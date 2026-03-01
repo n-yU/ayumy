@@ -38,7 +38,7 @@ GitHub Actions (cron: daily)
 | GitHub Actions | 日次ワークフローの実行 |
 
 ## Setup
-詳細なセットアップ手順は [Spec.md](./Spec.md) の §8 を参照してください。
+詳細なセットアップ手順は [Spec.md](./docs/Spec.md) の §8 を参照してください。
 
 ### Required Secrets (GitHub Actions)
 | Secret | 説明 |
