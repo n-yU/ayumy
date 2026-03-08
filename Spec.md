@@ -289,9 +289,11 @@ Notion ページの本文には Claude が生成した要約を記載する。�
 2. ホストマシンの `~/.ayumy.env` に `GITHUB_PAT` として記載
 
 ### 8.4 クライアントマシン
-1. NAS のデータディレクトリをマウント
-2. 環境変数 `AYUMY_DATA_DIR`（NAS のマウントパス）を設定
-3. 対象リポジトリに hook を設置（§4.4 参照）
+1. `ayumy` リポジトリをクローン: `git clone https://github.com/{user}/ayumy.git ~/ayumy`
+2. PATH を通す: `export PATH="$HOME/ayumy/bin:$PATH"`（`~/.zshrc` 等に追加）
+3. NAS のデータディレクトリをマウント
+4. 環境変数 `AYUMY_DATA_DIR`（NAS のマウントパス）を設定
+5. 対象リポジトリに hook を設置（§4.4 参照）
 
 ### 8.5 Notion
 1. [Notion Integrations](https://www.notion.so/my-integrations) で Internal Integration を作成

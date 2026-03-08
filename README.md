@@ -36,11 +36,13 @@ GitHub 上の日次開発アクティビティ（Commit, PR, Issue）と Claude 
 ## Directory Structure
 ```
 ayumy/
+├── bin/
+│   └── ayumy                 # CLI エントリポイント（サブコマンドのディスパッチ）
 ├── scripts/
-│   ├── daily_report.py        # メインスクリプト: GitHub API + Claude API + Notion API
-│   └── sync_session.sh        # セッション転送スクリプト（hook・手動共用）
+│   ├── daily_report.py       # メインスクリプト: GitHub API + Claude API + Notion API
+│   └── sync_session.sh       # セッション転送スクリプト（hook・手動共用）
 ├── hooks/
-│   └── post-commit            # 各リポジトリにシンボリックリンクで配置
+│   └── post-commit           # 各リポジトリにシンボリックリンクで配置
 ├── Spec.md
 ├── CLAUDE.md
 └── README.md
