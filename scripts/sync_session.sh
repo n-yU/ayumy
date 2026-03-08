@@ -59,16 +59,10 @@ sync_project() {
   log "$project_name: syncing $file_count session(s)"
 
   local dest_dir="$AYUMY_DATA_DIR/claude-sessions/$project_name"
-
-  if [[ -n "${AYUMY_HOST:-}" ]]; then
-    # Remote transfer
-    ssh "$AYUMY_HOST" "mkdir -p '$dest_dir'"
-    echo "$files" | rsync --files-from=- --no-relative / "$AYUMY_HOST:$dest_dir/"
-  else
-    # Local transfer (for testing)
-    mkdir -p "$dest_dir"
-    echo "$files" | rsync --files-from=- --no-relative / "$dest_dir/"
-  fi
+  mkdir -p "$dest_dir"
+  echo "$files" | while IFS= read -r f; do
+    cp "$f" "$dest_dir/"
+  done
 
   # Update marker on success
   touch "$project_dir/$MARKER_NAME"

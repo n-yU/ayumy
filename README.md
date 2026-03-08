@@ -11,7 +11,7 @@ GitHub 上の日次開発アクティビティ（Commit, PR, Issue）と Claude 
   git commit → post-commit hook ─┐
   ayumy sync（手動）─────────────┤
                                   ▼
-                         rsync over SSH
+                         NAS (共有ストレージ)
                                   │
 [ホストマシン]                    ▼
   cron (毎日 UTC 00:00) → daily_report.py
@@ -48,7 +48,7 @@ ayumy/
 
 ## Setup
 - ホストマシンの `~/.ayumy.env` に必要な環境変数（`GITHUB_PAT`, `ANTHROPIC_API_KEY`, `NOTION_TOKEN`, `NOTION_DATABASE_ID`, `SLACK_WEBHOOK_URL`, `AYUMY_DATA_DIR`）を設定する
-- クライアントマシンでは `AYUMY_HOST` にホストマシンの SSH ホスト名を設定する
+- クライアントマシンでは `AYUMY_DATA_DIR` に NAS のマウントパスを設定する
 - 詳細は [Spec.md](./Spec.md) の §8 を参照
 
 ## Running Cost

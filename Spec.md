@@ -17,7 +17,7 @@ GitHub 上で自分が owner であるすべてのリポジトリにおける日
   git commit → post-commit hook ─┐
   ayumy sync（手動）─────────────┤
                                   ▼
-                         rsync over SSH
+                         NAS (共有ストレージ)
                                   │
 [ホストマシン]                    ▼
   cron (毎日 UTC 00:00) → daily_report.py
@@ -73,7 +73,7 @@ ayumy/
 
 ## 4. フェーズ 1: セッションログの転送
 ### 4.1 概要
-Claude Code セッションの JSONL をホストマシンに rsync で転送する。
+Claude Code セッションの JSONL を NAS に転送する。
 
 - **自動転送（post-commit hook）**: commit を契機に、当該プロジェクトのアクティブセッションをバックグラウンドで転送
 - **手動転送（`ayumy sync`）**: commit せずに作業を中断する場合など、任意のタイミングで実行
@@ -106,8 +106,7 @@ sync_session.sh [--project <project-name>] [--all] [--background]
 
 要件:
 
-- **環境変数 `AYUMY_HOST`**: ホストマシンの SSH ホスト名（例: `pi@raspberrypi.local`）
-- **環境変数 `AYUMY_DATA_DIR`**: NAS 上のデータディレクトリパス（ホストマシンにマウント済み）
+- **環境変数 `AYUMY_DATA_DIR`**: NAS 上のデータディレクトリのマウントパス
 - **冪等性**: ファイル単位で上書きする設計とし、同じ JSONL の複数回転送でも問題ない
 
 ### 4.4 post-commit hook
@@ -137,7 +136,6 @@ ayumy sync --project my-project   # 特定プロジェクトを指定
 
 ### 4.6 セキュリティに関する注意
 - JSONL には会話の生データが含まれるため、機密情報の漏洩に注意
-- ホストマシンへの SSH 接続は鍵認証のみ（パスワード認証は無効化）
 - データディレクトリのパーミッションは 700
 - 必要に応じて特定プロジェクトを除外するフィルタリング機能を設ける
 
@@ -269,15 +267,14 @@ Notion ページの本文には Claude が生成した要約を記載する。�
 
 ### 7.3 必要なソフトウェア
 - Python 3.12 以上（`requests`, `anthropic`）
-- rsync, SSH サーバー（sshd）
+- NAS へのネットワークアクセス（NFS 等でマウント）
 
 ## 8. セットアップ手順
 ### 8.1 NAS
 1. データディレクトリを作成: `mkdir -p /path/to/ayumy-data/{claude-sessions,processed,logs} && chmod 700 /path/to/ayumy-data`
 
 ### 8.2 ホストマシン
-1. SSH サーバーを有効化し、鍵認証を設定（パスワード認証は無効化推奨）
-2. NAS のデータディレクトリを NFS 等でマウント（例: `/mnt/nas/ayumy-data`）
+1. NAS のデータディレクトリを NFS 等でマウント（例: `/mnt/nas/ayumy-data`）
 3. `ayumy` リポジトリをクローン: `git clone https://github.com/{user}/ayumy.git ~/ayumy`
 4. Python 依存をインストール: `pip install requests anthropic`
 5. `~/.ayumy.env` を作成（§7.2 参照、`AYUMY_DATA_DIR` にマウントパスを設定）
@@ -288,10 +285,9 @@ Notion ページの本文には Claude が生成した要約を記載する。�
 2. ホストマシンの `~/.ayumy.env` に `GITHUB_PAT` として記載
 
 ### 8.4 クライアントマシン
-1. ホストマシンへの SSH 鍵認証を設定（`ssh-copy-id` 等）
-2. 環境変数 `AYUMY_HOST`（例: `pi@raspberrypi.local`）と `AYUMY_DATA_DIR`（ホストマシン上のマウントパス）を設定
+1. NAS のデータディレクトリをマウント
+2. 環境変数 `AYUMY_DATA_DIR`（NAS のマウントパス）を設定
 3. 対象リポジトリに hook を設置（§4.4 参照）
-4. 接続テスト: `rsync --dry-run test.txt ${AYUMY_HOST}:${AYUMY_DATA_DIR}/`
 
 ### 8.5 Notion
 1. [Notion Integrations](https://www.notion.so/my-integrations) で Internal Integration を作成
@@ -307,8 +303,7 @@ Notion ページの本文には Claude が生成した要約を記載する。�
 
 ## 9. 運用上の考慮事項
 ### 9.1 ネットワーク要件
-- クライアントマシンとホストマシンが同一 LAN 内にあること（rsync による転送のため）
-- ホストマシンから NAS へのアクセス（NFS 等でマウント）
+- クライアントマシンとホストマシンの両方から NAS にアクセスできること（NFS 等でマウント）
 - 外出先からも転送したい場合は Tailscale 等の VPN を導入する
 - ホストマシンからインターネットへのアクセス（各 API の呼び出し）
 
@@ -321,8 +316,8 @@ Notion ページの本文には Claude が生成した要約を記載する。�
 - API 呼び出し失敗時のリトライ処理
 - アクティビティが0件の日はスキップまたは「活動なし」と記録
 - post-commit hook は必ず exit 0（commit をブロックしない）
-- rsync 転送失敗時、JSONL はソース側に残るため次回転送時にリトライ可能
-- ホストマシンがダウンした場合も hook は正常終了し、復旧後に `ayumy sync --all` で補完可能
+- 転送失敗時、JSONL はソース側に残るため次回転送時にリトライ可能
+- NAS マウントが切れた場合も hook は正常終了し、復旧後に `ayumy sync --all` で補完可能
 
 ### 9.4 ランニングコスト見積もり
 課金が発生するのは Anthropic API のみ。GitHub API と Notion API は無料枠内で収まる。
@@ -358,9 +353,9 @@ Notion ページの本文には Claude が生成した要約を記載する。�
 外部 API 不要。ローカル環境のみで動作確認できる。
 - `--project`, `--all`, `--background` オプションの実装
 - マーカーファイル（`.ayumy_last_sync`）による差分検出
-- rsync による転送（冪等性の担保）
+- NAS への cp による転送（冪等性の担保）
 - `bin/ayumy` CLI エントリポイントの実装（`ayumy sync` でスクリプトを呼び出し）
-- ローカル検証: `AYUMY_HOST` を空にし、ローカルの別ディレクトリ（例: `/tmp/ayumy-data/`）を転送先として使用
+- ローカル検証: `AYUMY_DATA_DIR` にローカルの別ディレクトリ（例: `/tmp/ayumy-data/`）を指定して使用
 
 ### Phase 2: Git hook（`hooks/post-commit`） [#2](https://github.com/n-yU/ayumy/issues/2)
 Phase 1 の `sync_session.sh` を前提としたラッパー。
@@ -374,7 +369,7 @@ Phase 1 の `sync_session.sh` を前提としたラッパー。
 - cron による日次実行
 - `$AYUMY_DATA_DIR`（NAS マウントポイント）を volume mount でコンテナと共有
 - `.ayumy.env` を `env_file` として読み込み
-- SSH（rsync 受信側）はホストの sshd を使用し、コンテナには含めない
+- NAS マウントはホスト側で行い、コンテナには volume mount で共有
 
 ### Phase 4: メインスクリプト（`scripts/daily_report.py`）
 以下のサブ機能を順に実装する。各機能は独立して動作確認可能。
