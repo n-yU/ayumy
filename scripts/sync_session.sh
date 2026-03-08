@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 CLAUDE_PROJECTS_DIR="$HOME/.claude/projects"
 MARKER_NAME=".ayumy_last_sync"
