@@ -127,9 +127,9 @@ hook の配布方法:
 commit せずに作業を中断する場合や、hook で転送されなかったセッションを補完する。
 
 ```bash
-ayumy sync                        # current directory のプロジェクトを同期
-ayumy sync --all                  # 全プロジェクトの当日分を一括同期
-ayumy sync --project my-project   # 特定プロジェクトを指定
+ayumy sync                                                      # current directory のプロジェクトを同期
+ayumy sync --all                                                # 全プロジェクトの未同期分を一括同期
+ayumy sync --project -Users-username-Documents-github-my-project # 特定プロジェクトを指定
 ```
 
 `ayumy sync` は `bin/ayumy` CLI を通じて `sync_session.sh` を呼び出す。`bin/ayumy` はサブコマンドをディスパッチするエントリポイントであり、クライアントマシンのセットアップ時に PATH に追加する（例: `export PATH="$HOME/ayumy/bin:$PATH"`）。手動実行時はフォアグラウンドで実行し、転送結果を標準出力に表示する。
