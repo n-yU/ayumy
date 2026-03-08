@@ -69,7 +69,7 @@ sync_project() {
   local dest_dir="$AYUMY_DATA_DIR/claude-sessions/$project_name"
   mkdir -p "$dest_dir"
   echo "$files" | while IFS= read -r f; do
-    cp "$f" "$dest_dir/"
+    cp -p "$f" "$dest_dir/"
   done
 
   # Promote temp marker to actual marker on success
