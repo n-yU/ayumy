@@ -99,7 +99,7 @@ sync_session.sh [--project <project-name>] [--all] [--background]
 
 | オプション | 動作 |
 |---|---|
-| `--project <name>` | 指定プロジェクトの差分セッションのみ転送 |
+| `--project <name>` | 指定プロジェクトの差分セッションのみ転送。`<name>` は `~/.claude/projects/` 以下のディレクトリ名（例: `-Users-username-Documents-github-repo`） |
 | `--all` | 全プロジェクトから差分セッションを一括転送 |
 | `--background` | バックグラウンドで実行（hook 用） |
 | 引数なし | カレントディレクトリに対応するプロジェクトを自動判定 |
