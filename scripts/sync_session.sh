@@ -46,10 +46,17 @@ sync_project() {
   local project_name
   project_name=$(basename "$project_dir")
 
+  # Record sync start time before scanning to avoid race conditions.
+  # Any JSONL modified between scan and copy will have mtime newer than
+  # this marker and will be picked up on the next run.
+  local tmp_marker="$project_dir/${MARKER_NAME}.tmp"
+  touch "$tmp_marker"
+
   local files
   files=$(find_changed_sessions "$project_dir")
 
   if [[ -z "$files" ]]; then
+    rm -f "$tmp_marker"
     log "$project_name: no changes"
     return 1
   fi
@@ -64,8 +71,8 @@ sync_project() {
     cp "$f" "$dest_dir/"
   done
 
-  # Update marker on success
-  touch "$project_dir/$MARKER_NAME"
+  # Promote temp marker to actual marker on success
+  mv "$tmp_marker" "$project_dir/$MARKER_NAME"
   log "$project_name: done"
   return 0
 }
