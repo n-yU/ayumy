@@ -10,68 +10,65 @@ GitHub 上で自分が owner であるすべてのリポジトリにおける日
 
 ## 3. システム構成
 ### 3.1 アーキテクチャ
-本システムは「commit 時のセッションログ同期」と「日次の要約生成」の2フェーズで構成される。
-
-**フェーズ 1: commit 時のセッションログ同期（Git post-commit hook）**
-
-各リポジトリへの commit を契機に、その時点でアクティブな Claude Code セッションの JSONL を `logs` リポジトリに自動 push する。
+本システムは2フェーズで構成される。常時稼働マシン（Raspberry Pi 等）上で日次処理を実行し、セッションログの生データは LAN 内にのみ保持する。
 
 ```
-[各リポジトリで git commit]
-    │
-    └─→ post-commit hook 発火
-        ├─→ ~/.claude/projects/ からアクティブなセッションの JSONL を特定
-        └─→ logs リポジトリ (private) の claude-sessions/ に commit & push
-```
-
-**フェーズ 2: 日次の要約生成・Notion 書き込み（GitHub Actions）**
-
-```
-[GitHub Actions (logs リポジトリ, cron 毎日1回)]
-    │
-    ├─→ リポジトリ内の claude-sessions/ から前日分の JSONL を読み取り
-    ├─→ GitHub API: 全 owner リポジトリの Commit / PR / Issue を取得
-    ├─→ Claude API: 全データを統合して自然言語で日次要約を生成
-    └─→ Notion API: 要約をデータベースページとして作成
+[開発マシン]
+  git commit → post-commit hook ─┐
+  ayumy sync（手動）─────────────┤
+                                  ▼
+                         rsync over SSH
+                                  │
+[常時稼働マシン]                  ▼
+  ~/ayumy-data/claude-sessions/ に JSONL 蓄積
+  cron (毎日 UTC 00:00) → daily_report.py
+    ├─→ JSONL + GitHub API → Claude API で要約生成
+    ├─→ Notion API で記録
+    └─→ 処理済み JSONL を削除
 ```
 
 ### 3.2 使用する外部サービス・API
 | サービス | 用途 | 認証方式 |
 |---|---|---|
-| GitHub API (REST) | アクティビティデータの取得 | Personal Access Token (Fine-grained PAT) |
+| GitHub API (REST) | アクティビティデータの取得 | Fine-grained PAT |
 | Anthropic API | 自然言語による要約生成 | API Key |
 | Notion API | 作業記録の書き込み | Internal Integration Token |
 
-### 3.3 設計方針
-- **イベント駆動でのログ同期**: 各リポジトリの commit を契機に、その時点でアクティブな Claude Code セッションの JSONL を `logs` リポジトリに push する。cron による定期同期は行わない
-- **要約生成は GitHub Actions に一元化**: Claude API の呼び出しを含むすべての処理を Actions 側で実行する
-- **生データの集約管理**: Claude Code の JSONL は `logs` リポジトリ（private）にのみ格納し、各プロジェクトリポジトリには配置しない
-
-### 3.4 リポジトリ構成
-すべてを1つの private リポジトリ `logs` に集約する。
+### 3.3 ディレクトリ構成
+**ayumy リポジトリ（GitHub）** — スクリプトと設定のみ。セッションデータは含まない。
 
 ```
-logs/ (private)
-├── .github/
-│   └── workflows/
-│       └── daily_report.yml          # GitHub Actions ワークフロー
+ayumy/
 ├── scripts/
-│   ├── daily_report.py               # Actions 側: データ統合・要約・Notion 書き込み
-│   └── push_active_session.sh        # post-commit hook から呼ばれるスクリプト
+│   ├── daily_report.py               # メインスクリプト: GitHub API + Claude API + Notion API
+│   └── sync_session.sh               # セッション転送スクリプト（hook・手動共用）
 ├── hooks/
 │   └── post-commit                   # 各リポジトリにシンボリックリンクで配置
-├── claude-sessions/                  # commit 時に push される Claude Code 生データ
-│   ├── {project-a}/
-│   │   ├── {session-id-1}.jsonl
-│   │   └── {session-id-2}.jsonl
-│   └── {project-b}/
-│       └── ...
+├── docs/
+│   └── Spec.md
+├── CLAUDE.md
 └── README.md
 ```
 
-## 4. フェーズ 1: post-commit hook によるセッションログ同期
+**常時稼働マシン上のデータディレクトリ**
+
+```
+~/ayumy-data/
+├── claude-sessions/                  # 開発マシンから転送された JSONL
+│   ├── {project-name}/
+│   │   └── {session-id}.jsonl
+│   └── ...
+└── logs/                             # 実行ログ
+```
+
+## 4. フェーズ 1: セッションログの転送
 ### 4.1 概要
-各リポジトリに Git の `post-commit` hook を設置し、commit が発生するたびに、その時点でアクティブな Claude Code セッションの JSONL を `logs` リポジトリに自動 push する。
+Claude Code セッションの JSONL を常時稼働マシンに rsync で転送する。
+
+- **自動転送（post-commit hook）**: commit を契機に、当該プロジェクトのアクティブセッションをバックグラウンドで転送
+- **手動転送（`ayumy sync`）**: commit せずに作業を中断する場合など、任意のタイミングで実行
+
+いずれも共通の転送スクリプト `scripts/sync_session.sh` を使用する。
 
 ### 4.2 データソース
 Claude Code は会話を `~/.claude/projects/` 以下にローカル保存している。
@@ -80,102 +77,78 @@ Claude Code は会話を `~/.claude/projects/` 以下にローカル保存して
 - 個別セッションは JSONL ファイルとして保存
 - `sessions-index.json` にメタデータ（サマリー、メッセージ数、ブランチ、タイムスタンプ）が含まれる
 
-### 4.3 アクティブセッションの特定
-「アクティブなセッション」とは、commit を行った時点で進行中（まだクローズされていない）の Claude Code セッションを指す。以下の方法で特定する。
+「アクティブなセッション」とは、直近（例: 過去1時間以内）に `sessions-index.json` のタイムスタンプが更新されたセッションを指す。
 
-1. commit を行ったリポジトリのパスから、対応する `~/.claude/projects/{project-name}/` を特定
-2. `sessions-index.json` の最終更新タイムスタンプを参照し、直近（例: 過去1時間以内）に更新されたセッションを抽出
-3. 該当する JSONL ファイルを `logs` リポジトリの `claude-sessions/` に同期
+### 4.3 転送スクリプト（`sync_session.sh`）
+hook と手動実行の両方から呼ばれる共通スクリプト。
 
-### 4.4 post-commit hook の処理フロー
 ```
-post-commit hook 発火
-    │
-    ├─→ 1. 現在のリポジトリパスから Claude Code のプロジェクト名を解決
-    │
-    ├─→ 2. ~/.claude/projects/{project-name}/sessions-index.json を参照
-    │      直近に更新されたセッション ID を取得
-    │
-    ├─→ 3. 該当する JSONL ファイルを
-    │      {LOGS_REPO}/claude-sessions/{project-name}/{session-id}.jsonl にコピー
-    │
-    └─→ 4. logs リポジトリで commit & push（バックグラウンド実行）
+sync_session.sh [--project <project-name>] [--all] [--background]
 ```
 
-### 4.5 hook スクリプトの設計
-`logs/hooks/post-commit` として管理し、各リポジトリの `.git/hooks/post-commit` にシンボリックリンクまたはコピーで配置する。
+| オプション | 動作 |
+|---|---|
+| `--project <name>` | 指定プロジェクトのアクティブセッションのみ転送 |
+| `--all` | 全プロジェクトから当日更新されたセッションを一括転送 |
+| `--background` | バックグラウンドで実行（hook 用） |
+| 引数なし | カレントディレクトリに対応するプロジェクトを自動判定 |
 
-hook スクリプトの要件:
+要件:
 
-- **環境変数 `LOGS_REPO_PATH`**: `logs` リポジトリのローカルパスを指定
-- **バックグラウンド実行**: commit の体感速度に影響を与えないよう、`logs` リポジトリへの push はバックグラウンドで行う
-- **冪等性**: 同じセッションの JSONL が複数回 push されても問題ないよう、ファイル単位で上書きする設計とする
-- **エラーの静音化**: hook の失敗が本来の commit ワークフローを妨げないよう、エラーは stderr に出力するのみで exit 0 を返す
+- **環境変数 `AYUMY_HOST`**: 常時稼働マシンの SSH ホスト名（例: `pi@raspberrypi.local`）
+- **環境変数 `AYUMY_DATA_DIR`**: 常時稼働マシン上のデータディレクトリパス（デフォルト: `~/ayumy-data`）
+- **冪等性**: ファイル単位で上書きする設計とし、同じ JSONL の複数回転送でも問題ない
 
-### 4.6 hook の配布方法
-各リポジトリに hook を設置する方法として以下を想定する。
+### 4.4 post-commit hook
+`ayumy/hooks/post-commit` として管理し、各リポジトリの `.git/hooks/post-commit` にシンボリックリンクで配置する。
 
-- **手動設置**: `ln -s {LOGS_REPO}/hooks/post-commit {REPO}/.git/hooks/post-commit`
-- **Git テンプレート**: `git config --global init.templateDir {LOGS_REPO}/hooks-template` で新規リポジトリに自動適用
-- **セットアップスクリプト**: `logs` リポジトリに含める初期設定スクリプトで、既存の全リポジトリに一括設置
+hook はリポジトリパスからプロジェクト名を解決し、`sync_session.sh --project {name} --background` を呼び出すラッパーである。
 
-### 4.7 ファイル命名規則
+- hook の失敗は commit に影響を与えない（exit 0 を保証）
+- エラーは stderr に出力するのみ
+
+hook の配布方法:
+
+- **手動設置**: `ln -s {AYUMY_REPO}/hooks/post-commit {REPO}/.git/hooks/post-commit`
+- **Git テンプレート**: `git config --global init.templateDir {AYUMY_REPO}/hooks-template`
+- **セットアップスクリプト**: 既存の全リポジトリに一括設置
+
+### 4.5 手動同期（`ayumy sync`）
+commit せずに作業を中断する場合や、hook で転送されなかったセッションを補完する。
+
+```bash
+ayumy sync                        # current directory のプロジェクトを同期
+ayumy sync --all                  # 全プロジェクトの当日分を一括同期
+ayumy sync --project my-project   # 特定プロジェクトを指定
 ```
-claude-sessions/{project-name}/{session-id}.jsonl
-```
 
-- `{project-name}`: Claude Code が使用するプロジェクト識別名
-- `{session-id}`: セッション固有の ID
+`ayumy sync` は `sync_session.sh` を呼び出すシェルエイリアスまたはラッパーとして実装する。手動実行時はフォアグラウンドで実行し、転送結果を標準出力に表示する。
 
-### 4.8 セキュリティに関する注意
-- `logs` リポジトリは必ず **private** にすること
+### 4.6 セキュリティに関する注意
 - JSONL には会話の生データが含まれるため、機密情報の漏洩に注意
-- 必要に応じて `.gitignore` やフィルタリングで特定プロジェクトを除外可能にする
+- 常時稼働マシンへの SSH 接続は鍵認証のみ（パスワード認証は無効化）
+- データディレクトリのパーミッションは 700
+- 必要に応じて特定プロジェクトを除外するフィルタリング機能を設ける
 
 ## 5. フェーズ 2: データ統合・要約・Notion 書き込み
 ### 5.1 GitHub アクティビティの取得
-#### 5.1.1 対象リポジトリ
-- GitHub API `GET /user/repos` で取得
-- パラメータ `affiliation=owner` により、自分が owner のリポジトリのみを対象とする
-- ページネーション対応（`per_page=100`）で全件取得
+対象期間: 前日 UTC 00:00:00 〜 当日 UTC 00:00:00
 
-#### 5.1.2 対象アクティビティ
-前日 UTC 00:00:00 〜 当日 UTC 00:00:00 の範囲を取得対象とする。
+対象リポジトリは `GET /user/repos`（`affiliation=owner`, `per_page=100`）で全件取得する。
 
-**Commits**
-
-- エンドポイント: `GET /repos/{owner}/{repo}/commits`
-- パラメータ: `since`, `until`
-- 取得項目: コミットメッセージ、作成者、日時、SHA
-
-**Pull Requests**
-
-- エンドポイント: `GET /repos/{owner}/{repo}/pulls`
-- パラメータ: `state=all`, `sort=updated`, `direction=desc`
-- 前日以降に更新されたもののみをフィルタ
-- 取得項目: タイトル、番号、状態（open / closed / merged）、作成者、ラベル
-
-**Issues**
-
-- エンドポイント: `GET /repos/{owner}/{repo}/issues`
-- パラメータ: `since`, `state=all`
-- Pull Request を除外（`pull_request` キーが存在しないもの）
-- 取得項目: タイトル、番号、状態（open / closed）、作成者、ラベル
+| アクティビティ | エンドポイント | フィルタ | 取得項目 |
+|---|---|---|---|
+| Commits | `GET /repos/{owner}/{repo}/commits` | `since`, `until` | メッセージ、作成者、日時、SHA |
+| Pull Requests | `GET /repos/{owner}/{repo}/pulls` | `state=all`, `sort=updated`, 前日以降 | タイトル、番号、状態、作成者、ラベル |
+| Issues | `GET /repos/{owner}/{repo}/issues` | `since`, `state=all`, PR を除外 | タイトル、番号、状態、作成者、ラベル |
 
 ### 5.2 Claude Code セッションログの読み取り
-1. `claude-sessions/` 以下の全 JSONL ファイルを走査
-2. 各ファイルの最終更新日時（git log またはファイル内タイムスタンプ）で前日分をフィルタ
-3. JSONL から以下を抽出:
-   - ユーザーのプロンプト（質問・指示の内容）
-   - Claude の応答の要点
-   - 使用したツール（ファイル編集、コマンド実行など）
-   - 対象プロジェクト名
+1. `~/ayumy-data/claude-sessions/` 以下の全 JSONL を走査し、最終更新日時で前日分をフィルタ
+2. JSONL から抽出する項目: ユーザーのプロンプト、Claude の応答の要点、使用したツール、対象プロジェクト名
 
 ### 5.3 要約生成（Claude API）
-#### 5.3.1 使用モデル
-- Anthropic Claude API（`claude-sonnet-4-20250514` 推奨）
+使用モデル: `claude-sonnet-4-20250514`
 
-#### 5.3.2 プロンプト設計方針
 GitHub アクティビティと Claude Code セッションログの両方をコンテキストとして渡し、以下の観点で統合的な要約を生成する。
 
 - **全体サマリー**: その日の作業全体を2〜3文で要約
@@ -184,46 +157,35 @@ GitHub アクティビティと Claude Code セッションログの両方をコ
 - **主な成果・進捗**: マージされた PR、クローズされた Issue など
 - **継続中の作業**: オープンな PR や Issue
 
-#### 5.3.3 入力フォーマット（Claude API に渡すデータ）
+入力フォーマット:
+
 ```
 以下は {日付} の GitHub アクティビティおよび Claude Code での作業記録です。
 日本語で簡潔に要約してください。
 
 ---
 # GitHub アクティビティ
-## {リポジトリ名1}
+## {リポジトリ名}
 ### Commits
-- {コミットメッセージ1}
-- {コミットメッセージ2}
+- {コミットメッセージ}
 ### Pull Requests
 - [merged] #12 機能Aの追加
 ### Issues
 - [closed] #8 バグ修正
 
-## {リポジトリ名2}
-...
-
 ---
 # Claude Code セッション
-## プロジェクト: {project-a}
+## プロジェクト: {project-name}
 ### セッション 1 (14:00 - 15:30)
 - ユーザー: 認証機能のリファクタリングについて相談
 - Claude: JWT トークンの更新ロジックを提案、実装を支援
 - ツール使用: ファイル編集 (auth.ts, middleware.ts)
-
-### セッション 2 (17:00 - 17:30)
-- ユーザー: テストの追加を依頼
-- Claude: auth 関連のユニットテストを作成
-...
 ```
 
-#### 5.3.4 出力フォーマット（期待する応答）
-Claude に構造化された要約を返すよう指示し、以下のセクションを含める。
+出力には全体サマリー、リポジトリごとの作業概要、タグの提案、ステータスの判定を含める。
 
-- 全体サマリー
-- リポジトリごとの作業概要（GitHub + Claude Code を統合）
-- タグの提案
-- ステータスの判定
+### 5.4 処理済み JSONL の cleanup
+要約生成と Notion 書き込みが正常に完了した後、処理対象の JSONL ファイルを削除する。削除前にログ出力で対象ファイルを記録する。
 
 ## 6. Notion データベース仕様
 ### 6.1 データベースプロパティ
@@ -240,7 +202,7 @@ Claude に構造化された要約を返すよう指示し、以下のセクシ�
 | Claude Sessions | Number | Claude Code セッション数 | `4` |
 
 ### 6.2 ページ本文（children blocks）
-Notion ページの本文には Claude が生成した自然言語の要約を記載する。ブロックタイプとして `heading_2` と `paragraph` を使い分けて構造化する。
+Notion ページの本文には Claude が生成した要約を記載する。ブロックタイプとして `heading_2` と `paragraph` を使い分けて構造化する。
 
 ### 6.3 タグの分類基準
 | タグ | 基準 |
@@ -253,7 +215,7 @@ Notion ページの本文には Claude が生成した自然言語の要約を�
 | `review` | PR レビューが主な活動だった場合 |
 | `ai-assisted` | Claude Code を活用した作業が含まれる場合 |
 
-タグは Claude API の要約生成時に、コミットメッセージ・PR タイトル・Claude Code セッション内容から自動判定させる。
+タグは Claude API の要約生成時に自動判定させる。
 
 ### 6.4 ステータスの判定基準
 | ステータス | 基準 |
@@ -265,106 +227,82 @@ Notion ページの本文には Claude が生成した自然言語の要約を�
 
 ステータスも Claude API による要約時に判定させる。
 
-## 7. GitHub Actions ワークフロー仕様
-### 7.1 トリガー
-- **スケジュール実行**: 毎日 UTC 00:00（JST 09:00）
-- **手動実行**: `workflow_dispatch` で任意のタイミングでも実行可能
-
-### 7.2 Secrets（`logs` リポジトリに設定）
-| Secret 名 | 説明 |
-|---|---|
-| `MY_GITHUB_PAT` | GitHub Fine-grained PAT（全 owner リポジトリへの read 権限） |
-| `NOTION_TOKEN` | Notion Internal Integration トークン |
-| `NOTION_DATABASE_ID` | 書き込み先の Notion データベース ID |
-| `ANTHROPIC_API_KEY` | Anthropic API キー |
-
-### 7.3 ワークフロー定義（概要）
-```yaml
-name: Daily Work Log
-on:
-  schedule:
-    - cron: '0 0 * * *'
-  workflow_dispatch:
-
-jobs:
-  daily-log:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # claude-sessions の履歴にアクセスするため
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - run: pip install requests anthropic
-      - run: python scripts/daily_report.py
-        env:
-          GITHUB_PAT: ${{ secrets.MY_GITHUB_PAT }}
-          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
-          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+## 7. 常時稼働マシンの構成
+### 7.1 cron 設定
+```
+0 0 * * * cd ~/ayumy && python3 scripts/daily_report.py >> ~/ayumy-data/logs/daily_report.log 2>&1
 ```
 
+毎日 UTC 00:00（JST 09:00）に実行する。
+
+### 7.2 環境変数
+`~/.ayumy.env` に記載し、スクリプト内で読み込む。
+
+| 環境変数 | 説明 |
+|---|---|
+| `GITHUB_PAT` | GitHub Fine-grained PAT（全 owner リポジトリへの read 権限） |
+| `ANTHROPIC_API_KEY` | Anthropic API キー |
+| `NOTION_TOKEN` | Notion Internal Integration トークン |
+| `NOTION_DATABASE_ID` | 書き込み先の Notion データベース ID |
+| `AYUMY_DATA_DIR` | データディレクトリのパス（デフォルト: `~/ayumy-data`） |
+
+### 7.3 必要なソフトウェア
+- Python 3.12 以上（`requests`, `anthropic`）
+- rsync, SSH サーバー（sshd）
+
 ## 8. セットアップ手順
-### 8.1 `logs` リポジトリの作成
-1. GitHub で **private** リポジトリ `logs` を作成
-2. 上記のディレクトリ構成に従いファイルを配置
-3. Settings > Secrets and variables > Actions に4つの Secret を登録
+### 8.1 常時稼働マシン
+1. SSH サーバーを有効化し、鍵認証を設定（パスワード認証は無効化推奨）
+2. データディレクトリを作成: `mkdir -p ~/ayumy-data/claude-sessions ~/ayumy-data/logs && chmod 700 ~/ayumy-data`
+3. `ayumy` リポジトリをクローン: `git clone https://github.com/{user}/ayumy.git ~/ayumy`
+4. Python 依存をインストール: `pip install requests anthropic`
+5. `~/.ayumy.env` を作成（§7.2 参照）
+6. cron を設定（§7.1 参照）
 
-### 8.2 GitHub PAT の作成
-1. Fine-grained PAT を作成
-2. スコープ: 自分の全リポジトリへの Contents / Issues / Pull Requests の read 権限
-3. `logs` リポジトリの Secret `MY_GITHUB_PAT` に登録
+### 8.2 GitHub PAT
+1. Fine-grained PAT を作成（スコープ: 全 owner リポジトリへの Contents / Issues / Pull Requests の read 権限）
+2. 常時稼働マシンの `~/.ayumy.env` に `GITHUB_PAT` として記載
 
-### 8.3 post-commit hook の設置
-1. `logs` リポジトリをローカルにクローン
-2. 環境変数 `LOGS_REPO_PATH` にクローン先のパスを設定（例: `~/.config/logs-repo-path` に記載）
-3. 対象リポジトリに hook を設置:
-   - 手動: `ln -s {LOGS_REPO}/hooks/post-commit {REPO}/.git/hooks/post-commit`
-   - 一括: `logs` リポジトリのセットアップスクリプトを実行
-4. SSH 鍵または PAT で `logs` リポジトリへの push が可能であることを確認
+### 8.3 開発マシン
+1. 常時稼働マシンへの SSH 鍵認証を設定（`ssh-copy-id` 等）
+2. 環境変数 `AYUMY_HOST`（例: `pi@raspberrypi.local`）と `AYUMY_DATA_DIR`（デフォルト: `~/ayumy-data`）を設定
+3. 対象リポジトリに hook を設置（§4.4 参照）
+4. 接続テスト: `rsync --dry-run test.txt ${AYUMY_HOST}:~/ayumy-data/`
 
 ### 8.4 Notion
 1. [Notion Integrations](https://www.notion.so/my-integrations) で Internal Integration を作成
-2. 「6.1 データベースプロパティ」に従いデータベースを作成
-3. データベースの「コネクト」から作成した Integration を追加
+2. §6.1 に従いデータベースを作成し、Integration を接続
 
 ### 8.5 Anthropic
 1. [Anthropic Console](https://console.anthropic.com/) で API キーを発行
 
 ## 9. 運用上の考慮事項
-### 9.1 実行タイミングについて
-- フェーズ 1（セッションログ同期）は commit のたびにイベント駆動で実行されるため、cron のようなタイミング管理は不要
-- フェーズ 2（日次要約）の Actions cron 実行時点で、前日の commit に紐づくセッションログはすでに `logs` リポジトリに蓄積されている
-- Claude Code を使ったが commit しなかった作業はログに含まれない点に注意（将来の拡張案として補完手段を検討）
+### 9.1 ネットワーク要件
+- 開発マシンと常時稼働マシンが同一 LAN 内にあること（rsync による転送のため）
+- 外出先からも転送したい場合は Tailscale 等の VPN を導入する
+- 常時稼働マシンからインターネットへのアクセス（各 API の呼び出し）
 
 ### 9.2 API レートリミット
-- GitHub API: 認証済みで 5,000 リクエスト/時。リポジトリ数が多い場合はリクエスト数に注意
-- Anthropic API: プランに応じたレートリミットあり。1日1回の実行であれば問題なし
-- Notion API: 3 リクエスト/秒。書き込みは1ページのため問題なし
+- GitHub API: 認証済みで 5,000 リクエスト/時
+- Anthropic API: プランに応じたレートリミットあり（日次1回なら問題なし）
+- Notion API: 3 リクエスト/秒（1ページの書き込みのみなので問題なし）
 
-### 9.3 コスト
-- GitHub Actions: プライベートリポジトリは月2,000分の無料枠あり（実行時間は数分程度）
-- Anthropic API: トークン使用量に応じた従量課金。日次1回の要約であれば少額
-- Notion API: 無料
-
-### 9.4 エラーハンドリング
+### 9.3 エラーハンドリング
 - API 呼び出し失敗時のリトライ処理
 - アクティビティが0件の日はスキップまたは「活動なし」と記録
-- post-commit hook の失敗は本来の commit に影響を与えない設計（exit 0 を保証）
-- `logs` リポジトリへの push が失敗した場合、次回 commit 時に未同期分も含めてリトライ
-- GitHub Actions の失敗通知（メールまたは Slack 連携）
+- post-commit hook は必ず exit 0（commit をブロックしない）
+- rsync 転送失敗時、JSONL はソース側に残るため次回転送時にリトライ可能
+- 常時稼働マシンがダウンした場合も hook は正常終了し、復旧後に `ayumy sync --all` で補完可能
 
-### 9.5 ストレージ管理
-- `claude-sessions/` は JSONL ファイルが蓄積されるため、定期的なアーカイブまたは古いファイルの削除を検討
-- git の履歴にも残るため、リポジトリサイズの肥大化に注意
-- 必要に応じて Git LFS の利用や、一定期間経過後のファイル削除ポリシーを設ける
+### 9.4 ストレージ管理
+- 処理済み JSONL は日次処理の最後に自動削除（§5.4）
+- 実行ログは logrotate 等で管理
 
 ## 10. 将来の拡張案
-- **commit を伴わない Claude Code セッションの補完**: cron ベースのフォールバック同期で、commit せずに終了したセッションも拾う
-- **複数ユーザー対応**: Organization メンバーの活動もまとめて記録
-- **週次・月次レポート**: 日次データを集約した定期サマリーの生成
+- **開発マシン側の定期自動同期**: cron で `ayumy sync --all` を定期実行し、手動同期の手間を省く
+- **複数開発マシン対応**: 競合解決（ファイル名にホスト名を含める等）
+- **週次・月次レポート**: 日次データを集約した定期サマリー
 - **Slack 通知**: Notion 記録と同時に Slack チャンネルにも投稿
 - **ダッシュボード**: Notion データベースのビューを活用した可視化
 - **claude.ai の会話記録**: データエクスポート機能との連携
-- **複数マシン対応**: 複数の開発マシンからの同期時の競合解決
+- **過去日の再処理**: 日付を指定して再実行できるオプション
