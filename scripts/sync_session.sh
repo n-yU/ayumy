@@ -137,7 +137,7 @@ case "$mode" in
       err "project not found: $project_dir"
       exit 1
     fi
-    sync_project "$project_dir"
+    sync_project "$project_dir" || true
     ;;
   all)
     synced=0
@@ -159,6 +159,6 @@ case "$mode" in
       err "no Claude sessions found for $git_root"
       exit 1
     fi
-    sync_project "$project_dir"
+    sync_project "$project_dir" || true
     ;;
 esac
