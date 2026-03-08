@@ -86,14 +86,14 @@ background=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --project)
-      [[ -n "$mode" ]] && { err "conflicting options: --project and --all"; usage; }
+      [[ -n "$mode" && "$mode" != "project" ]] && { err "conflicting options: --project and --all"; usage; }
       mode="project"
       project_name="${2:-}"
       [[ -z "$project_name" ]] && { err "--project requires a name"; usage; }
       shift 2
       ;;
     --all)
-      [[ -n "$mode" ]] && { err "conflicting options: --project and --all"; usage; }
+      [[ -n "$mode" && "$mode" != "all" ]] && { err "conflicting options: --project and --all"; usage; }
       mode="all"
       shift
       ;;
