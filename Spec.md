@@ -44,8 +44,7 @@ ayumy/
 │   └── sync_session.sh               # セッション転送スクリプト（hook・手動共用）
 ├── hooks/
 │   └── post-commit                   # 各リポジトリにシンボリックリンクで配置
-├── docs/
-│   └── Spec.md
+├── Spec.md
 ├── CLAUDE.md
 └── README.md
 ```
@@ -298,7 +297,44 @@ Notion ページの本文には Claude が生成した要約を記載する。�
 - 処理済み JSONL は日次処理の最後に自動削除（§5.4）
 - 実行ログは logrotate 等で管理
 
-## 10. 将来の拡張案
+## 10. 開発手順
+以下の順序で実装を進める。依存関係の少ないコンポーネントから着手し、先に作ったものが後のテストデータ・検証基盤となる構成。
+
+### Step 1: セッション転送スクリプト（`scripts/sync_session.sh`）
+外部 API 不要。ローカル環境のみで動作確認できる。
+- `--project`, `--all`, `--background` オプションの実装
+- `~/.claude/projects/` からアクティブセッションの JSONL を検出するロジック
+- rsync による転送（冪等性の担保）
+- ローカル検証: `AYUMY_HOST` を空にし、ローカルの別ディレクトリ（例: `/tmp/ayumy-data/`）を転送先として使用
+
+### Step 2: Git hook（`hooks/post-commit`）
+Step 1 の `sync_session.sh` を前提としたラッパー。
+- リポジトリパスからプロジェクト名を解決
+- `sync_session.sh --project {name} --background` の呼び出し
+- `exit 0` の保証（commit をブロックしない設計）
+
+### Step 3: 常時稼働マシンのコンテナ化（`Dockerfile`, `compose.yaml`）
+`daily_report.py` の実行環境をコンテナとして構築する。
+- Python 3.12 + 依存パッケージ（`requests`, `anthropic`）
+- cron による日次実行
+- `~/ayumy-data/` を volume mount でホストと共有
+- `.ayumy.env` を `env_file` として読み込み
+- SSH（rsync 受信側）はホストの sshd を使用し、コンテナには含めない
+
+### Step 4: メインスクリプト（`scripts/daily_report.py`）
+以下のサブ機能を順に実装する。各機能は独立して動作確認可能。
+1. GitHub アクティビティ取得 — REST API で Commits / PRs / Issues を取得・整形
+2. JSONL セッションログの読み取り — `~/ayumy-data/claude-sessions/` のパース
+3. Claude API で要約生成 — §5.3 のフォーマットに従い統合要約を生成
+4. Notion API で書き込み — データベースプロパティとページ本文の作成（§6 準拠）
+5. 処理済み JSONL の cleanup — 正常完了後に削除（§5.4）
+
+### Step 5: 結合テスト・運用準備
+- 全コンポーネントの結合テスト（開発マシン → Pi → Notion の一連の流れ）
+- cron 設定の投入と初回実行の確認
+- エラーハンドリング・ログ出力の検証
+
+## 11. 将来の拡張案
 - **開発マシン側の定期自動同期**: cron で `ayumy sync --all` を定期実行し、手動同期の手間を省く
 - **複数開発マシン対応**: 競合解決（ファイル名にホスト名を含める等）
 - **週次・月次レポート**: 日次データを集約した定期サマリー

@@ -41,7 +41,7 @@ cron (daily)
 | Notion API | 作業記録の書き込み |
 
 ## Setup
-詳細なセットアップ手順は [Spec.md](./docs/Spec.md) の §8 を参照してください。
+詳細なセットアップ手順は [Spec.md](./Spec.md) の §8 を参照してください。
 
 ### Environment Variables (Server)
 常時稼働マシンの `~/.ayumy.env` に設定:
