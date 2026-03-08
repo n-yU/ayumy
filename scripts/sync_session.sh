@@ -23,7 +23,7 @@ log() { echo "[ayumy] $*"; }
 err() { echo "[ayumy] ERROR: $*" >&2; }
 
 # Convert an absolute path to the Claude project directory name.
-# e.g. /Users/nyu/Documents/github/ayumy -> -Users-nyu-Documents-github-ayumy
+# e.g. /Users/username/Documents/github/ayumy -> -Users-username-Documents-github-ayumy
 path_to_project_name() {
   echo "$1" | sed 's|/|-|g'
 }
