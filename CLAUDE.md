@@ -7,7 +7,7 @@
 ## アーキテクチャ
 2フェーズ構成（ホストマシン＝Raspberry Pi 等を使用、データは NAS に保持）:
 
-1. **フェーズ 1（post-commit hook）**: 各リポジトリでの commit を契機に、`~/.claude/projects/` からアクティブな Claude Code セッションの JSONL を NAS 上のデータディレクトリにコピーする。
+1. **フェーズ 1（post-commit hook）**: 各リポジトリでの commit を契機に、`~/.claude/projects/` から未同期の Claude Code セッションの JSONL を NAS 上のデータディレクトリにコピーする。
 2. **フェーズ 2（ホストマシン上の cron）**: NAS 上のセッションログの読み取りと GitHub API によるアクティビティ取得を行い、Claude API で要約を生成して Notion に書き込み、Slack に通知する。処理済み JSONL は `processed/` にアーカイブする。
 
 ## リポジトリ構成
