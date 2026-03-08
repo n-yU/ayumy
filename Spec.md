@@ -24,6 +24,7 @@ GitHub 上で自分が owner であるすべてのリポジトリにおける日
   cron (毎日 UTC 00:00) → daily_report.py
     ├─→ JSONL + GitHub API → Claude API で要約生成
     ├─→ Notion API で記録
+    ├─→ Slack Webhook で通知
     └─→ 処理済み JSONL を削除
 ```
 
@@ -33,6 +34,7 @@ GitHub 上で自分が owner であるすべてのリポジトリにおける日
 | GitHub API (REST) | アクティビティデータの取得 | Fine-grained PAT |
 | Anthropic API | 自然言語による要約生成 | API Key |
 | Notion API | 作業記録の書き込み | Internal Integration Token |
+| Slack Incoming Webhook | 完了通知 | Webhook URL |
 
 ### 3.3 ディレクトリ構成
 **ayumy リポジトリ（GitHub）** — スクリプトと設定のみ。セッションデータは含まない。
@@ -183,7 +185,16 @@ GitHub アクティビティと Claude Code セッションログの両方をコ
 
 出力には全体サマリー、リポジトリごとの作業概要、タグの提案、ステータスの判定を含める。
 
-### 5.4 処理済み JSONL の cleanup
+### 5.4 Slack 通知
+Notion への書き込み完了後、Slack Incoming Webhook で指定チャンネルに通知を送信する。
+
+通知内容:
+- 全体サマリー（Claude API が生成した2〜3文の要約）
+- Notion ページへのリンク
+
+通知が失敗しても処理全体は正常終了とする（通知はベストエフォート）。
+
+### 5.5 処理済み JSONL の cleanup
 要約生成と Notion 書き込みが正常に完了した後、処理対象の JSONL ファイルを削除する。削除前にログ出力で対象ファイルを記録する。
 
 ## 6. Notion データベース仕様
@@ -244,6 +255,7 @@ Notion ページの本文には Claude が生成した要約を記載する。�
 | `NOTION_TOKEN` | Notion Internal Integration トークン |
 | `NOTION_DATABASE_ID` | 書き込み先の Notion データベース ID |
 | `AYUMY_DATA_DIR` | データディレクトリのパス（デフォルト: `~/ayumy-data`） |
+| `SLACK_WEBHOOK_URL` | Slack Incoming Webhook URL |
 
 ### 7.3 必要なソフトウェア
 - Python 3.12 以上（`requests`, `anthropic`）
@@ -274,6 +286,11 @@ Notion ページの本文には Claude が生成した要約を記載する。�
 
 ### 8.5 Anthropic
 1. [Anthropic Console](https://console.anthropic.com/) で API キーを発行
+
+### 8.6 Slack
+1. Slack App を作成し、Incoming Webhook を有効化
+2. 通知先チャンネルを選択して Webhook URL を発行
+3. 常時稼働マシンの `~/.ayumy.env` に `SLACK_WEBHOOK_URL` として記載
 
 ## 9. 運用上の考慮事項
 ### 9.1 ネットワーク要件
@@ -348,7 +365,8 @@ Step 1 の `sync_session.sh` を前提としたラッパー。
 2. JSONL セッションログの読み取り — `~/ayumy-data/claude-sessions/` のパース
 3. Claude API で要約生成 — §5.3 のフォーマットに従い統合要約を生成
 4. Notion API で書き込み — データベースプロパティとページ本文の作成（§6 準拠）
-5. 処理済み JSONL の cleanup — 正常完了後に削除（§5.4）
+5. Slack 通知 — Incoming Webhook でサマリーと Notion リンクを送信（§5.4）
+6. 処理済み JSONL の cleanup — 正常完了後に削除（§5.5）
 
 ### Step 5: 結合テスト・運用準備
 - 全コンポーネントの結合テスト（開発マシン → Pi → Notion の一連の流れ）
@@ -359,7 +377,6 @@ Step 1 の `sync_session.sh` を前提としたラッパー。
 - **開発マシン側の定期自動同期**: cron で `ayumy sync --all` を定期実行し、手動同期の手間を省く
 - **複数開発マシン対応**: 競合解決（ファイル名にホスト名を含める等）
 - **週次・月次レポート**: 日次データを集約した定期サマリー
-- **Slack 通知**: Notion 記録と同時に Slack チャンネルにも投稿
 - **ダッシュボード**: Notion データベースのビューを活用した可視化
 - **claude.ai の会話記録**: データエクスポート機能との連携
 - **過去日の再処理**: 日付を指定して再実行できるオプション

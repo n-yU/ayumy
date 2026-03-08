@@ -8,7 +8,7 @@
 2フェーズ構成（常時稼働マシン＝Raspberry Pi 等を使用）:
 
 1. **フェーズ 1（post-commit hook）**: 各リポジトリでの commit を契機に、`~/.claude/projects/` からアクティブな Claude Code セッションの JSONL を rsync で常時稼働マシンに転送する。
-2. **フェーズ 2（常時稼働マシン上の cron）**: 蓄積されたセッションログの読み取りと GitHub API によるアクティビティ取得を行い、Claude API で要約を生成して Notion に書き込む。処理済み JSONL は自動削除する。
+2. **フェーズ 2（常時稼働マシン上の cron）**: 蓄積されたセッションログの読み取りと GitHub API によるアクティビティ取得を行い、Claude API で要約を生成して Notion に書き込み、Slack に通知する。処理済み JSONL は自動削除する。
 
 ## リポジトリ構成
 ```
