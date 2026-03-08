@@ -47,9 +47,23 @@ ayumy/
 ```
 
 ## Setup
-- ホストマシンの `~/.ayumy.env` に必要な環境変数（`GITHUB_PAT`, `ANTHROPIC_API_KEY`, `NOTION_TOKEN`, `NOTION_DATABASE_ID`, `SLACK_WEBHOOK_URL`, `AYUMY_DATA_DIR`）を設定する
-- クライアントマシンでは `AYUMY_DATA_DIR` に NAS のマウントパスを設定する
-- 詳細は [Spec.md](./Spec.md) の §8 を参照
+### クライアントマシン
+```bash
+# 1. リポジトリをクローン
+git clone https://github.com/{user}/ayumy.git ~/ayumy
+
+# 2. PATH を通す（~/.zshrc 等に追加）
+export PATH="$HOME/ayumy/bin:$PATH"
+
+# 3. NAS をマウントし、環境変数を設定（~/.zshrc 等に追加）
+export AYUMY_DATA_DIR="/path/to/nas/ayumy-data"
+
+# 4. 動作確認
+ayumy sync
+```
+
+### ホストマシン
+`~/.ayumy.env` に環境変数（`GITHUB_PAT`, `ANTHROPIC_API_KEY`, `NOTION_TOKEN`, `NOTION_DATABASE_ID`, `SLACK_WEBHOOK_URL`, `AYUMY_DATA_DIR`）を設定し、cron で `daily_report.py` を実行する。詳細は [Spec.md](./Spec.md) の §8 を参照
 
 ## Running Cost
 課金が発生するのは Anthropic API のみ（GitHub API・Notion API は無料枠内）
