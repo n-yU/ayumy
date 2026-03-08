@@ -115,6 +115,11 @@ if [[ -z "${AYUMY_DATA_DIR:-}" ]]; then
   exit 1
 fi
 
+if [[ ! -d "$AYUMY_DATA_DIR" ]]; then
+  err "AYUMY_DATA_DIR does not exist: $AYUMY_DATA_DIR"
+  exit 1
+fi
+
 if [[ ! -d "$CLAUDE_PROJECTS_DIR" ]]; then
   err "$CLAUDE_PROJECTS_DIR does not exist"
   exit 1
