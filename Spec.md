@@ -44,6 +44,8 @@ GitHub 上で自分が owner であるすべてのリポジトリにおける日
 
 ```
 ayumy/
+├── bin/
+│   └── ayumy                        # CLI エントリポイント（サブコマンドのディスパッチ）
 ├── scripts/
 │   ├── daily_report.py               # メインスクリプト: GitHub API + Claude API + Notion API
 │   └── sync_session.sh               # セッション転送スクリプト（hook・手動共用）
@@ -82,10 +84,11 @@ Claude Code セッションの JSONL をホストマシンに rsync で転送す
 Claude Code は会話を `~/.claude/projects/` 以下にローカル保存している。
 
 - 各プロジェクトがディレクトリとして存在（パスのスラッシュがダッシュに置換された名前）
-- 個別セッションは JSONL ファイルとして保存
-- `sessions-index.json` にメタデータ（サマリー、メッセージ数、ブランチ、タイムスタンプ）が含まれる
+- 個別セッションは JSONL ファイル（`{session-id}.jsonl`）として保存
+- メタデータ（セッション ID、タイムスタンプ、ブランチ等）は JSONL の各エントリに埋め込まれている
+- 外部インデックスファイルは存在しない
 
-「アクティブなセッション」とは、直近（例: 過去1時間以内）に `sessions-index.json` のタイムスタンプが更新されたセッションを指す。
+転送対象のセッションは、マーカーファイル（`.ayumy_last_sync`）との mtime 比較で決定する。マーカーが存在しない場合（初回）は全 JSONL を対象とし、転送成功後にマーカーを `touch` して次回の基準とする。
 
 ### 4.3 転送スクリプト（`sync_session.sh`）
 hook と手動実行の両方から呼ばれる共通スクリプト。
@@ -96,8 +99,8 @@ sync_session.sh [--project <project-name>] [--all] [--background]
 
 | オプション | 動作 |
 |---|---|
-| `--project <name>` | 指定プロジェクトのアクティブセッションのみ転送 |
-| `--all` | 全プロジェクトから当日更新されたセッションを一括転送 |
+| `--project <name>` | 指定プロジェクトの差分セッションのみ転送 |
+| `--all` | 全プロジェクトから差分セッションを一括転送 |
 | `--background` | バックグラウンドで実行（hook 用） |
 | 引数なし | カレントディレクトリに対応するプロジェクトを自動判定 |
 
@@ -130,7 +133,7 @@ ayumy sync --all                  # 全プロジェクトの当日分を一括�
 ayumy sync --project my-project   # 特定プロジェクトを指定
 ```
 
-`ayumy sync` は `sync_session.sh` を呼び出すシェルエイリアスまたはラッパーとして実装する。手動実行時はフォアグラウンドで実行し、転送結果を標準出力に表示する。
+`ayumy sync` は `bin/ayumy` CLI を通じて `sync_session.sh` を呼び出す。`bin/ayumy` はサブコマンドをディスパッチするエントリポイントであり、クライアントマシンのセットアップ時に PATH に追加する（例: `export PATH="$HOME/ayumy/bin:$PATH"`）。手動実行時はフォアグラウンドで実行し、転送結果を標準出力に表示する。
 
 ### 4.6 セキュリティに関する注意
 - JSONL には会話の生データが含まれるため、機密情報の漏洩に注意
@@ -351,11 +354,12 @@ Notion ページの本文には Claude が生成した要約を記載する。�
 ## 10. 開発手順
 以下の順序で実装を進める。依存関係の少ないコンポーネントから着手し、先に作ったものが後のテストデータ・検証基盤となる構成。
 
-### Phase 1: セッション転送スクリプト（`scripts/sync_session.sh`） [#1](https://github.com/n-yU/ayumy/issues/1)
+### Phase 1: セッション転送スクリプト（`scripts/sync_session.sh`）と CLI [#1](https://github.com/n-yU/ayumy/issues/1)
 外部 API 不要。ローカル環境のみで動作確認できる。
 - `--project`, `--all`, `--background` オプションの実装
-- `~/.claude/projects/` からアクティブセッションの JSONL を検出するロジック
+- マーカーファイル（`.ayumy_last_sync`）による差分検出
 - rsync による転送（冪等性の担保）
+- `bin/ayumy` CLI エントリポイントの実装（`ayumy sync` でスクリプトを呼び出し）
 - ローカル検証: `AYUMY_HOST` を空にし、ローカルの別ディレクトリ（例: `/tmp/ayumy-data/`）を転送先として使用
 
 ### Phase 2: Git hook（`hooks/post-commit`） [#2](https://github.com/n-yU/ayumy/issues/2)
