@@ -1,10 +1,10 @@
 # ayumy
 Traces of daily craft, woven by AI
 
-GitHub 上の日次開発アクティビティ（Commit, PR, Issue）と Claude Code のセッションログを自動収集し、Claude API で自然言語の要約を生成して Notion データベースに記録するシステム。
+GitHub 上の日次開発アクティビティ（Commit, PR, Issue）と Claude Code のセッションログを自動収集し、Claude API で自然言語の要約を生成して Notion データベースに記録するシステム
 
 ## Architecture
-常時稼働マシン（Raspberry Pi 等）を使用した2フェーズ構成。セッションログの生データは LAN 内にのみ保持する。
+常時稼働マシン（Raspberry Pi 等）を使用した2フェーズ構成。セッションログの生データは LAN 内にのみ保持する
 
 ```
 [開発マシン]
@@ -44,49 +44,13 @@ ayumy/
 └── README.md
 ```
 
-**常時稼働マシン上のデータディレクトリ**
-
-```
-~/ayumy-data/
-├── claude-sessions/           # 開発マシンから転送された JSONL
-│   ├── {project-name}/
-│   │   └── {session-id}.jsonl
-│   └── ...
-└── logs/                      # 実行ログ
-```
-
 ## Setup
-詳細なセットアップ手順は [Spec.md](./Spec.md) の §8 を参照。
-
-### Environment Variables (Server)
-常時稼働マシンの `~/.ayumy.env` に設定:
-
-| 変数 | 説明 |
-|---|---|
-| `GITHUB_PAT` | GitHub Fine-grained PAT |
-| `ANTHROPIC_API_KEY` | Anthropic API キー |
-| `NOTION_TOKEN` | Notion Internal Integration トークン |
-| `NOTION_DATABASE_ID` | Notion データベース ID |
-| `SLACK_WEBHOOK_URL` | Slack Incoming Webhook URL |
-| `AYUMY_DATA_DIR` | データディレクトリのパス（デフォルト: `~/ayumy-data`） |
-
-### Environment Variables (Dev Machine)
-| 変数 | 説明 |
-|---|---|
-| `AYUMY_HOST` | 常時稼働マシンの SSH ホスト名（例: `pi@raspberrypi.local`） |
-| `AYUMY_DATA_DIR` | データディレクトリのパス（デフォルト: `~/ayumy-data`） |
-
-## Development Phases
-| Phase | 内容 | Issue |
-|---|---|---|
-| 1 | セッション転送スクリプト（`sync_session.sh`） | [#1](https://github.com/n-yU/ayumy/issues/1) |
-| 2 | Git hook（`post-commit`） | [#2](https://github.com/n-yU/ayumy/issues/2) |
-| 3 | 常時稼働マシンのコンテナ化 | — |
-| 4 | メインスクリプト（`daily_report.py`） | — |
-| 5 | 結合テスト・運用準備 | — |
+- 常時稼働マシンの `~/.ayumy.env` に必要な環境変数（`GITHUB_PAT`, `ANTHROPIC_API_KEY`, `NOTION_TOKEN`, `NOTION_DATABASE_ID`, `SLACK_WEBHOOK_URL`）を設定する
+- 開発マシンでは `AYUMY_HOST` に常時稼働マシンの SSH ホスト名を設定する
+- 詳細は [Spec.md](./Spec.md) の §8 を参照
 
 ## Running Cost
-課金が発生するのは Anthropic API のみ（GitHub API・Notion API は無料枠内）。
+課金が発生するのは Anthropic API のみ（GitHub API・Notion API は無料枠内）
 
 | 期間 | コスト |
 |---|---|
@@ -94,4 +58,4 @@ ayumy/
 | 1ヶ月 | ~$1.5 |
 | 1年 | ~$18 |
 
-※ 平均的な開発日の見積もり。セッションログが大量にある日はトークン数が増加する。
+※ 平均的な開発日の見積もり。セッションログが大量にある日はトークン数が増加する
