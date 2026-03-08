@@ -51,12 +51,12 @@ sync_project() {
   # this marker and will be picked up on the next run.
   local tmp_marker="$project_dir/${MARKER_NAME}.tmp"
   touch "$tmp_marker"
+  trap 'rm -f "$tmp_marker"' RETURN
 
   local files
   files=$(find_changed_sessions "$project_dir")
 
   if [[ -z "$files" ]]; then
-    rm -f "$tmp_marker"
     log "$project_name: no changes"
     return 1
   fi
