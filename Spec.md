@@ -75,7 +75,7 @@ ayumy/
 ### 4.1 概要
 Claude Code セッションの JSONL を NAS に転送する。
 
-- **自動転送（post-commit hook）**: commit を契機に、当該プロジェクトのアクティブセッションをバックグラウンドで転送
+- **自動転送（post-commit hook）**: commit を契機に、当該プロジェクトの未同期セッションをバックグラウンドで転送
 - **手動転送（`ayumy sync`）**: commit せずに作業を中断する場合など、任意のタイミングで実行
 
 いずれも共通の転送スクリプト `scripts/sync_session.sh` を使用する。
