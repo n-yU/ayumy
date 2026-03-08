@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+AYUMY_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+usage() {
+  cat <<'USAGE'
+Usage: ayumy <command> [options]
+
+Commands:
+  sync    Sync Claude Code sessions to the host machine
+USAGE
+  exit 1
+}
+
+[[ $# -eq 0 ]] && usage
+
+command="$1"
+shift
+
+case "$command" in
+  sync)
+    exec "$AYUMY_ROOT/scripts/sync_session.sh" "$@"
+    ;;
+  *)
+    echo "ayumy: unknown command '$command'" >&2
+    usage
+    ;;
+esac

@@ -7,7 +7,7 @@
 ## アーキテクチャ
 2フェーズ構成（ホストマシン＝Raspberry Pi 等を使用、データは NAS に保持）:
 
-1. **フェーズ 1（post-commit hook）**: 各リポジトリでの commit を契機に、`~/.claude/projects/` からアクティブな Claude Code セッションの JSONL を rsync でホストマシンに転送し、NAS 上のデータディレクトリに蓄積する。
+1. **フェーズ 1（post-commit hook）**: 各リポジトリでの commit を契機に、`~/.claude/projects/` から未同期の Claude Code セッションの JSONL を NAS 上のデータディレクトリにコピーする。
 2. **フェーズ 2（ホストマシン上の cron）**: NAS 上のセッションログの読み取りと GitHub API によるアクティビティ取得を行い、Claude API で要約を生成して Notion に書き込み、Slack に通知する。処理済み JSONL は `processed/` にアーカイブする。
 
 ## リポジトリ構成
@@ -22,7 +22,7 @@ hooks/post-commit                    # Git hook（各リポジトリにシンボ
 - **Claude モデル**: 要約生成に `claude-sonnet-4-20250514` を使用
 - **GitHub API**: REST、Fine-grained PAT、`affiliation=owner` で自分の所有リポジトリのみ対象
 - **Notion API**: Internal Integration Token、データベースプロパティは Spec.md §6 に定義
-- **Hook 設計**: 必ず `exit 0` を返す（commit をブロックしない）、rsync はバックグラウンド実行、セッション ID 単位の上書きで冪等性を担保
+- **Hook 設計**: 必ず `exit 0` を返す（commit をブロックしない）、バックグラウンド実行、セッション ID 単位の上書きで冪等性を担保
 
 ## 環境変数
 ホストマシン（`~/.ayumy.env`）:
@@ -33,8 +33,7 @@ hooks/post-commit                    # Git hook（各リポジトリにシンボ
 - `AYUMY_DATA_DIR` — NAS 上のデータディレクトリのマウントパス
 
 クライアントマシン（post-commit hook 用）:
-- `AYUMY_HOST` — ホストマシンの SSH ホスト名（例: `pi@raspberrypi.local`）
-- `AYUMY_DATA_DIR` — ホストマシン上の NAS マウントパス
+- `AYUMY_DATA_DIR` — NAS 上のデータディレクトリのマウントパス
 
 ## 書式規約
 - **Markdown の見出し**: 見出しの直後に空行を入れない（見出しの前には空行を入れる）
