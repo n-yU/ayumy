@@ -23,6 +23,9 @@ fi
 # Resolve project name from the repository path.
 # Claude Code stores projects under ~/.claude/projects/ with slashes replaced by dashes.
 git_root="$(git rev-parse --show-toplevel 2>/dev/null)"
+if [[ -z "$git_root" ]]; then
+  exit 0
+fi
 project_name="$(echo "$git_root" | sed 's|/|-|g')"
 
 "$sync_script" --project "$project_name" --background
