@@ -4,7 +4,8 @@
 #   ln -s /path/to/ayumy/hooks/post-commit /path/to/repo/.git/hooks/post-commit
 
 # Never block the commit — always exit 0.
-trap 'exit 0' ERR
+# No `set -e`; failed commands fall through to the next line.
+# Explicit checks handle each failure case, and the final `exit 0` guarantees success.
 
 # Resolve the ayumy repository root from this symlink target.
 hook_path="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null)"
