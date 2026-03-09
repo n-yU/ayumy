@@ -7,8 +7,8 @@
 trap 'exit 0' ERR
 
 # Resolve the ayumy repository root from this symlink target.
-hook_path="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null)" || exit 0
-AYUMY_ROOT="$(cd "$(dirname "$hook_path")/.." && pwd)" || exit 0
+hook_path="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null)"
+AYUMY_ROOT="$(cd "$(dirname "$hook_path")/.." && pwd)"
 
 sync_script="$AYUMY_ROOT/scripts/sync_session.sh"
 if [[ ! -x "$sync_script" ]]; then
@@ -18,7 +18,7 @@ fi
 
 # Resolve project name from the repository path.
 # Claude Code stores projects under ~/.claude/projects/ with slashes replaced by dashes.
-git_root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+git_root="$(git rev-parse --show-toplevel 2>/dev/null)"
 project_name="$(echo "$git_root" | sed 's|/|-|g')"
 
 "$sync_script" --project "$project_name" --background
