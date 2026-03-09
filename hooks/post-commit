@@ -8,6 +8,10 @@ trap 'exit 0' ERR
 
 # Resolve the ayumy repository root from this symlink target.
 hook_path="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null)"
+if [[ -z "$hook_path" ]]; then
+  echo "[ayumy] could not resolve hook path from: $0" >&2
+  exit 0
+fi
 AYUMY_ROOT="$(cd "$(dirname "$hook_path")/.." && pwd)"
 
 sync_script="$AYUMY_ROOT/scripts/sync_session.sh"
