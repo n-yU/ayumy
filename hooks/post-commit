@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Post-commit hook for ayumy.
+# Symlink this file to each repo's .git/hooks/post-commit:
+#   ln -s /path/to/ayumy/hooks/post-commit /path/to/repo/.git/hooks/post-commit
+
+# Never block the commit — always exit 0.
+# No `set -e`; failed commands fall through to the next line.
+# Explicit checks handle each failure case, and the final `exit 0` guarantees success.
+
+# Resolve the ayumy repository root from this symlink target.
+hook_path="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null)"
+if [[ -z "$hook_path" ]]; then
+  echo "[ayumy] could not resolve hook path from: $0" >&2
+  exit 0
+fi
+AYUMY_ROOT="$(cd "$(dirname "$hook_path")/.." && pwd)"
+
+sync_script="$AYUMY_ROOT/scripts/sync_session.sh"
+if [[ ! -x "$sync_script" ]]; then
+  echo "[ayumy] sync script not found: $sync_script" >&2
+  exit 0
+fi
+
+# Resolve project name from the repository path.
+# Claude Code stores projects under ~/.claude/projects/ with slashes replaced by dashes.
+git_root="$(git rev-parse --show-toplevel 2>/dev/null)"
+if [[ -z "$git_root" ]]; then
+  exit 0
+fi
+project_name="$(echo "$git_root" | sed 's|/|-|g')"
+
+"$sync_script" --project "$project_name" --background
+exit 0
