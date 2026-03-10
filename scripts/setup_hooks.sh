@@ -96,5 +96,5 @@ else
   }
   # Normalize to absolute path.
   git_dir="$(cd "$git_dir" && pwd)"
-  install_hook "$git_dir"
+  install_hook "$git_dir" || true
 fi
