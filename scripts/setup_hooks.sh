@@ -101,6 +101,11 @@ else
     echo "ayumy setup-hooks: not a Git repository" >&2
     exit 1
   }
+  # Worktrees and submodules use a .git file instead of a directory; not supported.
+  if [[ ! -d "$git_dir" ]]; then
+    echo "ayumy setup-hooks: unsupported Git layout (.git is not a directory): $git_dir" >&2
+    exit 1
+  fi
   # Normalize to absolute path.
   git_dir="$(cd "$git_dir" && pwd)"
   install_hook "$git_dir" || true
