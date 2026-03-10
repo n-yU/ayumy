@@ -128,6 +128,8 @@ hook の配布方法（`ayumy setup-hooks` コマンドで設置）:
 - **一括設置**: `ayumy setup-hooks --all <dir>` で指定ディレクトリ配下の全リポジトリに設置
 - **手動設置**: `ln -s {AYUMY_REPO}/hooks/post-commit {REPO}/.git/hooks/post-commit`
 
+`--all` の対象は `.git` ディレクトリを持つ通常のリポジトリのみ。Git worktree やサブモジュール（`.git` がファイルのケース）は対象外。
+
 ### 4.5 手動同期（`ayumy sync`）
 commit せずに作業を中断する場合や、hook で転送されなかったセッションを補完する。
 
