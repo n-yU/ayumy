@@ -111,6 +111,9 @@ if [[ -n "$all_dir" ]]; then
   summary="[ayumy] done: $found repos found, $installed installed, $skipped skipped"
   [[ "$errors" -gt 0 ]] && summary="$summary, $errors failed"
   echo "$summary"
+  if [[ "$errors" -gt 0 ]]; then
+    exit 2
+  fi
 else
   # Install to the current directory's repository.
   git_dir="$(git rev-parse --git-dir 2>/dev/null)" || {
