@@ -125,7 +125,7 @@ hook はリポジトリパスからプロジェクト名を解決し、`sync_ses
 hook の配布方法（`ayumy setup-hooks` コマンドで設置）:
 
 - **単体設置**: 対象リポジトリで `ayumy setup-hooks` を実行
-- **一括設置**: `ayumy setup-hooks --all <dir>` で指定ディレクトリ配下の全リポジトリに設置
+- **一括設置**: `ayumy setup-hooks --all <dir>` で指定ディレクトリ直下のリポジトリに設置
 - **手動設置**: `ln -s {AYUMY_REPO}/hooks/post-commit {REPO}/.git/hooks/post-commit`
 
 `--all` の対象は `.git` ディレクトリを持つ通常のリポジトリのみ。Git worktree やサブモジュール（`.git` がファイルのケース）は対象外。

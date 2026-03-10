@@ -17,7 +17,7 @@ Usage: ayumy setup-hooks [options]
 Install the post-commit hook to Git repositories via symlink.
 
 Options:
-  --all <dir>   Scan <dir> for Git repositories and install hooks to all of them
+  --all <dir>   Scan immediate children of <dir> for Git repositories and install hooks
   --force       Overwrite an existing post-commit hook
   --help        Show this help message
 USAGE
