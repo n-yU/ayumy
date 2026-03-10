@@ -124,5 +124,10 @@ else
   fi
   # Normalize to absolute path.
   git_dir="$(cd "$git_dir" && pwd)"
-  install_hook "$git_dir" || true
+  rc=0
+  install_hook "$git_dir" || rc=$?
+  # Exit with error code for real failures; skip (rc=1) is non-fatal.
+  if [[ "$rc" -ge 2 ]]; then
+    exit "$rc"
+  fi
 fi
