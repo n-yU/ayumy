@@ -27,10 +27,11 @@ install_hook() {
 
   if [[ -L "$hook_path" ]]; then
     local target
-    target="$(readlink -f "$hook_path" 2>/dev/null || realpath "$hook_path" 2>/dev/null)"
-    if [[ "$target" == "$(readlink -f "$HOOK_SOURCE")" ]]; then
-      echo "[ayumy] already installed: $hook_path"
-      return 0
+    if target="$(readlink "$hook_path" 2>/dev/null)"; then
+      if [[ "$target" == "$HOOK_SOURCE" ]]; then
+        echo "[ayumy] already installed: $hook_path"
+        return 0
+      fi
     fi
   fi
 
