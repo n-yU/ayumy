@@ -49,7 +49,7 @@ ayumy/
 ├── scripts/
 │   ├── daily_report.py               # メインスクリプト: GitHub API + Claude API + Notion API
 │   ├── sync_session.sh               # セッション転送スクリプト（hook・手動共用）
-│   └── setup_hooks.sh               # hook の設置スクリプト
+│   └── setup_hooks.sh                # hook の設置スクリプト
 ├── hooks/
 │   └── post-commit                   # 各リポジトリにシンボリックリンクで配置
 ├── Spec.md
