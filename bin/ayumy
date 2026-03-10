@@ -8,7 +8,8 @@ usage() {
 Usage: ayumy <command> [options]
 
 Commands:
-  sync    Sync Claude Code sessions to the host machine
+  sync          Sync Claude Code sessions to the host machine
+  setup-hooks   Install post-commit hook to Git repositories
 USAGE
   exit 1
 }
@@ -21,6 +22,9 @@ shift
 case "$command" in
   sync)
     exec "$AYUMY_ROOT/scripts/sync_session.sh" "$@"
+    ;;
+  setup-hooks)
+    exec "$AYUMY_ROOT/scripts/setup_hooks.sh" "$@"
     ;;
   *)
     echo "ayumy: unknown command '$command'" >&2

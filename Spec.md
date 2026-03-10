@@ -48,7 +48,8 @@ ayumy/
 │   └── ayumy                        # CLI エントリポイント（サブコマンドのディスパッチ）
 ├── scripts/
 │   ├── daily_report.py               # メインスクリプト: GitHub API + Claude API + Notion API
-│   └── sync_session.sh               # セッション転送スクリプト（hook・手動共用）
+│   ├── sync_session.sh               # セッション転送スクリプト（hook・手動共用）
+│   └── setup_hooks.sh               # hook の設置スクリプト
 ├── hooks/
 │   └── post-commit                   # 各リポジトリにシンボリックリンクで配置
 ├── Spec.md
@@ -121,11 +122,11 @@ hook はリポジトリパスからプロジェクト名を解決し、`sync_ses
 - hook の失敗は commit に影響を与えない（exit 0 を保証）
 - エラーは stderr に出力するのみ
 
-hook の配布方法:
+hook の配布方法（`ayumy setup-hooks` コマンドで設置）:
 
+- **単体設置**: 対象リポジトリで `ayumy setup-hooks` を実行
+- **一括設置**: `ayumy setup-hooks --all <dir>` で指定ディレクトリ配下の全リポジトリに設置
 - **手動設置**: `ln -s {AYUMY_REPO}/hooks/post-commit {REPO}/.git/hooks/post-commit`
-- **Git テンプレート**: `git config --global init.templateDir {AYUMY_REPO}/hooks-template`
-- **セットアップスクリプト**: 既存の全リポジトリに一括設置
 
 ### 4.5 手動同期（`ayumy sync`）
 commit せずに作業を中断する場合や、hook で転送されなかったセッションを補完する。
@@ -293,7 +294,7 @@ Notion ページの本文には Claude が生成した要約を記載する。�
 2. PATH を通す: `export PATH="$HOME/ayumy/bin:$PATH"`（`~/.zshrc` 等に追加）
 3. NAS のデータディレクトリをマウント
 4. 環境変数 `AYUMY_DATA_DIR`（NAS のマウントパス）を設定
-5. 対象リポジトリに hook を設置（§4.4 参照）
+5. 対象リポジトリに hook を設置: `ayumy setup-hooks --all ~/Documents/github`（§4.4 参照）
 
 ### 8.5 Notion
 1. [Notion Integrations](https://www.notion.so/my-integrations) で Internal Integration を作成
@@ -368,6 +369,7 @@ Phase 1 の `sync_session.sh` を前提としたラッパー。
 - リポジトリパスからプロジェクト名を解決
 - `sync_session.sh --project {name} --background` の呼び出し
 - `exit 0` の保証（commit をブロックしない設計）
+- hook の配布: `ayumy setup-hooks` コマンド（単体設置 / `--all` で一括設置）
 
 ### Phase 3: ホストマシンのコンテナ化（`Dockerfile`, `compose.yaml`）
 `daily_report.py` の実行環境をコンテナとして構築する。

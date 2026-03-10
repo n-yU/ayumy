@@ -14,6 +14,7 @@
 ```
 scripts/daily_report.py              # メインスクリプト: GitHub API + Claude API + Notion API
 scripts/sync_session.sh              # セッション転送スクリプト（hook・手動共用）
+scripts/setup_hooks.sh               # hook の設置スクリプト
 hooks/post-commit                    # Git hook（各リポジトリにシンボリックリンクで配置）
 ```
 
