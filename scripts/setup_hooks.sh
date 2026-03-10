@@ -4,6 +4,12 @@ set -euo pipefail
 AYUMY_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 HOOK_SOURCE="$AYUMY_ROOT/hooks/post-commit"
 
+# Verify that the hook source exists (and is executable) before proceeding.
+if [[ ! -f "$HOOK_SOURCE" || ! -x "$HOOK_SOURCE" ]]; then
+  echo "ayumy setup-hooks: hook source not found or not executable: $HOOK_SOURCE" >&2
+  exit 1
+fi
+
 usage() {
   cat <<'USAGE'
 Usage: ayumy setup-hooks [options]
