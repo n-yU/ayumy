@@ -21,7 +21,7 @@ Options:
   --force       Overwrite an existing post-commit hook
   --help        Show this help message
 USAGE
-  exit 1
+  exit "${1:-1}"
 }
 
 # Install the hook to a single repository.
@@ -73,7 +73,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --help)
-      usage
+      usage 0
       ;;
     *)
       echo "ayumy setup-hooks: unknown option '$1'" >&2
