@@ -40,8 +40,15 @@ install_hook() {
     return 1
   fi
 
-  mkdir -p "$hook_dir"
-  ln -sf "$HOOK_SOURCE" "$hook_path"
+  if ! mkdir -p "$hook_dir"; then
+    echo "[ayumy] failed to create hook directory: $hook_dir" >&2
+    return 1
+  fi
+
+  if ! ln -sf "$HOOK_SOURCE" "$hook_path"; then
+    echo "[ayumy] failed to install hook (could not create symlink): $hook_path -> $HOOK_SOURCE" >&2
+    return 1
+  fi
   echo "[ayumy] installed: $hook_path"
 }
 
