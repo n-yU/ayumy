@@ -48,12 +48,12 @@ install_hook() {
 
   if ! mkdir -p "$hook_dir"; then
     echo "[ayumy] failed to create hook directory: $hook_dir" >&2
-    return 1
+    return 2
   fi
 
   if ! ln -sf "$HOOK_SOURCE" "$hook_path"; then
     echo "[ayumy] failed to install hook (could not create symlink): $hook_path -> $HOOK_SOURCE" >&2
-    return 1
+    return 2
   fi
   echo "[ayumy] installed: $hook_path"
 }
@@ -89,18 +89,28 @@ if [[ -n "$all_dir" ]]; then
   fi
 
   found=0
-  failed=0
+  skipped=0
+  errors=0
   for git_dir in "$all_dir"/*/.git; do
     [[ -d "$git_dir" ]] || continue
     found=$((found + 1))
-    install_hook "$git_dir" || failed=$((failed + 1))
+    rc=0
+    install_hook "$git_dir" || rc=$?
+    if [[ "$rc" -eq 1 ]]; then
+      skipped=$((skipped + 1))
+    elif [[ "$rc" -ge 2 ]]; then
+      errors=$((errors + 1))
+    fi
   done
 
   if [[ "$found" -eq 0 ]]; then
     echo "[ayumy] no Git repositories found in: $all_dir" >&2
     exit 1
   fi
-  echo "[ayumy] done: $found repos found, $((found - failed)) installed, $failed skipped"
+  installed=$((found - skipped - errors))
+  summary="[ayumy] done: $found repos found, $installed installed, $skipped skipped"
+  [[ "$errors" -gt 0 ]] && summary="$summary, $errors failed"
+  echo "$summary"
 else
   # Install to the current directory's repository.
   git_dir="$(git rev-parse --git-dir 2>/dev/null)" || {
