@@ -1,0 +1,9 @@
+services:
+  ayumy:
+    build: .
+    env_file:
+      - ~/.ayumy.env
+    volumes:
+      - ${AYUMY_DATA_DIR}:/data
+    environment:
+      - AYUMY_DATA_DIR=/data

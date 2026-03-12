@@ -10,6 +10,7 @@ Usage: ayumy <command> [options]
 Commands:
   sync          Sync Claude Code sessions to the host machine
   setup-hooks   Install post-commit hook to Git repositories
+  setup-host    Set up the host machine (env file, container, cron)
 USAGE
   exit 1
 }
@@ -25,6 +26,9 @@ case "$command" in
     ;;
   setup-hooks)
     exec "$AYUMY_ROOT/scripts/setup_hooks.sh" "$@"
+    ;;
+  setup-host)
+    exec "$AYUMY_ROOT/scripts/setup_host.sh" "$@"
     ;;
   *)
     echo "ayumy: unknown command '$command'" >&2

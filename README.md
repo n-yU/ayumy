@@ -43,7 +43,8 @@ ayumy/
 ├── scripts/
 │   ├── report.py             # メインスクリプト: GitHub API + Claude API + Notion API
 │   ├── sync_session.sh       # セッション転送スクリプト（hook・手動共用）
-│   └── setup_hooks.sh        # hook の設置スクリプト
+│   ├── setup_hooks.sh        # hook の設置スクリプト
+│   └── setup_host.sh         # ホストマシンのセットアップスクリプト
 ├── hooks/
 │   └── post-commit           # 各リポジトリにシンボリックリンクで配置
 ├── Dockerfile                # レポート生成コンテナ
@@ -70,7 +71,17 @@ ayumy sync
 ```
 
 ### ホストマシン
-`~/.ayumy.env` に環境変数（`GITHUB_PAT`, `ANTHROPIC_API_KEY`, `NOTION_TOKEN`, `NOTION_DATABASE_ID`, `SLACK_WEBHOOK_URL`, `AYUMY_DATA_DIR`）を設定し、Docker Compose でレポート生成コンテナを実行する。詳細は [Spec.md](./Spec.md) の §8 を参照
+```bash
+# 1. NAS のデータディレクトリを NFS 等でマウント
+
+# 2. セットアップ（env ファイル作成、コンテナビルド＆テスト、cron 設定）
+ayumy setup-host
+
+# 3. 手動実行
+cd ~/ayumy && docker compose run --rm ayumy
+```
+
+詳細は [Spec.md](./Spec.md) の §7, §8 を参照
 
 ## Running Cost
 課金が発生するのは Anthropic API のみ（GitHub API・Notion API は無料枠内）

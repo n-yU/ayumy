@@ -50,7 +50,8 @@ ayumy/
 ├── scripts/
 │   ├── report.py                    # メインスクリプト: GitHub API + Claude API + Notion API
 │   ├── sync_session.sh              # セッション転送スクリプト（hook・手動共用）
-│   └── setup_hooks.sh               # hook の設置スクリプト
+│   ├── setup_hooks.sh               # hook の設置スクリプト
+│   └── setup_host.sh                # ホストマシンのセットアップスクリプト
 ├── hooks/
 │   └── post-commit                  # 各リポジトリにシンボリックリンクで配置
 ├── Dockerfile                       # レポート生成コンテナ
@@ -294,9 +295,8 @@ cd ~/ayumy && docker compose run --rm ayumy
 1. NAS のデータディレクトリを NFS 等でマウント（例: `/mnt/nas/ayumy-data`）
 2. Docker および Docker Compose をインストール
 3. `ayumy` リポジトリをクローン: `git clone https://github.com/{user}/ayumy.git ~/ayumy`
-4. `~/.ayumy.env` を作成（§7.2 参照、`AYUMY_DATA_DIR` にマウントパスを設定）
-5. コンテナをビルド: `cd ~/ayumy && docker compose build`
-6. cron を設定: `(crontab -l 2>/dev/null; echo '0 15 * * * cd ~/ayumy && docker compose run --rm ayumy >> $AYUMY_DATA_DIR/logs/report.log 2>&1') | crontab -`
+4. PATH を通す: `export PATH="$HOME/ayumy/bin:$PATH"`（`~/.bashrc` 等に追加）
+5. セットアップスクリプトを実行: `ayumy setup-host`（env ファイル作成、コンテナビルド＆テスト、cron 設定を対話的に行う）
 
 ### 8.3 GitHub PAT
 1. Fine-grained PAT を作成（スコープ: 全 owner リポジトリへの Contents / Issues / Pull Requests の read 権限）
@@ -385,12 +385,10 @@ Phase 1 の `sync_session.sh` を前提としたラッパー。
 - hook の配布: `ayumy setup-hooks` コマンド（単体設置 / `--all` で一括設置）
 
 ### Phase 3: ホストマシンのコンテナ化（`Dockerfile`, `compose.yaml`）
-`report.py` の実行環境をコンテナとして構築する。日次の定期実行に加え、作業の区切りなど任意のタイミングでの手動実行も想定する。
-- Python 3.12 + 依存パッケージ（`requests`, `anthropic`）
-- コンテナは1回実行して終了するジョブ方式（ホスト側の cron または手動で `docker compose run --rm` により起動）
-- `$AYUMY_DATA_DIR`（NAS マウントポイント）を volume mount でコンテナと共有
-- `.ayumy.env` を `env_file` として読み込み
-- NAS マウントはホスト側で行い、コンテナには volume mount で共有
+Phase 4 で作成するメインスクリプト（Python）の実行環境をコンテナとして構築する。日次の定期実行に加え、作業の区切りなど任意のタイミングでの手動実行も想定する。
+- `Dockerfile` の作成（Python 3.12 + 依存パッケージ `requests`, `anthropic`）
+- `compose.yaml` の作成（`env_file`, volume mount, 環境変数の設定）
+- ホストマシンセットアップスクリプトの作成（env ファイル生成、コンテナビルド＆テスト、crontab 設定）
 
 ### Phase 4: メインスクリプト（`scripts/report.py`）
 以下のサブ機能を順に実装する。各機能は独立して動作確認可能。

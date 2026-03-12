@@ -15,6 +15,7 @@
 scripts/report.py                    # メインスクリプト: GitHub API + Claude API + Notion API
 scripts/sync_session.sh              # セッション転送スクリプト（hook・手動共用）
 scripts/setup_hooks.sh               # hook の設置スクリプト
+scripts/setup_host.sh                # ホストマシンのセットアップスクリプト
 hooks/post-commit                    # Git hook（各リポジトリにシンボリックリンクで配置）
 Dockerfile                           # レポート生成コンテナ
 compose.yaml                         # Docker Compose 設定
