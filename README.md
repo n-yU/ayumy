@@ -14,7 +14,8 @@ GitHub 上の日次開発アクティビティ（Commit, PR, Issue）と Claude 
                          NAS (共有ストレージ)
                                   │
 [ホストマシン]                    ▼
-  cron (毎日 UTC 00:00) → daily_report.py
+  cron (毎日 JST 00:00) → docker compose run --rm ayumy (report.py)
+  手動実行 ─────────────→ docker compose run --rm ayumy (report.py)
     ├─→ JSONL + GitHub API → Claude API で要約生成
     ├─→ Notion API で記録
     ├─→ Slack Webhook で通知
@@ -27,6 +28,7 @@ GitHub 上の日次開発アクティビティ（Commit, PR, Issue）と Claude 
 ## Tech Stack
 | 技術 | 用途 |
 |---|---|
+| Docker | レポート生成コンテナの実行環境 |
 | Python 3.12 | メインスクリプト（`requests`, `anthropic`） |
 | GitHub API (REST) | 開発アクティビティの取得 |
 | Anthropic API (`claude-sonnet-4-20250514`) | 自然言語による要約生成 |
@@ -39,10 +41,13 @@ ayumy/
 ├── bin/
 │   └── ayumy                 # CLI エントリポイント（サブコマンドのディスパッチ）
 ├── scripts/
-│   ├── daily_report.py       # メインスクリプト: GitHub API + Claude API + Notion API
-│   └── sync_session.sh       # セッション転送スクリプト（hook・手動共用）
+│   ├── report.py             # メインスクリプト: GitHub API + Claude API + Notion API
+│   ├── sync_session.sh       # セッション転送スクリプト（hook・手動共用）
+│   └── setup_hooks.sh        # hook の設置スクリプト
 ├── hooks/
 │   └── post-commit           # 各リポジトリにシンボリックリンクで配置
+├── Dockerfile                # レポート生成コンテナ
+├── compose.yaml              # Docker Compose 設定
 ├── Spec.md
 ├── CLAUDE.md
 └── README.md
@@ -65,7 +70,7 @@ ayumy sync
 ```
 
 ### ホストマシン
-`~/.ayumy.env` に環境変数（`GITHUB_PAT`, `ANTHROPIC_API_KEY`, `NOTION_TOKEN`, `NOTION_DATABASE_ID`, `SLACK_WEBHOOK_URL`, `AYUMY_DATA_DIR`）を設定し、cron で `daily_report.py` を実行する。詳細は [Spec.md](./Spec.md) の §8 を参照
+`~/.ayumy.env` に環境変数（`GITHUB_PAT`, `ANTHROPIC_API_KEY`, `NOTION_TOKEN`, `NOTION_DATABASE_ID`, `SLACK_WEBHOOK_URL`, `AYUMY_DATA_DIR`）を設定し、Docker Compose でレポート生成コンテナを実行する。詳細は [Spec.md](./Spec.md) の §8 を参照
 
 ## Running Cost
 課金が発生するのは Anthropic API のみ（GitHub API・Notion API は無料枠内）

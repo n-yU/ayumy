@@ -8,17 +8,20 @@
 2フェーズ構成（ホストマシン＝Raspberry Pi 等を使用、データは NAS に保持）:
 
 1. **フェーズ 1（post-commit hook）**: 各リポジトリでの commit を契機に、`~/.claude/projects/` から未同期の Claude Code セッションの JSONL を NAS 上のデータディレクトリにコピーする。
-2. **フェーズ 2（ホストマシン上の cron）**: NAS 上のセッションログの読み取りと GitHub API によるアクティビティ取得を行い、Claude API で要約を生成して Notion に書き込み、Slack に通知する。処理済み JSONL は `processed/` にアーカイブする。
+2. **フェーズ 2（ホストマシン上の Docker コンテナ）**: NAS 上のセッションログの読み取りと GitHub API によるアクティビティ取得を行い、Claude API で要約を生成して Notion に書き込み、Slack に通知する。処理済み JSONL は `processed/` にアーカイブする。cron による日次の定期実行に加え、任意のタイミングでの手動実行にも対応する。
 
 ## リポジトリ構成
 ```
-scripts/daily_report.py              # メインスクリプト: GitHub API + Claude API + Notion API
+scripts/report.py                    # メインスクリプト: GitHub API + Claude API + Notion API
 scripts/sync_session.sh              # セッション転送スクリプト（hook・手動共用）
 scripts/setup_hooks.sh               # hook の設置スクリプト
 hooks/post-commit                    # Git hook（各リポジトリにシンボリックリンクで配置）
+Dockerfile                           # レポート生成コンテナ
+compose.yaml                         # Docker Compose 設定
 ```
 
 ## 技術詳細
+- **実行環境**: Docker（`docker compose run --rm` で起動）
 - **言語**: Python 3.12、依存: `requests`, `anthropic`
 - **Claude モデル**: 要約生成に `claude-sonnet-4-20250514` を使用
 - **GitHub API**: REST、Fine-grained PAT、`affiliation=owner` で自分の所有リポジトリのみ対象
@@ -48,5 +51,5 @@ hooks/post-commit                    # Git hook（各リポジトリにシンボ
 ## 開発メモ
 - 仕様書は `Spec.md`（日本語）— すべての要件の原典
 - JSONL の生データは LAN 内（NAS）にのみ保持し、リモートリポジトリには push しない
-- アクティビティの取得対象期間: 前日 UTC 00:00:00 〜 当日 UTC 00:00:00
+- アクティビティの取得対象期間: 前日 JST 00:00:00 〜 当日 JST 00:00:00
 - アクティビティが 0 件の日はスキップまたは「活動なし」と記録

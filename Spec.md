@@ -20,7 +20,8 @@ GitHub 上で自分が owner であるすべてのリポジトリにおける日
                          NAS (共有ストレージ)
                                   │
 [ホストマシン]                    ▼
-  cron (毎日 UTC 00:00) → daily_report.py
+  cron (毎日 JST 00:00) → docker compose run --rm ayumy (report.py)
+  手動実行 ─────────────→ docker compose run --rm ayumy (report.py)
     ├─→ JSONL + GitHub API → Claude API で要約生成
     ├─→ Notion API で記録
     ├─→ Slack Webhook で通知
@@ -47,11 +48,13 @@ ayumy/
 ├── bin/
 │   └── ayumy                        # CLI エントリポイント（サブコマンドのディスパッチ）
 ├── scripts/
-│   ├── daily_report.py               # メインスクリプト: GitHub API + Claude API + Notion API
-│   ├── sync_session.sh               # セッション転送スクリプト（hook・手動共用）
-│   └── setup_hooks.sh                # hook の設置スクリプト
+│   ├── report.py                    # メインスクリプト: GitHub API + Claude API + Notion API
+│   ├── sync_session.sh              # セッション転送スクリプト（hook・手動共用）
+│   └── setup_hooks.sh               # hook の設置スクリプト
 ├── hooks/
-│   └── post-commit                   # 各リポジトリにシンボリックリンクで配置
+│   └── post-commit                  # 各リポジトリにシンボリックリンクで配置
+├── Dockerfile                       # レポート生成コンテナ
+├── compose.yaml                     # Docker Compose 設定
 ├── Spec.md
 ├── CLAUDE.md
 └── README.md
@@ -148,7 +151,7 @@ ayumy sync --project -Users-username-Documents-github-my-project # 特定プロ�
 
 ## 5. フェーズ 2: データ統合・要約・Notion 書き込み
 ### 5.1 GitHub アクティビティの取得
-対象期間: 前日 UTC 00:00:00 〜 当日 UTC 00:00:00
+対象期間: 前日 JST 00:00:00 〜 当日 JST 00:00:00
 
 対象リポジトリは `GET /user/repos`（`affiliation=owner`, `per_page=100`）で全件取得する。
 
@@ -253,15 +256,22 @@ Notion ページの本文には Claude が生成した要約を記載する。�
 ステータスも Claude API による要約時に判定させる。
 
 ## 7. ホストマシンの構成
-### 7.1 cron 設定
-```
-0 0 * * * cd ~/ayumy && python3 scripts/daily_report.py >> $AYUMY_DATA_DIR/logs/daily_report.log 2>&1
-```
+### 7.1 実行方式
+レポート生成はコンテナ（Docker Compose）で実行する。日次の定期実行に加え、作業の区切りなど任意のタイミングでも手動実行できる。
 
-毎日 UTC 00:00（JST 09:00）に実行する。
+**定期実行（cron）**
+```
+0 15 * * * cd ~/ayumy && docker compose run --rm ayumy >> $AYUMY_DATA_DIR/logs/report.log 2>&1
+```
+毎日 JST 00:00（UTC 15:00）に実行する。ホスト側の cron がコンテナを起動し、スクリプト実行後にコンテナは自動で破棄される。
+
+**手動実行**
+```
+cd ~/ayumy && docker compose run --rm ayumy
+```
 
 ### 7.2 環境変数
-`~/.ayumy.env` に記載し、スクリプト内で読み込む。
+`~/.ayumy.env` に記載し、`compose.yaml` の `env_file` でコンテナに渡す。
 
 | 環境変数 | 説明 |
 |---|---|
@@ -273,7 +283,7 @@ Notion ページの本文には Claude が生成した要約を記載する。�
 | `SLACK_WEBHOOK_URL` | Slack Incoming Webhook URL |
 
 ### 7.3 必要なソフトウェア
-- Python 3.12 以上（`requests`, `anthropic`）
+- Docker および Docker Compose
 - NAS へのネットワークアクセス（NFS 等でマウント）
 
 ## 8. セットアップ手順
@@ -282,10 +292,11 @@ Notion ページの本文には Claude が生成した要約を記載する。�
 
 ### 8.2 ホストマシン
 1. NAS のデータディレクトリを NFS 等でマウント（例: `/mnt/nas/ayumy-data`）
+2. Docker および Docker Compose をインストール
 3. `ayumy` リポジトリをクローン: `git clone https://github.com/{user}/ayumy.git ~/ayumy`
-4. Python 依存をインストール: `pip install requests anthropic`
-5. `~/.ayumy.env` を作成（§7.2 参照、`AYUMY_DATA_DIR` にマウントパスを設定）
-6. cron を設定（§7.1 参照）
+4. `~/.ayumy.env` を作成（§7.2 参照、`AYUMY_DATA_DIR` にマウントパスを設定）
+5. コンテナをビルド: `cd ~/ayumy && docker compose build`
+6. cron を設定: `(crontab -l 2>/dev/null; echo '0 15 * * * cd ~/ayumy && docker compose run --rm ayumy >> $AYUMY_DATA_DIR/logs/report.log 2>&1') | crontab -`
 
 ### 8.3 GitHub PAT
 1. Fine-grained PAT を作成（スコープ: 全 owner リポジトリへの Contents / Issues / Pull Requests の read 権限）
@@ -318,7 +329,7 @@ Notion ページの本文には Claude が生成した要約を記載する。�
 
 ### 9.2 API レートリミット
 - GitHub API: 認証済みで 5,000 リクエスト/時
-- Anthropic API: プランに応じたレートリミットあり（日次1回なら問題なし）
+- Anthropic API: プランに応じたレートリミットあり（1日数回程度なら問題なし）
 - Notion API: 3 リクエスト/秒（1ページの書き込みのみなので問題なし）
 
 ### 9.3 エラーハンドリング
@@ -374,14 +385,14 @@ Phase 1 の `sync_session.sh` を前提としたラッパー。
 - hook の配布: `ayumy setup-hooks` コマンド（単体設置 / `--all` で一括設置）
 
 ### Phase 3: ホストマシンのコンテナ化（`Dockerfile`, `compose.yaml`）
-`daily_report.py` の実行環境をコンテナとして構築する。
+`report.py` の実行環境をコンテナとして構築する。日次の定期実行に加え、作業の区切りなど任意のタイミングでの手動実行も想定する。
 - Python 3.12 + 依存パッケージ（`requests`, `anthropic`）
-- cron による日次実行
+- コンテナは1回実行して終了するジョブ方式（ホスト側の cron または手動で `docker compose run --rm` により起動）
 - `$AYUMY_DATA_DIR`（NAS マウントポイント）を volume mount でコンテナと共有
 - `.ayumy.env` を `env_file` として読み込み
 - NAS マウントはホスト側で行い、コンテナには volume mount で共有
 
-### Phase 4: メインスクリプト（`scripts/daily_report.py`）
+### Phase 4: メインスクリプト（`scripts/report.py`）
 以下のサブ機能を順に実装する。各機能は独立して動作確認可能。
 1. GitHub アクティビティ取得 — REST API で Commits / PRs / Issues を取得・整形
 2. JSONL セッションログの読み取り — `$AYUMY_DATA_DIR/claude-sessions/` のパース
