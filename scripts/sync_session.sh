@@ -147,8 +147,8 @@ if [[ "$report" == true ]]; then
     exit 1
   fi
   # --cli-binary-format is AWS CLI v2 only
-  aws_version=$(aws --version 2>&1 | grep -oE 'aws-cli/[0-9]+' | grep -oE '[0-9]+')
-  if [[ "${aws_version:-0}" -lt 2 ]]; then
+  aws_version=$(aws --version 2>&1 | grep -oE 'aws-cli/[0-9]+' | grep -oE '[0-9]+' || true)
+  if [[ -z "$aws_version" || "$aws_version" -lt 2 ]]; then
     err "aws CLI v2 or later is required for --report (found v${aws_version:-unknown})"
     exit 1
   fi
