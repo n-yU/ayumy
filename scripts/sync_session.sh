@@ -116,6 +116,11 @@ done
 
 # --- validation ---
 
+if ! command -v aws &>/dev/null; then
+  err "aws CLI is not installed"
+  exit 1
+fi
+
 if [[ -z "${AYUMY_S3_BUCKET:-}" ]]; then
   err "AYUMY_S3_BUCKET is not set"
   exit 1
