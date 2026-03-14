@@ -72,9 +72,9 @@ sync_project() {
   log "$project_name: syncing $file_count session(s)"
 
   local dest_prefix="s3://$AYUMY_S3_BUCKET/claude-sessions/$project_name/"
-  echo "$files" | while IFS= read -r f; do
+  while IFS= read -r f; do
     aws s3 cp "$f" "$dest_prefix" --quiet
-  done
+  done <<< "$files"
 
   # Promote temp marker to actual marker on success
   mv "$tmp_marker" "$project_dir/$MARKER_NAME"
