@@ -187,11 +187,17 @@ esac
 if [[ "$report" == true ]]; then
   log "invoking Lambda function: $AYUMY_LAMBDA_FUNCTION"
   tmp_output=$(mktemp)
-  trap 'rm -f "$tmp_output"' EXIT
+  tmp_meta=$(mktemp)
+  trap 'rm -f "$tmp_output" "$tmp_meta"' EXIT
   aws lambda invoke \
     --function-name "$AYUMY_LAMBDA_FUNCTION" \
     --payload '{}' \
     --cli-binary-format raw-in-base64-out \
-    "$tmp_output" >/dev/null
+    "$tmp_output" > "$tmp_meta"
+  if grep -q '"FunctionError"' "$tmp_meta"; then
+    err "Lambda invocation failed: $(cat "$tmp_meta")"
+    err "Lambda output: $(cat "$tmp_output")"
+    exit 1
+  fi
   log "Lambda response: $(cat "$tmp_output")"
 fi
