@@ -128,7 +128,14 @@ fi
 
 # Normalize: strip s3:// prefix and trailing slashes
 AYUMY_S3_BUCKET="${AYUMY_S3_BUCKET#s3://}"
-AYUMY_S3_BUCKET="${AYUMY_S3_BUCKET%/}"
+while [[ "$AYUMY_S3_BUCKET" == */ ]]; do
+  AYUMY_S3_BUCKET="${AYUMY_S3_BUCKET%/}"
+done
+
+if [[ -z "$AYUMY_S3_BUCKET" || "$AYUMY_S3_BUCKET" == */* ]]; then
+  err "AYUMY_S3_BUCKET must be a plain bucket name (no s3:// prefix, no path): '$AYUMY_S3_BUCKET'"
+  exit 1
+fi
 
 if [[ "$report" == true && -z "${AYUMY_LAMBDA_FUNCTION:-}" ]]; then
   err "AYUMY_LAMBDA_FUNCTION is not set (required for --report)"
