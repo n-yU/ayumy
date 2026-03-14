@@ -46,7 +46,7 @@ find_changed_sessions() {
   fi
 }
 
-# Sync a single project. Returns 0 on success, 1 if nothing to do, 2 on transfer error.
+# Sync a single project. Returns 0 if files were transferred, 1 if nothing to do, 2 on transfer error.
 sync_project() {
   local project_dir="$1"
   local project_name
