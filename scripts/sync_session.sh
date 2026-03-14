@@ -137,9 +137,17 @@ if [[ -z "$AYUMY_S3_BUCKET" || "$AYUMY_S3_BUCKET" == */* ]]; then
   exit 1
 fi
 
-if [[ "$report" == true && -z "${AYUMY_LAMBDA_FUNCTION:-}" ]]; then
-  err "AYUMY_LAMBDA_FUNCTION is not set (required for --report)"
-  exit 1
+if [[ "$report" == true ]]; then
+  if [[ -z "${AYUMY_LAMBDA_FUNCTION:-}" ]]; then
+    err "AYUMY_LAMBDA_FUNCTION is not set (required for --report)"
+    exit 1
+  fi
+  # --cli-binary-format is AWS CLI v2 only
+  aws_version=$(aws --version 2>&1 | grep -oE 'aws-cli/[0-9]+' | grep -oE '[0-9]+')
+  if [[ "${aws_version:-0}" -lt 2 ]]; then
+    err "aws CLI v2 or later is required for --report (found v${aws_version:-unknown})"
+    exit 1
+  fi
 fi
 
 if [[ ! -d "$CLAUDE_PROJECTS_DIR" ]]; then
