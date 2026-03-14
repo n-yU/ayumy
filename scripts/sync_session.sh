@@ -46,7 +46,7 @@ find_changed_sessions() {
   fi
 }
 
-# Sync a single project. Returns 0 if files were transferred, 1 if nothing to do.
+# Sync a single project. Returns 0 if files were transferred, 1 if nothing to do, 2 on transfer error.
 sync_project() {
   local project_dir="$1"
   local project_name
@@ -72,9 +72,12 @@ sync_project() {
   log "$project_name: syncing $file_count session(s)"
 
   local dest_prefix="s3://$AYUMY_S3_BUCKET/claude-sessions/$project_name/"
-  echo "$files" | while IFS= read -r f; do
-    aws s3 cp "$f" "$dest_prefix" --quiet
-  done
+  while IFS= read -r f; do
+    if ! aws s3 cp "$f" "$dest_prefix" --quiet; then
+      err "$project_name: failed to upload $(basename -- "$f")"
+      return 2
+    fi
+  done <<< "$files"
 
   # Promote temp marker to actual marker on success
   mv "$tmp_marker" "$project_dir/$MARKER_NAME"
@@ -179,13 +182,19 @@ case "$mode" in
       err "project not found: $project_dir"
       exit 1
     fi
-    sync_project "$project_dir" || true
+    rc=0; sync_project "$project_dir" || rc=$?
+    [[ "$rc" -eq 0 || "$rc" -eq 1 ]] || exit "$rc"
     ;;
   all)
     synced=0
     for project_dir in "$CLAUDE_PROJECTS_DIR"/*/; do
       [[ -d "$project_dir" ]] || continue
-      sync_project "$project_dir" && synced=$((synced + 1)) || true
+      rc=0; sync_project "$project_dir" || rc=$?
+      if [[ "$rc" -eq 0 ]]; then
+        synced=$((synced + 1))
+      elif [[ "$rc" -ne 1 ]]; then
+        exit "$rc"
+      fi
     done
     log "synced $synced project(s)"
     ;;
@@ -201,7 +210,8 @@ case "$mode" in
       err "no Claude sessions found for $git_root"
       exit 1
     fi
-    sync_project "$project_dir" || true
+    rc=0; sync_project "$project_dir" || rc=$?
+    [[ "$rc" -eq 0 || "$rc" -eq 1 ]] || exit "$rc"
     ;;
 esac
 
