@@ -8,7 +8,7 @@ usage() {
 Usage: ayumy <command> [options]
 
 Commands:
-  sync          Sync Claude Code sessions to the host machine
+  sync          Sync Claude Code sessions to S3
   setup-hooks   Install post-commit hook to Git repositories
 USAGE
   exit 1
