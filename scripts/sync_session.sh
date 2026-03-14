@@ -126,6 +126,10 @@ if [[ -z "${AYUMY_S3_BUCKET:-}" ]]; then
   exit 1
 fi
 
+# Normalize: strip s3:// prefix and trailing slashes
+AYUMY_S3_BUCKET="${AYUMY_S3_BUCKET#s3://}"
+AYUMY_S3_BUCKET="${AYUMY_S3_BUCKET%/}"
+
 if [[ "$report" == true && -z "${AYUMY_LAMBDA_FUNCTION:-}" ]]; then
   err "AYUMY_LAMBDA_FUNCTION is not set (required for --report)"
   exit 1
