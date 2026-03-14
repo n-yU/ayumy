@@ -10,25 +10,26 @@ GitHub 上で自分が owner であるすべてのリポジトリにおける日
 
 ## 3. システム構成
 ### 3.1 アーキテクチャ
-本システムは2フェーズで構成される。ホストマシン（Raspberry Pi 等）上で日次処理を実行し、セッションログの生データは LAN 内にのみ保持する。データディレクトリは NAS 上に配置し、ホストマシンから NFS 等でマウントして使用する。
+本システムは2フェーズで構成される。セッションログは S3 バケットに保管し、レポート生成は AWS Lambda で実行する。
 
 ```
 [クライアントマシン]
   git commit → post-commit hook ─┐
   ayumy sync（手動）─────────────┤
+  ayumy sync --report ───────────┤── S3 転送後に Lambda も実行
                                   ▼
-                         NAS (共有ストレージ)
+                         S3 バケット (ayumy-data)
                                   │
-[ホストマシン]                    ▼
-  cron (毎日 JST 00:00) → docker compose run --rm ayumy (report.py)
-  手動実行 ─────────────→ docker compose run --rm ayumy (report.py)
+[AWS Lambda]                      ▼
+  EventBridge (毎日 JST 00:00) → Lambda (report.py)
+  ayumy sync --report ──────────→ Lambda (report.py)
     ├─→ JSONL + GitHub API → Claude API で要約生成
     ├─→ Notion API で記録
     ├─→ Slack Webhook で通知
     └─→ 処理済み JSONL を processed/ に移動
 
-[NAS]
-  /path/to/ayumy-data/            # ホストマシンにマウント
+[S3]
+  s3://{bucket}/
   └── claude-sessions/ に JSONL 蓄積
 ```
 
@@ -39,6 +40,9 @@ GitHub 上で自分が owner であるすべてのリポジトリにおける日
 | Anthropic API | 自然言語による要約生成 | API Key |
 | Notion API | 作業記録の書き込み | Internal Integration Token |
 | Slack Incoming Webhook | 完了通知 | Webhook URL |
+| AWS S3 | セッションログの保管 | AWS 認証情報（IAM ユーザー / プロファイル） |
+| AWS Lambda | レポート生成の実行環境 | IAM ロール |
+| Amazon EventBridge Scheduler | 日次の定期実行 | — |
 
 ### 3.3 ディレクトリ構成
 **ayumy リポジトリ（GitHub）** — スクリプトと設定のみ。セッションデータは含まない。
@@ -53,36 +57,40 @@ ayumy/
 │   └── setup_hooks.sh               # hook の設置スクリプト
 ├── hooks/
 │   └── post-commit                  # 各リポジトリにシンボリックリンクで配置
-├── Dockerfile                       # レポート生成コンテナ
-├── compose.yaml                     # Docker Compose 設定
+├── lambda/
+│   ├── handler.py                   # Lambda ハンドラ（report.py を呼び出すエントリポイント）
+│   └── requirements.txt             # Lambda 用の依存パッケージ
+├── template.yaml                    # AWS SAM テンプレート（Lambda, EventBridge, IAM ロール）
 ├── Spec.md
 ├── CLAUDE.md
 └── README.md
 ```
 
-**NAS 上のデータディレクトリ**（ホストマシンに NFS 等でマウント）
+**S3 バケット**
 
 ```
-/path/to/ayumy-data/
+s3://{bucket}/
 ├── claude-sessions/                  # クライアントマシンから転送された JSONL
 │   ├── {project-name}/
 │   │   └── {session-id}.jsonl
 │   └── ...
-├── processed/                        # 処理済み JSONL（無期限保持）
-│   ├── {project-name}/
-│   │   └── {session-id}.jsonl
-│   └── ...
-└── logs/                             # 実行ログ
+└── processed/                        # 処理済み JSONL（無期限保持）
+    ├── {project-name}/
+    │   └── {session-id}.jsonl
+    └── ...
 ```
+
+実行ログは CloudWatch Logs に出力する。
 
 ## 4. フェーズ 1: セッションログの転送
 ### 4.1 概要
-Claude Code セッションの JSONL を NAS に転送する。
+Claude Code セッションの JSONL を S3 バケットに転送する。
 
 - **自動転送（post-commit hook）**: commit を契機に、当該プロジェクトの未同期セッションをバックグラウンドで転送
 - **手動転送（`ayumy sync`）**: commit せずに作業を中断する場合など、任意のタイミングで実行
+- **手動転送＋レポート生成（`ayumy sync --report`）**: S3 への転送後に Lambda を呼び出してレポート生成まで実行
 
-いずれも共通の転送スクリプト `scripts/sync_session.sh` を使用する。
+いずれも共通の転送スクリプト `scripts/sync_session.sh` を使用する。`--report` 指定時は転送完了後に `aws lambda invoke` で Lambda 関数を呼び出す。
 
 ### 4.2 データソース
 Claude Code は会話を `~/.claude/projects/` 以下にローカル保存している。
@@ -102,7 +110,7 @@ Claude Code は会話を `~/.claude/projects/` 以下にローカル保存して
 hook と手動実行の両方から呼ばれる共通スクリプト。
 
 ```
-sync_session.sh [--project <project-name>] [--all] [--background]
+sync_session.sh [--project <project-name>] [--all] [--background] [--report]
 ```
 
 | オプション | 動作 |
@@ -110,12 +118,14 @@ sync_session.sh [--project <project-name>] [--all] [--background]
 | `--project <name>` | 指定プロジェクトの差分セッションのみ転送。`<name>` は `~/.claude/projects/` 以下のディレクトリ名（例: `-Users-username-Documents-github-repo`） |
 | `--all` | 全プロジェクトから差分セッションを一括転送 |
 | `--background` | バックグラウンドで実行（hook 用） |
+| `--report` | S3 転送後に Lambda 関数を呼び出してレポート生成を実行 |
 | 引数なし | カレントディレクトリに対応するプロジェクトを自動判定 |
 
 要件:
 
-- **環境変数 `AYUMY_DATA_DIR`**: NAS 上のデータディレクトリのマウントパス
-- **冪等性**: ファイル単位で上書きする設計とし、同じ JSONL の複数回転送でも問題ない
+- **環境変数 `AYUMY_S3_BUCKET`**: セッションログの保管先 S3 バケット名
+- **AWS 認証情報**: AWS CLI が使用可能な状態であること（`~/.aws/credentials` または環境変数）
+- **冪等性**: `aws s3 cp` による上書きで同じ JSONL の複数回転送でも問題ない
 
 ### 4.4 post-commit hook
 `ayumy/hooks/post-commit` として管理し、各リポジトリの `.git/hooks/post-commit` にシンボリックリンクで配置する。
@@ -140,13 +150,16 @@ commit せずに作業を中断する場合や、hook で転送されなかっ�
 ayumy sync                                                      # current directory のプロジェクトを同期
 ayumy sync --all                                                # 全プロジェクトの未同期分を一括同期
 ayumy sync --project -Users-username-Documents-github-my-project # 特定プロジェクトを指定
+ayumy sync --report                                             # 同期後にレポート生成（Lambda 実行）まで行う
+ayumy sync --all --report                                       # 全プロジェクト同期 + レポート生成
 ```
 
-`ayumy sync` は `bin/ayumy` CLI を通じて `sync_session.sh` を呼び出す。`bin/ayumy` はサブコマンドをディスパッチするエントリポイントであり、クライアントマシンのセットアップ時に PATH に追加する（例: `export PATH="$HOME/ayumy/bin:$PATH"`）。手動実行時はフォアグラウンドで実行し、転送結果を標準出力に表示する。
+`ayumy sync` は `bin/ayumy` CLI を通じて `sync_session.sh` を呼び出す。`bin/ayumy` はサブコマンドをディスパッチするエントリポイントであり、クライアントマシンのセットアップ時に PATH に追加する（例: `export PATH="$HOME/ayumy/bin:$PATH"`）。手動実行時はフォアグラウンドで実行し、転送結果を標準出力に表示する。`--report` 指定時は Lambda の実行結果も標準出力に表示する。
 
 ### 4.6 セキュリティに関する注意
-- JSONL には会話の生データが含まれるため、機密情報の漏洩に注意
-- データディレクトリのパーミッションは 700
+- JSONL には会話の生データが含まれるため、会話中やツール実行時に機密情報（API キー、パスワード等）をログに残さないよう注意する
+- S3 バケットはパブリックアクセスブロックを有効化し、IAM ポリシーで自アカウントのみにアクセスを制限する
+- S3 のサーバーサイド暗号化（SSE-S3）を有効化する
 - 必要に応じて特定プロジェクトを除外するフィルタリング機能を設ける
 
 ## 5. フェーズ 2: データ統合・要約・Notion 書き込み
@@ -162,7 +175,7 @@ ayumy sync --project -Users-username-Documents-github-my-project # 特定プロ�
 | Issues | `GET /repos/{owner}/{repo}/issues` | `since`, `state=all`, PR を除外 | タイトル、番号、状態、作成者、ラベル |
 
 ### 5.2 Claude Code セッションログの読み取り
-1. `$AYUMY_DATA_DIR/claude-sessions/` 以下の全 JSONL を走査し、最終更新日時で前日分をフィルタ
+1. S3 バケットの `claude-sessions/` プレフィックス以下の全 JSONL を走査し、最終更新日時で前日分をフィルタ
 2. JSONL から抽出する項目: ユーザーのプロンプト、Claude の応答の要点、使用したツール、対象プロジェクト名
 
 ### 5.3 要約生成（Claude API）
@@ -213,7 +226,7 @@ Notion への書き込み完了後、Slack Incoming Webhook で指定チャン�
 通知が失敗しても処理全体は正常終了とする（通知はベストエフォート）。
 
 ### 5.5 処理済み JSONL のアーカイブ
-要約生成と Notion 書き込みが正常に完了した後、処理対象の JSONL ファイルを `claude-sessions/` から `processed/` に移動する。移動先はプロジェクト名のサブディレクトリを維持する（例: `processed/{project-name}/{session-id}.jsonl`）。JSONL は無期限に保持し、削除しない。
+要約生成と Notion 書き込みが正常に完了した後、処理対象の JSONL ファイルを S3 上で `claude-sessions/` から `processed/` に移動（コピー＋削除）する。移動先はプロジェクト名のサブディレクトリを維持する（例: `processed/{project-name}/{session-id}.jsonl`）。JSONL は無期限に保持し、削除しない。
 
 ## 6. Notion データベース仕様
 ### 6.1 データベースプロパティ
@@ -255,77 +268,85 @@ Notion ページの本文には Claude が生成した要約を記載する。�
 
 ステータスも Claude API による要約時に判定させる。
 
-## 7. ホストマシンの構成
+## 7. AWS Lambda の構成
 ### 7.1 実行方式
-レポート生成はコンテナ（Docker Compose）で実行する。日次の定期実行に加え、作業の区切りなど任意のタイミングでも手動実行できる。
+レポート生成は AWS Lambda で実行する。日次の定期実行に加え、`ayumy sync --report` による手動実行にも対応する。
 
-**定期実行（cron）**
-```
-0 15 * * * cd ~/ayumy && docker compose run --rm ayumy >> $AYUMY_DATA_DIR/logs/report.log 2>&1
-```
-毎日 JST 00:00（UTC 15:00）に実行する。ホスト側の cron がコンテナを起動し、スクリプト実行後にコンテナは自動で破棄される。
+**定期実行（EventBridge Scheduler）**
+毎日 JST 00:00（UTC 15:00）に EventBridge Scheduler が Lambda 関数を呼び出す。
 
 **手動実行**
+```bash
+ayumy sync --report    # クライアントマシンから（S3 転送 + Lambda 実行）
 ```
-cd ~/ayumy && docker compose run --rm ayumy
-```
+内部的には `aws lambda invoke` で Lambda 関数を同期呼び出しし、実行結果を標準出力に表示する。
 
 ### 7.2 環境変数
-`~/.ayumy.env` に記載し、`compose.yaml` の `env_file` でコンテナに渡す。
+Lambda 関数の環境変数として設定する。機密情報は AWS Secrets Manager に保管し、Lambda から参照する。
 
+**Lambda 環境変数**
 | 環境変数 | 説明 |
+|---|---|
+| `AYUMY_S3_BUCKET` | セッションログの保管先 S3 バケット名 |
+| `NOTION_DATABASE_ID` | 書き込み先の Notion データベース ID |
+
+**Secrets Manager に保管**
+| シークレット | 説明 |
 |---|---|
 | `GITHUB_PAT` | GitHub Fine-grained PAT（全 owner リポジトリへの read 権限） |
 | `ANTHROPIC_API_KEY` | Anthropic API キー |
 | `NOTION_TOKEN` | Notion Internal Integration トークン |
-| `NOTION_DATABASE_ID` | 書き込み先の Notion データベース ID |
-| `AYUMY_DATA_DIR` | NAS 上のデータディレクトリのマウントパス |
 | `SLACK_WEBHOOK_URL` | Slack Incoming Webhook URL |
 
-### 7.3 必要なソフトウェア
-- Docker および Docker Compose
-- NAS へのネットワークアクセス（NFS 等でマウント）
+### 7.3 Lambda 関数の構成
+- **ランタイム**: Python 3.12
+- **ハンドラ**: `lambda/handler.py`（`scripts/report.py` を呼び出すエントリポイント）
+- **タイムアウト**: 300秒（5分）
+- **メモリ**: 256MB
+- **依存パッケージ**: `requests`, `anthropic`, `boto3`
+- **IAM ロール**: S3 バケットへの読み書き、Secrets Manager の読み取り、CloudWatch Logs への書き込み
+
+### 7.4 デプロイ
+AWS SAM（`template.yaml`）で Lambda 関数、EventBridge Scheduler、IAM ロール、S3 バケットを管理する。
+
+```bash
+sam build && sam deploy
+```
 
 ## 8. セットアップ手順
-### 8.1 NAS
-1. データディレクトリを作成: `mkdir -p /path/to/ayumy-data/{claude-sessions,processed,logs} && chmod 700 /path/to/ayumy-data`
+### 8.1 AWS
+1. AWS SAM CLI をインストール
+2. `sam build && sam deploy` で S3 バケット、Lambda 関数、EventBridge Scheduler、IAM ロールをデプロイ（S3 バケットのパブリックアクセスブロックと SSE-S3 は SAM テンプレートで設定）
 
-### 8.2 ホストマシン
-1. NAS のデータディレクトリを NFS 等でマウント（例: `/mnt/nas/ayumy-data`）
-2. Docker および Docker Compose をインストール
-3. `ayumy` リポジトリをクローン: `git clone https://github.com/{user}/ayumy.git ~/ayumy`
-4. `~/.ayumy.env` を作成（§7.2 参照、`AYUMY_DATA_DIR` にマウントパスを設定）
-5. コンテナをビルド: `cd ~/ayumy && docker compose build`
-6. cron を設定: `(crontab -l 2>/dev/null; echo '0 15 * * * cd ~/ayumy && docker compose run --rm ayumy >> $AYUMY_DATA_DIR/logs/report.log 2>&1') | crontab -`
-
-### 8.3 GitHub PAT
+### 8.2 GitHub PAT
 1. Fine-grained PAT を作成（スコープ: 全 owner リポジトリへの Contents / Issues / Pull Requests の read 権限）
-2. ホストマシンの `~/.ayumy.env` に `GITHUB_PAT` として記載
+2. AWS Secrets Manager に `GITHUB_PAT` として登録（Lambda が実行時に参照する。§7.2 参照）
 
-### 8.4 クライアントマシン
+### 8.3 クライアントマシン
 1. `ayumy` リポジトリをクローン: `git clone https://github.com/{user}/ayumy.git ~/ayumy`
 2. PATH を通す: `export PATH="$HOME/ayumy/bin:$PATH"`（`~/.zshrc` 等に追加）
-3. NAS のデータディレクトリをマウント
-4. 環境変数 `AYUMY_DATA_DIR`（NAS のマウントパス）を設定
+3. AWS CLI をインストールし、認証情報を設定（S3 への書き込みと Lambda の呼び出し権限が必要）
+4. 環境変数 `AYUMY_S3_BUCKET`（S3 バケット名）と `AYUMY_LAMBDA_FUNCTION`（Lambda 関数名）を設定
 5. 対象リポジトリに hook を設置: `ayumy setup-hooks --all ~/Documents/github`（§4.4 参照）
 
-### 8.5 Notion
+### 8.4 Notion
 1. [Notion Integrations](https://www.notion.so/my-integrations) で Internal Integration を作成
 2. §6.1 に従いデータベースを作成し、Integration を接続
+3. AWS Secrets Manager に `NOTION_TOKEN` として登録
 
-### 8.6 Anthropic
+### 8.5 Anthropic
 1. [Anthropic Console](https://console.anthropic.com/) で API キーを発行
+2. AWS Secrets Manager に `ANTHROPIC_API_KEY` として登録
 
-### 8.7 Slack
+### 8.6 Slack
 1. Slack App を作成し、Incoming Webhook を有効化
 2. 通知先チャンネルを選択して Webhook URL を発行
-3. ホストマシンの `~/.ayumy.env` に `SLACK_WEBHOOK_URL` として記載
+3. AWS Secrets Manager に `SLACK_WEBHOOK_URL` として登録
 
 ## 9. 運用上の考慮事項
 ### 9.1 ネットワーク要件
-- クライアントマシンとホストマシンの両方から NAS にアクセスできること（NFS 等でマウント）
-- 外出先からも転送したい場合は Tailscale 等の VPN を導入する
-- ホストマシンからインターネットへのアクセス（各 API の呼び出し）
+- クライアントマシンからインターネットへのアクセス（S3 への転送、Lambda の呼び出し）
+- 外出先からも転送可能（VPN 不要）
 
 ### 9.2 API レートリミット
 - GitHub API: 認証済みで 5,000 リクエスト/時
@@ -336,11 +357,11 @@ cd ~/ayumy && docker compose run --rm ayumy
 - API 呼び出し失敗時のリトライ処理
 - アクティビティが0件の日はスキップまたは「活動なし」と記録
 - post-commit hook は必ず exit 0（commit をブロックしない）
-- 転送失敗時、JSONL はソース側に残るため次回転送時にリトライ可能
-- NAS マウントが切れた場合も hook は正常終了し、復旧後に `ayumy sync --all` で補完可能
+- S3 転送失敗時、JSONL はソース側に残るため次回転送時にリトライ可能
+- AWS 認証情報が無効な場合も hook は正常終了し、認証修正後に `ayumy sync --all` で補完可能
 
 ### 9.4 ランニングコスト見積もり
-課金が発生するのは Anthropic API のみ。GitHub API と Notion API は無料枠内で収まる。
+課金が発生するのは Anthropic API と AWS。GitHub API と Notion API は無料枠内で収まる。
 
 **Anthropic API（`claude-sonnet-4-20250514`）**
 - 入力: $3 / 1M tokens、出力: $15 / 1M tokens
@@ -360,16 +381,63 @@ cd ~/ayumy && docker compose run --rm ayumy
 
 ※ セッションログが大量にある日はトークン数が増加する。上記は平均的な開発日の見積もり。
 
+**AWS**
+| サービス | 概算 |
+|---|---|
+| Lambda | 無料枠内（月100万リクエスト、1日1〜数回の実行） |
+| S3 | 月数円（年間 1〜2 GB 程度） |
+| EventBridge Scheduler | 無料枠内 |
+| Secrets Manager | ~$0.40/月（シークレット4件） |
+
 ### 9.5 ストレージ管理
-- データディレクトリは NAS 上に配置し、ホストマシンのディスクを消費しない
-- 処理済み JSONL は `processed/` に移動して無期限保持（§5.5）。NAS 上のため容量の懸念は小さい（年間 1〜2 GB 程度）
-- 実行ログは logrotate 等で管理
-- NAS マウントが切れた場合、スクリプトはデータディレクトリの存在チェックでエラー終了する
+- セッションログは S3 に保管し、クライアントマシンのディスクを消費しない
+- 処理済み JSONL は S3 上で `processed/` に移動して無期限保持（§5.5）。年間 1〜2 GB 程度
+- 実行ログは CloudWatch Logs に出力し、保持期間を設定して管理する
+- 必要に応じて S3 ライフサイクルポリシーで古いデータを Glacier 等に移行可能
 
 ## 10. 開発手順
 以下の順序で実装を進める。依存関係の少ないコンポーネントから着手し、先に作ったものが後のテストデータ・検証基盤となる構成。
 
-### Phase 1: セッション転送スクリプト（`scripts/sync_session.sh`）と CLI [#1](https://github.com/n-yU/ayumy/issues/1)
+### v2 Phase 0: ホストマシン関連の削除 [#8](https://github.com/n-yU/ayumy/issues/8)
+Lambda + S3 構成への設計変更に伴い、不要になったファイルを削除する。
+- `Dockerfile`, `compose.yaml`, `scripts/setup_host.sh` の削除
+- `bin/ayumy` から `setup-host` サブコマンドを削除
+
+### v2 Phase 1: セッション転送の S3 対応（`scripts/sync_session.sh`） [#9](https://github.com/n-yU/ayumy/issues/9)
+既存の NAS 転送（`cp`）を S3 転送（`aws s3 cp`）に置き換える。
+- 転送先を `AYUMY_DATA_DIR`（ローカルパス）から `AYUMY_S3_BUCKET`（S3 バケット）に変更
+- `--report` オプションの追加（転送後に `aws lambda invoke` で Lambda を呼び出す）
+- `AYUMY_LAMBDA_FUNCTION` 環境変数の追加
+- 既存の `--project`, `--all`, `--background` オプション、マーカーファイル方式はそのまま維持
+
+### v2 Phase 2: AWS Lambda 環境の構築（`template.yaml`, `lambda/`） [#10](https://github.com/n-yU/ayumy/issues/10)
+メインスクリプト（Python）の実行環境を Lambda として構築する。
+- SAM テンプレートの作成（Lambda 関数、EventBridge Scheduler、IAM ロール、S3 バケット）
+- Lambda ハンドラの作成（`lambda/handler.py`）
+- Secrets Manager へのシークレット登録
+- `sam build && sam deploy` によるデプロイ確認
+
+### v2 Phase 3: メインスクリプト（`scripts/report.py`）
+以下のサブ機能を順に実装する。各機能は独立して動作確認可能。
+1. GitHub アクティビティ取得 — REST API で Commits / PRs / Issues を取得・整形
+2. JSONL セッションログの読み取り — S3 バケットの `claude-sessions/` のパース
+3. Claude API で要約生成 — §5.3 のフォーマットに従い統合要約を生成
+4. Notion API で書き込み — データベースプロパティとページ本文の作成（§6 準拠）
+5. Slack 通知 — Incoming Webhook でサマリーと Notion リンクを送信（§5.4）
+6. 処理済み JSONL のアーカイブ — 正常完了後に S3 上で `processed/` へ移動（§5.5）
+
+### v2 Phase 4: 結合テスト・運用準備
+- 全コンポーネントの結合テスト（クライアントマシン → S3 → Lambda → Notion の一連の流れ）
+- EventBridge Scheduler の設定確認と初回実行
+- エラーハンドリング・CloudWatch Logs の検証
+
+### アーカイブ: v1 開発手順（NAS + Docker 構成）
+以下は設計変更前（NAS + ホストマシン構成）の開発手順。v1 Phase 1〜2 は完了済み、v1 Phase 3 は途中まで実施。
+
+<details>
+<summary>v1 Phase 1〜5</summary>
+
+#### v1 Phase 1: セッション転送スクリプト（`scripts/sync_session.sh`）と CLI [#1](https://github.com/n-yU/ayumy/issues/1)
 外部 API 不要。ローカル環境のみで動作確認できる。
 - `--project`, `--all`, `--background` オプションの実装
 - マーカーファイル（`.ayumy_last_sync`）による差分検出
@@ -377,22 +445,20 @@ cd ~/ayumy && docker compose run --rm ayumy
 - `bin/ayumy` CLI エントリポイントの実装（`ayumy sync` でスクリプトを呼び出し）
 - ローカル検証: `AYUMY_DATA_DIR` にローカルの別ディレクトリ（例: `/tmp/ayumy-data/`）を指定して使用
 
-### Phase 2: Git hook（`hooks/post-commit`） [#2](https://github.com/n-yU/ayumy/issues/2)
-Phase 1 の `sync_session.sh` を前提としたラッパー。
+#### v1 Phase 2: Git hook（`hooks/post-commit`） [#2](https://github.com/n-yU/ayumy/issues/2)
+v1 Phase 1 の `sync_session.sh` を前提としたラッパー。
 - リポジトリパスからプロジェクト名を解決
 - `sync_session.sh --project {name} --background` の呼び出し
 - `exit 0` の保証（commit をブロックしない設計）
 - hook の配布: `ayumy setup-hooks` コマンド（単体設置 / `--all` で一括設置）
 
-### Phase 3: ホストマシンのコンテナ化（`Dockerfile`, `compose.yaml`）
-`report.py` の実行環境をコンテナとして構築する。日次の定期実行に加え、作業の区切りなど任意のタイミングでの手動実行も想定する。
-- Python 3.12 + 依存パッケージ（`requests`, `anthropic`）
-- コンテナは1回実行して終了するジョブ方式（ホスト側の cron または手動で `docker compose run --rm` により起動）
-- `$AYUMY_DATA_DIR`（NAS マウントポイント）を volume mount でコンテナと共有
-- `.ayumy.env` を `env_file` として読み込み
-- NAS マウントはホスト側で行い、コンテナには volume mount で共有
+#### v1 Phase 3: ホストマシンのコンテナ化（`Dockerfile`, `compose.yaml`）
+v1 Phase 4 で作成するメインスクリプト（Python）の実行環境をコンテナとして構築する。日次の定期実行に加え、作業の区切りなど任意のタイミングでの手動実行も想定する。
+- `Dockerfile` の作成（Python 3.12 + 依存パッケージ `requests`, `anthropic`）
+- `compose.yaml` の作成（`env_file`, volume mount, 環境変数の設定）
+- ホストマシンセットアップスクリプトの作成（env ファイル生成、コンテナビルド＆テスト、crontab 設定）
 
-### Phase 4: メインスクリプト（`scripts/report.py`）
+#### v1 Phase 4: メインスクリプト（`scripts/report.py`）
 以下のサブ機能を順に実装する。各機能は独立して動作確認可能。
 1. GitHub アクティビティ取得 — REST API で Commits / PRs / Issues を取得・整形
 2. JSONL セッションログの読み取り — `$AYUMY_DATA_DIR/claude-sessions/` のパース
@@ -401,10 +467,12 @@ Phase 1 の `sync_session.sh` を前提としたラッパー。
 5. Slack 通知 — Incoming Webhook でサマリーと Notion リンクを送信（§5.4）
 6. 処理済み JSONL のアーカイブ — 正常完了後に `processed/` へ移動（§5.5）
 
-### Phase 5: 結合テスト・運用準備
+#### v1 Phase 5: 結合テスト・運用準備
 - 全コンポーネントの結合テスト（クライアントマシン → Pi → Notion の一連の流れ）
 - cron 設定の投入と初回実行の確認
 - エラーハンドリング・ログ出力の検証
+
+</details>
 
 ## 11. 将来の拡張案
 - **クライアントマシン側の定期自動同期**: cron で `ayumy sync --all` を定期実行し、手動同期の手間を省く
