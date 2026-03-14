@@ -17,6 +17,10 @@ Options:
   --background      Run in the background (for hooks)
   --report          Invoke Lambda to generate report after sync
   (no args)         Auto-detect project from current directory
+
+Environment variables:
+  AYUMY_S3_BUCKET        S3 bucket name for session storage (required)
+  AYUMY_LAMBDA_FUNCTION  Lambda function name (required for --report)
 USAGE
   exit 1
 }
