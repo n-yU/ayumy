@@ -182,13 +182,19 @@ case "$mode" in
       err "project not found: $project_dir"
       exit 1
     fi
-    sync_project "$project_dir" || [[ $? -eq 1 ]]
+    rc=0; sync_project "$project_dir" || rc=$?
+    [[ "$rc" -eq 0 || "$rc" -eq 1 ]] || exit "$rc"
     ;;
   all)
     synced=0
     for project_dir in "$CLAUDE_PROJECTS_DIR"/*/; do
       [[ -d "$project_dir" ]] || continue
-      sync_project "$project_dir" && synced=$((synced + 1)) || [[ $? -eq 1 ]]
+      rc=0; sync_project "$project_dir" || rc=$?
+      if [[ "$rc" -eq 0 ]]; then
+        synced=$((synced + 1))
+      elif [[ "$rc" -ne 1 ]]; then
+        exit "$rc"
+      fi
     done
     log "synced $synced project(s)"
     ;;
@@ -204,7 +210,8 @@ case "$mode" in
       err "no Claude sessions found for $git_root"
       exit 1
     fi
-    sync_project "$project_dir" || [[ $? -eq 1 ]]
+    rc=0; sync_project "$project_dir" || rc=$?
+    [[ "$rc" -eq 0 || "$rc" -eq 1 ]] || exit "$rc"
     ;;
 esac
 
