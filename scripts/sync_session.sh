@@ -212,6 +212,7 @@ if [[ "$report" == true ]]; then
     --function-name "$AYUMY_LAMBDA_FUNCTION" \
     --payload '{}' \
     --cli-binary-format raw-in-base64-out \
+    --output json \
     "$tmp_output" > "$tmp_meta"
   if grep -q '"FunctionError"' "$tmp_meta"; then
     err "Lambda invocation failed: $(cat "$tmp_meta")"
