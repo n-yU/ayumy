@@ -74,7 +74,7 @@ sync_project() {
   local dest_prefix="s3://$AYUMY_S3_BUCKET/claude-sessions/$project_name/"
   while IFS= read -r f; do
     if ! aws s3 cp "$f" "$dest_prefix" --quiet; then
-      err "$project_name: failed to upload $(basename "$f")"
+      err "$project_name: failed to upload $(basename -- "$f")"
       return 2
     fi
   done <<< "$files"
