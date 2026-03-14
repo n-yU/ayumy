@@ -9,13 +9,18 @@ MARKER_NAME=".ayumy_last_sync"
 
 usage() {
   cat <<'USAGE'
-Usage: sync_session.sh [--project <name>] [--all] [--background]
+Usage: sync_session.sh [--project <name>] [--all] [--background] [--report]
 
 Options:
   --project <name>  Sync a specific project
   --all             Sync all projects
   --background      Run in the background (for hooks)
+  --report          Invoke Lambda to generate report after sync
   (no args)         Auto-detect project from current directory
+
+Environment variables:
+  AYUMY_S3_BUCKET        S3 bucket name for session storage (required)
+  AYUMY_LAMBDA_FUNCTION  Lambda function name (required for --report)
 USAGE
   exit 1
 }
@@ -66,10 +71,9 @@ sync_project() {
   file_count=$(echo "$files" | wc -l | tr -d ' ')
   log "$project_name: syncing $file_count session(s)"
 
-  local dest_dir="$AYUMY_DATA_DIR/claude-sessions/$project_name"
-  mkdir -p "$dest_dir"
+  local dest_prefix="s3://$AYUMY_S3_BUCKET/claude-sessions/$project_name/"
   echo "$files" | while IFS= read -r f; do
-    cp -p "$f" "$dest_dir/"
+    aws s3 cp "$f" "$dest_prefix" --quiet
   done
 
   # Promote temp marker to actual marker on success
@@ -83,6 +87,7 @@ sync_project() {
 mode=""
 project_name=""
 background=false
+report=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -102,6 +107,10 @@ while [[ $# -gt 0 ]]; do
       background=true
       shift
       ;;
+    --report)
+      report=true
+      shift
+      ;;
     *)
       err "unknown option: $1"
       usage
@@ -111,14 +120,38 @@ done
 
 # --- validation ---
 
-if [[ -z "${AYUMY_DATA_DIR:-}" ]]; then
-  err "AYUMY_DATA_DIR is not set"
+if ! command -v aws &>/dev/null; then
+  err "aws CLI is not installed"
   exit 1
 fi
 
-if [[ ! -d "$AYUMY_DATA_DIR" ]]; then
-  err "AYUMY_DATA_DIR does not exist: $AYUMY_DATA_DIR"
+if [[ -z "${AYUMY_S3_BUCKET:-}" ]]; then
+  err "AYUMY_S3_BUCKET is not set"
   exit 1
+fi
+
+# Normalize: strip s3:// prefix and trailing slashes
+AYUMY_S3_BUCKET="${AYUMY_S3_BUCKET#s3://}"
+while [[ "$AYUMY_S3_BUCKET" == */ ]]; do
+  AYUMY_S3_BUCKET="${AYUMY_S3_BUCKET%/}"
+done
+
+if [[ -z "$AYUMY_S3_BUCKET" || "$AYUMY_S3_BUCKET" == */* ]]; then
+  err "AYUMY_S3_BUCKET must be a plain bucket name (no s3:// prefix, no path): '$AYUMY_S3_BUCKET'"
+  exit 1
+fi
+
+if [[ "$report" == true ]]; then
+  if [[ -z "${AYUMY_LAMBDA_FUNCTION:-}" ]]; then
+    err "AYUMY_LAMBDA_FUNCTION is not set (required for --report)"
+    exit 1
+  fi
+  # --cli-binary-format is AWS CLI v2 only
+  aws_version=$(aws --version 2>&1 | grep -oE 'aws-cli/[0-9]+' | grep -oE '[0-9]+' || true)
+  if [[ -z "$aws_version" || "$aws_version" -lt 2 ]]; then
+    err "aws CLI v2 or later is required for --report (found v${aws_version:-unknown})"
+    exit 1
+  fi
 fi
 
 if [[ ! -d "$CLAUDE_PROJECTS_DIR" ]]; then
@@ -132,6 +165,7 @@ if [[ "$background" == true ]]; then
   args=()
   [[ "$mode" == "project" ]] && args+=(--project "$project_name")
   [[ "$mode" == "all" ]] && args+=(--all)
+  [[ "$report" == true ]] && args+=(--report)
   nohup "$0" "${args[@]}" >/dev/null 2>&1 &
   exit 0
 fi
@@ -170,3 +204,24 @@ case "$mode" in
     sync_project "$project_dir" || true
     ;;
 esac
+
+# --- report mode: invoke Lambda ---
+
+if [[ "$report" == true ]]; then
+  log "invoking Lambda function: $AYUMY_LAMBDA_FUNCTION"
+  tmp_output=$(mktemp)
+  tmp_meta=$(mktemp)
+  trap 'rm -f "$tmp_output" "$tmp_meta"' EXIT
+  aws lambda invoke \
+    --function-name "$AYUMY_LAMBDA_FUNCTION" \
+    --payload '{}' \
+    --cli-binary-format raw-in-base64-out \
+    --output json \
+    "$tmp_output" > "$tmp_meta"
+  if grep -q '"FunctionError"' "$tmp_meta"; then
+    err "Lambda invocation failed: $(cat "$tmp_meta")"
+    err "Lambda output: $(cat "$tmp_output")"
+    exit 1
+  fi
+  log "Lambda response: $(cat "$tmp_output")"
+fi
