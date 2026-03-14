@@ -398,11 +398,6 @@ sam build && sam deploy
 ## 10. 開発手順
 以下の順序で実装を進める。依存関係の少ないコンポーネントから着手し、先に作ったものが後のテストデータ・検証基盤となる構成。
 
-### v2 Phase 0: ホストマシン関連の削除 [#8](https://github.com/n-yU/ayumy/issues/8)
-Lambda + S3 構成への設計変更に伴い、不要になったファイルを削除する。
-- `Dockerfile`, `compose.yaml`, `scripts/setup_host.sh` の削除
-- `bin/ayumy` から `setup-host` サブコマンドを削除
-
 ### v2 Phase 1: セッション転送の S3 対応（`scripts/sync_session.sh`） [#9](https://github.com/n-yU/ayumy/issues/9)
 既存の NAS 転送（`cp`）を S3 転送（`aws s3 cp`）に置き換える。
 - 転送先を `AYUMY_DATA_DIR`（ローカルパス）から `AYUMY_S3_BUCKET`（S3 バケット）に変更
@@ -452,7 +447,7 @@ v1 Phase 1 の `sync_session.sh` を前提としたラッパー。
 - `exit 0` の保証（commit をブロックしない設計）
 - hook の配布: `ayumy setup-hooks` コマンド（単体設置 / `--all` で一括設置）
 
-#### v1 Phase 3: ホストマシンのコンテナ化（`Dockerfile`, `compose.yaml`）
+#### v1 Phase 3: ホストマシンのコンテナ化（`Dockerfile`, `compose.yaml`） [#6](https://github.com/n-yU/ayumy/issues/6)
 v1 Phase 4 で作成するメインスクリプト（Python）の実行環境をコンテナとして構築する。日次の定期実行に加え、作業の区切りなど任意のタイミングでの手動実行も想定する。
 - `Dockerfile` の作成（Python 3.12 + 依存パッケージ `requests`, `anthropic`）
 - `compose.yaml` の作成（`env_file`, volume mount, 環境変数の設定）
