@@ -12,13 +12,13 @@
 
 ## リポジトリ構成
 ```
-scripts/report.py                    # メインスクリプト: GitHub API + Claude API + Notion API
 scripts/sync_session.sh              # セッション転送スクリプト（hook・手動共用）
 scripts/setup_hooks.sh               # hook の設置スクリプト
 hooks/post-commit                    # Git hook（各リポジトリにシンボリックリンクで配置）
 lambda/handler.py                    # Lambda ハンドラ（report.py を呼び出すエントリポイント）
+lambda/report.py                     # メインスクリプト: GitHub API + Claude API + Notion API
 lambda/requirements.txt              # Lambda 用の依存パッケージ
-template.yaml                        # AWS SAM テンプレート（Lambda, EventBridge, IAM ロール）
+template.yaml                        # AWS SAM テンプレート（Lambda, EventBridge, IAM ロール, S3 バケット）
 ```
 
 ## 技術詳細
@@ -35,7 +35,7 @@ Lambda（環境変数 + Secrets Manager）:
 - `NOTION_DATABASE_ID` — 書き込み先の Notion データベース ID（環境変数）
 - `GITHUB_PAT` — GitHub Fine-grained PAT（Secrets Manager）
 - `ANTHROPIC_API_KEY` — Anthropic API キー（Secrets Manager）
-- `NOTION_TOKEN` — Notion Internal Integration トークン（Secrets Manager）
+- `NOTION_SECRET` — Notion Internal Integration トークン（Secrets Manager）
 - `SLACK_WEBHOOK_URL` — Slack Incoming Webhook URL（Secrets Manager）
 
 クライアントマシン:

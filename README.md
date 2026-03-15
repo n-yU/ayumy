@@ -41,48 +41,23 @@ ayumy/
 ├── bin/
 │   └── ayumy                 # CLI エントリポイント（サブコマンドのディスパッチ）
 ├── scripts/
-│   ├── report.py             # メインスクリプト: GitHub API + Claude API + Notion API
 │   ├── sync_session.sh       # セッション転送スクリプト（hook・手動共用）
 │   └── setup_hooks.sh        # hook の設置スクリプト
 ├── hooks/
 │   └── post-commit           # 各リポジトリにシンボリックリンクで配置
 ├── lambda/
 │   ├── handler.py            # Lambda ハンドラ
+│   ├── report.py             # メインスクリプト: GitHub API + Claude API + Notion API
 │   └── requirements.txt      # Lambda 用の依存パッケージ
 ├── template.yaml             # AWS SAM テンプレート
+├── Setup.md
 ├── Spec.md
 ├── CLAUDE.md
 └── README.md
 ```
 
 ## Setup
-### AWS
-```bash
-# 1. SAM でデプロイ（Lambda, EventBridge, S3, IAM ロール）
-sam build && sam deploy
-
-# 2. Secrets Manager にシークレットを登録
-```
-
-### クライアントマシン
-```bash
-# 1. リポジトリをクローン
-git clone https://github.com/{user}/ayumy.git ~/ayumy
-
-# 2. PATH を通す（~/.zshrc 等に追加）
-export PATH="$HOME/ayumy/bin:$PATH"
-
-# 3. AWS CLI をインストールし、認証情報を設定
-
-# 4. 環境変数を設定（~/.zshrc 等に追加）
-export AYUMY_S3_BUCKET="ayumy-data"
-export AYUMY_LAMBDA_FUNCTION="ayumy-report"
-
-# 5. 動作確認
-ayumy sync
-```
-
-詳細は [Spec.md](./Spec.md) の §7, §8 を参照
+[Setup.md](./Setup.md) を参照
 
 ## Running Cost
 Anthropic API と AWS の費用が発生する（GitHub API・Notion API は無料枠内）
