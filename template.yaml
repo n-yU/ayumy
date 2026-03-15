@@ -1,0 +1,60 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Ayumy - Daily development activity reporter
+
+Parameters:
+  NotionDatabaseId:
+    Type: String
+    Description: Notion database ID for daily reports
+
+Globals:
+  Function:
+    Timeout: 300
+    MemorySize: 256
+    Runtime: python3.12
+
+Resources:
+  # S3 bucket for session log storage
+  SessionBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  # Lambda function for report generation
+  ReportFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handler.lambda_handler
+      CodeUri: lambda/
+      Environment:
+        Variables:
+          AYUMY_S3_BUCKET: !Ref SessionBucket
+          NOTION_DATABASE_ID: !Ref NotionDatabaseId
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref SessionBucket
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:ayumy/*"
+      Events:
+        DailySchedule:
+          Type: ScheduleV2
+          Properties:
+            ScheduleExpression: cron(0 15 * * ? *)
+            ScheduleExpressionTimezone: UTC
+            Description: Run daily at JST 00:00 (UTC 15:00)
+
+Outputs:
+  ReportFunctionName:
+    Description: Lambda function name (set as AYUMY_LAMBDA_FUNCTION on client)
+    Value: !Ref ReportFunction
+  SessionBucketName:
+    Description: S3 bucket name (set as AYUMY_S3_BUCKET on client)
+    Value: !Ref SessionBucket
