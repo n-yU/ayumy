@@ -50,14 +50,16 @@ ayumy/
 │   ├── report.py             # メインスクリプト: GitHub API + Claude API + Notion API
 │   └── requirements.txt      # Lambda 用の依存パッケージ
 ├── template.yaml             # AWS SAM テンプレート
-├── Setup.md
-├── Spec.md
+├── docs/
+│   ├── Setup.md
+│   ├── Spec.md
+│   └── Development.md
 ├── CLAUDE.md
 └── README.md
 ```
 
 ## Setup
-[Setup.md](./Setup.md) を参照
+[docs/Setup.md](./docs/Setup.md) を参照
 
 ## Running Cost
 Anthropic API と AWS の費用が発生する（GitHub API・Notion API は無料枠内）

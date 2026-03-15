@@ -26,7 +26,7 @@ template.yaml                        # AWS SAM テンプレート（Lambda, Even
 - **言語**: Python 3.12、依存: `requests`, `anthropic`, `boto3`
 - **Claude モデル**: 要約生成に `claude-sonnet-4-20250514` を使用
 - **GitHub API**: REST、Fine-grained PAT、`affiliation=owner` で自分の所有リポジトリのみ対象
-- **Notion API**: Internal Integration Token、データベースプロパティは Spec.md §6 に定義
+- **Notion API**: Internal Integration Token、データベースプロパティは [docs/Spec.md](docs/Spec.md) §6 に定義
 - **Hook 設計**: 必ず `exit 0` を返す（commit をブロックしない）、バックグラウンド実行、セッション ID 単位の上書きで冪等性を担保
 
 ## 環境変数
@@ -52,7 +52,8 @@ Lambda（環境変数 + Secrets Manager）:
 - **ドキュメント**（md ファイル）: タイトルは英語で書く
 
 ## 開発メモ
-- 仕様書は `Spec.md`（日本語）— すべての要件の原典
+- 仕様書は [docs/Spec.md](docs/Spec.md)（日本語）— すべての要件の原典
+- 開発手順は [docs/Development.md](docs/Development.md) — フェーズ別の実装計画と v1 からの変遷を記録
 - JSONL の生データは S3 バケットに保管し、リモートリポジトリには push しない
 - アクティビティの取得対象期間: 前日 JST 00:00:00 〜 当日 JST 00:00:00
 - アクティビティが 0 件の日はスキップまたは「活動なし」と記録
