@@ -32,13 +32,20 @@ def lambda_handler(event, context):
             }
 
     script_path = os.path.join(os.path.dirname(__file__), "report.py")
-    result = subprocess.run(
-        [sys.executable, script_path],
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=280,
-    )
+    try:
+        result = subprocess.run(
+            [sys.executable, script_path],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=280,
+        )
+    except subprocess.TimeoutExpired as e:
+        print(f"report.py timed out after {e.timeout}s")
+        return {
+            "statusCode": 500,
+            "body": json.dumps({"error": f"report.py timed out after {e.timeout}s"}),
+        }
 
     print(f"stdout: {result.stdout}")
     if result.stderr:
