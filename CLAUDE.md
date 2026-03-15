@@ -35,7 +35,7 @@ Lambda（環境変数 + Secrets Manager）:
 - `NOTION_DATABASE_ID` — 書き込み先の Notion データベース ID（環境変数）
 - `GITHUB_PAT` — GitHub Fine-grained PAT（Secrets Manager）
 - `ANTHROPIC_API_KEY` — Anthropic API キー（Secrets Manager）
-- `NOTION_TOKEN` — Notion Internal Integration トークン（Secrets Manager）
+- `NOTION_SECRET` — Notion Internal Integration トークン（Secrets Manager）
 - `SLACK_WEBHOOK_URL` — Slack Incoming Webhook URL（Secrets Manager）
 
 クライアントマシン:

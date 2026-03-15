@@ -295,7 +295,7 @@ Lambda 関数の環境変数として設定する。機密情報は AWS Secrets 
 |---|---|
 | `GITHUB_PAT` | GitHub Fine-grained PAT（全 owner リポジトリへの read 権限） |
 | `ANTHROPIC_API_KEY` | Anthropic API キー |
-| `NOTION_TOKEN` | Notion Internal Integration トークン |
+| `NOTION_SECRET` | Notion Internal Integration トークン |
 | `SLACK_WEBHOOK_URL` | Slack Incoming Webhook URL |
 
 ### 7.3 Lambda 関数の構成
@@ -332,7 +332,7 @@ sam build && sam deploy
 ### 8.4 Notion
 1. [Notion Integrations](https://www.notion.so/my-integrations) で Internal Integration を作成
 2. §6.1 に従いデータベースを作成し、Integration を接続
-3. AWS Secrets Manager に `NOTION_TOKEN` として登録
+3. AWS Secrets Manager に `NOTION_SECRET` として登録
 
 ### 8.5 Anthropic
 1. [Anthropic Console](https://console.anthropic.com/) で API キーを発行
