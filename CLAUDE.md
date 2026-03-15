@@ -18,7 +18,7 @@ hooks/post-commit                    # Git hook（各リポジトリにシンボ
 lambda/handler.py                    # Lambda ハンドラ（report.py を呼び出すエントリポイント）
 lambda/report.py                     # メインスクリプト: GitHub API + Claude API + Notion API
 lambda/requirements.txt              # Lambda 用の依存パッケージ
-template.yaml                        # AWS SAM テンプレート（Lambda, EventBridge, IAM ロール）
+template.yaml                        # AWS SAM テンプレート（Lambda, EventBridge, IAM ロール, S3 バケット）
 ```
 
 ## 技術詳細

@@ -313,54 +313,24 @@ AWS SAM（`template.yaml`）で Lambda 関数、EventBridge Scheduler、IAM ロ�
 sam build && sam deploy
 ```
 
-## 8. セットアップ手順
-### 8.1 AWS
-1. AWS SAM CLI をインストール
-2. `sam build && sam deploy` で S3 バケット、Lambda 関数、EventBridge Scheduler、IAM ロールをデプロイ（S3 バケットのパブリックアクセスブロックと SSE-S3 は SAM テンプレートで設定）
-
-### 8.2 GitHub PAT
-1. Fine-grained PAT を作成（スコープ: 全 owner リポジトリへの Contents / Issues / Pull Requests の read 権限）
-2. AWS Secrets Manager に `GITHUB_PAT` として登録（Lambda が実行時に参照する。§7.2 参照）
-
-### 8.3 クライアントマシン
-1. `ayumy` リポジトリをクローン: `git clone https://github.com/{user}/ayumy.git ~/ayumy`
-2. PATH を通す: `export PATH="$HOME/ayumy/bin:$PATH"`（`~/.zshrc` 等に追加）
-3. AWS CLI をインストールし、認証情報を設定（S3 への書き込みと Lambda の呼び出し権限が必要）
-4. 環境変数 `AYUMY_S3_BUCKET`（S3 バケット名）と `AYUMY_LAMBDA_FUNCTION`（Lambda 関数名）を設定
-5. 対象リポジトリに hook を設置: `ayumy setup-hooks --all ~/Documents/github`（§4.4 参照）
-
-### 8.4 Notion
-1. [Notion Integrations](https://www.notion.so/my-integrations) で Internal Integration を作成
-2. §6.1 に従いデータベースを作成し、Integration を接続
-3. AWS Secrets Manager に `NOTION_SECRET` として登録
-
-### 8.5 Anthropic
-1. [Anthropic Console](https://console.anthropic.com/) で API キーを発行
-2. AWS Secrets Manager に `ANTHROPIC_API_KEY` として登録
-
-### 8.6 Slack
-1. Slack App を作成し、Incoming Webhook を有効化
-2. 通知先チャンネルを選択して Webhook URL を発行
-3. AWS Secrets Manager に `SLACK_WEBHOOK_URL` として登録
-
-## 9. 運用上の考慮事項
-### 9.1 ネットワーク要件
+## 8. 運用上の考慮事項
+### 8.1 ネットワーク要件
 - クライアントマシンからインターネットへのアクセス（S3 への転送、Lambda の呼び出し）
 - 外出先からも転送可能（VPN 不要）
 
-### 9.2 API レートリミット
+### 8.2 API レートリミット
 - GitHub API: 認証済みで 5,000 リクエスト/時
 - Anthropic API: プランに応じたレートリミットあり（1日数回程度なら問題なし）
 - Notion API: 3 リクエスト/秒（1ページの書き込みのみなので問題なし）
 
-### 9.3 エラーハンドリング
+### 8.3 エラーハンドリング
 - API 呼び出し失敗時のリトライ処理
 - アクティビティが0件の日はスキップまたは「活動なし」と記録
 - post-commit hook は必ず exit 0（commit をブロックしない）
 - S3 転送失敗時、JSONL はソース側に残るため次回転送時にリトライ可能
 - AWS 認証情報が無効な場合も hook は正常終了し、認証修正後に `ayumy sync --all` で補完可能
 
-### 9.4 ランニングコスト見積もり
+### 8.4 ランニングコスト見積もり
 課金が発生するのは Anthropic API と AWS。GitHub API と Notion API は無料枠内で収まる。
 
 **Anthropic API（`claude-sonnet-4-20250514`）**
@@ -389,13 +359,13 @@ sam build && sam deploy
 | EventBridge Scheduler | 無料枠内 |
 | Secrets Manager | ~$0.40/月（シークレット4件） |
 
-### 9.5 ストレージ管理
+### 8.5 ストレージ管理
 - セッションログは S3 に保管し、クライアントマシンのディスクを消費しない
 - 処理済み JSONL は S3 上で `processed/` に移動して無期限保持（§5.5）。年間 1〜2 GB 程度
 - 実行ログは CloudWatch Logs に出力し、保持期間を設定して管理する
 - 必要に応じて S3 ライフサイクルポリシーで古いデータを Glacier 等に移行可能
 
-## 10. 開発手順
+## 9. 開発手順
 以下の順序で実装を進める。依存関係の少ないコンポーネントから着手し、先に作ったものが後のテストデータ・検証基盤となる構成。
 
 ### v2 Phase 1: セッション転送の S3 対応（`scripts/sync_session.sh`） [#9](https://github.com/n-yU/ayumy/issues/9)
@@ -469,7 +439,7 @@ v1 Phase 4 で作成するメインスクリプト（Python）の実行環境を
 
 </details>
 
-## 11. 将来の拡張案
+## 10. 将来の拡張案
 - **クライアントマシン側の定期自動同期**: cron で `ayumy sync --all` を定期実行し、手動同期の手間を省く
 - **複数クライアントマシン対応**: 競合解決（ファイル名にホスト名を含める等）
 - **週次・月次レポート**: 日次データを集約した定期サマリー
