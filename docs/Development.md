@@ -15,7 +15,7 @@
 - Secrets Manager へのシークレット登録
 - `sam build && sam deploy` によるデプロイ確認
 
-## v2 Phase 3: メインスクリプト（`lambda/report.py`）
+## v2 Phase 3: メインスクリプト（`lambda/report.py`） [#14](https://github.com/n-yU/ayumy/issues/14)
 以下のサブ機能を順に実装する。各機能は独立して動作確認可能。
 1. GitHub アクティビティ取得 — REST API で Commits / PRs / Issues を取得・整形
 2. JSONL セッションログの読み取り — S3 バケットの `claude-sessions/` のパース
@@ -24,7 +24,7 @@
 5. Slack 通知 — Incoming Webhook でサマリーと Notion リンクを送信（Spec.md §5.4）
 6. 処理済み JSONL のアーカイブ — 正常完了後に S3 上で `processed/` へ移動（Spec.md §5.5）
 
-## v2 Phase 4: 結合テスト・運用準備
+## v2 Phase 4: 結合テスト・運用準備 [#15](https://github.com/n-yU/ayumy/issues/15)
 - 全コンポーネントの結合テスト（クライアントマシン → S3 → Lambda → Notion の一連の流れ）
 - EventBridge Scheduler の設定確認と初回実行
 - エラーハンドリング・CloudWatch Logs の検証
