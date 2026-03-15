@@ -18,6 +18,7 @@ Resources:
   SessionBucket:
     Type: AWS::S3::Bucket
     Properties:
+      BucketName: ayumy.n-yu
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -32,6 +33,7 @@ Resources:
   ReportFunction:
     Type: AWS::Serverless::Function
     Properties:
+      FunctionName: ayumy-report
       Handler: handler.lambda_handler
       CodeUri: lambda/
       Environment:
@@ -47,6 +49,7 @@ Resources:
         DailySchedule:
           Type: ScheduleV2
           Properties:
+            Name: ayumy-daily-report
             ScheduleExpression: cron(0 15 * * ? *)
             ScheduleExpressionTimezone: UTC
             Description: Run daily at JST 00:00 (UTC 15:00)
