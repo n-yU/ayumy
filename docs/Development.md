@@ -23,6 +23,7 @@
 4. Notion API で書き込み — データベースプロパティとページ本文の作成（Spec.md §6 準拠）
 5. Slack 通知 — Incoming Webhook でサマリーと Notion リンクを送信（Spec.md §5.4）
 6. 処理済み JSONL のアーカイブ — 正常完了後に S3 上で `processed/` へ移動（Spec.md §5.5）
+7. EventBridge Scheduler の有効化 — `template.yaml` の `State: DISABLED` を削除して再デプロイ
 
 ## v2 Phase 4: 結合テスト・運用準備 [#15](https://github.com/n-yU/ayumy/issues/15)
 - 全コンポーネントの結合テスト（クライアントマシン → S3 → Lambda → Notion の一連の流れ）
