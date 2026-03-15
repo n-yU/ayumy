@@ -7,7 +7,7 @@ import sys
 def lambda_handler(event, context):
     """Entry point for the Lambda function.
 
-    Invokes scripts/report.py with secrets loaded from AWS Secrets Manager.
+    Invokes report.py (co-located in lambda/) with secrets from Secrets Manager.
     """
     import boto3
 

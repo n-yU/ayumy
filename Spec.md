@@ -52,13 +52,13 @@ ayumy/
 ├── bin/
 │   └── ayumy                        # CLI エントリポイント（サブコマンドのディスパッチ）
 ├── scripts/
-│   ├── report.py                    # メインスクリプト: GitHub API + Claude API + Notion API
 │   ├── sync_session.sh              # セッション転送スクリプト（hook・手動共用）
 │   └── setup_hooks.sh               # hook の設置スクリプト
 ├── hooks/
 │   └── post-commit                  # 各リポジトリにシンボリックリンクで配置
 ├── lambda/
 │   ├── handler.py                   # Lambda ハンドラ（report.py を呼び出すエントリポイント）
+│   ├── report.py                    # メインスクリプト: GitHub API + Claude API + Notion API
 │   └── requirements.txt             # Lambda 用の依存パッケージ
 ├── template.yaml                    # AWS SAM テンプレート（Lambda, EventBridge, IAM ロール）
 ├── Spec.md
@@ -300,7 +300,7 @@ Lambda 関数の環境変数として設定する。機密情報は AWS Secrets 
 
 ### 7.3 Lambda 関数の構成
 - **ランタイム**: Python 3.12
-- **ハンドラ**: `lambda/handler.py`（`scripts/report.py` を呼び出すエントリポイント）
+- **ハンドラ**: `lambda/handler.py`（`lambda/report.py` を呼び出すエントリポイント）
 - **タイムアウト**: 300秒（5分）
 - **メモリ**: 256MB
 - **依存パッケージ**: `requests`, `anthropic`, `boto3`
@@ -412,7 +412,7 @@ sam build && sam deploy
 - Secrets Manager へのシークレット登録
 - `sam build && sam deploy` によるデプロイ確認
 
-### v2 Phase 3: メインスクリプト（`scripts/report.py`）
+### v2 Phase 3: メインスクリプト（`lambda/report.py`）
 以下のサブ機能を順に実装する。各機能は独立して動作確認可能。
 1. GitHub アクティビティ取得 — REST API で Commits / PRs / Issues を取得・整形
 2. JSONL セッションログの読み取り — S3 バケットの `claude-sessions/` のパース
