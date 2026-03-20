@@ -63,7 +63,8 @@ ayumy/
 │   │   ├── __main__.py              # エントリポイント（python -m report）
 │   │   ├── github.py                # GitHub アクティビティ取得
 │   │   └── session.py               # Claude Code セッションログ読み取り
-│   └── requirements.txt             # Lambda 用の依存パッケージ
+│   ├── requirements.txt             # Lambda デプロイ用の依存パッケージ
+│   └── requirements-dev.txt         # ローカル開発用の依存パッケージ（boto3 を含む）
 ├── template.yaml                    # AWS SAM テンプレート（Lambda, EventBridge, IAM ロール）
 ├── docs/
 │   ├── Setup.md
@@ -317,7 +318,7 @@ Lambda 関数の環境変数として設定する。機密情報は AWS Secrets 
 - **ハンドラ**: `lambda/handler.py`（`lambda/report` パッケージを呼び出すエントリポイント）
 - **タイムアウト**: 300秒（5分）
 - **メモリ**: 256MB
-- **依存パッケージ**: `requests`, `anthropic`, `boto3`
+- **依存パッケージ**: デプロイ: `requests`, `anthropic`, `PyGithub`、開発: 左記 + `boto3`
 - **IAM ロール**: S3 バケットへの読み書き、Secrets Manager の読み取り、CloudWatch Logs への書き込み
 
 ### 7.4 デプロイ

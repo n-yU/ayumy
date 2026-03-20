@@ -17,13 +17,14 @@ scripts/setup_hooks.sh               # hook の設置スクリプト
 hooks/post-commit                    # Git hook（各リポジトリにシンボリックリンクで配置）
 lambda/handler.py                    # Lambda ハンドラ（report パッケージを呼び出すエントリポイント）
 lambda/report/                       # メインパッケージ: GitHub API + Claude API + Notion API
-lambda/requirements.txt              # Lambda 用の依存パッケージ
+lambda/requirements.txt              # Lambda デプロイ用の依存パッケージ
+lambda/requirements-dev.txt          # ローカル開発用の依存パッケージ（boto3 を含む）
 template.yaml                        # AWS SAM テンプレート（Lambda, EventBridge, IAM ロール, S3 バケット）
 ```
 
 ## 技術詳細
 - **実行環境**: AWS Lambda（SAM でデプロイ）
-- **言語**: Python 3.12、依存: `requests`, `anthropic`, `boto3`
+- **言語**: Python 3.12、デプロイ依存: `requests`, `anthropic`, `PyGithub`、開発依存: 左記 + `boto3`
 - **Claude モデル**: 要約生成に `claude-sonnet-4-20250514` を使用
 - **GitHub API**: REST、Fine-grained PAT、`affiliation=owner` で自分の所有リポジトリのみ対象
 - **Notion API**: Internal Integration Token、データベースプロパティは [docs/Spec.md](docs/Spec.md) §6 に定義
