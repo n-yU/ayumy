@@ -187,13 +187,14 @@ class GitHubClient:
 
 
 def format_github_activity(activity: Activity) -> str:
-    """Format GitHub activity into the text format for Claude API input.
+    """Format GitHub activity into the GitHub section text for Claude API input.
 
     Args:
         activity: Activity dict as returned by GitHubClient.fetch_activity()
 
     Returns:
-        A Markdown-formatted string following the Spec.md §5.3 input format
+        A Markdown-formatted string for the "# GitHub アクティビティ" section,
+        suitable for inclusion in the Spec.md §5.3 input format
     """
     if not activity:
         return "# GitHub アクティビティ\nアクティビティなし"
