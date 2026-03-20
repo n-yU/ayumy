@@ -22,7 +22,7 @@ def main() -> None:
 
     source = os.environ.get("AYUMY_SOURCE")
     since, until = get_target_date_range(source)
-    print(f"Target date range: {since.isoformat()} ~ {until.isoformat()}")
+    print(f"Target date range: {since.isoformat()} ~ {until.isoformat()}", file=sys.stderr)
 
     github_client = GitHubClient(github_pat)
     github_activity = github_client.fetch_activity(since, until)
