@@ -87,9 +87,15 @@ class SessionClient:
             elif entry_type == "assistant":
                 if timestamp:
                     timestamps.append(timestamp)
-                for block in entry.get("message", {}).get("content", []):
-                    if block.get("type") == "tool_use":
-                        tools_used.add(block["name"])
+                content = entry.get("message", {}).get("content", [])
+                if isinstance(content, list):
+                    for block in content:
+                        if not isinstance(block, dict):
+                            continue
+                        if block.get("type") == "tool_use":
+                            name = block.get("name")
+                            if isinstance(name, str) and name:
+                                tools_used.add(name)
 
         if not user_messages:
             return None
