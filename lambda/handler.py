@@ -3,14 +3,14 @@ import os
 import subprocess
 import sys
 
+import boto3
+
 
 def lambda_handler(event, context):
     """Entry point for the Lambda function.
 
-    Invokes report.py (co-located in lambda/) with secrets from Secrets Manager.
+    Invokes the report package (co-located in lambda/) with secrets from Secrets Manager.
     """
-    import boto3
-
     secrets_client = boto3.client("secretsmanager")
     secret_names = {
         "GITHUB_PAT": "ayumy/github-pat",
@@ -34,10 +34,10 @@ def lambda_handler(event, context):
                 "body": json.dumps({"error": f"Failed to retrieve secret: {secret_id}"}),
             }
 
-    script_path = os.path.join(os.path.dirname(__file__), "report.py")
     try:
         result = subprocess.run(
-            [sys.executable, script_path],
+            [sys.executable, "-m", "report"],
+            cwd=os.path.dirname(__file__),
             env=env,
             capture_output=True,
             text=True,

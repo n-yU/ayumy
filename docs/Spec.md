@@ -21,8 +21,8 @@ GitHub 上で自分が owner であるすべてのリポジトリにおける日
                          S3 バケット (ayumy-data)
                                   │
 [AWS Lambda]                      ▼
-  EventBridge (毎日 JST 00:00) → Lambda (report.py)
-  ayumy sync --report ──────────→ Lambda (report.py)
+  EventBridge (毎日 JST 00:00) → Lambda (report)
+  ayumy sync --report ──────────→ Lambda (report)
     ├─→ JSONL + GitHub API → Claude API で要約生成
     ├─→ Notion API で記録
     ├─→ Slack Webhook で通知
@@ -57,8 +57,12 @@ ayumy/
 ├── hooks/
 │   └── post-commit                  # 各リポジトリにシンボリックリンクで配置
 ├── lambda/
-│   ├── handler.py                   # Lambda ハンドラ（report.py を呼び出すエントリポイント）
-│   ├── report.py                    # メインスクリプト: GitHub API + Claude API + Notion API
+│   ├── handler.py                   # Lambda ハンドラ（report パッケージを呼び出すエントリポイント）
+│   ├── report/                      # メインパッケージ: GitHub API + Claude API + Notion API
+│   │   ├── __init__.py              # 型定義、共通ユーティリティ
+│   │   ├── __main__.py              # エントリポイント（python -m report）
+│   │   ├── github.py                # GitHub アクティビティ取得
+│   │   └── session.py               # Claude Code セッションログ読み取り
 │   └── requirements.txt             # Lambda 用の依存パッケージ
 ├── template.yaml                    # AWS SAM テンプレート（Lambda, EventBridge, IAM ロール）
 ├── docs/
@@ -310,7 +314,7 @@ Lambda 関数の環境変数として設定する。機密情報は AWS Secrets 
 
 ### 7.3 Lambda 関数の構成
 - **ランタイム**: Python 3.12
-- **ハンドラ**: `lambda/handler.py`（`lambda/report.py` を呼び出すエントリポイント）
+- **ハンドラ**: `lambda/handler.py`（`lambda/report` パッケージを呼び出すエントリポイント）
 - **タイムアウト**: 300秒（5分）
 - **メモリ**: 256MB
 - **依存パッケージ**: `requests`, `anthropic`, `boto3`

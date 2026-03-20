@@ -15,8 +15,8 @@
 scripts/sync_session.sh              # セッション転送スクリプト（hook・手動共用）
 scripts/setup_hooks.sh               # hook の設置スクリプト
 hooks/post-commit                    # Git hook（各リポジトリにシンボリックリンクで配置）
-lambda/handler.py                    # Lambda ハンドラ（report.py を呼び出すエントリポイント）
-lambda/report.py                     # メインスクリプト: GitHub API + Claude API + Notion API
+lambda/handler.py                    # Lambda ハンドラ（report パッケージを呼び出すエントリポイント）
+lambda/report/                       # メインパッケージ: GitHub API + Claude API + Notion API
 lambda/requirements.txt              # Lambda 用の依存パッケージ
 template.yaml                        # AWS SAM テンプレート（Lambda, EventBridge, IAM ロール, S3 バケット）
 ```

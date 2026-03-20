@@ -15,8 +15,8 @@ S3 + AWS Lambda を使用した2フェーズ構成
                          S3 バケット (ayumy-data)
                                   │
 [AWS Lambda]                      ▼
-  EventBridge (毎日 JST 00:00) → Lambda (report.py)
-  ayumy sync --report ──────────→ Lambda (report.py)
+  EventBridge (毎日 JST 00:00) → Lambda (report)
+  ayumy sync --report ──────────→ Lambda (report)
     ├─→ JSONL + GitHub API → Claude API で要約生成
     ├─→ Notion API で記録
     ├─→ Slack Webhook で通知
@@ -47,7 +47,7 @@ ayumy/
 │   └── post-commit           # 各リポジトリにシンボリックリンクで配置
 ├── lambda/
 │   ├── handler.py            # Lambda ハンドラ
-│   ├── report.py             # メインスクリプト: GitHub API + Claude API + Notion API
+│   ├── report/               # メインパッケージ: GitHub API + Claude API + Notion API
 │   └── requirements.txt      # Lambda 用の依存パッケージ
 ├── template.yaml             # AWS SAM テンプレート
 ├── docs/
