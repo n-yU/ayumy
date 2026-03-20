@@ -1,59 +1,16 @@
-"""Ayumy daily report generator.
+"""GitHub activity client."""
 
-Fetches GitHub activity (commits, pull requests, issues) for the target
-date range and formats it for downstream processing.
-"""
-
-import os
-import sys
-from datetime import datetime, timedelta, timezone
-from typing import Any, TypedDict
+from datetime import datetime
 
 from github import Github
 from github.PaginatedList import PaginatedList
 from github.Repository import Repository
 
-JST = timezone(timedelta(hours=9))
-
-# Type aliases for structured activity data
-CommitInfo = dict[str, str]
-PullInfo = dict[str, Any]
-IssueInfo = dict[str, Any]
-
-
-class RepoActivity(TypedDict):
-    commits: list[CommitInfo]
-    pulls: list[PullInfo]
-    issues: list[IssueInfo]
-
-
-Activity = dict[str, RepoActivity]
-
-
-def get_target_date_range(source: str | None = None) -> tuple[datetime, datetime]:
-    """Return the target date range for activity fetching.
-
-    Args:
-        source: Invocation source. "manual" for manual execution,
-            None or other values for scheduled execution
-
-    Returns:
-        A tuple of (since, until) as timezone-aware datetime objects.
-        Scheduled: previous day JST 00:00 ~ today JST 00:00.
-        Manual: today JST 00:00 ~ now
-    """
-    now_jst = datetime.now(JST)
-    today_jst = now_jst.replace(hour=0, minute=0, second=0, microsecond=0)
-
-    if source == "manual":
-        return today_jst, now_jst
-
-    yesterday_jst = today_jst - timedelta(days=1)
-    return yesterday_jst, today_jst
+from . import Activity, CommitInfo, IssueInfo, PullInfo
 
 
 class GitHubClient:
-    """Client for fetching GitHub activity via PyGithub."""
+    """Client for fetching and formatting GitHub activity via PyGithub."""
 
     def __init__(self, pat: str) -> None:
         """Initialize the client with a GitHub Personal Access Token.
@@ -164,8 +121,8 @@ class GitHubClient:
         """Fetch all GitHub activity for the target date range.
 
         Args:
-            since: Start of the target period (inclusive).
-            until: End of the target period (exclusive).
+            since: Start of the target period (inclusive)
+            until: End of the target period (exclusive)
 
         Returns:
             A dict keyed by repo name. Each value contains "commits",
@@ -185,60 +142,38 @@ class GitHubClient:
                 }
         return activity
 
+    def format_activity(self, activity: Activity) -> str:
+        """Format GitHub activity into the GitHub section text for Claude API input.
 
-def format_github_activity(activity: Activity) -> str:
-    """Format GitHub activity into the GitHub section text for Claude API input.
+        Args:
+            activity: Activity dict as returned by fetch_activity()
 
-    Args:
-        activity: Activity dict as returned by GitHubClient.fetch_activity()
+        Returns:
+            A Markdown-formatted string for the "# GitHub アクティビティ"
+            section, suitable for inclusion in the Spec.md §5.3 input format
+        """
+        if not activity:
+            return "# GitHub アクティビティ\nアクティビティなし"
 
-    Returns:
-        A Markdown-formatted string for the "# GitHub アクティビティ" section,
-        suitable for inclusion in the Spec.md §5.3 input format
-    """
-    if not activity:
-        return "# GitHub アクティビティ\nアクティビティなし"
+        lines = ["# GitHub アクティビティ"]
+        for repo_name, data in sorted(activity.items()):
+            lines.append(f"## {repo_name}")
 
-    lines = ["# GitHub アクティビティ"]
-    for repo_name, data in sorted(activity.items()):
-        lines.append(f"## {repo_name}")
+            if data["commits"]:
+                lines.append("### Commits")
+                for c in data["commits"]:
+                    lines.append(f"- {c['message']}")
 
-        if data["commits"]:
-            lines.append("### Commits")
-            for c in data["commits"]:
-                lines.append(f"- {c['message']}")
+            if data["pulls"]:
+                lines.append("### Pull Requests")
+                for pr in data["pulls"]:
+                    labels = f" ({', '.join(pr['labels'])})" if pr["labels"] else ""
+                    lines.append(f"- [{pr['state']}] #{pr['number']} {pr['title']}{labels}")
 
-        if data["pulls"]:
-            lines.append("### Pull Requests")
-            for pr in data["pulls"]:
-                labels = f" ({', '.join(pr['labels'])})" if pr["labels"] else ""
-                lines.append(f"- [{pr['state']}] #{pr['number']} {pr['title']}{labels}")
+            if data["issues"]:
+                lines.append("### Issues")
+                for issue in data["issues"]:
+                    labels = f" ({', '.join(issue['labels'])})" if issue["labels"] else ""
+                    lines.append(f"- [{issue['state']}] #{issue['number']} {issue['title']}{labels}")
 
-        if data["issues"]:
-            lines.append("### Issues")
-            for issue in data["issues"]:
-                labels = f" ({', '.join(issue['labels'])})" if issue["labels"] else ""
-                lines.append(f"- [{issue['state']}] #{issue['number']} {issue['title']}{labels}")
-
-    return "\n".join(lines)
-
-
-def main() -> None:
-    """Entry point for the report generator."""
-    github_pat = os.environ.get("GITHUB_PAT")
-    if not github_pat:
-        print("GITHUB_PAT is not set", file=sys.stderr)
-        sys.exit(1)
-
-    source = os.environ.get("AYUMY_SOURCE")
-    since, until = get_target_date_range(source)
-    print(f"Target date range: {since.isoformat()} ~ {until.isoformat()}")
-
-    client = GitHubClient(github_pat)
-    activity = client.fetch_activity(since, until)
-    formatted = format_github_activity(activity)
-    print(formatted)
-
-
-if __name__ == "__main__":
-    main()
+        return "\n".join(lines)

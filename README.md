@@ -15,8 +15,8 @@ S3 + AWS Lambda を使用した2フェーズ構成
                          S3 バケット (ayumy-data)
                                   │
 [AWS Lambda]                      ▼
-  EventBridge (毎日 JST 00:00) → Lambda (report.py)
-  ayumy sync --report ──────────→ Lambda (report.py)
+  EventBridge (毎日 JST 00:00) → Lambda (report)
+  ayumy sync --report ──────────→ Lambda (report)
     ├─→ JSONL + GitHub API → Claude API で要約生成
     ├─→ Notion API で記録
     ├─→ Slack Webhook で通知
@@ -29,7 +29,7 @@ S3 + AWS Lambda を使用した2フェーズ構成
 | AWS Lambda | レポート生成の実行環境 |
 | AWS S3 | セッションログの保管 |
 | Amazon EventBridge Scheduler | 日次の定期実行 |
-| Python 3.12 | メインスクリプト（`requests`, `anthropic`, `boto3`） |
+| Python 3.12 | メインスクリプト（`requests`, `anthropic`, `PyGithub`） |
 | GitHub API (REST) | 開発アクティビティの取得 |
 | Anthropic API (`claude-sonnet-4-20250514`) | 自然言語による要約生成 |
 | Notion API | 作業記録の書き込み |
@@ -47,8 +47,9 @@ ayumy/
 │   └── post-commit           # 各リポジトリにシンボリックリンクで配置
 ├── lambda/
 │   ├── handler.py            # Lambda ハンドラ
-│   ├── report.py             # メインスクリプト: GitHub API + Claude API + Notion API
-│   └── requirements.txt      # Lambda 用の依存パッケージ
+│   ├── report/               # メインパッケージ: GitHub API + Claude API + Notion API
+│   ├── requirements.txt      # Lambda デプロイ用の依存パッケージ
+│   └── requirements-dev.txt  # ローカル開発用の依存パッケージ（boto3 を含む）
 ├── template.yaml             # AWS SAM テンプレート
 ├── docs/
 │   ├── Setup.md
