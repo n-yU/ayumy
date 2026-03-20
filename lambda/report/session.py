@@ -64,7 +64,7 @@ class SessionClient:
         # Format: claude-sessions/{project-name}/{session-id}.jsonl
         parts = key.split("/")
         project = parts[1] if len(parts) >= 3 else "unknown"
-        session_id = parts[-1].replace(".jsonl", "")
+        session_id = parts[-1].removesuffix(".jsonl")
 
         user_messages: list[str] = []
         tools_used: set[str] = set()
