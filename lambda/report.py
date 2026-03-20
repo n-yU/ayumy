@@ -7,7 +7,7 @@ date range and formats it for downstream processing.
 import os
 import sys
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, TypedDict
 
 from github import Github
 from github.PaginatedList import PaginatedList
@@ -19,7 +19,14 @@ JST = timezone(timedelta(hours=9))
 CommitInfo = dict[str, str]
 PullInfo = dict[str, Any]
 IssueInfo = dict[str, Any]
-RepoActivity = dict[str, list[CommitInfo] | list[PullInfo] | list[IssueInfo]]
+
+
+class RepoActivity(TypedDict):
+    commits: list[CommitInfo]
+    pulls: list[PullInfo]
+    issues: list[IssueInfo]
+
+
 Activity = dict[str, RepoActivity]
 
 
