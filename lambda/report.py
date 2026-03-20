@@ -1,7 +1,7 @@
 """Ayumy daily report generator.
 
-Fetches GitHub activity and Claude Code session logs, generates a summary
-via Claude API, writes to Notion, and notifies via Slack.
+Fetches GitHub activity (commits, pull requests, issues) for the target
+date range and formats it for downstream processing.
 """
 
 import os
