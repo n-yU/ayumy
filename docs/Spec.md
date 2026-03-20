@@ -167,7 +167,14 @@ ayumy sync --all --report                                       # 全プロジ�
 
 ## 5. フェーズ 2: データ統合・要約・Notion 書き込み
 ### 5.1 GitHub アクティビティの取得
-対象期間: 前日 JST 00:00:00 〜 当日 JST 00:00:00
+対象期間は実行方式によって異なる。
+
+| 実行方式 | 対象期間 |
+|---|---|
+| 定期実行（EventBridge） | 前日 JST 00:00:00 〜 当日 JST 00:00:00 |
+| 手動実行（`ayumy sync --report`） | 当日 JST 00:00:00 〜 現在時刻 |
+
+Lambda event の `source` フィールドで判定する。`"manual"` なら手動実行、それ以外（EventBridge の場合は `"aws.scheduler"` 等）なら定期実行として扱う。
 
 対象リポジトリは `GET /user/repos`（`affiliation=owner`, `per_page=100`）で全件取得する。
 
@@ -282,7 +289,7 @@ Notion ページの本文には Claude が生成した要約を記載する。�
 ```bash
 ayumy sync --report    # クライアントマシンから（S3 転送 + Lambda 実行）
 ```
-内部的には `aws lambda invoke` で Lambda 関数を同期呼び出しし、実行結果を標準出力に表示する。
+内部的には `aws lambda invoke` で Lambda 関数を `{"source": "manual"}` ペイロード付きで同期呼び出しし、実行結果を標準出力に表示する。Lambda はこのペイロードの `source` フィールドで手動実行を判定し、当日分のアクティビティを対象とする（§5.1）。
 
 ### 7.2 環境変数
 Lambda 関数の環境変数として設定する。機密情報は AWS Secrets Manager に保管し、Lambda から参照する。

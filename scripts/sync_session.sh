@@ -224,7 +224,7 @@ if [[ "$report" == true ]]; then
   trap 'rm -f "$tmp_output" "$tmp_meta"' EXIT
   aws lambda invoke \
     --function-name "$AYUMY_LAMBDA_FUNCTION" \
-    --payload '{}' \
+    --payload '{"source": "manual"}' \
     --cli-binary-format raw-in-base64-out \
     --output json \
     "$tmp_output" > "$tmp_meta"

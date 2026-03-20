@@ -20,6 +20,9 @@ def lambda_handler(event, context):
     }
 
     env = os.environ.copy()
+    if event.get("source") == "manual":
+        env["AYUMY_SOURCE"] = "manual"
+
     for env_var, secret_id in secret_names.items():
         try:
             resp = secrets_client.get_secret_value(SecretId=secret_id)
