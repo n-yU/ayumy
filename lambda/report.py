@@ -87,7 +87,7 @@ class GitHubClient:
         """
         return [
             {
-                "sha": c.sha[:7],
+                "sha": c.sha,
                 "message": c.commit.message.split("\n")[0],
                 "author": c.commit.author.name,
                 "date": c.commit.author.date.isoformat(),
