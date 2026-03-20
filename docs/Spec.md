@@ -62,7 +62,8 @@ ayumy/
 │   │   ├── __init__.py              # 型定義、共通ユーティリティ
 │   │   ├── __main__.py              # エントリポイント（python -m report）
 │   │   ├── github.py                # GitHub アクティビティ取得
-│   │   └── session.py               # Claude Code セッションログ読み取り
+│   │   ├── session.py               # Claude Code セッションログ読み取り
+│   │   └── summarizer.py            # Claude API 要約生成
 │   ├── requirements.txt             # Lambda デプロイ用の依存パッケージ
 │   └── requirements-dev.txt         # ローカル開発用の依存パッケージ（boto3 を含む）
 ├── template.yaml                    # AWS SAM テンプレート（Lambda, EventBridge, IAM ロール）
