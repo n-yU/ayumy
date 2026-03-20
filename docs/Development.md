@@ -15,6 +15,12 @@
 - Secrets Manager へのシークレット登録
 - `sam build && sam deploy` によるデプロイ確認
 
+## v2 Phase 2.1: 実行方式の識別（`sync_session.sh`, `handler.py`） [#16](https://github.com/n-yU/ayumy/issues/16)
+手動実行と定期実行で対象期間を切り替えるために、Lambda event に `source` フィールドを渡す仕組みを追加する。
+- `sync_session.sh` の Lambda 呼び出しペイロードに `{"source": "manual"}` を追加
+- `handler.py` で `event.source` を `AYUMY_SOURCE` 環境変数として `report.py` に渡す
+- 定期実行（EventBridge）は前日分、手動実行は当日分を対象とする
+
 ## v2 Phase 3: メインスクリプト（`lambda/report.py`） [#14](https://github.com/n-yU/ayumy/issues/14)
 以下のサブ機能を順に実装する。各機能は独立して動作確認可能。
 1. GitHub アクティビティ取得 — REST API で Commits / PRs / Issues を取得・整形
