@@ -44,10 +44,10 @@ def lambda_handler(event, context):
             timeout=280,
         )
     except subprocess.TimeoutExpired as e:
-        print(f"report.py timed out after {e.timeout}s")
+        print(f"report module timed out after {e.timeout}s")
         return {
             "statusCode": 500,
-            "body": json.dumps({"error": f"report.py timed out after {e.timeout}s"}),
+            "body": json.dumps({"error": f"report module timed out after {e.timeout}s"}),
         }
 
     print(f"stdout: {result.stdout}")
@@ -58,7 +58,7 @@ def lambda_handler(event, context):
         return {
             "statusCode": 500,
             "body": json.dumps({
-                "error": "report.py failed",
+                "error": "report module failed",
                 "returncode": result.returncode,
                 "stderr": result.stderr,
             }),
