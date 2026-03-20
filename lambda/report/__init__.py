@@ -36,6 +36,21 @@ class SessionInfo(TypedDict):
 SessionActivity = dict[str, list[SessionInfo]]
 
 
+class RepoSummary(TypedDict):
+    name: str
+    summary: str
+    achievements: list[str]
+    ongoing: list[str]
+    claude_code: str
+    tags: list[str]
+    status: str
+
+
+class ReportSummary(TypedDict):
+    summary: str
+    repositories: list[RepoSummary]
+
+
 def get_target_date_range(source: str | None = None) -> tuple[datetime, datetime]:
     """Return the target date range for activity fetching.
 
