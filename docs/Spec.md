@@ -317,7 +317,7 @@ Lambda 関数の環境変数として設定する。機密情報は AWS Secrets 
 - **ハンドラ**: `lambda/handler.py`（`lambda/report` パッケージを呼び出すエントリポイント）
 - **タイムアウト**: 300秒（5分）
 - **メモリ**: 256MB
-- **依存パッケージ**: デプロイ: `requests`, `anthropic`, `PyGithub`、開発: 左記 + `boto3`
+- **依存パッケージ**: デプロイ: `requests`, `anthropic`, `PyGithub`（`boto3` は Lambda ランタイム同梱版を利用）、開発: 左記 + `boto3`
 - **IAM ロール**: S3 バケットへの読み書き、Secrets Manager の読み取り、CloudWatch Logs への書き込み
 
 ### 7.4 デプロイ
