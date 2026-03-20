@@ -54,7 +54,7 @@ class GitHubClient:
         Args:
             pat: GitHub Fine-grained PAT with read access to owner repos
         """
-        self.g = Github(pat)
+        self.g = Github(pat, per_page=100)
 
     def fetch_repos(self) -> PaginatedList[Repository]:
         """Fetch all owner-affiliated repositories.
