@@ -190,6 +190,37 @@ class SessionClient:
 
         return "\n".join(lines)
 
+    def archive_sessions(self, since: datetime, until: datetime) -> int:
+        """Move processed JSONL files from claude-sessions/ to processed/.
+
+        Copies each object to the processed/ prefix (preserving project
+        subdirectory structure) and then deletes the original.
+
+        Args:
+            since: Start of the target period (inclusive)
+            until: End of the target period (exclusive)
+
+        Returns:
+            The number of session files archived
+        """
+        objects = self.list_session_objects(since, until)
+        archived = 0
+
+        for obj in objects:
+            src_key = obj["Key"]
+            # claude-sessions/{project}/{session}.jsonl -> processed/{project}/{session}.jsonl
+            dst_key = "processed/" + src_key.removeprefix("claude-sessions/")
+
+            self.s3.copy_object(
+                Bucket=self.bucket,
+                CopySource={"Bucket": self.bucket, "Key": src_key},
+                Key=dst_key,
+            )
+            self.s3.delete_object(Bucket=self.bucket, Key=src_key)
+            archived += 1
+
+        return archived
+
     @staticmethod
     def _format_time(iso_timestamp: str) -> str:
         """Convert an ISO timestamp to JST HH:MM format.
