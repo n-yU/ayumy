@@ -39,6 +39,28 @@ class NotionClient:
         self.client = Client(auth=token)
         self.database_id = database_id
 
+    def fetch_allowlists(self) -> tuple[list[str], list[str]]:
+        """Fetch allowed tags and statuses from the database schema.
+
+        Reads the Tags (multi-select) and Status (select) property
+        options defined in the Notion database.
+
+        Returns:
+            A tuple of (allowed_tags, allowed_statuses) as string lists
+        """
+        db = self.client.databases.retrieve(database_id=self.database_id)
+        properties = db["properties"]
+
+        tags = [
+            opt["name"]
+            for opt in properties["Tags"]["multi_select"]["options"]
+        ]
+        statuses = [
+            opt["name"]
+            for opt in properties["Status"]["select"]["options"]
+        ]
+        return tags, statuses
+
     def _build_properties(
         self,
         target_date: datetime,
@@ -63,17 +85,21 @@ class NotionClient:
         """
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
 
-        return {
+        properties: dict = {
             "Name": {"title": [{"type": "text", "text": {"content": repo_summary["name"]}}]},
             "Date": {"date": {"start": date_str}},
             "Repository": {"select": {"name": repo_summary["name"]}},
             "Tags": {"multi_select": [{"name": tag} for tag in repo_summary["tags"]]},
-            "Status": {"select": {"name": repo_summary["status"]}},
             "Commits": {"number": commits},
             "PRs Merged": {"number": prs_merged},
             "Issues Closed": {"number": issues_closed},
             "Claude Sessions": {"number": claude_sessions},
         }
+
+        if repo_summary["status"]:
+            properties["Status"] = {"select": {"name": repo_summary["status"]}}
+
+        return properties
 
     def _build_children(
         self,
