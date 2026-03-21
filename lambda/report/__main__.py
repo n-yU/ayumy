@@ -50,8 +50,14 @@ def main() -> None:
         archived = session_client.archive_sessions()
         print(f"Archived {archived} session log(s)", file=sys.stderr)
 
+        # Detect skipped repos (in summary but not in GitHub activity)
+        skipped_repos = [
+            r["name"] for r in report["repositories"]
+            if r["name"] not in github_activity
+        ]
+
         # Slack notification (best-effort)
-        slack_client.notify(since, report, pages)
+        slack_client.notify(since, report, pages, skipped_repos)
 
         print(json.dumps(report, ensure_ascii=False, indent=2))
     except Exception as e:

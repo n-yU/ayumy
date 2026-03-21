@@ -24,6 +24,7 @@ class SlackClient:
         target_date: datetime,
         report: ReportSummary,
         pages: list[tuple[str, str]],
+        skipped_repos: list[str] | None = None,
     ) -> None:
         """Send a daily report notification to Slack.
 
@@ -34,6 +35,8 @@ class SlackClient:
             target_date: The target date for the report
             report: Full report summary from Claude API
             pages: List of (repo_name, page_url) tuples
+            skipped_repos: Repo names that were in the summary but skipped
+                during Notion page creation
         """
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
 
@@ -45,7 +48,11 @@ class SlackClient:
                 f"📄 Notion Pages\n{page_lines}"
             )
         else:
-            text = f"✅ Daily Report ({date_str}): No activity"
+            text = f"✅ Daily Report ({date_str}): No pages created"
+
+        if skipped_repos:
+            skipped = ", ".join(skipped_repos)
+            text += f"\n\n⚠️ Skipped: {skipped}"
 
         self._send(text)
 
