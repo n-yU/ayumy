@@ -232,7 +232,7 @@ class NotionClient:
         report: ReportSummary,
         activity: Activity,
         session_activity: SessionActivity,
-    ) -> list[str]:
+    ) -> list[tuple[str, str]]:
         """Create Notion pages for all repositories in the report.
 
         Archives (soft-deletes) existing pages for the target date before
@@ -245,20 +245,19 @@ class NotionClient:
             session_activity: Claude Code session data keyed by repo name
 
         Returns:
-            A list of URLs of the created Notion pages
+            A list of (repo_name, page_url) tuples for created pages
         """
         archived = self._archive_existing_pages(target_date)
         if archived:
             date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
             print(f"Archived {archived} existing page(s) for {date_str}", file=sys.stderr)
 
-        urls: list[str] = []
+        pages: list[tuple[str, str]] = []
 
         for repo_summary in report["repositories"]:
             repo_name = repo_summary["name"]
 
             # Skip repos not found in activity (no matching GitHub repo)
-            # TODO: Notify via Slack when skipping
             if repo_name not in activity:
                 print(f"Skipping unknown repo: {repo_name}", file=sys.stderr)
                 continue
@@ -283,6 +282,6 @@ class NotionClient:
                 issues_closed,
                 claude_sessions,
             )
-            urls.append(url)
+            pages.append((repo_name, url))
 
-        return urls
+        return pages

@@ -20,6 +20,7 @@ class SessionClient:
         """
         self.s3 = boto3.client("s3")
         self.bucket = bucket
+        self._fetched_keys: list[str] = []
 
     def list_session_objects(
         self, since: datetime, until: datetime
@@ -143,8 +144,10 @@ class SessionClient:
         """
         activity: SessionActivity = {}
         names = repo_names or []
+        self._fetched_keys: list[str] = []
 
         for obj in self.list_session_objects(since, until):
+            self._fetched_keys.append(obj["Key"])
             session = self.parse_session(obj["Key"])
             if session is None:
                 continue
@@ -189,6 +192,33 @@ class SessionClient:
                     lines.append(f"- ツール使用: {tools}")
 
         return "\n".join(lines)
+
+    def archive_sessions(self) -> int:
+        """Move fetched JSONL files from claude-sessions/ to processed/.
+
+        Archives exactly the objects that were listed by the preceding
+        fetch_sessions() call, avoiding race conditions with late arrivals.
+        Copies each object to the processed/ prefix (preserving project
+        subdirectory structure) and then deletes the original.
+
+        Returns:
+            The number of session files archived
+        """
+        archived = 0
+
+        for src_key in self._fetched_keys:
+            # claude-sessions/{project}/{session}.jsonl -> processed/{project}/{session}.jsonl
+            dst_key = "processed/" + src_key.removeprefix("claude-sessions/")
+
+            self.s3.copy_object(
+                Bucket=self.bucket,
+                CopySource={"Bucket": self.bucket, "Key": src_key},
+                Key=dst_key,
+            )
+            self.s3.delete_object(Bucket=self.bucket, Key=src_key)
+            archived += 1
+
+        return archived
 
     @staticmethod
     def _format_time(iso_timestamp: str) -> str:
