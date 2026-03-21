@@ -104,28 +104,54 @@ class SessionClient:
             "tools_used": sorted(tools_used),
         }
 
+    @staticmethod
+    def _resolve_repo_name(project: str, repo_names: list[str]) -> str:
+        """Map a project name to a repository name by suffix matching.
+
+        Args:
+            project: Project directory name from S3 path
+                (e.g. "-Users-nyu-Documents-github-ayumy")
+            repo_names: Known repository names from GitHub activity
+
+        Returns:
+            The matching repo name, or the original project name if no
+            match is found
+        """
+        best_match: str | None = None
+        for name in repo_names:
+            if project.endswith(f"-{name}"):
+                if best_match is None or len(name) > len(best_match):
+                    best_match = name
+        return best_match if best_match is not None else project
+
     def fetch_sessions(
-        self, since: datetime, until: datetime
+        self, since: datetime, until: datetime, repo_names: list[str] | None = None,
     ) -> SessionActivity:
         """Fetch all session logs for the target date range.
 
         Args:
             since: Start of the target period (inclusive)
             until: End of the target period (exclusive)
+            repo_names: Known repository names from GitHub activity.
+                When provided, project names are mapped to repo names
+                by suffix matching
 
         Returns:
-            A dict keyed by project name. Each value is a list of
-            SessionInfo dicts. Projects with no sessions are omitted
+            A dict keyed by repo name (or project name if unmapped).
+            Each value is a list of SessionInfo dicts. Repos with no
+            sessions are omitted
         """
         activity: SessionActivity = {}
+        names = repo_names or []
+
         for obj in self.list_session_objects(since, until):
             session = self.parse_session(obj["Key"])
             if session is None:
                 continue
-            project = session["project"]
-            if project not in activity:
-                activity[project] = []
-            activity[project].append(session)
+            key = self._resolve_repo_name(session["project"], names)
+            if key not in activity:
+                activity[key] = []
+            activity[key].append(session)
 
         # Sort sessions by start_time within each project
         for sessions in activity.values():
