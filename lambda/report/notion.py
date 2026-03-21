@@ -200,8 +200,8 @@ class NotionClient:
 
         return page["url"]
 
-    def _delete_existing_pages(self, target_date: datetime) -> int:
-        """Delete existing pages for the target date.
+    def _archive_existing_pages(self, target_date: datetime) -> int:
+        """Archive existing pages for the target date.
 
         Queries the database for pages matching the target date and
         archives them to prevent duplicates on re-runs.
@@ -210,7 +210,7 @@ class NotionClient:
             target_date: The target date to match
 
         Returns:
-            The number of pages deleted
+            The number of pages archived
         """
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
         results = self.client.databases.query(
@@ -234,8 +234,8 @@ class NotionClient:
     ) -> list[str]:
         """Create Notion pages for all repositories in the report.
 
-        Deletes existing pages for the target date before creating new
-        ones to ensure idempotent re-runs.
+        Archives (soft-deletes) existing pages for the target date before
+        creating new ones to ensure idempotent re-runs.
 
         Args:
             target_date: The target date for the report
@@ -246,10 +246,10 @@ class NotionClient:
         Returns:
             A list of URLs of the created Notion pages
         """
-        deleted = self._delete_existing_pages(target_date)
-        if deleted:
+        archived = self._archive_existing_pages(target_date)
+        if archived:
             date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
-            print(f"Deleted {deleted} existing page(s) for {date_str}", file=sys.stderr)
+            print(f"Archived {archived} existing page(s) for {date_str}", file=sys.stderr)
 
         urls: list[str] = []
 
