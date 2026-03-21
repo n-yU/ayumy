@@ -1,5 +1,6 @@
 """Notion API client for writing daily report pages."""
 
+import sys
 from datetime import datetime
 
 from notion_client import Client
@@ -219,11 +220,16 @@ class NotionClient:
         """
         urls: list[str] = []
 
-        # TODO: Skip repos not found in activity (no matching GitHub repo)
-        # and notify via Slack instead of creating a Notion page
         for repo_summary in report["repositories"]:
             repo_name = repo_summary["name"]
-            repo_activity = activity.get(repo_name, {})
+
+            # Skip repos not found in activity (no matching GitHub repo)
+            # TODO: Notify via Slack when skipping
+            if repo_name not in activity:
+                print(f"Skipping unknown repo: {repo_name}", file=sys.stderr)
+                continue
+
+            repo_activity = activity[repo_name]
 
             commits = len(repo_activity.get("commits", []))
             prs_merged = sum(
