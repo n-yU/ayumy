@@ -117,6 +117,9 @@ class SummaryClient:
             messages=[{"role": "user", "content": prompt}],
         )
 
+        if not message.content:
+            raise ValueError("Claude API response has no content blocks.")
+
         response_text = message.content[0].text
         try:
             return json.loads(response_text)
