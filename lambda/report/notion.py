@@ -85,17 +85,21 @@ class NotionClient:
         """
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
 
-        return {
+        properties: dict = {
             "Name": {"title": [{"type": "text", "text": {"content": repo_summary["name"]}}]},
             "Date": {"date": {"start": date_str}},
             "Repository": {"select": {"name": repo_summary["name"]}},
             "Tags": {"multi_select": [{"name": tag} for tag in repo_summary["tags"]]},
-            "Status": {"select": {"name": repo_summary["status"]}},
             "Commits": {"number": commits},
             "PRs Merged": {"number": prs_merged},
             "Issues Closed": {"number": issues_closed},
             "Claude Sessions": {"number": claude_sessions},
         }
+
+        if repo_summary["status"]:
+            properties["Status"] = {"select": {"name": repo_summary["status"]}}
+
+        return properties
 
     def _build_children(
         self,
