@@ -50,7 +50,7 @@ def main() -> None:
         slack_client.notify(since, report, pages)
 
         # Archive processed session logs
-        archived = session_client.archive_sessions(since, until)
+        archived = session_client.archive_sessions()
         print(f"Archived {archived} session log(s)", file=sys.stderr)
 
         print(json.dumps(report, ensure_ascii=False, indent=2))

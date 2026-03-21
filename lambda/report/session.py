@@ -143,8 +143,10 @@ class SessionClient:
         """
         activity: SessionActivity = {}
         names = repo_names or []
+        self._fetched_keys: list[str] = []
 
         for obj in self.list_session_objects(since, until):
+            self._fetched_keys.append(obj["Key"])
             session = self.parse_session(obj["Key"])
             if session is None:
                 continue
@@ -190,24 +192,20 @@ class SessionClient:
 
         return "\n".join(lines)
 
-    def archive_sessions(self, since: datetime, until: datetime) -> int:
-        """Move processed JSONL files from claude-sessions/ to processed/.
+    def archive_sessions(self) -> int:
+        """Move fetched JSONL files from claude-sessions/ to processed/.
 
+        Archives exactly the objects that were listed by the preceding
+        fetch_sessions() call, avoiding race conditions with late arrivals.
         Copies each object to the processed/ prefix (preserving project
         subdirectory structure) and then deletes the original.
-
-        Args:
-            since: Start of the target period (inclusive)
-            until: End of the target period (exclusive)
 
         Returns:
             The number of session files archived
         """
-        objects = self.list_session_objects(since, until)
         archived = 0
 
-        for obj in objects:
-            src_key = obj["Key"]
+        for src_key in self._fetched_keys:
             # claude-sessions/{project}/{session}.jsonl -> processed/{project}/{session}.jsonl
             dst_key = "processed/" + src_key.removeprefix("claude-sessions/")
 
