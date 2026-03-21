@@ -126,7 +126,7 @@ class NotionClient:
                     "object": "block",
                     "type": "bulleted_list_item",
                     "bulleted_list_item": {
-                        "rich_text": [{"type": "text", "text": {"content": item}}],
+                        "rich_text": _chunk_rich_text(item),
                     },
                 })
 
@@ -144,7 +144,7 @@ class NotionClient:
                     "object": "block",
                     "type": "bulleted_list_item",
                     "bulleted_list_item": {
-                        "rich_text": [{"type": "text", "text": {"content": item}}],
+                        "rich_text": _chunk_rich_text(item),
                     },
                 })
 
