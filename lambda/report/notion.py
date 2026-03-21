@@ -7,6 +7,24 @@ from notion_client import Client
 from . import JST, Activity, RepoSummary, ReportSummary, SessionActivity
 
 
+RICH_TEXT_LIMIT = 2000
+
+
+def _chunk_rich_text(text: str) -> list[dict]:
+    """Split text into rich_text objects respecting Notion's per-item limit.
+
+    Args:
+        text: Text content to split
+
+    Returns:
+        A list of rich_text objects, each within RICH_TEXT_LIMIT chars
+    """
+    return [
+        {"type": "text", "text": {"content": text[i:i + RICH_TEXT_LIMIT]}}
+        for i in range(0, len(text), RICH_TEXT_LIMIT)
+    ]
+
+
 class NotionClient:
     """Client for writing daily report pages to a Notion database."""
 
@@ -77,9 +95,7 @@ class NotionClient:
         children.append({
             "object": "block",
             "type": "paragraph",
-            "paragraph": {
-                "rich_text": [{"type": "text", "text": {"content": overall_summary}}],
-            },
+            "paragraph": {"rich_text": _chunk_rich_text(overall_summary)},
         })
 
         # Repository summary
@@ -93,9 +109,7 @@ class NotionClient:
         children.append({
             "object": "block",
             "type": "paragraph",
-            "paragraph": {
-                "rich_text": [{"type": "text", "text": {"content": repo_summary["summary"]}}],
-            },
+            "paragraph": {"rich_text": _chunk_rich_text(repo_summary["summary"])},
         })
 
         # Achievements
@@ -146,9 +160,7 @@ class NotionClient:
             children.append({
                 "object": "block",
                 "type": "paragraph",
-                "paragraph": {
-                    "rich_text": [{"type": "text", "text": {"content": repo_summary["claude_code"]}}],
-                },
+                "paragraph": {"rich_text": _chunk_rich_text(repo_summary["claude_code"])},
             })
 
         return children
