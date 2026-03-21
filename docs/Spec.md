@@ -194,6 +194,7 @@ Lambda event の `source` フィールドで判定する。`"manual"` なら手�
 ### 5.2 Claude Code セッションログの読み取り
 1. S3 バケットの `claude-sessions/` プレフィックス以下の全 JSONL を走査し、最終更新日時で前日分をフィルタ
 2. JSONL から抽出する項目: ユーザーのプロンプト、使用したツール、対象プロジェクト名
+3. プロジェクト名（S3 パス由来、例: `-Users-nyu-Documents-github-ayumy`）を GitHub activity の既知リポジトリ名と最長サフィックスマッチングで解決する。一致しない場合は元のプロジェクト名をそのまま使用する
 
 ### 5.3 要約生成（Claude API）
 使用モデル: `claude-sonnet-4-20250514`
@@ -246,7 +247,7 @@ Notion への書き込み完了後、Slack Incoming Webhook で指定チャン�
 
 ## 6. Notion データベース仕様
 ### 6.1 データベースプロパティ
-Date × Repository 単位でページを作成する。1日に複数ページが生成される。
+Date × Repository 単位でページを作成する。1日に複数ページが生成される。再実行時は対象日の既存ページをアーカイブ（soft-delete）してから再作成し、冪等性を担保する。GitHub activity に存在しないリポジトリは Notion ページを作成しない。
 
 | プロパティ名 | 型 | 説明 | 例 |
 |---|---|---|---|
