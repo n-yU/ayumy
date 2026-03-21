@@ -28,7 +28,7 @@ def main() -> None:
     formatted_github = github_client.format_activity(github_activity)
 
     session_client = SessionClient(s3_bucket)
-    session_activity = session_client.fetch_sessions(since, until)
+    session_activity = session_client.fetch_sessions(since, until, list(github_activity.keys()))
     formatted_sessions = session_client.format_activity(session_activity)
 
     summary_client = SummaryClient(anthropic_api_key)
