@@ -64,6 +64,7 @@ ayumy/
 │   │   ├── github.py                # GitHub アクティビティ取得
 │   │   ├── notion.py                # Notion API 書き込み
 │   │   ├── session.py               # Claude Code セッションログ読み取り
+│   │   ├── slack.py                 # Slack 通知
 │   │   └── summarizer.py            # Claude API 要約生成
 │   ├── requirements.txt             # Lambda デプロイ用の依存パッケージ
 │   └── requirements-dev.txt         # ローカル開発用の依存パッケージ（boto3 を含む）

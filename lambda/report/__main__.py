@@ -8,6 +8,7 @@ from . import get_target_date_range, require_env
 from .github import GitHubClient
 from .notion import NotionClient
 from .session import SessionClient
+from .slack import SlackClient
 from .summarizer import SummaryClient
 
 
@@ -18,6 +19,7 @@ def main() -> None:
     anthropic_api_key = require_env("ANTHROPIC_API_KEY")
     notion_token = require_env("NOTION_SECRET")
     notion_db_id = require_env("NOTION_DATABASE_ID")
+    slack_webhook_url = require_env("SLACK_WEBHOOK_URL")
 
     source = os.environ.get("AYUMY_SOURCE")
     since, until = get_target_date_range(source)
@@ -35,11 +37,19 @@ def main() -> None:
     report = summary_client.generate_summary(since, formatted_github, formatted_sessions)
 
     notion_client = NotionClient(notion_token, notion_db_id)
-    page_urls = notion_client.create_report_pages(
+    pages = notion_client.create_report_pages(
         since, report, github_activity, session_activity,
     )
-    for url in page_urls:
-        print(f"Created Notion page: {url}", file=sys.stderr)
+    for name, url in pages:
+        print(f"Created Notion page: {name} -> {url}", file=sys.stderr)
+
+    # Slack notification (best-effort)
+    slack_client = SlackClient(slack_webhook_url)
+    slack_client.notify(since, report, pages)
+
+    # Archive processed session logs
+    archived = session_client.archive_sessions(since, until)
+    print(f"Archived {archived} session log(s)", file=sys.stderr)
 
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
