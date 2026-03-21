@@ -5,7 +5,7 @@ from datetime import datetime
 
 from notion_client import Client
 
-from . import JST, Activity, RepoSummary, ReportSummary, SessionActivity
+from . import JST, GitHubActivity, RepoSummary, ReportSummary, SessionActivity
 
 
 RICH_TEXT_LIMIT = 2000
@@ -230,7 +230,7 @@ class NotionClient:
         self,
         target_date: datetime,
         report: ReportSummary,
-        activity: Activity,
+        activity: GitHubActivity,
         session_activity: SessionActivity,
     ) -> list[tuple[str, str]]:
         """Create Notion pages for all repositories in the report.
@@ -262,7 +262,7 @@ class NotionClient:
                 print(f"Skipping unknown repo: {repo_name}", file=sys.stderr)
                 continue
 
-            repo_activity = activity[repo_name]
+            repo_activity = activity.repos()[repo_name]
 
             commits = len(repo_activity.get("commits", []))
             prs_merged = sum(

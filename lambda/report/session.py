@@ -6,7 +6,7 @@ from typing import Any
 
 import boto3
 
-from . import JST, SessionActivity, SessionInfo
+from . import SessionActivity, SessionInfo
 
 
 class SessionClient:
@@ -138,11 +138,9 @@ class SessionClient:
                 by suffix matching
 
         Returns:
-            A dict keyed by repo name (or project name if unmapped).
-            Each value is a list of SessionInfo dicts. Repos with no
-            sessions are omitted
+            A SessionActivity instance. Repos with no sessions are omitted
         """
-        activity: SessionActivity = {}
+        data: dict[str, list[SessionInfo]] = {}
         names = repo_names or []
         self._fetched_keys: list[str] = []
 
@@ -152,46 +150,15 @@ class SessionClient:
             if session is None:
                 continue
             key = self._resolve_repo_name(session["project"], names)
-            if key not in activity:
-                activity[key] = []
-            activity[key].append(session)
+            if key not in data:
+                data[key] = []
+            data[key].append(session)
 
         # Sort sessions by start_time within each project
-        for sessions in activity.values():
+        for sessions in data.values():
             sessions.sort(key=lambda s: s["start_time"])
 
-        return activity
-
-    def format_activity(self, activity: SessionActivity) -> str:
-        """Format session logs into the Claude Code section text for Claude API input.
-
-        Args:
-            activity: SessionActivity dict as returned by fetch_sessions()
-
-        Returns:
-            A Markdown-formatted string for the "# Claude Code セッション"
-            section, suitable for inclusion in the Spec.md §5.3 input format
-        """
-        if not activity:
-            return "# Claude Code セッション\nセッションなし"
-
-        lines = ["# Claude Code セッション"]
-        for project_name, sessions in sorted(activity.items()):
-            lines.append(f"## プロジェクト: {project_name}")
-
-            for i, session in enumerate(sessions, 1):
-                start = self._format_time(session["start_time"])
-                end = self._format_time(session["end_time"])
-                lines.append(f"### セッション {i} ({start} - {end})")
-
-                for msg in session["user_messages"]:
-                    lines.append(f"- ユーザー: {msg}")
-
-                if session["tools_used"]:
-                    tools = ", ".join(session["tools_used"])
-                    lines.append(f"- ツール使用: {tools}")
-
-        return "\n".join(lines)
+        return SessionActivity(data)
 
     def archive_sessions(self) -> int:
         """Move fetched JSONL files from claude-sessions/ to processed/.
@@ -219,18 +186,3 @@ class SessionClient:
             archived += 1
 
         return archived
-
-    @staticmethod
-    def _format_time(iso_timestamp: str) -> str:
-        """Convert an ISO timestamp to JST HH:MM format.
-
-        Args:
-            iso_timestamp: ISO 8601 timestamp string
-
-        Returns:
-            Time string in "HH:MM" format (JST)
-        """
-        if not iso_timestamp:
-            return "??:??"
-        dt = datetime.fromisoformat(iso_timestamp).astimezone(JST)
-        return dt.strftime("%H:%M")

@@ -6,7 +6,7 @@ from github import Github
 from github.PaginatedList import PaginatedList
 from github.Repository import Repository
 
-from . import Activity, CommitInfo, IssueInfo, PullInfo
+from . import CommitInfo, GitHubActivity, IssueInfo, PullInfo, RepoActivity
 
 
 class GitHubClient:
@@ -117,7 +117,7 @@ class GitHubClient:
             })
         return results
 
-    def fetch_activity(self, since: datetime, until: datetime) -> Activity:
+    def fetch_activity(self, since: datetime, until: datetime) -> GitHubActivity:
         """Fetch all GitHub activity for the target date range.
 
         Args:
@@ -125,55 +125,18 @@ class GitHubClient:
             until: End of the target period (exclusive)
 
         Returns:
-            A dict keyed by repo name. Each value contains "commits",
-            "pulls", and "issues" lists. Repos with no activity are omitted
+            A GitHubActivity instance. Repos with no activity are omitted
         """
-        activity: Activity = {}
+        data: dict[str, RepoActivity] = {}
         for repo in self.fetch_repos():
             commits = self.fetch_commits(repo, since, until)
             pulls = self.fetch_pulls(repo, since, until)
             issues = self.fetch_issues(repo, since, until)
 
             if commits or pulls or issues:
-                activity[repo.name] = {
+                data[repo.name] = {
                     "commits": commits,
                     "pulls": pulls,
                     "issues": issues,
                 }
-        return activity
-
-    def format_activity(self, activity: Activity) -> str:
-        """Format GitHub activity into the GitHub section text for Claude API input.
-
-        Args:
-            activity: Activity dict as returned by fetch_activity()
-
-        Returns:
-            A Markdown-formatted string for the "# GitHub アクティビティ"
-            section, suitable for inclusion in the Spec.md §5.3 input format
-        """
-        if not activity:
-            return "# GitHub アクティビティ\nアクティビティなし"
-
-        lines = ["# GitHub アクティビティ"]
-        for repo_name, data in sorted(activity.items()):
-            lines.append(f"## {repo_name}")
-
-            if data["commits"]:
-                lines.append("### Commits")
-                for c in data["commits"]:
-                    lines.append(f"- {c['message']}")
-
-            if data["pulls"]:
-                lines.append("### Pull Requests")
-                for pr in data["pulls"]:
-                    labels = f" ({', '.join(pr['labels'])})" if pr["labels"] else ""
-                    lines.append(f"- [{pr['state']}] #{pr['number']} {pr['title']}{labels}")
-
-            if data["issues"]:
-                lines.append("### Issues")
-                for issue in data["issues"]:
-                    labels = f" ({', '.join(issue['labels'])})" if issue["labels"] else ""
-                    lines.append(f"- [{issue['state']}] #{issue['number']} {issue['title']}{labels}")
-
-        return "\n".join(lines)
+        return GitHubActivity(data)
