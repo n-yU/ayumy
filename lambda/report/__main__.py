@@ -46,12 +46,12 @@ def main() -> None:
         for name, url in pages:
             print(f"Created Notion page: {name} -> {url}", file=sys.stderr)
 
-        # Slack notification (best-effort)
-        slack_client.notify(since, report, pages)
-
         # Archive processed session logs
         archived = session_client.archive_sessions()
         print(f"Archived {archived} session log(s)", file=sys.stderr)
+
+        # Slack notification (best-effort)
+        slack_client.notify(since, report, pages)
 
         print(json.dumps(report, ensure_ascii=False, indent=2))
     except Exception as e:
