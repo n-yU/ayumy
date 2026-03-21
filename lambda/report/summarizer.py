@@ -49,7 +49,7 @@ status は以下からリポジトリごとに1つ選択:
 - productive: 複数の PR マージや Issue クローズがある
 - maintenance: 依存関係更新、CI 修正など保守作業が中心
 - blocked: PR レビュー待ちや Issue の議論が中心
-- light: アクティビティが少ない日\
+- light: アクティビティが少ない日
 """
 
 
