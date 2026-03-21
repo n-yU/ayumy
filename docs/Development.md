@@ -31,18 +31,12 @@
 6. 処理済み JSONL のアーカイブ — 正常完了後に S3 上で `processed/` へ移動（Spec.md §5.5）
 7. EventBridge Scheduler の有効化 — `template.yaml` の `State: DISABLED` を削除して再デプロイ
 
-### v2 Phase 3.1: タグ・ステータス管理 [#22](https://github.com/n-yU/ayumy/issues/22)
+## v2 Phase 3.1: タグ・ステータス管理 [#22](https://github.com/n-yU/ayumy/issues/22)
 `ayumy` CLI からタグ・ステータスの登録・一覧を行い、Notion DB の select オプションと要約生成時の allowlist バリデーションに利用する。
 - タグ・ステータスリストの永続化（S3 または Notion DB）
 - `ayumy tag` サブコマンドの追加（登録・一覧・削除）
 - 要約生成時のバリデーション（allowlist 外の値を除外またはフォールバック）
 - システムプロンプトへの動的な候補リスト注入
-
-### v2 Phase 3.2: セッションログの日付フィルタリング [#23](https://github.com/n-yU/ayumy/issues/23)
-日をまたぐセッションで前日分のメッセージが翌日のレポートに混入する問題を解決する。`parse_session` で JSONL エントリの `timestamp` を `since` / `until` でフィルタし、対象期間内のメッセージのみを抽出する。
-- `parse_session` に `since` / `until` パラメータを追加
-- `fetch_sessions` から `since` / `until` を伝播
-- Spec.md §5.2 に日付フィルタリングの記述を追加
 
 ## v2 Phase 4: 結合テスト・運用準備 [#15](https://github.com/n-yU/ayumy/issues/15)
 - 全コンポーネントの結合テスト（クライアントマシン → S3 → Lambda → Notion の一連の流れ）
