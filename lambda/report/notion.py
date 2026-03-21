@@ -213,6 +213,7 @@ class NotionClient:
             The number of pages archived
         """
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
+        # No pagination: daily page count won't exceed Notion's default page size (100)
         results = self.client.databases.query(
             database_id=self.database_id,
             filter={"property": "Date", "date": {"equals": date_str}},
