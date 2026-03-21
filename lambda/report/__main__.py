@@ -4,28 +4,20 @@ import json
 import os
 import sys
 
-from . import get_target_date_range
+from . import get_target_date_range, require_env
 from .github import GitHubClient
+from .notion import NotionClient
 from .session import SessionClient
 from .summarizer import SummaryClient
 
 
 def main() -> None:
     """Entry point for the report generator."""
-    github_pat = os.environ.get("GITHUB_PAT")
-    if not github_pat:
-        print("GITHUB_PAT is not set", file=sys.stderr)
-        sys.exit(1)
-
-    s3_bucket = os.environ.get("AYUMY_S3_BUCKET")
-    if not s3_bucket:
-        print("AYUMY_S3_BUCKET is not set", file=sys.stderr)
-        sys.exit(1)
-
-    anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not anthropic_api_key:
-        print("ANTHROPIC_API_KEY is not set", file=sys.stderr)
-        sys.exit(1)
+    github_pat = require_env("GITHUB_PAT")
+    s3_bucket = require_env("AYUMY_S3_BUCKET")
+    anthropic_api_key = require_env("ANTHROPIC_API_KEY")
+    notion_token = require_env("NOTION_SECRET")
+    notion_db_id = require_env("NOTION_DATABASE_ID")
 
     source = os.environ.get("AYUMY_SOURCE")
     since, until = get_target_date_range(source)
@@ -41,6 +33,14 @@ def main() -> None:
 
     summary_client = SummaryClient(anthropic_api_key)
     report = summary_client.generate_summary(since, formatted_github, formatted_sessions)
+
+    notion_client = NotionClient(notion_token, notion_db_id)
+    page_urls = notion_client.create_report_pages(
+        since, report, github_activity, session_activity,
+    )
+    for url in page_urls:
+        print(f"Created Notion page: {url}", file=sys.stderr)
+
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 

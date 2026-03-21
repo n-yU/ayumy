@@ -4,6 +4,8 @@ Fetches GitHub activity and Claude Code session logs for the target
 date range and formats them for downstream processing.
 """
 
+import os
+import sys
 from datetime import datetime, timedelta, timezone
 from typing import Any, TypedDict
 
@@ -49,6 +51,22 @@ class RepoSummary(TypedDict):
 class ReportSummary(TypedDict):
     summary: str
     repositories: list[RepoSummary]
+
+
+def require_env(name: str) -> str:
+    """Get a required environment variable or exit with an error.
+
+    Args:
+        name: Environment variable name
+
+    Returns:
+        The environment variable value
+    """
+    value = os.environ.get(name)
+    if not value:
+        print(f"{name} is not set", file=sys.stderr)
+        sys.exit(1)
+    return value
 
 
 def get_target_date_range(source: str | None = None) -> tuple[datetime, datetime]:

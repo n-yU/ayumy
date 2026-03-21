@@ -62,6 +62,7 @@ ayumy/
 │   │   ├── __init__.py              # 型定義、共通ユーティリティ
 │   │   ├── __main__.py              # エントリポイント（python -m report）
 │   │   ├── github.py                # GitHub アクティビティ取得
+│   │   ├── notion.py                # Notion API 書き込み
 │   │   ├── session.py               # Claude Code セッションログ読み取り
 │   │   └── summarizer.py            # Claude API 要約生成
 │   ├── requirements.txt             # Lambda デプロイ用の依存パッケージ
@@ -245,20 +246,34 @@ Notion への書き込み完了後、Slack Incoming Webhook で指定チャン�
 
 ## 6. Notion データベース仕様
 ### 6.1 データベースプロパティ
+Date × Repository 単位でページを作成する。1日に複数ページが生成される。
+
 | プロパティ名 | 型 | 説明 | 例 |
 |---|---|---|---|
-| Name | Title | 日次レポートのタイトル | `Daily Report 2025-03-01` |
+| Name | Title | リポジトリ名 | `ayumy` |
 | Date | Date | 対象日 | `2025-03-01` |
-| Repositories | Multi-select | アクティビティがあったリポジトリ名 | `my-app`, `api-server` |
-| Tags | Multi-select | 作業内容の分類タグ | `feature`, `bugfix`, `docs`, `refactor`, `ci`, `review`, `ai-assisted` |
-| Status | Select | その日の全体的な進捗状態 | `productive`, `maintenance`, `blocked`, `light` |
-| Commits | Number | コミット総数 | `12` |
-| PRs Merged | Number | マージされた PR 数 | `3` |
-| Issues Closed | Number | クローズされた Issue 数 | `2` |
-| Claude Sessions | Number | Claude Code セッション数 | `4` |
+| Repository | Select | リポジトリ名 | `ayumy` |
+| Tags | Multi-select | 作業内容の分類タグ | `feature`, `ai-assisted` |
+| Status | Select | リポジトリでの進捗状態 | `productive` |
+| Commits | Number | リポジトリのコミット数 | `5` |
+| PRs Merged | Number | リポジトリのマージ PR 数 | `2` |
+| Issues Closed | Number | リポジトリのクローズ Issue 数 | `1` |
+| Claude Sessions | Number | リポジトリのセッション数 | `3` |
 
 ### 6.2 ページ本文（children blocks）
-Notion ページの本文には Claude が生成した要約を記載する。ブロックタイプとして `heading_2` と `paragraph` を使い分けて構造化する。
+Notion ページの本文には Claude が生成した要約を記載する。ブロックタイプとして `heading_2`、`paragraph`、`bulleted_list_item` を使い分けて構造化する。
+
+```
+[paragraph]            全体サマリー（その日の作業全体の要約）
+[heading_2]            概要
+[paragraph]            リポジトリの作業概要
+[heading_2]            成果（該当がある場合のみ）
+[bulleted_list_item]   マージされた PR、クローズされた Issue 等
+[heading_2]            継続中の作業（該当がある場合のみ）
+[bulleted_list_item]   オープンな PR や Issue 等
+[heading_2]            Claude Code（セッションがある場合のみ）
+[paragraph]            Claude Code での作業概要
+```
 
 ### 6.3 タグの分類基準
 | タグ | 基準 |
