@@ -126,5 +126,5 @@ class SummaryClient:
         except json.JSONDecodeError as e:
             raise ValueError(
                 f"Failed to parse Claude API response as JSON: {e}\n"
-                f"Response: {response_text}"
+                f"Response (truncated): {response_text[:500]}"
             ) from e
