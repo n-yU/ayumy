@@ -47,6 +47,12 @@ class SlackClient:
         )
 
         try:
-            self.client.send(text=text)
-        except Exception:
-            print("Failed to send Slack notification", file=sys.stderr)
+            response = self.client.send(text=text)
+            if response.status_code != 200:
+                print(
+                    f"Failed to send Slack notification: "
+                    f"status={response.status_code}, body={response.body}",
+                    file=sys.stderr,
+                )
+        except Exception as e:
+            print(f"Failed to send Slack notification: {e!r}", file=sys.stderr)
