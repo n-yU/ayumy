@@ -58,3 +58,4 @@ Lambda（環境変数 + Secrets Manager）:
 - JSONL の生データは S3 バケットに保管し、リモートリポジトリには push しない
 - アクティビティの取得対象期間: 前日 JST 00:00:00 〜 当日 JST 00:00:00
 - アクティビティが 0 件の日はスキップまたは「活動なし」と記録
+- PR での commit 時に、関連するドキュメント（[docs/Spec.md](docs/Spec.md), [docs/Development.md](docs/Development.md), [README.md](README.md)）に矛盾・未反映がないか確認し、必要に応じて更新する

@@ -59,7 +59,7 @@ ayumy/
 ├── lambda/
 │   ├── handler.py                   # Lambda ハンドラ（report パッケージを呼び出すエントリポイント）
 │   ├── report/                      # メインパッケージ: GitHub API + Claude API + Notion API
-│   │   ├── __init__.py              # 型定義、共通ユーティリティ
+│   │   ├── __init__.py              # 型定義（Activity クラス）、共通ユーティリティ
 │   │   ├── __main__.py              # エントリポイント（python -m report）
 │   │   ├── github.py                # GitHub アクティビティ取得
 │   │   ├── notion.py                # Notion API 書き込み
