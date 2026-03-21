@@ -30,14 +30,12 @@ def main() -> None:
     try:
         github_client = GitHubClient(github_pat)
         github_activity = github_client.fetch_activity(since, until)
-        formatted_github = github_client.format_activity(github_activity)
 
         session_client = SessionClient(s3_bucket)
         session_activity = session_client.fetch_sessions(since, until, list(github_activity.keys()))
-        formatted_sessions = session_client.format_activity(session_activity)
 
         summary_client = SummaryClient(anthropic_api_key)
-        report = summary_client.generate_summary(since, formatted_github, formatted_sessions)
+        report = summary_client.generate_summary(since, github_activity.format(), session_activity.format())
 
         notion_client = NotionClient(notion_token, notion_db_id)
         pages = notion_client.create_report_pages(
