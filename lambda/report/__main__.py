@@ -25,33 +25,38 @@ def main() -> None:
     since, until = get_target_date_range(source)
     print(f"Target date range: {since.isoformat()} ~ {until.isoformat()}", file=sys.stderr)
 
-    github_client = GitHubClient(github_pat)
-    github_activity = github_client.fetch_activity(since, until)
-    formatted_github = github_client.format_activity(github_activity)
-
-    session_client = SessionClient(s3_bucket)
-    session_activity = session_client.fetch_sessions(since, until, list(github_activity.keys()))
-    formatted_sessions = session_client.format_activity(session_activity)
-
-    summary_client = SummaryClient(anthropic_api_key)
-    report = summary_client.generate_summary(since, formatted_github, formatted_sessions)
-
-    notion_client = NotionClient(notion_token, notion_db_id)
-    pages = notion_client.create_report_pages(
-        since, report, github_activity, session_activity,
-    )
-    for name, url in pages:
-        print(f"Created Notion page: {name} -> {url}", file=sys.stderr)
-
-    # Slack notification (best-effort)
     slack_client = SlackClient(slack_webhook_url)
-    slack_client.notify(since, report, pages)
 
-    # Archive processed session logs
-    archived = session_client.archive_sessions(since, until)
-    print(f"Archived {archived} session log(s)", file=sys.stderr)
+    try:
+        github_client = GitHubClient(github_pat)
+        github_activity = github_client.fetch_activity(since, until)
+        formatted_github = github_client.format_activity(github_activity)
 
-    print(json.dumps(report, ensure_ascii=False, indent=2))
+        session_client = SessionClient(s3_bucket)
+        session_activity = session_client.fetch_sessions(since, until, list(github_activity.keys()))
+        formatted_sessions = session_client.format_activity(session_activity)
+
+        summary_client = SummaryClient(anthropic_api_key)
+        report = summary_client.generate_summary(since, formatted_github, formatted_sessions)
+
+        notion_client = NotionClient(notion_token, notion_db_id)
+        pages = notion_client.create_report_pages(
+            since, report, github_activity, session_activity,
+        )
+        for name, url in pages:
+            print(f"Created Notion page: {name} -> {url}", file=sys.stderr)
+
+        # Slack notification (best-effort)
+        slack_client.notify(since, report, pages)
+
+        # Archive processed session logs
+        archived = session_client.archive_sessions(since, until)
+        print(f"Archived {archived} session log(s)", file=sys.stderr)
+
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    except Exception as e:
+        slack_client.notify_error(since, e)
+        raise
 
 
 if __name__ == "__main__":

@@ -35,17 +35,37 @@ class SlackClient:
             report: Full report summary from Claude API
             pages: List of (repo_name, page_url) tuples
         """
-        if not pages:
-            return
-
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
-        page_lines = "\n".join(f"• {name}: {url}" for name, url in pages)
-        text = (
-            f"📝 Daily Report ({date_str})\n\n"
-            f"{report['summary']}\n\n"
-            f"📄 Notion Pages\n{page_lines}"
-        )
 
+        if pages:
+            page_lines = "\n".join(f"• {name}: {url}" for name, url in pages)
+            text = (
+                f"📝 Daily Report ({date_str})\n\n"
+                f"{report['summary']}\n\n"
+                f"📄 Notion Pages\n{page_lines}"
+            )
+        else:
+            text = f"✅ Daily Report ({date_str}): No activity"
+
+        self._send(text)
+
+    def notify_error(self, target_date: datetime, error: Exception) -> None:
+        """Send an error notification to Slack.
+
+        Args:
+            target_date: The target date for the report
+            error: The exception that occurred
+        """
+        date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
+        text = f"❌ Daily Report ({date_str}): {error}"
+        self._send(text)
+
+    def _send(self, text: str) -> None:
+        """Send a message via Slack webhook (best-effort).
+
+        Args:
+            text: Message text to send
+        """
         try:
             response = self.client.send(text=text)
             if response.status_code != 200:
