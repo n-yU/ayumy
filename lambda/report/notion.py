@@ -212,7 +212,7 @@ class NotionClient:
             target_date: The target date for the report
             report: Full report summary from Claude API
             activity: GitHub activity data keyed by repo name
-            session_activity: Claude Code session data keyed by project name
+            session_activity: Claude Code session data keyed by repo name
 
         Returns:
             A list of URLs of the created Notion pages
