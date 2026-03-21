@@ -241,10 +241,12 @@ Notion への書き込み完了後、Slack Incoming Webhook で指定チャン�
 - 全体サマリー（Claude API が生成した2〜3文の要約）
 - Notion ページへのリンク
 
+アクティビティが 0 件で Notion ページが作成されなかった場合は、正常稼働を示す簡易通知を送信する。処理中にエラーが発生した場合もエラー内容を通知する。
+
 通知が失敗しても処理全体は正常終了とする（通知はベストエフォート）。
 
 ### 5.5 処理済み JSONL のアーカイブ
-要約生成と Notion 書き込みが正常に完了した後、処理対象の JSONL ファイルを S3 上で `claude-sessions/` から `processed/` に移動（コピー＋削除）する。移動先はプロジェクト名のサブディレクトリを維持する（例: `processed/{project-name}/{session-id}.jsonl`）。JSONL は無期限に保持し、削除しない。
+要約生成と Notion 書き込みが正常に完了した後、処理対象の JSONL ファイルを S3 上で `claude-sessions/` から `processed/` に移動（コピー＋削除）する。アーカイブ対象は `fetch_sessions` で取得したオブジェクトキーに限定し、処理中に到着した遅延ファイルが誤ってアーカイブされるのを防ぐ。移動先はプロジェクト名のサブディレクトリを維持する（例: `processed/{project-name}/{session-id}.jsonl`）。JSONL は無期限に保持し、削除しない。
 
 ## 6. Notion データベース仕様
 ### 6.1 データベースプロパティ
