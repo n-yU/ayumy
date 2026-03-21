@@ -20,6 +20,7 @@ class SessionClient:
         """
         self.s3 = boto3.client("s3")
         self.bucket = bucket
+        self._fetched_keys: list[str] = []
 
     def list_session_objects(
         self, since: datetime, until: datetime
