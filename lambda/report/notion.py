@@ -45,7 +45,7 @@ class NotionClient:
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
 
         return {
-            "Name": {"title": [{"text": {"content": repo_summary["name"]}}]},
+            "Name": {"title": [{"type": "text", "text": {"content": repo_summary["name"]}}]},
             "Date": {"date": {"start": date_str}},
             "Repository": {"select": {"name": repo_summary["name"]}},
             "Tags": {"multi_select": [{"name": tag} for tag in repo_summary["tags"]]},
