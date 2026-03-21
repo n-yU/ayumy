@@ -1,6 +1,7 @@
 """Claude API summary generator."""
 
 import json
+import sys
 from datetime import datetime
 
 import anthropic
@@ -10,17 +11,17 @@ from . import JST, ReportSummary
 MODEL = "claude-sonnet-4-20250514"
 MAX_TOKENS = 2048
 
-SYSTEM_PROMPT = """\
+_SYSTEM_PROMPT_TEMPLATE = """\
 あなたは開発者の日次アクティビティを要約するアシスタントです。
 与えられた GitHub アクティビティと Claude Code セッションログをもとに、
 日本語で構造化された要約を生成してください。
 
 以下の JSON 形式で出力してください。JSON 以外のテキストは含めないでください。
 
-{
+{{
   "summary": "その日の作業全体を2〜3文で要約",
   "repositories": [
-    {
+    {{
       "name": "リポジトリ名",
       "summary": "このリポジトリでの作業概要",
       "achievements": ["マージされた PR、クローズされた Issue 等の成果"],
@@ -28,29 +29,31 @@ SYSTEM_PROMPT = """\
       "claude_code": "Claude Code での作業概要（セッションなしの場合は空文字列）",
       "tags": ["該当する分類タグ"],
       "status": "このリポジトリでの進捗状態"
-    }
+    }}
   ]
-}
+}}
 
 Claude Code セッションのプロジェクト名は GitHub リポジトリ名と対応させてください。
-プロジェクト名からリポジトリを特定できない場合は、name を "unknown ({プロジェクト名})" としてください。
+プロジェクト名からリポジトリを特定できない場合は、name を "unknown ({{プロジェクト名}})" としてください。
 無理に推測して既存のリポジトリに紐づけないでください。
 
 tags は以下から該当するものをリポジトリごとに選択:
-- feature: 新機能追加に関する Commit / PR
-- bugfix: バグ修正に関する Commit / PR / Issue
-- docs: ドキュメント更新
-- refactor: リファクタリング
-- ci: CI/CD やビルド設定の変更
-- review: PR レビューが主な活動だった場合
-- ai-assisted: Claude Code を活用した作業が含まれる場合
+{tags}
 
 status は以下からリポジトリごとに1つ選択:
-- productive: 複数の PR マージや Issue クローズがある
-- maintenance: 依存関係更新、CI 修正など保守作業が中心
-- blocked: PR レビュー待ちや Issue の議論が中心
-- light: アクティビティが少ない日
+{statuses}
 """
+
+
+class ValidationResult:
+    """Result of validating a report against allowlists."""
+
+    def __init__(self) -> None:
+        self.invalid_tags: dict[str, list[str]] = {}
+        self.invalid_statuses: dict[str, str] = {}
+
+    def __bool__(self) -> bool:
+        return bool(self.invalid_tags or self.invalid_statuses)
 
 
 class SummaryClient:
@@ -63,6 +66,23 @@ class SummaryClient:
             api_key: Anthropic API key
         """
         self.client = anthropic.Anthropic(api_key=api_key)
+
+    @staticmethod
+    def _build_system_prompt(
+        allowed_tags: list[str], allowed_statuses: list[str],
+    ) -> str:
+        """Build the system prompt with dynamic tag/status lists.
+
+        Args:
+            allowed_tags: Allowed tag names from Notion DB
+            allowed_statuses: Allowed status names from Notion DB
+
+        Returns:
+            A formatted system prompt string
+        """
+        tags = "\n".join(f"- {tag}" for tag in allowed_tags)
+        statuses = "\n".join(f"- {status}" for status in allowed_statuses)
+        return _SYSTEM_PROMPT_TEMPLATE.format(tags=tags, statuses=statuses)
 
     def build_prompt(
         self,
@@ -94,6 +114,8 @@ class SummaryClient:
         target_date: datetime,
         formatted_github: str,
         formatted_sessions: str,
+        allowed_tags: list[str],
+        allowed_statuses: list[str],
     ) -> ReportSummary:
         """Generate a structured summary using Claude API.
 
@@ -101,6 +123,8 @@ class SummaryClient:
             target_date: The target date for the report
             formatted_github: Formatted GitHub activity text
             formatted_sessions: Formatted Claude Code session text
+            allowed_tags: Allowed tag names from Notion DB
+            allowed_statuses: Allowed status names from Notion DB
 
         Returns:
             A ReportSummary dict with summary and per-repository details
@@ -109,11 +133,12 @@ class SummaryClient:
             ValueError: If Claude API response cannot be parsed as JSON
         """
         prompt = self.build_prompt(target_date, formatted_github, formatted_sessions)
+        system_prompt = self._build_system_prompt(allowed_tags, allowed_statuses)
 
         message = self.client.messages.create(
             model=MODEL,
             max_tokens=MAX_TOKENS,
-            system=SYSTEM_PROMPT,
+            system=system_prompt,
             messages=[{"role": "user", "content": prompt}],
         )
 
@@ -128,3 +153,48 @@ class SummaryClient:
                 f"Failed to parse Claude API response as JSON: {e}\n"
                 f"Response (truncated): {response_text[:500]}"
             ) from e
+
+    @staticmethod
+    def validate_report(
+        report: ReportSummary,
+        allowed_tags: list[str],
+        allowed_statuses: list[str],
+    ) -> ValidationResult:
+        """Validate and fix tags/status in a report against allowlists.
+
+        Removes invalid tags and replaces invalid statuses with an empty
+        string. Mutates the report in place.
+
+        Args:
+            report: Report to validate (mutated in place)
+            allowed_tags: Allowed tag names
+            allowed_statuses: Allowed status names
+
+        Returns:
+            A ValidationResult with any invalid values found
+        """
+        result = ValidationResult()
+        tag_set = set(allowed_tags)
+        status_set = set(allowed_statuses)
+
+        for repo in report["repositories"]:
+            name = repo["name"]
+
+            invalid = [t for t in repo["tags"] if t not in tag_set]
+            if invalid:
+                result.invalid_tags[name] = invalid
+                repo["tags"] = [t for t in repo["tags"] if t in tag_set]
+                print(
+                    f"Removed invalid tags for {name}: {invalid}",
+                    file=sys.stderr,
+                )
+
+            if repo["status"] not in status_set:
+                result.invalid_statuses[name] = repo["status"]
+                print(
+                    f"Removed invalid status for {name}: {repo['status']}",
+                    file=sys.stderr,
+                )
+                repo["status"] = ""
+
+        return result

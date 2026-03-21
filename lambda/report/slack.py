@@ -6,6 +6,7 @@ from datetime import datetime
 from slack_sdk.webhook import WebhookClient
 
 from . import JST, ReportSummary
+from .summarizer import ValidationResult
 
 
 class SlackClient:
@@ -55,6 +56,25 @@ class SlackClient:
             text += f"\n\n⚠️ Skipped: {skipped}"
 
         self._send(text)
+
+    def notify_validation_errors(
+        self, target_date: datetime, result: ValidationResult,
+    ) -> None:
+        """Send a notification about invalid tags/status values.
+
+        Args:
+            target_date: The target date for the report
+            result: Validation result containing invalid values
+        """
+        date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
+        lines = [f"⚠️ Daily Report ({date_str}): Invalid tags/status detected"]
+
+        for name, tags in result.invalid_tags.items():
+            lines.append(f"• {name}: tags={tags}")
+        for name, status in result.invalid_statuses.items():
+            lines.append(f"• {name}: status={status}")
+
+        self._send("\n".join(lines))
 
     def notify_error(self, target_date: datetime, error: Exception) -> None:
         """Send an error notification to Slack.

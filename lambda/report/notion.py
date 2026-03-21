@@ -39,6 +39,28 @@ class NotionClient:
         self.client = Client(auth=token)
         self.database_id = database_id
 
+    def fetch_allowlists(self) -> tuple[list[str], list[str]]:
+        """Fetch allowed tags and statuses from the database schema.
+
+        Reads the Tags (multi-select) and Status (select) property
+        options defined in the Notion database.
+
+        Returns:
+            A tuple of (allowed_tags, allowed_statuses) as string lists
+        """
+        db = self.client.databases.retrieve(database_id=self.database_id)
+        properties = db["properties"]
+
+        tags = [
+            opt["name"]
+            for opt in properties["Tags"]["multi_select"]["options"]
+        ]
+        statuses = [
+            opt["name"]
+            for opt in properties["Status"]["select"]["options"]
+        ]
+        return tags, statuses
+
     def _build_properties(
         self,
         target_date: datetime,

@@ -34,10 +34,20 @@ def main() -> None:
         session_client = SessionClient(s3_bucket)
         session_activity = session_client.fetch_sessions(since, until, list(github_activity.keys()))
 
-        summary_client = SummaryClient(anthropic_api_key)
-        report = summary_client.generate_summary(since, github_activity.format(), session_activity.format())
-
         notion_client = NotionClient(notion_token, notion_db_id)
+        allowed_tags, allowed_statuses = notion_client.fetch_allowlists()
+
+        summary_client = SummaryClient(anthropic_api_key)
+        report = summary_client.generate_summary(
+            since, github_activity.format(), session_activity.format(),
+            allowed_tags, allowed_statuses,
+        )
+
+        # Validate tags/status against Notion allowlists
+        validation = SummaryClient.validate_report(report, allowed_tags, allowed_statuses)
+        if validation:
+            slack_client.notify_validation_errors(since, validation)
+
         pages = notion_client.create_report_pages(
             since, report, github_activity, session_activity,
         )
