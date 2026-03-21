@@ -117,10 +117,12 @@ class SessionClient:
             The matching repo name, or the original project name if no
             match is found
         """
+        best_match: str | None = None
         for name in repo_names:
             if project.endswith(f"-{name}"):
-                return name
-        return project
+                if best_match is None or len(name) > len(best_match):
+                    best_match = name
+        return best_match if best_match is not None else project
 
     def fetch_sessions(
         self, since: datetime, until: datetime, repo_names: list[str] | None = None,
