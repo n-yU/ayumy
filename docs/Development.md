@@ -31,6 +31,13 @@
 6. 処理済み JSONL のアーカイブ — 正常完了後に S3 上で `processed/` へ移動（Spec.md §5.5）
 7. EventBridge Scheduler の有効化 — `template.yaml` の `State: DISABLED` を削除して再デプロイ
 
+## v2 Phase 3.1: タグ・ステータス管理
+`ayumy` CLI からタグ・ステータスの登録・一覧を行い、Notion DB の select オプションと要約生成時の allowlist バリデーションに利用する。
+- タグ・ステータスリストの永続化（S3 または Notion DB）
+- `ayumy tag` サブコマンドの追加（登録・一覧・削除）
+- 要約生成時のバリデーション（allowlist 外の値を除外またはフォールバック）
+- システムプロンプトへの動的な候補リスト注入
+
 ## v2 Phase 4: 結合テスト・運用準備 [#15](https://github.com/n-yU/ayumy/issues/15)
 - 全コンポーネントの結合テスト（クライアントマシン → S3 → Lambda → Notion の一連の流れ）
 - EventBridge Scheduler の設定確認と初回実行
