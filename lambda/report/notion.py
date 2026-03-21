@@ -219,6 +219,8 @@ class NotionClient:
         """
         urls: list[str] = []
 
+        # TODO: Skip repos not found in activity (no matching GitHub repo)
+        # and notify via Slack instead of creating a Notion page
         for repo_summary in report["repositories"]:
             repo_name = repo_summary["name"]
             repo_activity = activity.get(repo_name, {})
