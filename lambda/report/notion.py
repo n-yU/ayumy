@@ -200,6 +200,31 @@ class NotionClient:
 
         return page["url"]
 
+    def _delete_existing_pages(self, target_date: datetime) -> int:
+        """Delete existing pages for the target date.
+
+        Queries the database for pages matching the target date and
+        archives them to prevent duplicates on re-runs.
+
+        Args:
+            target_date: The target date to match
+
+        Returns:
+            The number of pages deleted
+        """
+        date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
+        results = self.client.databases.query(
+            database_id=self.database_id,
+            filter={"property": "Date", "date": {"equals": date_str}},
+        )
+
+        count = 0
+        for page in results["results"]:
+            self.client.pages.update(page_id=page["id"], archived=True)
+            count += 1
+
+        return count
+
     def create_report_pages(
         self,
         target_date: datetime,
@@ -208,6 +233,9 @@ class NotionClient:
         session_activity: SessionActivity,
     ) -> list[str]:
         """Create Notion pages for all repositories in the report.
+
+        Deletes existing pages for the target date before creating new
+        ones to ensure idempotent re-runs.
 
         Args:
             target_date: The target date for the report
@@ -218,6 +246,11 @@ class NotionClient:
         Returns:
             A list of URLs of the created Notion pages
         """
+        deleted = self._delete_existing_pages(target_date)
+        if deleted:
+            date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
+            print(f"Deleted {deleted} existing page(s) for {date_str}", file=sys.stderr)
+
         urls: list[str] = []
 
         for repo_summary in report["repositories"]:
