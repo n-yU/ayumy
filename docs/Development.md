@@ -95,8 +95,10 @@ Notion DB の select/multi-select オプションを allowlist として使用�
 Phase 5 の結合テストにあたって追加で対応が必要となった改善点をまとめる
 
 ### v2 Phase 4.1: セッション起点の GitHub アクティビティ取得 [#32](https://github.com/n-yU/ayumy/issues/32)
-現在は全 owner リポジトリの GitHub アクティビティを取得してからセッションを照合しているが、Fine-grained PAT では fork 等の一部リポジトリで 403 が発生する。S3 上のセッションログから対象リポジトリを先に特定し、そのリポジトリのみ GitHub アクティビティを取得するよう処理順を変更する
-- セッションログのリポジトリ名一覧を先に取得
+現在は全 owner リポジトリの GitHub アクティビティを取得してからセッションを照合しているが、Fine-grained PAT では fork 等の一部リポジトリで 403 が発生する。S3 上のセッションログから対象リポジトリを先に特定し、そのリポジトリのみ GitHub アクティビティを取得するよう処理順を変更する。`post-commit` hook 実行時に `git remote get-url origin` からリポジトリ名を取得し、プロジェクトディレクトリに `.ayumy_repo` として保存する。`sync_session.sh` がこのファイルを S3 にアップロードし、Lambda 側でリポジトリ名の解決に使用する
+- `post-commit` hook でリポジトリ名を `.ayumy_repo` に書き出す
+- `sync_session.sh` で `.ayumy_repo` を S3 にアップロード
+- `session.py` で S3 上の `.ayumy_repo` を読んでリポジトリ名を解決
 - `fetch_activity` を指定リポジトリのみに限定
 - `__main__.py` の処理順を変更（セッション取得 → GitHub アクティビティ取得）
 

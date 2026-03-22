@@ -97,6 +97,10 @@ class SessionActivity:
         """Return the underlying repo-keyed dict."""
         return self._data
 
+    def keys(self) -> KeysView[str]:
+        """Return repository/project names."""
+        return self._data.keys()
+
     def __bool__(self) -> bool:
         return bool(self._data)
 

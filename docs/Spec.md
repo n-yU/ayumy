@@ -184,7 +184,7 @@ ayumy sync --all --report                                       # 全プロジ�
 
 Lambda event の `source` フィールドで判定する。`"manual"` なら手動実行、それ以外（EventBridge の場合は `"aws.scheduler"` 等）なら定期実行として扱う。
 
-対象リポジトリは `GET /user/repos`（`affiliation=owner`, `per_page=100`）で全件取得する。
+対象リポジトリは S3 上のセッションログから特定する。各プロジェクトディレクトリの `.ayumy_repo` メタデータファイルからリポジトリ名を読み取り、そのリポジトリのみ `GET /repos/{owner}/{repo}` で取得する。
 
 | アクティビティ | エンドポイント | フィルタ | 取得項目 |
 |---|---|---|---|

@@ -28,11 +28,11 @@ def main() -> None:
     slack_client = SlackClient(slack_webhook_url)
 
     try:
-        github_client = GitHubClient(github_pat)
-        github_activity = github_client.fetch_activity(since, until)
-
         session_client = SessionClient(s3_bucket)
-        session_activity = session_client.fetch_sessions(since, until, list(github_activity.keys()))
+        session_activity = session_client.fetch_sessions(since, until)
+
+        github_client = GitHubClient(github_pat)
+        github_activity = github_client.fetch_activity(since, until, list(session_activity.keys()))
 
         notion_client = NotionClient(notion_token, notion_db_id)
         allowed_tags, allowed_statuses = notion_client.fetch_allowlists()
