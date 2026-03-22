@@ -37,12 +37,11 @@
 - `GitHubActivity` / `SessionActivity` クラスに `format` メソッドを移動
 - 呼び出し元（`__main__.py`）と型定義（`__init__.py`）の更新
 
-### v2 Phase 3.2: タグ・ステータス管理 [#22](https://github.com/n-yU/ayumy/issues/22)
-`ayumy` CLI からタグ・ステータスの登録・一覧を行い、Notion DB の select オプションと要約生成時の allowlist バリデーションに利用する。
-- タグ・ステータスリストの永続化（S3 または Notion DB）
-- `ayumy tag` サブコマンドの追加（登録・一覧・削除）
-- 要約生成時のバリデーション（allowlist 外の値を除外またはフォールバック）
+### v2 Phase 3.2: タグ・ステータスのバリデーション [#22](https://github.com/n-yU/ayumy/issues/22)
+Notion DB の select/multi-select オプションを allowlist として使用し、要約生成時にバリデーションする。タグ・ステータスの管理は Notion DB の UI から直接行う。
+- Notion DB スキーマから allowlist を取得
 - システムプロンプトへの動的な候補リスト注入
+- 要約生成時のバリデーション（allowlist 外の値を除外またはフォールバック）
 
 ### v2 Phase 3.3: セッションログの日付フィルタリング [#23](https://github.com/n-yU/ayumy/issues/23)
 日をまたぐセッションで前日分のメッセージが翌日のレポートに混入する問題を解決する。`parse_session` で JSONL エントリの `timestamp` を `since` / `until` でフィルタし、対象期間内のメッセージのみを抽出する。
