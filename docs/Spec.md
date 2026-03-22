@@ -193,9 +193,10 @@ Lambda event の `source` フィールドで判定する。`"manual"` なら手�
 | Issues | `GET /repos/{owner}/{repo}/issues` | `since`, `state=all`, PR を除外 | タイトル、番号、状態、作成者、ラベル |
 
 ### 5.2 Claude Code セッションログの読み取り
-1. S3 バケットの `claude-sessions/` プレフィックス以下の全 JSONL を走査し、最終更新日時で前日分をフィルタ
-2. JSONL から抽出する項目: ユーザーのプロンプト、使用したツール、対象プロジェクト名
-3. プロジェクト名（S3 パス由来、例: `-Users-nyu-Documents-github-ayumy`）を GitHub activity の既知リポジトリ名と最長サフィックスマッチングで解決する。一致しない場合は元のプロジェクト名をそのまま使用する
+1. S3 バケットの `claude-sessions/` プレフィックス以下の全 JSONL を走査し、最終更新日時（`LastModified`）で対象期間内のファイルを抽出する
+2. 各 JSONL エントリの `timestamp`（ISO 8601 UTC）を `since` / `until` と比較し、対象期間内のメッセージのみを抽出する。タイムスタンプのないエントリはスキップする。日をまたぐセッションでは、対象期間外のメッセージが混入するのを防ぐ
+3. JSONL から抽出する項目: ユーザーのプロンプト、使用したツール、対象プロジェクト名
+4. プロジェクト名（S3 パス由来、例: `-Users-nyu-Documents-github-ayumy`）を GitHub activity の既知リポジトリ名と最長サフィックスマッチングで解決する。一致しない場合は元のプロジェクト名をそのまま使用する
 
 ### 5.3 要約生成（Claude API）
 使用モデル: `claude-sonnet-4-20250514`

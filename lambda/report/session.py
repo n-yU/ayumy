@@ -48,15 +48,22 @@ class SessionClient:
 
         return objects
 
-    def parse_session(self, key: str) -> SessionInfo | None:
+    def parse_session(
+        self, key: str, since: datetime, until: datetime
+    ) -> SessionInfo | None:
         """Download and parse a single JSONL session file from S3.
+
+        Filters entries by timestamp to include only those within the
+        target period. Entries without a timestamp are skipped.
 
         Args:
             key: S3 object key (e.g. claude-sessions/project/session.jsonl)
+            since: Start of the target period (inclusive)
+            until: End of the target period (exclusive)
 
         Returns:
             A SessionInfo dict, or None if the session has no meaningful
-            content
+            content within the target period
         """
         resp = self.s3.get_object(Bucket=self.bucket, Key=key)
         body = resp["Body"].read().decode("utf-8")
@@ -78,16 +85,21 @@ class SessionClient:
             entry_type = entry.get("type")
             timestamp = entry.get("timestamp")
 
+            # Filter entries by timestamp
+            if not timestamp:
+                continue
+            entry_dt = datetime.fromisoformat(timestamp)
+            if not (since <= entry_dt < until):
+                continue
+
             if entry_type == "user":
-                if timestamp:
-                    timestamps.append(timestamp)
+                timestamps.append(timestamp)
                 content = entry.get("message", {}).get("content", "")
                 if isinstance(content, str) and content.strip():
                     user_messages.append(content.strip())
 
             elif entry_type == "assistant":
-                if timestamp:
-                    timestamps.append(timestamp)
+                timestamps.append(timestamp)
                 for block in entry.get("message", {}).get("content", []):
                     if block.get("type") == "tool_use":
                         tools_used.add(block["name"])
@@ -146,7 +158,7 @@ class SessionClient:
 
         for obj in self.list_session_objects(since, until):
             self._fetched_keys.append(obj["Key"])
-            session = self.parse_session(obj["Key"])
+            session = self.parse_session(obj["Key"], since, until)
             if session is None:
                 continue
             key = self._resolve_repo_name(session["project"], names)
