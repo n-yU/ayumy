@@ -1,6 +1,6 @@
 # Ayumy: Spec
 ## 1. 概要
-GitHub 上で自分が owner であるすべてのリポジトリにおける日次の開発アクティビティ（Commit, Pull Request, Issue）と、Claude Code での会話記録を自動収集し、Claude API で自然言語の要約を生成したうえで、Notion データベースに記録するシステム。
+GitHub 上の日次開発アクティビティ（Commit, Pull Request, Issue）と Claude Code での会話記録を自動収集し、Claude API で自然言語の要約を生成したうえで、Notion データベースに記録するシステム。対象リポジトリは S3 上のセッションログから特定する。
 
 ## 2. 目的
 - 日々の開発作業を自動的に記録・蓄積する
@@ -68,7 +68,7 @@ ayumy/
 │   │   └── summarizer.py            # Claude API 要約生成
 │   ├── requirements.txt             # Lambda デプロイ用の依存パッケージ
 │   └── requirements-dev.txt         # ローカル開発用の依存パッケージ（boto3 を含む）
-├── template.yaml                    # AWS SAM テンプレート（Lambda, EventBridge, IAM ロール）
+├── template.yaml                    # AWS SAM テンプレート（Lambda, EventBridge, IAM ロール, S3 バケット）
 ├── docs/
 │   ├── Setup.md
 │   ├── Spec.md

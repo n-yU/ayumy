@@ -26,7 +26,7 @@ template.yaml                        # AWS SAM テンプレート（Lambda, Even
 - **実行環境**: AWS Lambda（SAM でデプロイ）
 - **言語**: Python 3.12、デプロイ依存: `requests`, `anthropic`, `PyGithub`、開発依存: 左記 + `boto3`
 - **Claude モデル**: 要約生成に `claude-sonnet-4-20250514` を使用
-- **GitHub API**: REST、Fine-grained PAT、`affiliation=owner` で自分の所有リポジトリのみ対象
+- **GitHub API**: REST、Fine-grained PAT、セッションログから特定したリポジトリのみ対象
 - **Notion API**: Internal Integration Token、データベースプロパティは [docs/Spec.md](docs/Spec.md) §6 に定義
 - **Hook 設計**: 必ず `exit 0` を返す（commit をブロックしない）、バックグラウンド実行、セッション ID 単位の上書きで冪等性を担保
 
