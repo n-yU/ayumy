@@ -33,7 +33,8 @@ project_name="$(echo "$git_root" | sed 's|/|-|g')"
 # Extracted from git remote URL (e.g. "github.com/n-yU/ayumy.git" -> "ayumy").
 project_dir="$HOME/.claude/projects/$project_name"
 if [[ -d "$project_dir" ]]; then
-  repo_name="$(git remote get-url origin 2>/dev/null | sed 's|.*/||; s|\.git$||')"
+  # Support both HTTPS (github.com/owner/repo.git) and SSH (git@github.com:owner/repo.git)
+  repo_name="$(git remote get-url origin 2>/dev/null | sed 's|.*[:/]||; s|\.git$||')"
   if [[ -n "$repo_name" ]]; then
     echo "$repo_name" > "$project_dir/.ayumy_repo"
   fi
