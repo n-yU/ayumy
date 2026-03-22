@@ -3,7 +3,6 @@
 from datetime import datetime
 
 from github import Github
-from github.PaginatedList import PaginatedList
 from github.Repository import Repository
 
 from . import CommitInfo, GitHubActivity, IssueInfo, PullInfo, RepoActivity
@@ -19,15 +18,6 @@ class GitHubClient:
             pat: GitHub Fine-grained PAT with read access to owner repos
         """
         self.g = Github(pat, per_page=100)
-
-    def fetch_repos(self) -> PaginatedList[Repository]:
-        """Fetch all owner-affiliated repositories.
-
-        Returns:
-            A paginated list of Repository objects owned by the
-            authenticated user
-        """
-        return self.g.get_user().get_repos(affiliation="owner")
 
     def fetch_commits(
         self, repo: Repository, since: datetime, until: datetime
@@ -117,18 +107,24 @@ class GitHubClient:
             })
         return results
 
-    def fetch_activity(self, since: datetime, until: datetime) -> GitHubActivity:
-        """Fetch all GitHub activity for the target date range.
+    def fetch_activity(
+        self, since: datetime, until: datetime, repo_names: list[str],
+    ) -> GitHubActivity:
+        """Fetch GitHub activity for the specified repositories.
 
         Args:
             since: Start of the target period (inclusive)
             until: End of the target period (exclusive)
+            repo_names: Repository names to fetch activity for
 
         Returns:
             A GitHubActivity instance. Repos with no activity are omitted
         """
+        user = self.g.get_user()
         data: dict[str, RepoActivity] = {}
-        for repo in self.fetch_repos():
+
+        for name in repo_names:
+            repo = user.get_repo(name)
             commits = self.fetch_commits(repo, since, until)
             pulls = self.fetch_pulls(repo, since, until)
             issues = self.fetch_issues(repo, since, until)

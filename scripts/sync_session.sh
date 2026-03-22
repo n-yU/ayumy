@@ -79,6 +79,15 @@ sync_project() {
     fi
   done <<< "$files"
 
+  # Upload repo name metadata if available
+  local repo_file="$project_dir/.ayumy_repo"
+  if [[ -f "$repo_file" ]]; then
+    if ! aws s3 cp "$repo_file" "${dest_prefix}.ayumy_repo" --quiet; then
+      err "$project_name: failed to upload .ayumy_repo metadata"
+      return 2
+    fi
+  fi
+
   # Promote temp marker to actual marker on success
   mv "$tmp_marker" "$project_dir/$MARKER_NAME"
   log "$project_name: done"

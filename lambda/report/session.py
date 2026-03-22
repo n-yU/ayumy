@@ -117,54 +117,62 @@ class SessionClient:
             "tools_used": sorted(tools_used),
         }
 
-    @staticmethod
-    def _resolve_repo_name(project: str, repo_names: list[str]) -> str:
-        """Map a project name to a repository name by suffix matching.
+    def _read_repo_name(self, project: str) -> str | None:
+        """Read the repo name from .ayumy_repo metadata file in S3.
 
         Args:
             project: Project directory name from S3 path
-                (e.g. "-Users-nyu-Documents-github-ayumy")
-            repo_names: Known repository names from GitHub activity
 
         Returns:
-            The matching repo name, or the original project name if no
-            match is found
+            The repo name, or None if metadata is missing or invalid
         """
-        best_match: str | None = None
-        for name in repo_names:
-            if project.endswith(f"-{name}"):
-                if best_match is None or len(name) > len(best_match):
-                    best_match = name
-        return best_match if best_match is not None else project
+        key = f"claude-sessions/{project}/.ayumy_repo"
+        try:
+            resp = self.s3.get_object(Bucket=self.bucket, Key=key)
+            name = resp["Body"].read().decode("utf-8").strip()
+            # Validate: must be a plain repo name (no URL fragments)
+            if name and "/" not in name and ":" not in name:
+                return name
+            return None
+        except self.s3.exceptions.NoSuchKey:
+            return None
 
     def fetch_sessions(
-        self, since: datetime, until: datetime, repo_names: list[str] | None = None,
+        self, since: datetime, until: datetime,
     ) -> SessionActivity:
         """Fetch all session logs for the target date range.
+
+        Resolves project directory names to repository names using
+        .ayumy_repo metadata files in S3.
 
         Args:
             since: Start of the target period (inclusive)
             until: End of the target period (exclusive)
-            repo_names: Known repository names from GitHub activity.
-                When provided, project names are mapped to repo names
-                by suffix matching
 
         Returns:
             A SessionActivity instance. Repos with no sessions are omitted
         """
         data: dict[str, list[SessionInfo]] = {}
-        names = repo_names or []
         self._fetched_keys: list[str] = []
+        # Cache .ayumy_repo lookups per project to avoid repeated S3 reads
+        repo_name_cache: dict[str, str | None] = {}
 
         for obj in self.list_session_objects(since, until):
-            self._fetched_keys.append(obj["Key"])
             session = self.parse_session(obj["Key"], since, until)
             if session is None:
                 continue
-            key = self._resolve_repo_name(session["project"], names)
-            if key not in data:
-                data[key] = []
-            data[key].append(session)
+
+            project = session["project"]
+            if project not in repo_name_cache:
+                repo_name_cache[project] = self._read_repo_name(project)
+            repo_name = repo_name_cache[project]
+            if repo_name is None:
+                continue
+
+            self._fetched_keys.append(obj["Key"])
+            if repo_name not in data:
+                data[repo_name] = []
+            data[repo_name].append(session)
 
         # Sort sessions by start_time within each project
         for sessions in data.values():
