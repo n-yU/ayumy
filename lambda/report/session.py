@@ -158,7 +158,6 @@ class SessionClient:
         repo_name_cache: dict[str, str | None] = {}
 
         for obj in self.list_session_objects(since, until):
-            self._fetched_keys.append(obj["Key"])
             session = self.parse_session(obj["Key"], since, until)
             if session is None:
                 continue
@@ -170,6 +169,7 @@ class SessionClient:
             if repo_name is None:
                 continue
 
+            self._fetched_keys.append(obj["Key"])
             if repo_name not in data:
                 data[repo_name] = []
             data[repo_name].append(session)
