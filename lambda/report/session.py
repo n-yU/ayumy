@@ -132,7 +132,11 @@ class SessionClient:
         key = f"claude-sessions/{project}/.ayumy_repo"
         try:
             resp = self.s3.get_object(Bucket=self.bucket, Key=key)
-            return resp["Body"].read().decode("utf-8").strip()
+            name = resp["Body"].read().decode("utf-8").strip()
+            # Validate: must be a plain repo name (no URL fragments)
+            if name and "/" not in name and ":" not in name:
+                return name
+            return project
         except self.s3.exceptions.NoSuchKey:
             return project
 
