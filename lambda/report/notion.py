@@ -100,9 +100,10 @@ class NotionClient:
             A dict of Notion page properties
         """
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
+        title_str = f"{target_date.astimezone(JST).strftime('%y-%m-%d')}: {repo_summary['name']}"
 
         properties: dict = {
-            "Name": {"title": [{"type": "text", "text": {"content": repo_summary["name"]}}]},
+            "Name": {"title": [{"type": "text", "text": {"content": title_str}}]},
             "Date": {"date": {"start": date_str}},
             "Repository": {"select": {"name": repo_summary["name"]}},
             "Tags": {"multi_select": [{"name": tag} for tag in repo_summary["tags"]]},

@@ -13,7 +13,7 @@
 
 | プロパティ名 | 型 | 備考 |
 |---|---|---|
-| Name | Title | デフォルトで存在 |
+| Name | Title | デフォルトで存在。`YY-MM-DD: repo` 形式で自動設定 |
 | Date | Date | |
 | Repository | Select | オプションは自動追加される |
 | Tags | Multi-select | 下記のオプションを事前登録 |
@@ -23,7 +23,7 @@
 | Issues Closed | Number | |
 | Claude Sessions | Number | |
 
-Tags のオプション: `feature`, `bugfix`, `docs`, `refactor`, `ci`, `review`, `ai-assisted`
+Tags のオプション: `feature`, `bugfix`, `docs`, `refactor`, `ci`, `review`
 Status のオプション: `productive`, `maintenance`, `blocked`, `light`
 
 Tags と Status のオプションは allowlist として機能する（Spec.md §6.3-6.4）。要約生成時にこれらのオプションが候補としてプロンプトに注入され、allowlist 外の値はバリデーションで除外される。オプションの追加・削除は Notion DB の UI から直接行う。

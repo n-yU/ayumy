@@ -255,7 +255,7 @@ Date × Repository 単位でページを作成する。1日に複数ページが
 
 | プロパティ名 | 型 | 説明 | 例 |
 |---|---|---|---|
-| Name | Title | リポジトリ名 | `ayumy` |
+| Name | Title | 日付とリポジトリ名 | `26-03-01: ayumy` |
 | Date | Date | 対象日 | `2025-03-01` |
 | Repository | Select | リポジトリ名 | `ayumy` |
 | Tags | Multi-select | 作業内容の分類タグ | `feature`, `ai-assisted` |
@@ -289,7 +289,6 @@ Notion ページの本文には Claude が生成した要約を記載する。�
 | `refactor` | リファクタリング |
 | `ci` | CI/CD やビルド設定の変更 |
 | `review` | PR レビューが主な活動だった場合 |
-| `ai-assisted` | Claude Code を活用した作業が含まれる場合 |
 
 タグは Claude API の要約生成時に自動判定させる。
 
