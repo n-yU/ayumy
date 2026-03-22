@@ -117,17 +117,14 @@ class SessionClient:
             "tools_used": sorted(tools_used),
         }
 
-    def _read_repo_name(self, project: str) -> str:
+    def _read_repo_name(self, project: str) -> str | None:
         """Read the repo name from .ayumy_repo metadata file in S3.
-
-        Falls back to the raw project directory name if the metadata
-        file does not exist.
 
         Args:
             project: Project directory name from S3 path
 
         Returns:
-            The repo name, or the original project name as fallback
+            The repo name, or None if metadata is missing or invalid
         """
         key = f"claude-sessions/{project}/.ayumy_repo"
         try:
@@ -136,9 +133,9 @@ class SessionClient:
             # Validate: must be a plain repo name (no URL fragments)
             if name and "/" not in name and ":" not in name:
                 return name
-            return project
+            return None
         except self.s3.exceptions.NoSuchKey:
-            return project
+            return None
 
     def fetch_sessions(
         self, since: datetime, until: datetime,
@@ -158,7 +155,7 @@ class SessionClient:
         data: dict[str, list[SessionInfo]] = {}
         self._fetched_keys: list[str] = []
         # Cache .ayumy_repo lookups per project to avoid repeated S3 reads
-        repo_name_cache: dict[str, str] = {}
+        repo_name_cache: dict[str, str | None] = {}
 
         for obj in self.list_session_objects(since, until):
             self._fetched_keys.append(obj["Key"])
@@ -169,11 +166,13 @@ class SessionClient:
             project = session["project"]
             if project not in repo_name_cache:
                 repo_name_cache[project] = self._read_repo_name(project)
-            key = repo_name_cache[project]
+            repo_name = repo_name_cache[project]
+            if repo_name is None:
+                continue
 
-            if key not in data:
-                data[key] = []
-            data[key].append(session)
+            if repo_name not in data:
+                data[repo_name] = []
+            data[repo_name].append(session)
 
         # Sort sessions by start_time within each project
         for sessions in data.values():
