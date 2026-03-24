@@ -58,7 +58,7 @@ v1 Phase 4 で作成するメインスクリプト（Python）の実行環境を
 - Secrets Manager へのシークレット登録
 - `sam build && sam deploy` によるデプロイ確認
 
-## v2 Phase 2.1: 実行方式の識別（`sync_session.sh`, `handler.py`） [#16](https://github.com/n-yU/ayumy/issues/16)
+### v2 Phase 2.1: 実行方式の識別（`sync_session.sh`, `handler.py`） [#16](https://github.com/n-yU/ayumy/issues/16)
 手動実行と定期実行で対象期間を切り替えるために、Lambda event に `source` フィールドを渡す仕組みを追加する
 - `sync_session.sh` の Lambda 呼び出しペイロードに `{"source": "manual"}` を追加
 - `handler.py` で `event.source` を `AYUMY_SOURCE` 環境変数として `report` パッケージに渡す
@@ -106,6 +106,11 @@ S3 上のセッションログから対象リポジトリを先に特定し、�
 `ayumy sync --report` の Lambda 呼び出しを同期（`RequestResponse`）から非同期（`Event`）に変更する。同期呼び出しでは Lambda の実行時間が AWS CLI の read timeout を超えるとエラーになるため、非同期で即座に終了し、結果は Slack 通知で確認する
 - `aws lambda invoke` に `--invocation-type Event` を追加
 - 同期呼び出し用のレスポンス処理を削除
+
+### v2 Phase 4.3: Notion data sources API への移行 [#35](https://github.com/n-yU/ayumy/issues/35)
+Notion API バージョン 2025-09-03 で `databases.retrieve` のレスポンスから `properties` が削除されたため、`fetch_allowlists` を data sources API 経由に変更する
+- `databases.retrieve` で `data_sources` から ID を取得
+- `data_sources.retrieve` で `properties` を取得
 
 ## v2 Phase 5: 結合テスト・運用準備 [#15](https://github.com/n-yU/ayumy/issues/15)
 - Notion DB プロパティの作成（Setup.md §2 に従う）
