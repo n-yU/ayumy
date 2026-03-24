@@ -227,20 +227,12 @@ esac
 # --- report mode: invoke Lambda ---
 
 if [[ "$report" == true ]]; then
-  log "invoking Lambda function: $AYUMY_LAMBDA_FUNCTION"
-  tmp_output=$(mktemp)
-  tmp_meta=$(mktemp)
-  trap 'rm -f "$tmp_output" "$tmp_meta"' EXIT
+  log "invoking Lambda function: $AYUMY_LAMBDA_FUNCTION (async)"
   aws lambda invoke \
     --function-name "$AYUMY_LAMBDA_FUNCTION" \
+    --invocation-type Event \
     --payload '{"source": "manual"}' \
     --cli-binary-format raw-in-base64-out \
-    --output json \
-    "$tmp_output" > "$tmp_meta"
-  if grep -q '"FunctionError"' "$tmp_meta"; then
-    err "Lambda invocation failed: $(cat "$tmp_meta")"
-    err "Lambda output: $(cat "$tmp_output")"
-    exit 1
-  fi
-  log "Lambda response: $(cat "$tmp_output")"
+    /dev/null > /dev/null
+  log "Lambda invocation accepted — check Slack for results"
 fi
