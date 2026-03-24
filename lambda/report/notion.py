@@ -43,13 +43,15 @@ class NotionClient:
         """Fetch allowed tags and statuses from the database schema.
 
         Reads the Tags (multi-select) and Status (select) property
-        options defined in the Notion database.
+        options defined in the Notion database via the data sources API.
 
         Returns:
             A tuple of (allowed_tags, allowed_statuses) as string lists
         """
         db = self.client.databases.retrieve(database_id=self.database_id)
-        properties = db["properties"]
+        data_source_id = db["data_sources"][0]["data_source_id"]
+        ds = self.client.data_sources.retrieve(data_source_id=data_source_id)
+        properties = ds["properties"]
 
         tags = [
             opt["name"]
