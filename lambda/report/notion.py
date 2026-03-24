@@ -49,7 +49,7 @@ class NotionClient:
             A tuple of (allowed_tags, allowed_statuses) as string lists
         """
         db = self.client.databases.retrieve(database_id=self.database_id)
-        data_source_id = db["data_sources"][0]["data_source_id"]
+        data_source_id = db["data_sources"][0]["id"]
         ds = self.client.data_sources.retrieve(data_source_id=data_source_id)
         properties = ds["properties"]
 
