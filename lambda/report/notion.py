@@ -38,6 +38,7 @@ class NotionClient:
         """
         self.client = Client(auth=token)
         self.database_id = database_id
+        self._data_source_id: str | None = None
 
     def fetch_allowlists(self) -> tuple[list[str], list[str]]:
         """Fetch allowed tags and statuses from the database schema.
@@ -49,8 +50,8 @@ class NotionClient:
             A tuple of (allowed_tags, allowed_statuses) as string lists
         """
         db = self.client.databases.retrieve(database_id=self.database_id)
-        data_source_id = db["data_sources"][0]["id"]
-        ds = self.client.data_sources.retrieve(data_source_id=data_source_id)
+        self._data_source_id = db["data_sources"][0]["id"]
+        ds = self.client.data_sources.retrieve(data_source_id=self._data_source_id)
         properties = ds["properties"]
 
         tags = [
@@ -242,8 +243,8 @@ class NotionClient:
         """
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
         # No pagination: daily page count won't exceed Notion's default page size (100)
-        results = self.client.databases.query(
-            database_id=self.database_id,
+        results = self.client.data_sources.query(
+            data_source_id=self._data_source_id,
             filter={"property": "Date", "date": {"equals": date_str}},
         )
 
