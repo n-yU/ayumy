@@ -40,6 +40,19 @@ class NotionClient:
         self.database_id = database_id
         self._data_source_id: str | None = None
 
+    @property
+    def data_source_id(self) -> str:
+        """Return the cached data source ID.
+
+        Raises:
+            RuntimeError: If fetch_allowlists() has not been called yet
+        """
+        if self._data_source_id is None:
+            raise RuntimeError(
+                "data_source_id is not initialized; call fetch_allowlists() first"
+            )
+        return self._data_source_id
+
     def fetch_allowlists(self) -> tuple[list[str], list[str]]:
         """Fetch allowed tags and statuses from the database schema.
 
@@ -244,7 +257,7 @@ class NotionClient:
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
         # No pagination: daily page count won't exceed Notion's default page size (100)
         results = self.client.data_sources.query(
-            data_source_id=self._data_source_id,
+            data_source_id=self.data_source_id,
             filter={"property": "Date", "date": {"equals": date_str}},
         )
 
