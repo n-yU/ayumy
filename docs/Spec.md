@@ -72,7 +72,7 @@ ayumy/
 ├── docs/
 │   ├── Setup.md
 │   ├── Spec.md
-│   └── Development.md
+│   └── InitialDevelopment.md
 ├── CLAUDE.md
 └── README.md
 ```
@@ -313,7 +313,7 @@ Notion ページの本文には Claude が生成した要約を記載する。�
 ```bash
 ayumy sync --report    # クライアントマシンから（S3 転送 + Lambda 実行）
 ```
-内部的には `aws lambda invoke` で Lambda 関数を `{"source": "manual"}` ペイロード付きで同期呼び出しし、実行結果を標準出力に表示する。Lambda はこのペイロードの `source` フィールドで手動実行を判定し、当日分のアクティビティを対象とする（§5.1）。
+内部的には `aws lambda invoke --invocation-type Event` で Lambda 関数を `{"source": "manual"}` ペイロード付きで非同期呼び出しする。Lambda はこのペイロードの `source` フィールドで手動実行を判定し、当日分のアクティビティを対象とする（§5.1）。実行結果は Slack 通知で確認する。
 
 ### 7.2 環境変数
 Lambda 関数の環境変数として設定する。機密情報は AWS Secrets Manager に保管し、Lambda から参照する。
@@ -336,7 +336,7 @@ Lambda 関数の環境変数として設定する。機密情報は AWS Secrets 
 - **ランタイム**: Python 3.12
 - **ハンドラ**: `lambda/handler.py`（`lambda/report` パッケージを呼び出すエントリポイント）
 - **タイムアウト**: 300秒（5分）
-- **メモリ**: 256MB
+- **メモリ**: 512MB
 - **依存パッケージ**: デプロイ: `requests`, `anthropic`, `PyGithub`（`boto3` は Lambda ランタイム同梱版を利用）、開発: 左記 + `boto3`
 - **IAM ロール**: S3 バケットへの読み書き、Secrets Manager の読み取り、CloudWatch Logs への書き込み
 

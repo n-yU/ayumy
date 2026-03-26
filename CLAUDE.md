@@ -54,8 +54,8 @@ Lambda（環境変数 + Secrets Manager）:
 
 ## 開発メモ
 - 仕様書は [docs/Spec.md](docs/Spec.md)（日本語）— すべての要件の原典
-- 開発手順は [docs/Development.md](docs/Development.md) — フェーズ別の実装計画と v1 からの変遷を記録
+- 初期開発手順は [docs/InitialDevelopment.md](docs/InitialDevelopment.md) — フェーズ別の実装計画と v1 からの変遷を記録
 - JSONL の生データは S3 バケットに保管し、リモートリポジトリには push しない
 - アクティビティの取得対象期間: 前日 JST 00:00:00 〜 当日 JST 00:00:00
 - アクティビティが 0 件の日はスキップまたは「活動なし」と記録
-- PR での commit 時に、関連するドキュメント（[docs/Spec.md](docs/Spec.md), [docs/Development.md](docs/Development.md), [README.md](README.md)）に矛盾・未反映がないか確認し、必要に応じて更新する
+- PR での commit 時に、関連するドキュメント（[docs/Spec.md](docs/Spec.md), [docs/InitialDevelopment.md](docs/InitialDevelopment.md), [README.md](README.md)）に矛盾・未反映がないか確認し、必要に応じて更新する
