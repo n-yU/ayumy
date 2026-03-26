@@ -1,4 +1,4 @@
-.PHONY: lambda-install lambda-invoke
+.PHONY: lambda-install lambda-invoke lambda-deploy
 
 # Install lambda dependencies into local .venv via uv (includes dev deps like boto3)
 lambda-install:
@@ -8,3 +8,7 @@ lambda-install:
 # Invoke Lambda function locally for testing
 lambda-invoke:
 	sam build && sam local invoke ReportFunction
+
+# Build and deploy Lambda function to AWS
+lambda-deploy:
+	sam build && sam deploy --no-confirm-changeset
