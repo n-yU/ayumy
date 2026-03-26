@@ -108,9 +108,10 @@ S3 上のセッションログから対象リポジトリを先に特定し、�
 - 同期呼び出し用のレスポンス処理を削除
 
 ### v2 Phase 4.3: Notion data sources API への移行 [#35](https://github.com/n-yU/ayumy/issues/35)
-Notion API バージョン 2025-09-03 で `databases.retrieve` のレスポンスから `properties` が削除されたため、`fetch_allowlists` を data sources API 経由に変更する
-- `databases.retrieve` で `data_sources` から ID を取得
-- `data_sources.retrieve` で `properties` を取得
+Notion API バージョン 2025-09-03 で `databases.retrieve` のレスポンスから `properties` が削除され、`databases.query` も廃止されたため、data sources API に移行する
+- `databases.retrieve` で `data_sources` から ID を取得し、`data_sources.retrieve` で `properties` を取得（`fetch_allowlists`）
+- `databases.query` を `data_sources.query` に置き換え（`_archive_existing_pages`）
+- `data_source_id` を `fetch_allowlists` でキャッシュし、未初期化時にガードするプロパティを追加
 
 ## v2 Phase 5: 結合テスト・運用準備 [#15](https://github.com/n-yU/ayumy/issues/15)
 - Notion DB プロパティの作成（Setup.md §2 に従う）
