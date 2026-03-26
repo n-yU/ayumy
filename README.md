@@ -54,7 +54,7 @@ ayumy/
 ├── docs/
 │   ├── Setup.md
 │   ├── Spec.md
-│   └── Development.md
+│   └── InitialDevelopment.md
 ├── CLAUDE.md
 └── README.md
 ```

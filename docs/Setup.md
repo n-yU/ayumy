@@ -9,7 +9,26 @@
    - 機能: コンテンツの読み取り・挿入・更新を有効化
 2. Notion にデータベースを作成し、Integration を接続
    - データベースページの URL から ID を取得: `https://www.notion.so/{database-id}?v=...`
-3. AWS Secrets Manager（ap-northeast-1）に登録
+3. データベースに以下のプロパティを作成する（Spec.md §6.1 参照）
+
+| プロパティ名 | 型 | 備考 |
+|---|---|---|
+| Name | Title | デフォルトで存在。`YY-MM-DD: repo` 形式で自動設定 |
+| Date | Date | |
+| Repository | Select | オプションは自動追加される |
+| Tags | Multi-select | 下記のオプションを事前登録 |
+| Status | Select | 下記のオプションを事前登録 |
+| Commits | Number | |
+| PRs Merged | Number | |
+| Issues Closed | Number | |
+| Claude Sessions | Number | |
+
+Tags のオプション: `feature`, `bugfix`, `docs`, `refactor`, `ci`, `review`
+Status のオプション: `productive`, `maintenance`, `blocked`, `light`
+
+Tags と Status のオプションは allowlist として機能する（Spec.md §6.3-6.4）。要約生成時にこれらのオプションが候補としてプロンプトに注入され、allowlist 外の値はバリデーションで除外される。オプションの追加・削除は Notion DB の UI から直接行う。
+
+4. AWS Secrets Manager（ap-northeast-1）に登録
    - シークレットのタイプ: その他のシークレットのタイプ
    - シークレット名: `ayumy/notion-secret`
    - プレーンテキストで Integration トークンを貼り付け

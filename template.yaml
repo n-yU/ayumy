@@ -10,7 +10,7 @@ Parameters:
 Globals:
   Function:
     Timeout: 300
-    MemorySize: 256
+    MemorySize: 512
     Runtime: python3.12
 
 Resources:
@@ -52,7 +52,7 @@ Resources:
             Name: ayumy-daily-report
             ScheduleExpression: cron(0 15 * * ? *)
             ScheduleExpressionTimezone: UTC
-            State: DISABLED
+            State: ENABLED
             Description: Run daily at JST 00:00 (UTC 15:00)
 
 Outputs:

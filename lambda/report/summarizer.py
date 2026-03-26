@@ -145,7 +145,11 @@ class SummaryClient:
         if not message.content:
             raise ValueError("Claude API response has no content blocks.")
 
-        response_text = message.content[0].text
+        response_text = message.content[0].text.strip()
+        # Strip markdown code fences if present
+        if response_text.startswith("```"):
+            response_text = response_text.split("\n", 1)[1]
+            response_text = response_text.rsplit("```", 1)[0].strip()
         try:
             return json.loads(response_text)
         except json.JSONDecodeError as e:
