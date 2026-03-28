@@ -1,12 +1,12 @@
 """Claude Code session log client."""
 
 import json
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 import boto3
 
-from . import SessionActivity, SessionInfo
+from . import JST, SessionActivity, SessionInfo
 
 
 class SessionClient:
@@ -22,14 +22,8 @@ class SessionClient:
         self.bucket = bucket
         self._fetched_keys: list[str] = []
 
-    def list_session_objects(
-        self, since: datetime, until: datetime
-    ) -> list[dict[str, Any]]:
-        """List JSONL objects in claude-sessions/ within the target period.
-
-        Args:
-            since: Start of the target period (inclusive)
-            until: End of the target period (exclusive)
+    def list_session_objects(self) -> list[dict[str, Any]]:
+        """List all unarchived JSONL objects in claude-sessions/.
 
         Returns:
             A list of S3 object metadata dicts with Key and LastModified
@@ -42,11 +36,41 @@ class SessionClient:
             for obj in page.get("Contents", []):
                 if not obj["Key"].endswith(".jsonl"):
                     continue
-                last_modified = obj["LastModified"]
-                if since <= last_modified < until:
-                    objects.append(obj)
+                objects.append(obj)
 
         return objects
+
+    def scan_entry_dates(self) -> dict[str, set[date]]:
+        """Scan all unarchived JSONL files and return entry dates per key.
+
+        Downloads each file and extracts timestamps to determine which
+        JST dates have entries. Used to detect backfill targets.
+
+        Returns:
+            Mapping of S3 key to set of JST dates with entries
+        """
+        result: dict[str, set[date]] = {}
+
+        for obj in self.list_session_objects():
+            key = obj["Key"]
+            resp = self.s3.get_object(Bucket=self.bucket, Key=key)
+            body = resp["Body"].read().decode("utf-8")
+            dates: set[date] = set()
+
+            for line in body.splitlines():
+                if not line.strip():
+                    continue
+                entry = json.loads(line)
+                timestamp = entry.get("timestamp")
+                if not timestamp:
+                    continue
+                entry_dt = datetime.fromisoformat(timestamp).astimezone(JST)
+                dates.add(entry_dt.date())
+
+            if dates:
+                result[key] = dates
+
+        return result
 
     def parse_session(
         self, key: str, since: datetime, until: datetime
@@ -153,11 +177,10 @@ class SessionClient:
             A SessionActivity instance. Repos with no sessions are omitted
         """
         data: dict[str, list[SessionInfo]] = {}
-        self._fetched_keys: list[str] = []
         # Cache .ayumy_repo lookups per project to avoid repeated S3 reads
         repo_name_cache: dict[str, str | None] = {}
 
-        for obj in self.list_session_objects(since, until):
+        for obj in self.list_session_objects():
             session = self.parse_session(obj["Key"], since, until)
             if session is None:
                 continue
@@ -193,7 +216,7 @@ class SessionClient:
         """
         archived = 0
 
-        for src_key in self._fetched_keys:
+        for src_key in set(self._fetched_keys):
             # claude-sessions/{project}/{session}.jsonl -> processed/{project}/{session}.jsonl
             dst_key = "processed/" + src_key.removeprefix("claude-sessions/")
 

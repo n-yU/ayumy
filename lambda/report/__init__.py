@@ -7,7 +7,7 @@ date range and formats them for downstream processing.
 import os
 import sys
 from collections.abc import KeysView
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, TypedDict
 
 JST = timezone(timedelta(hours=9))
@@ -184,6 +184,20 @@ def require_env(name: str) -> str:
         print(f"{name} is not set", file=sys.stderr)
         sys.exit(1)
     return value
+
+
+def date_to_range(target: date) -> tuple[datetime, datetime]:
+    """Convert a date to a full JST day range.
+
+    Args:
+        target: The target date
+
+    Returns:
+        A tuple of (since, until) covering 00:00 JST to next day 00:00 JST
+    """
+    since = datetime(target.year, target.month, target.day, tzinfo=JST)
+    until = since + timedelta(days=1)
+    return since, until
 
 
 def get_target_date_range(source: str | None = None) -> tuple[datetime, datetime]:
