@@ -23,4 +23,5 @@ oidc-deploy:
 		--template-file .github/oidc-bootstrap.yml \
 		--stack-name ayumy-github-oidc \
 		--capabilities CAPABILITY_NAMED_IAM \
+		--no-fail-on-empty-changeset \
 		--region ap-northeast-1
