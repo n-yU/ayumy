@@ -35,9 +35,10 @@ def lambda_handler(event, context):
     try:
         run(source)
     except Exception as e:
+        print(f"Report failed: {e}")
         return {
             "statusCode": 500,
-            "body": json.dumps({"error": f"report failed: {e}"}),
+            "body": json.dumps({"error": "report failed"}),
         }
 
     return {
