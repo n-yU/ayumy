@@ -1,7 +1,5 @@
 """Tests for report package core utilities."""
 
-import os
-
 import pytest
 
 from report import require_env
