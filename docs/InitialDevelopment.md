@@ -61,7 +61,7 @@ v1 Phase 4 で作成するメインスクリプト（Python）の実行環境を
 ### v2 Phase 2.1: 実行方式の識別（`sync_session.sh`, `handler.py`） [#16](https://github.com/n-yU/ayumy/issues/16)
 手動実行と定期実行で対象期間を切り替えるために、Lambda event に `source` フィールドを渡す仕組みを追加する
 - `sync_session.sh` の Lambda 呼び出しペイロードに `{"source": "manual"}` を追加
-- `handler.py` で `event.source` を `AYUMY_SOURCE` 環境変数として `report` パッケージに渡す
+- `handler.py` で `event.source` を `pipeline.run()` の引数として渡す
 - 定期実行（EventBridge）は前日分、手動実行は当日分を対象とする
 
 ## v2 Phase 3: メインパッケージ（`lambda/report/`） [#14](https://github.com/n-yU/ayumy/issues/14)
