@@ -14,5 +14,5 @@ lambda-deploy:
 	sam build && sam deploy --no-confirm-changeset
 
 # Run unit tests
-test:
+test: lambda-install
 	.venv/bin/python -m pytest tests/ -v
