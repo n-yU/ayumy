@@ -86,7 +86,6 @@ Resources:
                   - iam:CreateRole
                   - iam:DeleteRole
                   - iam:GetRole
-                  - iam:PassRole
                   - iam:AttachRolePolicy
                   - iam:DetachRolePolicy
                   - iam:PutRolePolicy
@@ -95,6 +94,15 @@ Resources:
                   - iam:TagRole
                   - iam:UntagRole
                 Resource: !Sub "arn:aws:iam::${AWS::AccountId}:role/ayumy-*"
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource: !Sub "arn:aws:iam::${AWS::AccountId}:role/ayumy-*"
+                Condition:
+                  StringEquals:
+                    iam:PassedToService:
+                      - lambda.amazonaws.com
+                      - scheduler.amazonaws.com
               # S3 (for session bucket managed by SAM)
               - Effect: Allow
                 Action:
