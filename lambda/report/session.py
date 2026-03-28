@@ -212,10 +212,10 @@ class SessionClient:
     def archive_sessions(self) -> int:
         """Move fetched JSONL files from claude-sessions/ to processed/.
 
-        Archives exactly the objects that were listed by the preceding
-        fetch_sessions() call, avoiding race conditions with late arrivals.
-        Copies each object to the processed/ prefix (preserving project
-        subdirectory structure) and then deletes the original.
+        Archives the deduplicated union of objects accumulated across all
+        preceding fetch_sessions() calls. Copies each object to the
+        processed/ prefix (preserving project subdirectory structure)
+        and then deletes the original.
 
         Returns:
             The number of session files archived
