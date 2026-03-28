@@ -115,19 +115,28 @@ def main() -> None:
             else:
                 day_since, day_until = date_to_range(target_date)
 
-            process_date(
-                day_since, day_until,
-                session_client, github_client, notion_client,
-                summary_client, slack_client,
-                allowed_tags, allowed_statuses,
-            )
+            try:
+                process_date(
+                    day_since, day_until,
+                    session_client, github_client, notion_client,
+                    summary_client, slack_client,
+                    allowed_tags, allowed_statuses,
+                )
+            except Exception as e:
+                slack_client.notify_error(day_since, e)
+                if target_date == primary_date:
+                    e._notified = True  # type: ignore[attr-defined]
+                    raise
 
         # Archive only after all dates are processed
         archived = session_client.archive_sessions()
         print(f"Archived {archived} session log(s)", file=sys.stderr)
 
     except Exception as e:
-        slack_client.notify_error(since, e)
+        # Errors from process_date are already notified with the correct date
+        # Only notify here for errors outside the loop (scan, allowlists, archive)
+        if not getattr(e, "_notified", False):
+            slack_client.notify_error(since, e)
         raise
 
 
