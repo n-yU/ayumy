@@ -97,7 +97,9 @@ def main() -> None:
         for dates in key_dates.values():
             all_dates.update(dates)
 
-        backfill_dates = sorted(d for d in all_dates if d != primary_date)[:MAX_BACKFILL]
+        # Only backfill past dates and pick the most recent MAX_BACKFILL of them
+        past_dates = sorted(d for d in all_dates if d < primary_date)
+        backfill_dates = past_dates[-MAX_BACKFILL:]
         target_dates = backfill_dates + [primary_date]
         if backfill_dates:
             print(f"Backfill dates detected: {backfill_dates}", file=sys.stderr)
