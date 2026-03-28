@@ -70,7 +70,6 @@ def process_date(
     ]
 
     slack_client.notify(since, report, pages, skipped_repos)
-    print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
 def main() -> None:
