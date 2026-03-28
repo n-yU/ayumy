@@ -83,6 +83,23 @@ class TestValidateReport:
         assert result.invalid_statuses == {"repo": "BadStatus"}
         assert report["repositories"][0]["status"] == ""
 
+    def test_empty_status_treated_as_invalid(self):
+        report = {
+            "summary": "summary",
+            "repositories": [{
+                "name": "repo",
+                "summary": "",
+                "achievements": [],
+                "ongoing": [],
+                "claude_code": "",
+                "tags": [],
+                "status": "",
+            }],
+        }
+        result = SummaryClient.validate_report(report, [], ["Active"])
+        assert result
+        assert result.invalid_statuses == {"repo": ""}
+
 
 class TestValidationResult:
     def test_bool_empty(self):
