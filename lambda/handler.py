@@ -1,5 +1,6 @@
 import json
 import os
+import traceback
 
 import boto3
 
@@ -35,7 +36,7 @@ def lambda_handler(event, context):
     try:
         run(source)
     except Exception as e:
-        print(f"Report failed: {e}")
+        traceback.print_exc()
         return {
             "statusCode": 500,
             "body": json.dumps({"error": "report failed"}),
