@@ -1,6 +1,7 @@
 """Claude Code session log client."""
 
 import json
+import sys
 from datetime import date, datetime
 from typing import Any
 
@@ -63,6 +64,7 @@ class SessionClient:
                 try:
                     entry = json.loads(line)
                 except json.JSONDecodeError:
+                    print(f"  Skipping malformed line in {key}", file=sys.stderr)
                     continue
                 timestamp = entry.get("timestamp")
                 if not timestamp:
@@ -111,6 +113,7 @@ class SessionClient:
             try:
                 entry = json.loads(line)
             except json.JSONDecodeError:
+                print(f"  Skipping malformed line in {key}", file=sys.stderr)
                 continue
             entry_type = entry.get("type")
             timestamp = entry.get("timestamp")
