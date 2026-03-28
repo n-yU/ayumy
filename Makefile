@@ -1,4 +1,4 @@
-.PHONY: lambda-install lambda-invoke lambda-deploy test
+.PHONY: lambda-install lambda-invoke lambda-deploy test oidc-deploy
 
 # Install lambda dependencies into local .venv via uv (includes dev deps like boto3)
 lambda-install:
@@ -16,3 +16,11 @@ lambda-deploy:
 # Run unit tests
 test: lambda-install
 	.venv/bin/python -m pytest tests/ -v
+
+# Deploy OIDC bootstrap stack for GitHub Actions
+oidc-deploy:
+	aws cloudformation deploy \
+		--template-file .github/oidc-bootstrap.yml \
+		--stack-name ayumy-github-oidc \
+		--capabilities CAPABILITY_NAMED_IAM \
+		--region ap-northeast-1
