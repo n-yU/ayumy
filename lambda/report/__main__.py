@@ -113,6 +113,8 @@ def main() -> None:
             else:
                 day_since, day_until = date_to_range(target_date)
 
+            # Snapshot key count so we can roll back on failure
+            key_count = len(session_client._fetched_keys)
             try:
                 process_date(
                     day_since, day_until,
@@ -121,6 +123,8 @@ def main() -> None:
                     allowed_tags, allowed_statuses,
                 )
             except Exception as e:
+                # Roll back keys added by the failed date
+                del session_client._fetched_keys[key_count:]
                 slack_client.notify_error(day_since, e)
                 if target_date == primary_date:
                     e._notified = True  # type: ignore[attr-defined]
