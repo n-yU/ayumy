@@ -4,7 +4,7 @@ from datetime import datetime
 from unittest.mock import MagicMock
 
 from report import JST
-from report.notion import NotionClient, _chunk_rich_text
+from report.notion import RICH_TEXT_LIMIT, NotionClient, _chunk_rich_text
 
 
 class TestChunkRichText:
@@ -13,12 +13,13 @@ class TestChunkRichText:
         assert result == [{"type": "text", "text": {"content": "hello"}}]
 
     def test_text_exceeding_limit(self):
-        text = "a" * 4500
+        overflow = RICH_TEXT_LIMIT // 4
+        text = "a" * (RICH_TEXT_LIMIT * 2 + overflow)
         result = _chunk_rich_text(text)
         assert len(result) == 3
-        assert len(result[0]["text"]["content"]) == 2000
-        assert len(result[1]["text"]["content"]) == 2000
-        assert len(result[2]["text"]["content"]) == 500
+        assert len(result[0]["text"]["content"]) == RICH_TEXT_LIMIT
+        assert len(result[1]["text"]["content"]) == RICH_TEXT_LIMIT
+        assert len(result[2]["text"]["content"]) == overflow
 
     def test_empty_text(self):
         result = _chunk_rich_text("")
@@ -49,6 +50,7 @@ class TestBuildProperties:
         assert props["Date"]["date"]["start"] == "2026-03-28"
         assert props["Repository"]["select"]["name"] == "my-repo"
         assert len(props["Tags"]["multi_select"]) == 2
+        assert {t["name"] for t in props["Tags"]["multi_select"]} == {"CI/CD", "Testing"}
         assert props["Commits"]["number"] == 5
         assert props["PRs Merged"]["number"] == 2
         assert props["Issues Closed"]["number"] == 1
@@ -99,6 +101,16 @@ class TestBuildChildren:
             "heading_2", "bulleted_list_item",
             "heading_2", "paragraph",
         ]
+
+        # Validate heading texts
+        assert children[1]["heading_2"]["rich_text"][0]["text"]["content"] == "概要"
+        assert children[3]["heading_2"]["rich_text"][0]["text"]["content"] == "成果"
+        assert children[5]["heading_2"]["rich_text"][0]["text"]["content"] == "継続中の作業"
+        assert children[7]["heading_2"]["rich_text"][0]["text"]["content"] == "Claude Code"
+
+        # Validate representative paragraph and bullet contents
+        assert children[2]["paragraph"]["rich_text"][0]["text"]["content"] == "repo summary"
+        assert children[4]["bulleted_list_item"]["rich_text"][0]["text"]["content"] == "merged PR"
 
     def test_empty_sections_omitted(self):
         repo_summary = {
