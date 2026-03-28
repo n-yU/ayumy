@@ -52,6 +52,7 @@ Resources:
                   - cloudformation:DescribeChangeSet
                   - cloudformation:DescribeStacks
                   - cloudformation:ExecuteChangeSet
+                  - cloudformation:DescribeStackEvents
                 Resource: !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/ayumy/*"
               # SAM deploy bucket
               - Effect: Allow
