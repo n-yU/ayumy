@@ -5,7 +5,6 @@ date range and formats them for downstream processing.
 """
 
 import os
-import sys
 from collections.abc import KeysView
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, TypedDict
@@ -171,18 +170,20 @@ class ReportSummary(TypedDict):
 
 
 def require_env(name: str) -> str:
-    """Get a required environment variable or exit with an error.
+    """Get a required environment variable or raise an error.
 
     Args:
         name: Environment variable name
 
     Returns:
         The environment variable value
+
+    Raises:
+        ValueError: If the environment variable is not set
     """
     value = os.environ.get(name)
     if not value:
-        print(f"{name} is not set", file=sys.stderr)
-        sys.exit(1)
+        raise ValueError(f"{name} is not set")
     return value
 
 
