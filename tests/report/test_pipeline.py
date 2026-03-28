@@ -36,19 +36,18 @@ def _empty_activity():
 
 
 def _nonempty_activity(repo="my-repo"):
-    """Create activity mocks that behave as truthy with format() support."""
-    session = MagicMock(spec=SessionActivity)
-    session.__bool__ = lambda self: True
-    session.__contains__ = lambda self, k: k == repo
-    session.keys.return_value = [repo]
-    session.format.return_value = "# Claude Code セッション\n## プロジェクト: repo"
-
-    github = MagicMock(spec=GitHubActivity)
-    github.__bool__ = lambda self: True
-    github.__contains__ = lambda self, k: k == repo
-    github.keys.return_value = [repo]
-    github.format.return_value = "# GitHub アクティビティ\n## repo"
-
+    """Create real activity objects with minimal valid data."""
+    session = SessionActivity({repo: [{
+        "session_id": "s1", "project": repo,
+        "start_time": "2026-03-28T10:00:00+09:00",
+        "end_time": "2026-03-28T11:00:00+09:00",
+        "user_messages": ["Fix bug"], "tools_used": ["Edit"],
+    }]})
+    github = GitHubActivity({repo: {
+        "commits": [{"message": "Fix bug", "sha": "abc", "author": "user",
+                      "date": "2026-03-28T10:00:00"}],
+        "pulls": [], "issues": [],
+    }})
     return session, github
 
 
