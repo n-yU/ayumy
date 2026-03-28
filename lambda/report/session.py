@@ -60,7 +60,10 @@ class SessionClient:
             for line in body.splitlines():
                 if not line.strip():
                     continue
-                entry = json.loads(line)
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
                 timestamp = entry.get("timestamp")
                 if not timestamp:
                     continue
@@ -105,7 +108,10 @@ class SessionClient:
         for line in body.splitlines():
             if not line.strip():
                 continue
-            entry = json.loads(line)
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
             entry_type = entry.get("type")
             timestamp = entry.get("timestamp")
 
