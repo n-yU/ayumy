@@ -222,7 +222,7 @@ class SessionClient:
         """
         archived = 0
 
-        for src_key in set(self._fetched_keys):
+        for src_key in dict.fromkeys(self._fetched_keys):
             # claude-sessions/{project}/{session}.jsonl -> processed/{project}/{session}.jsonl
             dst_key = "processed/" + src_key.removeprefix("claude-sessions/")
 
