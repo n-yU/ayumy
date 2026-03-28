@@ -23,6 +23,18 @@ class SessionClient:
         self.bucket = bucket
         self._fetched_keys: list[str] = []
 
+    def snapshot_keys(self) -> int:
+        """Return the current number of fetched keys for rollback."""
+        return len(self._fetched_keys)
+
+    def rollback_keys(self, snapshot: int) -> None:
+        """Discard fetched keys added after the given snapshot.
+
+        Args:
+            snapshot: Value returned by a prior snapshot_keys() call
+        """
+        del self._fetched_keys[snapshot:]
+
     def list_session_objects(self) -> list[dict[str, Any]]:
         """List all unarchived JSONL objects in claude-sessions/.
 
