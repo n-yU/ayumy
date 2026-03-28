@@ -1,15 +1,15 @@
 import json
 import os
-import subprocess
-import sys
 
 import boto3
+
+from report.pipeline import run
 
 
 def lambda_handler(event, context):
     """Entry point for the Lambda function.
 
-    Invokes the report package (co-located in lambda/) with secrets from Secrets Manager.
+    Retrieves secrets from Secrets Manager and generates daily reports.
     """
     secrets_client = boto3.client("secretsmanager")
     secret_names = {
@@ -19,14 +19,10 @@ def lambda_handler(event, context):
         "SLACK_WEBHOOK_URL": "ayumy/slack-webhook-url",
     }
 
-    env = os.environ.copy()
-    if event.get("source") == "manual":
-        env["AYUMY_SOURCE"] = "manual"
-
     for env_var, secret_id in secret_names.items():
         try:
             resp = secrets_client.get_secret_value(SecretId=secret_id)
-            env[env_var] = resp["SecretString"]
+            os.environ[env_var] = resp["SecretString"]
         except Exception as e:
             print(f"Failed to retrieve secret {secret_id}: {e}")
             return {
@@ -34,34 +30,14 @@ def lambda_handler(event, context):
                 "body": json.dumps({"error": f"Failed to retrieve secret: {secret_id}"}),
             }
 
+    source = "manual" if event.get("source") == "manual" else None
+
     try:
-        result = subprocess.run(
-            [sys.executable, "-m", "report"],
-            cwd=os.path.dirname(__file__),
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=280,
-        )
-    except subprocess.TimeoutExpired as e:
-        print(f"report module timed out after {e.timeout}s")
+        run(source)
+    except Exception as e:
         return {
             "statusCode": 500,
-            "body": json.dumps({"error": f"report module timed out after {e.timeout}s"}),
-        }
-
-    print(f"stdout: {result.stdout}")
-    if result.stderr:
-        print(f"stderr: {result.stderr}")
-
-    if result.returncode != 0:
-        return {
-            "statusCode": 500,
-            "body": json.dumps({
-                "error": "report module failed",
-                "returncode": result.returncode,
-                "stderr": result.stderr,
-            }),
+            "body": json.dumps({"error": f"report failed: {e}"}),
         }
 
     return {
