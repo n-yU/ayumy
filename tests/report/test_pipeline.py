@@ -335,4 +335,7 @@ class TestRun:
 
         # Backfill failure notified but primary still processed
         assert session_client.fetch_sessions.call_count == 2
+        slack_client.notify_error.assert_called_once()
+        backfill_since = slack_client.notify_error.call_args[0][0]
+        assert backfill_since.date() == date(2026, 3, 27)
         session_client.archive_sessions.assert_called_once()
