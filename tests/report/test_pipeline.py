@@ -176,6 +176,49 @@ class TestRun:
 
         session_client.scan_entry_dates.assert_called_once()
         session_client.archive_sessions.assert_called_once()
+        slack_client = MockSlack.return_value
+        slack_client = MockSlack.return_value
+        slack_client.notify_metrics.assert_called_once()
+        elapsed, peak_mb, limit_mb = slack_client.notify_metrics.call_args[0]
+        assert elapsed >= 0
+        assert peak_mb >= 0
+        assert limit_mb is None
+
+    @patch("report.pipeline.get_target_date_range")
+    @patch("report.pipeline.require_env")
+    @patch("report.pipeline.SlackClient")
+    @patch("report.pipeline.SessionClient")
+    @patch("report.pipeline.GitHubClient")
+    @patch("report.pipeline.NotionClient")
+    @patch("report.pipeline.SummaryClient")
+    def test_passes_memory_limit_to_metrics(
+        self, MockSummary, MockNotion, MockGitHub, MockSession,
+        MockSlack, mock_require_env, mock_date_range,
+    ):
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+        mock_date_range.return_value = (since, until)
+        mock_require_env.side_effect = lambda k: f"fake-{k}"
+
+        session_client = MockSession.return_value
+        session_client.scan_entry_dates.return_value = {}
+        session_client.fetch_sessions.return_value = SessionActivity({})
+        session_client.snapshot_keys.return_value = 0
+        session_client.archive_sessions.return_value = 0
+
+        github_client = MockGitHub.return_value
+        github_client.fetch_activity.return_value = GitHubActivity({})
+
+        notion_client = MockNotion.return_value
+        notion_client.fetch_allowlists.return_value = ([], [])
+
+        slack_client = MockSlack.return_value
+
+        run(source=None, memory_limit_mb=512)
+
+        slack_client.notify_metrics.assert_called_once()
+        _, _, limit_mb = slack_client.notify_metrics.call_args[0]
+        assert limit_mb == 512
 
     @patch("report.pipeline.get_target_date_range")
     @patch("report.pipeline.require_env")
@@ -287,6 +330,8 @@ class TestRun:
         slack_client.notify_error.assert_called_once()
         # Should not archive on failure
         session_client.archive_sessions.assert_not_called()
+        # Metrics should still be sent on failure (finally block)
+        slack_client.notify_metrics.assert_called_once()
 
     @patch("report.pipeline.get_target_date_range")
     @patch("report.pipeline.require_env")

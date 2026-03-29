@@ -53,6 +53,28 @@ class TestNotify:
         assert "unknown-repo" in text
 
 
+class TestNotifyMetrics:
+    def test_sends_metrics_with_memory_limit(self):
+        client = _make_client()
+
+        client.notify_metrics(12.5, 128.0, memory_limit_mb=256)
+
+        text = client.client.send.call_args.kwargs["text"]
+        assert "12.5s" in text
+        assert "128 / 256 MB" in text
+        assert "50%" in text
+
+    def test_sends_metrics_without_memory_limit(self):
+        client = _make_client()
+
+        client.notify_metrics(5.3, 64.0)
+
+        text = client.client.send.call_args.kwargs["text"]
+        assert "5.3s" in text
+        assert "64 MB" in text
+        assert "%" not in text
+
+
 class TestNotifyValidationErrors:
     def test_sends_invalid_tags_and_statuses(self):
         client = _make_client()
