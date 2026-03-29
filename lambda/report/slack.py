@@ -97,7 +97,7 @@ class SlackClient:
 
         self._blocks.extend([
             {"type": "header", "text": {"type": "plain_text", "text": f"⚠️ Daily Report ({date_str})"}},
-            {"type": "section", "text": {"type": "mrkdwn", "text": f"Invalid tags/status detected\n{chr(10).join(lines)}"}},
+            {"type": "section", "text": {"type": "mrkdwn", "text": f"Invalid tags/status detected\n{'\n'.join(lines)}"}},
         ])
         self._fallback_parts.append(f"⚠️ Daily Report ({date_str}): Invalid tags/status detected")
 
