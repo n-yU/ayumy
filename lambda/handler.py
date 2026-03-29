@@ -4,10 +4,10 @@ import os
 
 import boto3
 
+from report.pipeline import run
+
 logging.getLogger().setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
-
-from report.pipeline import run
 
 
 def lambda_handler(event, context):
