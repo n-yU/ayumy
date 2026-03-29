@@ -111,6 +111,22 @@ class TestNotify:
         assert "text" not in blocks[3]
         assert blocks[4]["type"] == "context"  # skipped
 
+    def test_falls_back_to_list_when_over_10_pages(self):
+        client = _make_client()
+        target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        report = {"summary": "summary", "repositories": []}
+        pages = [(f"repo-{i}", f"https://notion.so/p{i}") for i in range(11)]
+
+        client.notify(target, report, pages)
+        client.flush()
+
+        blocks = _get_send_kwargs(client)["blocks"]
+        page_block = blocks[3]
+        assert "fields" not in page_block
+        assert "text" in page_block
+        assert "repo-0" in page_block["text"]["text"]
+        assert "repo-10" in page_block["text"]["text"]
+
 
 class TestNotifyMetrics:
     def test_sends_metrics_with_memory_limit(self):

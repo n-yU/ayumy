@@ -50,12 +50,18 @@ class SlackClient:
                 {"type": "mrkdwn", "text": f"<{url}|{date_str}: {name}>"}
                 for name, url in pages
             ]
+            summary = report["summary"] or " "
             self._blocks.extend([
                 {"type": "header", "text": {"type": "plain_text", "text": f"📝 Daily Report ({date_str})"}},
-                {"type": "section", "text": {"type": "mrkdwn", "text": report["summary"]}},
+                {"type": "section", "text": {"type": "mrkdwn", "text": summary}},
                 {"type": "divider"},
-                {"type": "section", "fields": page_fields},
             ])
+            # section.fields allows max 10 items
+            if len(page_fields) <= 10:
+                self._blocks.append({"type": "section", "fields": page_fields})
+            else:
+                page_lines = "\n".join(f["text"] for f in page_fields)
+                self._blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": page_lines}})
             if skipped_repos:
                 skipped = ", ".join(skipped_repos)
                 self._blocks.append({"type": "context", "elements": [{"type": "mrkdwn", "text": f"⚠️ Skipped: {skipped}"}]})
