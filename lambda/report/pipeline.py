@@ -151,5 +151,9 @@ def run(source: str | None = None, memory_limit_mb: int | None = None) -> None:
         ru_maxrss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
         divisor = 1024 * 1024 if platform.system() == "Darwin" else 1024
         peak_memory_mb = ru_maxrss / divisor
+        logger.info(
+            "Execution metrics: elapsed=%.1fs, peak_memory=%.0fMB, limit=%s",
+            elapsed, peak_memory_mb, memory_limit_mb,
+        )
         slack_client.notify_metrics(elapsed, peak_memory_mb, memory_limit_mb)
 
