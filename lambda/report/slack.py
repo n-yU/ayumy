@@ -89,6 +89,29 @@ class SlackClient:
         text = f"❌ Daily Report ({date_str}): {error}"
         self._send(text)
 
+    def notify_metrics(
+        self, elapsed: float, peak_memory_mb: float,
+        memory_limit_mb: int | None = None,
+    ) -> None:
+        """Send execution metrics to Slack.
+
+        Args:
+            elapsed: Elapsed wall-clock time in seconds
+            peak_memory_mb: Peak RSS memory usage in MB
+            memory_limit_mb: Lambda memory limit in MB, or None for CLI
+        """
+        lines = [
+            "📊 Execution Metrics",
+            f"• Time: {elapsed:.1f}s",
+        ]
+        if memory_limit_mb is not None:
+            pct = peak_memory_mb / memory_limit_mb * 100
+            lines.append(f"• Memory: {peak_memory_mb:.0f} / {memory_limit_mb} MB ({pct:.0f}%)")
+        else:
+            lines.append(f"• Memory: {peak_memory_mb:.0f} MB")
+
+        self._send("\n".join(lines))
+
     def _send(self, text: str) -> None:
         """Send a message via Slack webhook (best-effort).
 
