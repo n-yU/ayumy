@@ -156,4 +156,5 @@ def run(source: str | None = None, memory_limit_mb: int | None = None) -> None:
             elapsed, peak_memory_mb, memory_limit_mb,
         )
         slack_client.notify_metrics(elapsed, peak_memory_mb, memory_limit_mb)
+        slack_client.flush()
 
