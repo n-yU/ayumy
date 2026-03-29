@@ -32,7 +32,7 @@ class SlackClient:
         """Send a daily report notification to Slack.
 
         Sends the overall summary and links to created Notion pages.
-        Failures are logged to stderr and do not raise exceptions.
+        Failures are logged and do not raise exceptions.
 
         Args:
             target_date: The target date for the report
