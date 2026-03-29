@@ -1,9 +1,11 @@
 """Claude Code session log client."""
 
 import json
-import sys
+import logging
 from datetime import date, datetime
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 import boto3
 
@@ -76,7 +78,7 @@ class SessionClient:
                 try:
                     entry = json.loads(line)
                 except json.JSONDecodeError:
-                    print(f"  Skipping malformed line in {key}", file=sys.stderr)
+                    logger.warning("Skipping malformed line in %s", key)
                     continue
                 timestamp = entry.get("timestamp")
                 if not timestamp:
@@ -125,7 +127,7 @@ class SessionClient:
             try:
                 entry = json.loads(line)
             except json.JSONDecodeError:
-                print(f"  Skipping malformed line in {key}", file=sys.stderr)
+                logger.warning("Skipping malformed line in %s", key)
                 continue
             entry_type = entry.get("type")
             timestamp = entry.get("timestamp")
