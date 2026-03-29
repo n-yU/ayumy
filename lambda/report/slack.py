@@ -103,4 +103,4 @@ class SlackClient:
                     response.status_code, response.body,
                 )
         except Exception as e:
-            logger.error("Failed to send Slack notification: %r", e)
+            logger.exception("Failed to send Slack notification: %r", e)
