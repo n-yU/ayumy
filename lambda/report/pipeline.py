@@ -3,14 +3,14 @@
 import logging
 from datetime import datetime
 
-logger = logging.getLogger(__name__)
-
 from . import JST, date_to_range, get_target_date_range, require_env
 from .github import GitHubClient
 from .notion import NotionClient
 from .session import SessionClient
 from .slack import SlackClient
 from .summarizer import SummaryClient
+
+logger = logging.getLogger(__name__)
 
 # Maximum number of past dates to backfill per invocation
 MAX_BACKFILL = 3

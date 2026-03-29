@@ -5,11 +5,11 @@ import logging
 from datetime import date, datetime
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
 import boto3
 
 from . import JST, SessionActivity, SessionInfo
+
+logger = logging.getLogger(__name__)
 
 
 class SessionClient:

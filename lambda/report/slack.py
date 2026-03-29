@@ -3,12 +3,12 @@
 import logging
 from datetime import datetime
 
-logger = logging.getLogger(__name__)
-
 from slack_sdk.webhook import WebhookClient
 
 from . import JST, ReportSummary
 from .summarizer import ValidationResult
+
+logger = logging.getLogger(__name__)
 
 
 class SlackClient:

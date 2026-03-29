@@ -3,11 +3,11 @@
 import logging
 from datetime import datetime
 
-logger = logging.getLogger(__name__)
-
 from notion_client import Client
 
 from . import JST, GitHubActivity, RepoSummary, ReportSummary, SessionActivity
+
+logger = logging.getLogger(__name__)
 
 
 RICH_TEXT_LIMIT = 2000

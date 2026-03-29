@@ -4,11 +4,11 @@ import json
 import logging
 from datetime import datetime
 
-logger = logging.getLogger(__name__)
-
 import anthropic
 
 from . import JST, ReportSummary
+
+logger = logging.getLogger(__name__)
 
 MODEL = "claude-sonnet-4-20250514"
 MAX_TOKENS = 2048
