@@ -1,6 +1,9 @@
 """Report generation pipeline."""
 
 import logging
+import platform
+import resource
+import time
 from datetime import datetime
 
 from . import JST, date_to_range, get_target_date_range, require_env
@@ -72,13 +75,15 @@ def process_date(
     slack_client.notify(since, report, pages, skipped_repos)
 
 
-def run(source: str | None = None) -> None:
+def run(source: str | None = None, memory_limit_mb: int | None = None) -> None:
     """Run the report generation pipeline.
 
     Args:
         source: Invocation source. "manual" for manual execution,
             None for scheduled execution
+        memory_limit_mb: Lambda memory limit in MB, or None for CLI
     """
+    start = time.monotonic()
     since, until = get_target_date_range(source)
     primary_date = since.astimezone(JST).date()
 
@@ -140,4 +145,15 @@ def run(source: str | None = None) -> None:
         if not getattr(e, "_notified", False):
             slack_client.notify_error(since, e)
         raise
+    finally:
+        elapsed = time.monotonic() - start
+        # macOS returns bytes, Linux returns kilobytes
+        ru_maxrss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        divisor = 1024 * 1024 if platform.system() == "Darwin" else 1024
+        peak_memory_mb = ru_maxrss / divisor
+        logger.info(
+            "Execution metrics: elapsed=%.1fs, peak_memory=%.0fMB, limit=%s",
+            elapsed, peak_memory_mb, memory_limit_mb,
+        )
+        slack_client.notify_metrics(elapsed, peak_memory_mb, memory_limit_mb)
 
