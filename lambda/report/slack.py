@@ -1,12 +1,14 @@
 """Slack notification client."""
 
-import sys
+import logging
 from datetime import datetime
 
 from slack_sdk.webhook import WebhookClient
 
 from . import JST, ReportSummary
 from .summarizer import ValidationResult
+
+logger = logging.getLogger(__name__)
 
 
 class SlackClient:
@@ -30,7 +32,7 @@ class SlackClient:
         """Send a daily report notification to Slack.
 
         Sends the overall summary and links to created Notion pages.
-        Failures are logged to stderr and do not raise exceptions.
+        Failures are logged and do not raise exceptions.
 
         Args:
             target_date: The target date for the report
@@ -96,10 +98,9 @@ class SlackClient:
         try:
             response = self.client.send(text=text)
             if response.status_code != 200:
-                print(
-                    f"Failed to send Slack notification: "
-                    f"status={response.status_code}, body={response.body}",
-                    file=sys.stderr,
+                logger.error(
+                    "Failed to send Slack notification: status=%d, body=%s",
+                    response.status_code, response.body,
                 )
         except Exception as e:
-            print(f"Failed to send Slack notification: {e!r}", file=sys.stderr)
+            logger.exception("Failed to send Slack notification: %r", e)

@@ -24,6 +24,7 @@ template.yaml                        # AWS SAM テンプレート（Lambda, Even
 
 ## 技術詳細
 - **実行環境**: AWS Lambda（SAM でデプロイ）
+- **ローカル開発**: uv で `.venv` を管理。`make test` でテスト実行（`make lambda-install` → pytest）
 - **言語**: Python 3.12、デプロイ依存: `requests`, `anthropic`, `PyGithub`、開発依存: 左記 + `boto3`
 - **Claude モデル**: 要約生成に `claude-sonnet-4-20250514` を使用
 - **GitHub API**: REST、Fine-grained PAT、セッションログから特定したリポジトリのみ対象

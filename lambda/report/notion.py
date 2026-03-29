@@ -1,11 +1,13 @@
 """Notion API client for writing daily report pages."""
 
-import sys
+import logging
 from datetime import datetime
 
 from notion_client import Client
 
 from . import JST, GitHubActivity, RepoSummary, ReportSummary, SessionActivity
+
+logger = logging.getLogger(__name__)
 
 
 RICH_TEXT_LIMIT = 2000
@@ -293,7 +295,7 @@ class NotionClient:
         archived = self._archive_existing_pages(target_date)
         if archived:
             date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
-            print(f"Archived {archived} existing page(s) for {date_str}", file=sys.stderr)
+            logger.info("Archived %d existing page(s) for %s", archived, date_str)
 
         pages: list[tuple[str, str]] = []
 
@@ -302,7 +304,7 @@ class NotionClient:
 
             # Skip repos not found in activity (no matching GitHub repo)
             if repo_name not in activity:
-                print(f"Skipping unknown repo: {repo_name}", file=sys.stderr)
+                logger.warning("Skipping unknown repo: %s", repo_name)
                 continue
 
             repo_activity = activity.repos()[repo_name]

@@ -1,6 +1,6 @@
 """Report generation pipeline."""
 
-import sys
+import logging
 from datetime import datetime
 
 from . import JST, date_to_range, get_target_date_range, require_env
@@ -9,6 +9,8 @@ from .notion import NotionClient
 from .session import SessionClient
 from .slack import SlackClient
 from .summarizer import SummaryClient
+
+logger = logging.getLogger(__name__)
 
 # Maximum number of past dates to backfill per invocation
 MAX_BACKFILL = 3
@@ -38,13 +40,13 @@ def process_date(
         allowed_tags: Valid tag names from Notion DB
         allowed_statuses: Valid status names from Notion DB
     """
-    print(f"Processing: {since.isoformat()} ~ {until.isoformat()}", file=sys.stderr)
+    logger.info("Processing: %s ~ %s", since.isoformat(), until.isoformat())
 
     session_activity = session_client.fetch_sessions(since, until)
     github_activity = github_client.fetch_activity(since, until, list(session_activity.keys()))
 
     if not session_activity and not github_activity:
-        print("  No activity, skipping", file=sys.stderr)
+        logger.info("No activity, skipping")
         return
 
     report = summary_client.generate_summary(
@@ -60,7 +62,7 @@ def process_date(
         since, report, github_activity, session_activity,
     )
     for name, url in pages:
-        print(f"  Created Notion page: {name} -> {url}", file=sys.stderr)
+        logger.info("Created Notion page: %s -> %s", name, url)
 
     skipped_repos = [
         r["name"] for r in report["repositories"]
@@ -96,7 +98,7 @@ def run(source: str | None = None) -> None:
         backfill_dates = past_dates[-MAX_BACKFILL:]
         target_dates = backfill_dates + [primary_date]
         if backfill_dates:
-            print(f"Backfill dates detected: {backfill_dates}", file=sys.stderr)
+            logger.info("Backfill dates detected: %s", backfill_dates)
 
         github_client = GitHubClient(require_env("GITHUB_PAT"))
         notion_client = NotionClient(
@@ -130,7 +132,7 @@ def run(source: str | None = None) -> None:
 
         # Archive only after all dates are processed
         archived = session_client.archive_sessions()
-        print(f"Archived {archived} session log(s)", file=sys.stderr)
+        logger.info("Archived %d session log(s)", archived)
 
     except Exception as e:
         # Errors from process_date are already notified with the correct date

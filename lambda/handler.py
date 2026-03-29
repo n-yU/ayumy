@@ -1,10 +1,13 @@
 import json
+import logging
 import os
-import traceback
 
 import boto3
 
 from report.pipeline import run
+
+logging.getLogger().setLevel(logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def lambda_handler(event, context):
@@ -25,7 +28,7 @@ def lambda_handler(event, context):
             resp = secrets_client.get_secret_value(SecretId=secret_id)
             os.environ[env_var] = resp["SecretString"]
         except Exception as e:
-            print(f"Failed to retrieve secret {secret_id}: {e}")
+            logger.exception("Failed to retrieve secret %s: %s", secret_id, e)
             return {
                 "statusCode": 500,
                 "body": json.dumps({"error": f"Failed to retrieve secret: {secret_id}"}),
@@ -36,7 +39,7 @@ def lambda_handler(event, context):
     try:
         run(source)
     except Exception:
-        traceback.print_exc()
+        logger.exception("Report generation failed")
         return {
             "statusCode": 500,
             "body": json.dumps({"error": "report failed"}),

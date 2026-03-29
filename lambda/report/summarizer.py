@@ -1,12 +1,14 @@
 """Claude API summary generator."""
 
 import json
-import sys
+import logging
 from datetime import datetime
 
 import anthropic
 
 from . import JST, ReportSummary
+
+logger = logging.getLogger(__name__)
 
 MODEL = "claude-sonnet-4-20250514"
 MAX_TOKENS = 2048
@@ -188,17 +190,11 @@ class SummaryClient:
             if invalid:
                 result.invalid_tags[name] = invalid
                 repo["tags"] = [t for t in repo["tags"] if t in tag_set]
-                print(
-                    f"Removed invalid tags for {name}: {invalid}",
-                    file=sys.stderr,
-                )
+                logger.warning("Removed invalid tags for %s: %s", name, invalid)
 
             if repo["status"] not in status_set:
                 result.invalid_statuses[name] = repo["status"]
-                print(
-                    f"Removed invalid status for {name}: {repo['status']}",
-                    file=sys.stderr,
-                )
+                logger.warning("Removed invalid status for %s: %s", name, repo["status"])
                 repo["status"] = ""
 
         return result
