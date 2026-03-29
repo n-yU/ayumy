@@ -177,7 +177,6 @@ class TestRun:
         session_client.scan_entry_dates.assert_called_once()
         session_client.archive_sessions.assert_called_once()
         slack_client = MockSlack.return_value
-        slack_client = MockSlack.return_value
         slack_client.notify_metrics.assert_called_once()
         elapsed, peak_mb, limit_mb = slack_client.notify_metrics.call_args[0]
         assert elapsed >= 0
