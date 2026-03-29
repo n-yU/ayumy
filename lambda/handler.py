@@ -28,7 +28,7 @@ def lambda_handler(event, context):
             resp = secrets_client.get_secret_value(SecretId=secret_id)
             os.environ[env_var] = resp["SecretString"]
         except Exception as e:
-            logger.error("Failed to retrieve secret %s: %s", secret_id, e)
+            logger.exception("Failed to retrieve secret %s: %s", secret_id, e)
             return {
                 "statusCode": 500,
                 "body": json.dumps({"error": f"Failed to retrieve secret: {secret_id}"}),
