@@ -161,6 +161,8 @@ class TestRun:
         mock_date_range.return_value = (since, until)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
 
+        MockStore.return_value.ingest.return_value = 0
+
         session_client = MockSession.return_value
         session_client.scan_entry_dates.return_value = {}
         session_client.fetch_sessions.return_value = SessionActivity({})
@@ -202,6 +204,8 @@ class TestRun:
         mock_date_range.return_value = (since, until)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
 
+        MockStore.return_value.ingest.return_value = 0
+
         session_client = MockSession.return_value
         session_client.scan_entry_dates.return_value = {}
         session_client.fetch_sessions.return_value = SessionActivity({})
@@ -240,6 +244,8 @@ class TestRun:
         mock_date_range.return_value = (since, until)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
 
+        MockStore.return_value.ingest.return_value = 0
+
         session_client = MockSession.return_value
         # Two past dates detected from session logs
         session_client.scan_entry_dates.return_value = {
@@ -276,6 +282,8 @@ class TestRun:
         until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
         mock_date_range.return_value = (since, until)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
+
+        MockStore.return_value.ingest.return_value = 0
 
         session_client = MockSession.return_value
         # 5 past dates, but only MAX_BACKFILL most recent should be processed
@@ -317,6 +325,8 @@ class TestRun:
         mock_date_range.return_value = (since, until)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
 
+        MockStore.return_value.ingest.return_value = 0
+
         session_client = MockSession.return_value
         session_client.scan_entry_dates.return_value = {}
         session_client.fetch_sessions.side_effect = RuntimeError("S3 error")
@@ -356,6 +366,8 @@ class TestRun:
         until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
         mock_date_range.return_value = (since, until)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
+
+        MockStore.return_value.ingest.return_value = 0
 
         session_client = MockSession.return_value
         session_client.scan_entry_dates.return_value = {
