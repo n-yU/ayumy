@@ -118,6 +118,23 @@ Claude Code は会話を `~/.claude/projects/` 以下にローカル保存して
 - メタデータ（セッション ID、タイムスタンプ、ブランチ等）は JSONL の各エントリに埋め込まれている
 - 外部インデックスファイルは存在しない
 
+JSONL の各エントリは以下の構造を持つ（Claude Code が生成するデータの観測に基づく。公式仕様は存在しない）:
+
+| フィールド | 型 | 説明 |
+|---|---|---|
+| `type` | String | エントリ種別（`"user"`, `"assistant"`, `"summary"` 等） |
+| `timestamp` | String | ISO 8601 形式のタイムスタンプ（例: `"2026-03-28T10:00:00+09:00"`）。常に存在するが、不正な値は観測されていない |
+| `message.content` | String / List | `type=user` の場合は文字列、`type=assistant` の場合はブロックのリスト |
+
+`type=assistant` の `message.content` リスト内のブロック:
+
+| フィールド | 型 | 説明 |
+|---|---|---|
+| `type` | String | ブロック種別（`"text"`, `"tool_use"` 等） |
+| `name` | String | `type=tool_use` の場合のツール名 |
+
+Claude Code が生成するため、タイムスタンプのフォーマットは安定しており、パース時に防御的な例外処理（`ValueError` の catch 等）は行わない
+
 転送対象のセッションは、マーカーファイル（`.ayumy_last_sync`）との mtime 比較で決定する。
 
 - マーカーが存在しない場合（初回）は全 JSONL を対象とする
