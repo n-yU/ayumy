@@ -4,7 +4,7 @@ Traces of daily craft, woven by AI
 GitHub 上の日次開発アクティビティ（Commit, PR, Issue）と Claude Code のセッションログを自動収集し、Claude API で自然言語の要約を生成して Notion データベースに記録するシステム
 
 ## Architecture
-S3 + AWS Lambda を使用した2フェーズ構成
+S3 + DynamoDB + AWS Lambda を使用した2フェーズ構成
 
 ```
 [クライアントマシン]
@@ -17,6 +17,7 @@ S3 + AWS Lambda を使用した2フェーズ構成
 [AWS Lambda]                      ▼
   EventBridge (毎日 JST 00:00) → Lambda (report)
   ayumy sync --report ──────────→ Lambda (report)
+    ├─→ JSONL パース → DynamoDB にセッション書き込み
     ├─→ JSONL + GitHub API → Claude API で要約生成
     ├─→ Notion API で記録
     ├─→ Slack Webhook で通知
@@ -28,6 +29,7 @@ S3 + AWS Lambda を使用した2フェーズ構成
 |---|---|
 | AWS Lambda | レポート生成の実行環境 |
 | AWS S3 | セッションログの保管 |
+| Amazon DynamoDB | セッションメタデータの集約 |
 | Amazon EventBridge Scheduler | 日次の定期実行 |
 | Python 3.12 | メインスクリプト（`requests`, `anthropic`, `PyGithub`） |
 | GitHub API (REST) | 開発アクティビティの取得 |
