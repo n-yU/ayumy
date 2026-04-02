@@ -99,7 +99,7 @@ def run(source: str | None = None, memory_limit_mb: int | None = None) -> None:
             ingested = store.ingest(session_client)
             logger.info("Ingested %d session item(s) to DynamoDB", ingested)
         except Exception as e:
-            logger.error("DynamoDB ingestion failed: %s", e)
+            logger.exception("DynamoDB ingestion failed")
             slack_client.notify_error(since, e)
 
         # Scan all unarchived files to detect backfill targets
