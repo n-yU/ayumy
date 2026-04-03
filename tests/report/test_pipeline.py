@@ -20,7 +20,6 @@ def _make_report(repos=None):
 def _make_clients():
     """Create mocked client instances."""
     return {
-        "session_client": MagicMock(),
         "github_client": MagicMock(),
         "notion_client": MagicMock(),
         "summary_client": MagicMock(),
@@ -58,10 +57,9 @@ class TestProcessDate:
         until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
 
         session, github = _empty_activity()
-        clients["session_client"].fetch_sessions.return_value = session
         clients["github_client"].fetch_activity.return_value = github
 
-        process_date(since, until, **clients, allowed_tags=[], allowed_statuses=[])
+        process_date(since, until, session, **clients, allowed_tags=[], allowed_statuses=[])
 
         clients["summary_client"].generate_summary.assert_not_called()
         clients["notion_client"].create_report_pages.assert_not_called()
@@ -73,7 +71,6 @@ class TestProcessDate:
         until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
 
         session, github = _nonempty_activity("my-repo")
-        clients["session_client"].fetch_sessions.return_value = session
         clients["github_client"].fetch_activity.return_value = github
 
         report = _make_report([{
@@ -86,7 +83,7 @@ class TestProcessDate:
         ]
 
         process_date(
-            since, until, **clients,
+            since, until, session, **clients,
             allowed_tags=["CI/CD"], allowed_statuses=["Active"],
         )
 
@@ -100,7 +97,6 @@ class TestProcessDate:
         until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
 
         session, github = _nonempty_activity("repo")
-        clients["session_client"].fetch_sessions.return_value = session
         clients["github_client"].fetch_activity.return_value = github
 
         report = _make_report([{
@@ -111,7 +107,7 @@ class TestProcessDate:
         clients["notion_client"].create_report_pages.return_value = []
 
         process_date(
-            since, until, **clients,
+            since, until, session, **clients,
             allowed_tags=["CI/CD"], allowed_statuses=["Active"],
         )
 
@@ -123,7 +119,6 @@ class TestProcessDate:
         until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
 
         session, github = _nonempty_activity("repo")
-        clients["session_client"].fetch_sessions.return_value = session
         clients["github_client"].fetch_activity.return_value = github
 
         report = _make_report([{
@@ -134,7 +129,7 @@ class TestProcessDate:
         clients["notion_client"].create_report_pages.return_value = []
 
         process_date(
-            since, until, **clients,
+            since, until, session, **clients,
             allowed_tags=[], allowed_statuses=[],
         )
 
@@ -161,13 +156,13 @@ class TestRun:
         mock_date_range.return_value = (since, until)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
 
-        MockStore.return_value.ingest.return_value = 0
+        store = MockStore.return_value
+        store.ingest.return_value = []
+        store.scan_backfill_dates.return_value = []
+        store.fetch_sessions.return_value = SessionActivity({})
 
         session_client = MockSession.return_value
-        session_client.scan_entry_dates.return_value = {}
-        session_client.fetch_sessions.return_value = SessionActivity({})
-        session_client.snapshot_keys.return_value = 0
-        session_client.archive_sessions.return_value = 0
+        session_client.delete_sessions.return_value = 0
 
         github_client = MockGitHub.return_value
         github_client.fetch_activity.return_value = GitHubActivity({})
@@ -177,8 +172,8 @@ class TestRun:
 
         run(source=None)
 
-        session_client.scan_entry_dates.assert_called_once()
-        session_client.archive_sessions.assert_called_once()
+        store.scan_backfill_dates.assert_called_once()
+        store.fetch_sessions.assert_called_once_with("2026-03-28")
         slack_client = MockSlack.return_value
         slack_client.notify_metrics.assert_called_once()
         elapsed, peak_mb, limit_mb = slack_client.notify_metrics.call_args[0]
@@ -204,13 +199,13 @@ class TestRun:
         mock_date_range.return_value = (since, until)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
 
-        MockStore.return_value.ingest.return_value = 0
+        store = MockStore.return_value
+        store.ingest.return_value = []
+        store.scan_backfill_dates.return_value = []
+        store.fetch_sessions.return_value = SessionActivity({})
 
         session_client = MockSession.return_value
-        session_client.scan_entry_dates.return_value = {}
-        session_client.fetch_sessions.return_value = SessionActivity({})
-        session_client.snapshot_keys.return_value = 0
-        session_client.archive_sessions.return_value = 0
+        session_client.delete_sessions.return_value = 0
 
         github_client = MockGitHub.return_value
         github_client.fetch_activity.return_value = GitHubActivity({})
@@ -244,16 +239,15 @@ class TestRun:
         mock_date_range.return_value = (since, until)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
 
-        MockStore.return_value.ingest.return_value = 0
+        store = MockStore.return_value
+        store.ingest.return_value = []
+        store.scan_backfill_dates.return_value = [
+            date(2026, 3, 26), date(2026, 3, 27),
+        ]
+        store.fetch_sessions.return_value = SessionActivity({})
 
         session_client = MockSession.return_value
-        # Two past dates detected from session logs
-        session_client.scan_entry_dates.return_value = {
-            "key1": {date(2026, 3, 26), date(2026, 3, 27)},
-        }
-        session_client.fetch_sessions.return_value = SessionActivity({})
-        session_client.snapshot_keys.return_value = 0
-        session_client.archive_sessions.return_value = 2
+        session_client.delete_sessions.return_value = 0
 
         github_client = MockGitHub.return_value
         github_client.fetch_activity.return_value = GitHubActivity({})
@@ -264,7 +258,7 @@ class TestRun:
         run(source=None)
 
         # 2 backfill dates + 1 primary = 3 calls
-        assert session_client.fetch_sessions.call_count == 3
+        assert store.fetch_sessions.call_count == 3
 
     @patch("report.pipeline.get_target_date_range")
     @patch("report.pipeline.require_env")
@@ -283,19 +277,17 @@ class TestRun:
         mock_date_range.return_value = (since, until)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
 
-        MockStore.return_value.ingest.return_value = 0
+        store = MockStore.return_value
+        store.ingest.return_value = []
+        # 5 past dates, but only MAX_BACKFILL most recent should be processed
+        store.scan_backfill_dates.return_value = [
+            date(2026, 3, 23), date(2026, 3, 24), date(2026, 3, 25),
+            date(2026, 3, 26), date(2026, 3, 27),
+        ]
+        store.fetch_sessions.return_value = SessionActivity({})
 
         session_client = MockSession.return_value
-        # 5 past dates, but only MAX_BACKFILL most recent should be processed
-        session_client.scan_entry_dates.return_value = {
-            "key1": {
-                date(2026, 3, 23), date(2026, 3, 24), date(2026, 3, 25),
-                date(2026, 3, 26), date(2026, 3, 27),
-            },
-        }
-        session_client.fetch_sessions.return_value = SessionActivity({})
-        session_client.snapshot_keys.return_value = 0
-        session_client.archive_sessions.return_value = 0
+        session_client.delete_sessions.return_value = 0
 
         github_client = MockGitHub.return_value
         github_client.fetch_activity.return_value = GitHubActivity({})
@@ -306,7 +298,7 @@ class TestRun:
         run(source=None)
 
         # MAX_BACKFILL + 1 primary
-        assert session_client.fetch_sessions.call_count == MAX_BACKFILL + 1
+        assert store.fetch_sessions.call_count == MAX_BACKFILL + 1
 
     @patch("report.pipeline.get_target_date_range")
     @patch("report.pipeline.require_env")
@@ -316,7 +308,7 @@ class TestRun:
     @patch("report.pipeline.GitHubClient")
     @patch("report.pipeline.NotionClient")
     @patch("report.pipeline.SummaryClient")
-    def test_rollback_and_notify_on_failure(
+    def test_notify_on_primary_failure(
         self, MockSummary, MockNotion, MockGitHub, MockSession,
         MockStore, MockSlack, mock_require_env, mock_date_range,
     ):
@@ -325,12 +317,13 @@ class TestRun:
         mock_date_range.return_value = (since, until)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
 
-        MockStore.return_value.ingest.return_value = 0
+        store = MockStore.return_value
+        store.ingest.return_value = []
+        store.scan_backfill_dates.return_value = []
+        store.fetch_sessions.side_effect = RuntimeError("DynamoDB error")
 
         session_client = MockSession.return_value
-        session_client.scan_entry_dates.return_value = {}
-        session_client.fetch_sessions.side_effect = RuntimeError("S3 error")
-        session_client.snapshot_keys.return_value = 0
+        session_client.delete_sessions.return_value = 0
 
         github_client = MockGitHub.return_value
 
@@ -339,13 +332,10 @@ class TestRun:
 
         slack_client = MockSlack.return_value
 
-        with pytest.raises(RuntimeError, match="S3 error"):
+        with pytest.raises(RuntimeError, match="DynamoDB error"):
             run(source=None)
 
-        session_client.rollback_keys.assert_called_once_with(0)
         slack_client.notify_error.assert_called_once()
-        # Should not archive on failure
-        session_client.archive_sessions.assert_not_called()
         # Metrics should still be sent on failure (finally block)
         slack_client.notify_metrics.assert_called_once()
         slack_client.flush.assert_called_once()
@@ -367,26 +357,23 @@ class TestRun:
         mock_date_range.return_value = (since, until)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
 
-        MockStore.return_value.ingest.return_value = 0
-
-        session_client = MockSession.return_value
-        session_client.scan_entry_dates.return_value = {
-            "key1": {date(2026, 3, 27)},
-        }
+        store = MockStore.return_value
+        store.ingest.return_value = []
+        store.scan_backfill_dates.return_value = [date(2026, 3, 27)]
 
         call_count = 0
 
-        def fetch_sessions_side_effect(s, u):
+        def fetch_sessions_side_effect(date_str):
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                # Backfill date fails
                 raise RuntimeError("backfill error")
             return SessionActivity({})
 
-        session_client.fetch_sessions.side_effect = fetch_sessions_side_effect
-        session_client.snapshot_keys.return_value = 0
-        session_client.archive_sessions.return_value = 0
+        store.fetch_sessions.side_effect = fetch_sessions_side_effect
+
+        session_client = MockSession.return_value
+        session_client.delete_sessions.return_value = 0
 
         github_client = MockGitHub.return_value
         github_client.fetch_activity.return_value = GitHubActivity({})
@@ -399,11 +386,10 @@ class TestRun:
         run(source=None)
 
         # Backfill failure notified but primary still processed
-        assert session_client.fetch_sessions.call_count == 2
+        assert store.fetch_sessions.call_count == 2
         slack_client.notify_error.assert_called_once()
         backfill_since = slack_client.notify_error.call_args[0][0]
         assert backfill_since.date() == date(2026, 3, 27)
-        session_client.archive_sessions.assert_called_once()
 
     @patch("report.pipeline.get_target_date_range")
     @patch("report.pipeline.require_env")
@@ -422,15 +408,12 @@ class TestRun:
         mock_date_range.return_value = (since, until)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
 
-        # DynamoDB ingestion fails
         store = MockStore.return_value
         store.ingest.side_effect = RuntimeError("DynamoDB error")
+        store.scan_backfill_dates.return_value = []
+        store.fetch_sessions.return_value = SessionActivity({})
 
         session_client = MockSession.return_value
-        session_client.scan_entry_dates.return_value = {}
-        session_client.fetch_sessions.return_value = SessionActivity({})
-        session_client.snapshot_keys.return_value = 0
-        session_client.archive_sessions.return_value = 0
 
         github_client = MockGitHub.return_value
         github_client.fetch_activity.return_value = GitHubActivity({})
@@ -444,5 +427,76 @@ class TestRun:
 
         # Ingestion error notified but pipeline continues
         slack_client.notify_error.assert_called_once()
-        session_client.scan_entry_dates.assert_called_once()
-        session_client.archive_sessions.assert_called_once()
+        store.scan_backfill_dates.assert_called_once()
+
+    @patch("report.pipeline.get_target_date_range")
+    @patch("report.pipeline.require_env")
+    @patch("report.pipeline.SlackClient")
+    @patch("report.pipeline.SessionStore")
+    @patch("report.pipeline.SessionClient")
+    @patch("report.pipeline.GitHubClient")
+    @patch("report.pipeline.NotionClient")
+    @patch("report.pipeline.SummaryClient")
+    def test_marks_reported_after_success(
+        self, MockSummary, MockNotion, MockGitHub, MockSession,
+        MockStore, MockSlack, mock_require_env, mock_date_range,
+    ):
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+        mock_date_range.return_value = (since, until)
+        mock_require_env.side_effect = lambda k: f"fake-{k}"
+
+        store = MockStore.return_value
+        store.ingest.return_value = []
+        store.scan_backfill_dates.return_value = []
+        store.fetch_sessions.return_value = SessionActivity({})
+
+        session_client = MockSession.return_value
+        session_client.delete_sessions.return_value = 0
+
+        github_client = MockGitHub.return_value
+        github_client.fetch_activity.return_value = GitHubActivity({})
+
+        notion_client = MockNotion.return_value
+        notion_client.fetch_allowlists.return_value = ([], [])
+
+        run(source=None)
+
+        store.mark_reported.assert_called_once_with("2026-03-28")
+
+    @patch("report.pipeline.get_target_date_range")
+    @patch("report.pipeline.require_env")
+    @patch("report.pipeline.SlackClient")
+    @patch("report.pipeline.SessionStore")
+    @patch("report.pipeline.SessionClient")
+    @patch("report.pipeline.GitHubClient")
+    @patch("report.pipeline.NotionClient")
+    @patch("report.pipeline.SummaryClient")
+    def test_deletes_s3_after_ingest(
+        self, MockSummary, MockNotion, MockGitHub, MockSession,
+        MockStore, MockSlack, mock_require_env, mock_date_range,
+    ):
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+        mock_date_range.return_value = (since, until)
+        mock_require_env.side_effect = lambda k: f"fake-{k}"
+
+        store = MockStore.return_value
+        store.ingest.return_value = ["claude-sessions/proj/s1.jsonl"]
+        store.scan_backfill_dates.return_value = []
+        store.fetch_sessions.return_value = SessionActivity({})
+
+        session_client = MockSession.return_value
+        session_client.delete_sessions.return_value = 1
+
+        github_client = MockGitHub.return_value
+        github_client.fetch_activity.return_value = GitHubActivity({})
+
+        notion_client = MockNotion.return_value
+        notion_client.fetch_allowlists.return_value = ([], [])
+
+        run(source=None)
+
+        session_client.delete_sessions.assert_called_once_with(
+            ["claude-sessions/proj/s1.jsonl"],
+        )

@@ -1,19 +1,20 @@
-"""DynamoDB session store for ingesting parsed session data."""
+"""DynamoDB session store for session metadata."""
 
 import json
 import logging
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import boto3
+from boto3.dynamodb.conditions import Key
 
-from . import JST
+from . import JST, SessionActivity, SessionInfo
 
 logger = logging.getLogger(__name__)
 
 
 class SessionStore:
-    """Client for writing session metadata to DynamoDB."""
+    """Client for reading and writing session metadata in DynamoDB."""
 
     def __init__(self, table_name: str) -> None:
         """Initialize the store with a DynamoDB table name.
@@ -23,7 +24,7 @@ class SessionStore:
         """
         self.table = boto3.resource("dynamodb").Table(table_name)
 
-    def ingest(self, session_client) -> int:
+    def ingest(self, session_client) -> list[str]:
         """Parse all JSONL files and write session items to DynamoDB.
 
         Downloads every unarchived JSONL from S3, groups entries by
@@ -34,12 +35,13 @@ class SessionStore:
             session_client: SessionClient instance for S3 access
 
         Returns:
-            The number of items written
+            S3 keys that were processed
         """
-        items = self._build_items(session_client)
-        return self._write_items(items)
+        items, keys = self._build_items(session_client)
+        self._write_items(items)
+        return keys
 
-    def _build_items(self, session_client) -> list[dict]:
+    def _build_items(self, session_client) -> tuple[list[dict], list[str]]:
         """Parse JSONL files and build DynamoDB items.
 
         Groups all entries by (JST date, repo, session_id) without
@@ -50,7 +52,7 @@ class SessionStore:
             session_client: SessionClient instance for S3 access
 
         Returns:
-            A list of DynamoDB item dicts ready for batch writing
+            A tuple of (DynamoDB items, S3 keys processed)
         """
         # (date, repo, session_id) -> accumulated entry data
         groups: dict[tuple[str, str, str], dict] = defaultdict(
@@ -63,6 +65,7 @@ class SessionStore:
         )
 
         repo_cache: dict[str, str | None] = {}
+        processed_keys: list[str] = []
 
         for obj in session_client.list_session_objects():
             key = obj["Key"]
@@ -75,6 +78,7 @@ class SessionStore:
             repo = repo_cache[project]
             if repo is None:
                 continue
+            processed_keys.append(key)
 
             resp = session_client.s3.get_object(
                 Bucket=session_client.bucket, Key=key,
@@ -130,18 +134,130 @@ class SessionStore:
                 "updated_at": now,
             })
 
-        return items
+        return items, processed_keys
 
-    def _write_items(self, items: list[dict]) -> int:
+    def _write_items(self, items: list[dict]) -> None:
         """Write items to DynamoDB using batch writer.
 
         Args:
             items: List of DynamoDB item dicts
-
-        Returns:
-            The number of items written
         """
         with self.table.batch_writer() as batch:
             for item in items:
                 batch.put_item(Item=item)
-        return len(items)
+
+    def fetch_sessions(self, date_str: str) -> SessionActivity:
+        """Query sessions for a specific date from DynamoDB.
+
+        Args:
+            date_str: JST date string (YYYY-MM-DD)
+
+        Returns:
+            A SessionActivity instance keyed by repository name
+        """
+        items = []
+        response = self.table.query(
+            KeyConditionExpression=Key("date").eq(date_str),
+        )
+        items.extend(response["Items"])
+
+        while "LastEvaluatedKey" in response:
+            response = self.table.query(
+                KeyConditionExpression=Key("date").eq(date_str),
+                ExclusiveStartKey=response["LastEvaluatedKey"],
+            )
+            items.extend(response["Items"])
+
+        data: dict[str, list[SessionInfo]] = {}
+        for item in items:
+            repo = item["repo"]
+            session_id = item["repo#session_id"].split("#", 1)[1]
+            session_info: SessionInfo = {
+                "session_id": session_id,
+                "project": item["project"],
+                "start_time": item["start_time"],
+                "end_time": item["end_time"],
+                "user_messages": item["user_messages"],
+                "tools_used": item["tools_used"],
+            }
+            data.setdefault(repo, []).append(session_info)
+
+        for sessions in data.values():
+            sessions.sort(key=lambda s: s["start_time"])
+
+        return SessionActivity(data)
+
+    def scan_backfill_dates(self, primary_date: date) -> list[date]:
+        """Scan DynamoDB for past dates needing report generation.
+
+        Finds dates where reported_at is not set (new sessions) or
+        updated_at > reported_at (updated sessions after reporting).
+
+        Args:
+            primary_date: The current primary date to exclude
+
+        Returns:
+            Sorted list of past dates needing (re-)generation
+        """
+        # Attr-to-attr comparison requires raw expression string
+        scan_kwargs = {
+            "FilterExpression": "attribute_not_exists(reported_at) OR updated_at > reported_at",
+            "ProjectionExpression": "#d",
+            "ExpressionAttributeNames": {"#d": "date"},
+        }
+
+        dates: set[date] = set()
+        response = self.table.scan(**scan_kwargs)
+        for item in response["Items"]:
+            dates.add(date.fromisoformat(item["date"]))
+
+        while "LastEvaluatedKey" in response:
+            response = self.table.scan(
+                **scan_kwargs,
+                ExclusiveStartKey=response["LastEvaluatedKey"],
+            )
+            for item in response["Items"]:
+                dates.add(date.fromisoformat(item["date"]))
+
+        dates.discard(primary_date)
+        return sorted(dates)
+
+    def mark_reported(self, date_str: str) -> None:
+        """Set reported_at on all items for the given date.
+
+        Args:
+            date_str: JST date string (YYYY-MM-DD)
+        """
+        now = datetime.now(timezone.utc).isoformat()
+
+        response = self.table.query(
+            KeyConditionExpression=Key("date").eq(date_str),
+            ProjectionExpression="#d, #sk",
+            ExpressionAttributeNames={
+                "#d": "date",
+                "#sk": "repo#session_id",
+            },
+        )
+        items = response["Items"]
+
+        while "LastEvaluatedKey" in response:
+            response = self.table.query(
+                KeyConditionExpression=Key("date").eq(date_str),
+                ProjectionExpression="#d, #sk",
+                ExpressionAttributeNames={
+                    "#d": "date",
+                    "#sk": "repo#session_id",
+                },
+                ExclusiveStartKey=response["LastEvaluatedKey"],
+            )
+            items.extend(response["Items"])
+
+        for item in items:
+            self.table.update_item(
+                Key={
+                    "date": item["date"],
+                    "repo#session_id": item["repo#session_id"],
+                },
+                UpdateExpression="SET reported_at = :ts",
+                ExpressionAttributeValues={":ts": now},
+            )

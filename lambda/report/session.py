@@ -1,19 +1,15 @@
-"""Claude Code session log client."""
+"""S3 client for Claude Code session JSONL files."""
 
-import json
 import logging
-from datetime import date, datetime
 from typing import Any
 
 import boto3
-
-from . import JST, SessionActivity, SessionInfo
 
 logger = logging.getLogger(__name__)
 
 
 class SessionClient:
-    """Client for reading and formatting Claude Code session logs from S3."""
+    """Client for managing Claude Code session JSONL files on S3."""
 
     def __init__(self, bucket: str) -> None:
         """Initialize the client with an S3 bucket name.
@@ -23,19 +19,6 @@ class SessionClient:
         """
         self.s3 = boto3.client("s3")
         self.bucket = bucket
-        self._fetched_keys: list[str] = []
-
-    def snapshot_keys(self) -> int:
-        """Return the current number of fetched keys for rollback."""
-        return len(self._fetched_keys)
-
-    def rollback_keys(self, snapshot: int) -> None:
-        """Discard fetched keys added after the given snapshot.
-
-        Args:
-            snapshot: Value returned by a prior snapshot_keys() call
-        """
-        del self._fetched_keys[snapshot:]
 
     def list_session_objects(self) -> list[dict[str, Any]]:
         """List all unarchived JSONL objects in claude-sessions/.
@@ -54,115 +37,6 @@ class SessionClient:
                 objects.append(obj)
 
         return objects
-
-    def scan_entry_dates(self) -> dict[str, set[date]]:
-        """Scan all unarchived JSONL files and return entry dates per key.
-
-        Downloads each file and extracts timestamps to determine which
-        JST dates have entries. Used to detect backfill targets.
-
-        Returns:
-            Mapping of S3 key to set of JST dates with entries
-        """
-        result: dict[str, set[date]] = {}
-
-        for obj in self.list_session_objects():
-            key = obj["Key"]
-            resp = self.s3.get_object(Bucket=self.bucket, Key=key)
-            body = resp["Body"].read().decode("utf-8")
-            dates: set[date] = set()
-
-            for line in body.splitlines():
-                if not line.strip():
-                    continue
-                try:
-                    entry = json.loads(line)
-                except json.JSONDecodeError:
-                    logger.warning("Skipping malformed line in %s", key)
-                    continue
-                timestamp = entry.get("timestamp")
-                if not timestamp:
-                    continue
-                entry_dt = datetime.fromisoformat(timestamp).astimezone(JST)
-                dates.add(entry_dt.date())
-
-            if dates:
-                result[key] = dates
-
-        return result
-
-    def parse_session(
-        self, key: str, since: datetime, until: datetime
-    ) -> SessionInfo | None:
-        """Download and parse a single JSONL session file from S3.
-
-        Filters entries by timestamp to include only those within the
-        target period. Entries without a timestamp are skipped.
-
-        Args:
-            key: S3 object key (e.g. claude-sessions/project/session.jsonl)
-            since: Start of the target period (inclusive)
-            until: End of the target period (exclusive)
-
-        Returns:
-            A SessionInfo dict, or None if the session has no meaningful
-            content within the target period
-        """
-        resp = self.s3.get_object(Bucket=self.bucket, Key=key)
-        body = resp["Body"].read().decode("utf-8")
-
-        # Extract project name and session ID from key
-        # Format: claude-sessions/{project-name}/{session-id}.jsonl
-        parts = key.split("/")
-        project = parts[1] if len(parts) >= 3 else "unknown"
-        session_id = parts[-1].removesuffix(".jsonl")
-
-        user_messages: list[str] = []
-        tools_used: set[str] = set()
-        timestamps: list[str] = []
-
-        for line in body.splitlines():
-            if not line.strip():
-                continue
-            try:
-                entry = json.loads(line)
-            except json.JSONDecodeError:
-                logger.warning("Skipping malformed line in %s", key)
-                continue
-            entry_type = entry.get("type")
-            timestamp = entry.get("timestamp")
-
-            # Filter entries by timestamp
-            if not timestamp:
-                continue
-            entry_dt = datetime.fromisoformat(timestamp)
-            if not (since <= entry_dt < until):
-                continue
-
-            if entry_type == "user":
-                timestamps.append(timestamp)
-                content = entry.get("message", {}).get("content", "")
-                if isinstance(content, str) and content.strip():
-                    user_messages.append(content.strip())
-
-            elif entry_type == "assistant":
-                timestamps.append(timestamp)
-                for block in entry.get("message", {}).get("content", []):
-                    if block.get("type") == "tool_use":
-                        tools_used.add(block["name"])
-
-        if not user_messages:
-            return None
-
-        timestamps.sort()
-        return {
-            "session_id": session_id,
-            "project": project,
-            "start_time": timestamps[0] if timestamps else "",
-            "end_time": timestamps[-1] if timestamps else "",
-            "user_messages": user_messages,
-            "tools_used": sorted(tools_used),
-        }
 
     def read_repo_name(self, project: str) -> str | None:
         """Read the repo name from .ayumy_repo metadata file in S3.
@@ -184,71 +58,21 @@ class SessionClient:
         except self.s3.exceptions.NoSuchKey:
             return None
 
-    def fetch_sessions(
-        self, since: datetime, until: datetime,
-    ) -> SessionActivity:
-        """Fetch all session logs for the target date range.
+    def delete_sessions(self, keys: list[str]) -> int:
+        """Delete JSONL files from S3.
 
-        Resolves project directory names to repository names using
-        .ayumy_repo metadata files in S3.
+        Called after successful DynamoDB ingestion to remove
+        processed files. If ingestion fails, files are preserved
+        for retry on the next execution.
 
         Args:
-            since: Start of the target period (inclusive)
-            until: End of the target period (exclusive)
+            keys: S3 object keys to delete
 
         Returns:
-            A SessionActivity instance. Repos with no sessions are omitted
+            The number of files deleted
         """
-        data: dict[str, list[SessionInfo]] = {}
-        # Cache .ayumy_repo lookups per project to avoid repeated S3 reads
-        repo_name_cache: dict[str, str | None] = {}
-
-        for obj in self.list_session_objects():
-            session = self.parse_session(obj["Key"], since, until)
-            if session is None:
-                continue
-
-            project = session["project"]
-            if project not in repo_name_cache:
-                repo_name_cache[project] = self.read_repo_name(project)
-            repo_name = repo_name_cache[project]
-            if repo_name is None:
-                continue
-
-            self._fetched_keys.append(obj["Key"])
-            if repo_name not in data:
-                data[repo_name] = []
-            data[repo_name].append(session)
-
-        # Sort sessions by start_time within each project
-        for sessions in data.values():
-            sessions.sort(key=lambda s: s["start_time"])
-
-        return SessionActivity(data)
-
-    def archive_sessions(self) -> int:
-        """Move fetched JSONL files from claude-sessions/ to processed/.
-
-        Archives the deduplicated union of objects accumulated across all
-        preceding fetch_sessions() calls. Copies each object to the
-        processed/ prefix (preserving project subdirectory structure)
-        and then deletes the original.
-
-        Returns:
-            The number of session files archived
-        """
-        archived = 0
-
-        for src_key in dict.fromkeys(self._fetched_keys):
-            # claude-sessions/{project}/{session}.jsonl -> processed/{project}/{session}.jsonl
-            dst_key = "processed/" + src_key.removeprefix("claude-sessions/")
-
-            self.s3.copy_object(
-                Bucket=self.bucket,
-                CopySource={"Bucket": self.bucket, "Key": src_key},
-                Key=dst_key,
-            )
-            self.s3.delete_object(Bucket=self.bucket, Key=src_key)
-            archived += 1
-
-        return archived
+        deleted = 0
+        for key in keys:
+            self.s3.delete_object(Bucket=self.bucket, Key=key)
+            deleted += 1
+        return deleted

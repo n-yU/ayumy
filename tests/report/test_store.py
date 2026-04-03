@@ -1,7 +1,8 @@
 """Tests for SessionStore."""
 
 import json
-from unittest.mock import MagicMock, patch
+from datetime import date
+from unittest.mock import MagicMock, call, patch
 
 from report.store import SessionStore
 
@@ -56,7 +57,7 @@ class TestBuildItems:
         )
         client.s3.get_object.return_value = _s3_body(lines)
 
-        items = store._build_items(client)
+        items, keys = store._build_items(client)
 
         assert len(items) == 2
         dates = {item["date"] for item in items}
@@ -66,6 +67,8 @@ class TestBuildItems:
             assert item["repo#session_id"] == "my-repo#s1"
             assert item["repo"] == "my-repo"
             assert item["project"] == "proj"
+
+        assert keys == ["claude-sessions/proj/s1.jsonl"]
 
     def test_aggregates_messages_and_tools(self):
         store = _make_store()
@@ -105,7 +108,7 @@ class TestBuildItems:
         )
         client.s3.get_object.return_value = _s3_body(lines)
 
-        items = store._build_items(client)
+        items, keys = store._build_items(client)
 
         assert len(items) == 1
         item = items[0]
@@ -122,9 +125,10 @@ class TestBuildItems:
         ]
         client.read_repo_name.return_value = None
 
-        items = store._build_items(client)
+        items, keys = store._build_items(client)
 
         assert items == []
+        assert keys == []
         client.s3.get_object.assert_not_called()
 
     def test_skips_no_user_messages(self):
@@ -144,9 +148,10 @@ class TestBuildItems:
         )
         client.s3.get_object.return_value = _s3_body(lines)
 
-        items = store._build_items(client)
+        items, keys = store._build_items(client)
 
         assert items == []
+        assert keys == ["claude-sessions/proj/s1.jsonl"]
 
 
 class TestWriteItems:
@@ -165,14 +170,13 @@ class TestWriteItems:
             {"date": "2026-03-29", "repo#session_id": "repo#s2"},
         ]
 
-        count = store._write_items(items)
+        store._write_items(items)
 
-        assert count == 2
         assert batch_writer.put_item.call_count == 2
 
 
 class TestIngest:
-    def test_returns_count(self):
+    def test_returns_processed_keys(self):
         store = _make_store()
         client = _make_session_client()
         client.list_session_objects.return_value = [
@@ -197,7 +201,181 @@ class TestIngest:
             return_value=False,
         )
 
-        count = store.ingest(client)
+        keys = store.ingest(client)
 
-        assert count == 1
+        assert keys == ["claude-sessions/proj/s1.jsonl"]
         batch_writer.put_item.assert_called_once()
+
+
+class TestFetchSessions:
+    def test_returns_session_activity(self):
+        store = _make_store()
+        store.table.query.return_value = {
+            "Items": [
+                {
+                    "date": "2026-03-28",
+                    "repo#session_id": "my-repo#s1",
+                    "repo": "my-repo",
+                    "project": "proj",
+                    "start_time": "2026-03-28T10:00:00+09:00",
+                    "end_time": "2026-03-28T11:00:00+09:00",
+                    "user_messages": ["Fix bug"],
+                    "tools_used": ["Edit", "Read"],
+                },
+            ],
+        }
+
+        activity = store.fetch_sessions("2026-03-28")
+
+        assert bool(activity)
+        assert "my-repo" in activity
+        sessions = activity.get("my-repo")
+        assert len(sessions) == 1
+        assert sessions[0]["session_id"] == "s1"
+        assert sessions[0]["user_messages"] == ["Fix bug"]
+
+    def test_groups_by_repo(self):
+        store = _make_store()
+        store.table.query.return_value = {
+            "Items": [
+                {
+                    "date": "2026-03-28",
+                    "repo#session_id": "repo-a#s1",
+                    "repo": "repo-a",
+                    "project": "proj-a",
+                    "start_time": "2026-03-28T10:00:00+09:00",
+                    "end_time": "2026-03-28T11:00:00+09:00",
+                    "user_messages": ["msg1"],
+                    "tools_used": [],
+                },
+                {
+                    "date": "2026-03-28",
+                    "repo#session_id": "repo-b#s2",
+                    "repo": "repo-b",
+                    "project": "proj-b",
+                    "start_time": "2026-03-28T12:00:00+09:00",
+                    "end_time": "2026-03-28T13:00:00+09:00",
+                    "user_messages": ["msg2"],
+                    "tools_used": [],
+                },
+            ],
+        }
+
+        activity = store.fetch_sessions("2026-03-28")
+
+        assert set(activity.keys()) == {"repo-a", "repo-b"}
+
+    def test_returns_empty_for_no_data(self):
+        store = _make_store()
+        store.table.query.return_value = {"Items": []}
+
+        activity = store.fetch_sessions("2026-03-28")
+
+        assert not activity
+
+    def test_sorts_sessions_by_start_time(self):
+        store = _make_store()
+        store.table.query.return_value = {
+            "Items": [
+                {
+                    "date": "2026-03-28",
+                    "repo#session_id": "repo#s2",
+                    "repo": "repo",
+                    "project": "proj",
+                    "start_time": "2026-03-28T14:00:00+09:00",
+                    "end_time": "2026-03-28T15:00:00+09:00",
+                    "user_messages": ["later"],
+                    "tools_used": [],
+                },
+                {
+                    "date": "2026-03-28",
+                    "repo#session_id": "repo#s1",
+                    "repo": "repo",
+                    "project": "proj",
+                    "start_time": "2026-03-28T10:00:00+09:00",
+                    "end_time": "2026-03-28T11:00:00+09:00",
+                    "user_messages": ["earlier"],
+                    "tools_used": [],
+                },
+            ],
+        }
+
+        activity = store.fetch_sessions("2026-03-28")
+
+        sessions = activity.get("repo")
+        assert sessions[0]["user_messages"] == ["earlier"]
+        assert sessions[1]["user_messages"] == ["later"]
+
+
+class TestScanBackfillDates:
+    def test_returns_unreported_dates(self):
+        store = _make_store()
+        store.table.scan.return_value = {
+            "Items": [
+                {"date": "2026-03-26"},
+                {"date": "2026-03-27"},
+            ],
+        }
+
+        dates = store.scan_backfill_dates(date(2026, 3, 28))
+
+        assert dates == [date(2026, 3, 26), date(2026, 3, 27)]
+
+    def test_excludes_primary_date(self):
+        store = _make_store()
+        store.table.scan.return_value = {
+            "Items": [
+                {"date": "2026-03-28"},
+            ],
+        }
+
+        dates = store.scan_backfill_dates(date(2026, 3, 28))
+
+        assert dates == []
+
+    def test_deduplicates_dates(self):
+        store = _make_store()
+        store.table.scan.return_value = {
+            "Items": [
+                {"date": "2026-03-27"},
+                {"date": "2026-03-27"},
+            ],
+        }
+
+        dates = store.scan_backfill_dates(date(2026, 3, 28))
+
+        assert dates == [date(2026, 3, 27)]
+
+    def test_returns_empty_when_all_reported(self):
+        store = _make_store()
+        store.table.scan.return_value = {"Items": []}
+
+        dates = store.scan_backfill_dates(date(2026, 3, 28))
+
+        assert dates == []
+
+
+class TestMarkReported:
+    def test_updates_all_items_for_date(self):
+        store = _make_store()
+        store.table.query.return_value = {
+            "Items": [
+                {"date": "2026-03-28", "repo#session_id": "repo#s1"},
+                {"date": "2026-03-28", "repo#session_id": "repo#s2"},
+            ],
+        }
+
+        store.mark_reported("2026-03-28")
+
+        assert store.table.update_item.call_count == 2
+        for c in store.table.update_item.call_args_list:
+            assert c.kwargs["UpdateExpression"] == "SET reported_at = :ts"
+            assert ":ts" in c.kwargs["ExpressionAttributeValues"]
+
+    def test_no_op_for_empty_date(self):
+        store = _make_store()
+        store.table.query.return_value = {"Items": []}
+
+        store.mark_reported("2026-03-28")
+
+        store.table.update_item.assert_not_called()

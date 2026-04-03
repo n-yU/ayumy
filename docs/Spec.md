@@ -23,11 +23,10 @@ GitHub 上の日次開発アクティビティ（Commit, Pull Request, Issue）�
 [AWS Lambda]                      ▼
   EventBridge (毎日 JST 00:00) → Lambda (report)
   ayumy sync --report ──────────→ Lambda (report)
-    ├─→ JSONL パース → DynamoDB にセッション書き込み
-    ├─→ JSONL + GitHub API → Claude API で要約生成
+    ├─→ JSONL パース → DynamoDB にセッション書き込み → S3 から JSONL 削除
+    ├─→ DynamoDB + GitHub API → Claude API で要約生成
     ├─→ Notion API で記録
-    ├─→ Slack Webhook で通知
-    └─→ 処理済み JSONL を processed/ に移動
+    └─→ Slack Webhook で通知
 
 [S3]
   s3://{bucket}/
@@ -88,11 +87,7 @@ ayumy/
 
 ```
 s3://{bucket}/
-├── claude-sessions/                  # クライアントマシンから転送された JSONL
-│   ├── {project-name}/
-│   │   └── {session-id}.jsonl
-│   └── ...
-└── processed/                        # 処理済み JSONL（無期限保持）
+└── claude-sessions/                  # クライアントマシンから転送された JSONL（DynamoDB 書き込み後に削除）
     ├── {project-name}/
     │   └── {session-id}.jsonl
     └── ...
@@ -217,11 +212,9 @@ Lambda event の `source` フィールドで判定する。`"manual"` なら手�
 | Issues | `GET /repos/{owner}/{repo}/issues` | `since`, `state=all`, PR を除外 | タイトル、番号、状態、作成者、ラベル |
 
 ### 5.2 Claude Code セッションログの読み取り
-1. S3 バケットの `claude-sessions/` プレフィックス以下の全 JSONL を走査する（アーカイブ済みファイルは `processed/` に移動済みのため対象外）
-2. 各 JSONL エントリの `timestamp`（ISO 8601 UTC）を `since` / `until` と比較し、対象期間内のメッセージのみを抽出する。タイムスタンプのないエントリはスキップする。日をまたぐセッションでは、対象期間外のメッセージが混入するのを防ぐ
-3. 対象期間外のエントリが未アーカイブファイルに含まれている場合、該当日のレポートを backfill として生成する（最大3日分）
-4. JSONL から抽出する項目: ユーザーのプロンプト、使用したツール、対象プロジェクト名
-5. プロジェクト名（S3 パス由来、例: `-Users-nyu-Documents-github-ayumy`）を GitHub activity の既知リポジトリ名と最長サフィックスマッチングで解決する。一致しない場合は元のプロジェクト名をそのまま使用する
+DynamoDB の `ayumy-sessions` テーブルから対象日付をパーティションキーとして Query し、セッションメタデータを取得する。結果をリポジトリ別にグルーピングし、各リポジトリ内のセッションを `start_time` 順にソートする。
+
+バックフィル検出は DynamoDB の Scan で行う。`reported_at` が未設定、または `updated_at > reported_at` のアイテムが存在する過去日付を対象とする（最大3日分）。セッションが更新された場合は `updated_at` が `reported_at` を超えるため、自動的に再生成対象となる
 
 ### 5.3 DynamoDB へのセッション書き込み
 レポート生成の前処理として、S3 上の未アーカイブ JSONL をパースし、セッションメタデータを DynamoDB に書き込む。日付フィルタなしで全エントリを処理し、JST 日付ごとにグルーピングする。
@@ -246,7 +239,13 @@ Lambda event の `source` フィールドで判定する。`"manual"` なら手�
 - 同一キー（PK + SK）のアイテムは上書きされる（冪等性を担保）
 - ユーザーメッセージがないグループはスキップする
 - リポジトリ名は `.ayumy_repo` メタデータファイルから解決する。メタデータがないプロジェクトはスキップする
-- 書き込み失敗時も既存のレポート生成フローは継続する（ベストエフォート）
+- 書き込み成功後、処理した JSONL を S3 から削除する。書き込み失敗時は S3 を削除せず、次回実行時に再試行する
+- 書き込み失敗時も DynamoDB に前回成功分のデータが残っているため、レポート生成フローは継続する
+
+レポート生成後の動作:
+
+- 対象日付の全アイテムの `reported_at` を現在時刻に更新する
+- これにより `scan_backfill_dates` が同じ日を再検出しなくなる
 
 ### 5.4 要約生成（Claude API）
 使用モデル: `claude-sonnet-4-20250514`
@@ -296,8 +295,8 @@ Notion への書き込み完了後、Slack Incoming Webhook で指定チャン�
 
 通知が失敗しても処理全体は正常終了とする（通知はベストエフォート）。
 
-### 5.6 処理済み JSONL のアーカイブ
-要約生成と Notion 書き込みが正常に完了した後、処理対象の JSONL ファイルを S3 上で `claude-sessions/` から `processed/` に移動（コピー＋削除）する。アーカイブ対象は `fetch_sessions` で取得したオブジェクトキーに限定し、処理中に到着した遅延ファイルが誤ってアーカイブされるのを防ぐ。移動先はプロジェクト名のサブディレクトリを維持する（例: `processed/{project-name}/{session-id}.jsonl`）。JSONL は無期限に保持し、削除しない。
+### 5.6 処理済み JSONL の削除
+DynamoDB への書き込みが正常に完了した後、処理した JSONL ファイルを S3 から削除する。削除対象は `ingest` で処理したオブジェクトキーに限定し、処理中に到着した遅延ファイルが誤って削除されるのを防ぐ。セッションデータは DynamoDB に永続化されているため、JSONL の保持は不要
 
 ## 6. Notion データベース仕様
 ### 6.1 データベースプロパティ
@@ -445,10 +444,9 @@ sam build && sam deploy
 | Secrets Manager | ~$0.40/月（シークレット4件） |
 
 ### 8.5 ストレージ管理
-- セッションログは S3 に保管し、クライアントマシンのディスクを消費しない
-- 処理済み JSONL は S3 上で `processed/` に移動して無期限保持（§5.5）。年間 1〜2 GB 程度
+- セッションログは S3 経由で DynamoDB に永続化し、クライアントマシンのディスクを消費しない
+- DynamoDB 書き込み後に S3 上の JSONL は削除されるため、S3 ストレージの増加は一時的
 - 実行ログは CloudWatch Logs に出力し、保持期間を設定して管理する
-- 必要に応じて S3 ライフサイクルポリシーで古いデータを Glacier 等に移行可能
 
 ## 9. 将来の拡張案
 - **クライアントマシン側の定期自動同期**: cron で `ayumy sync --all` を定期実行し、手動同期の手間を省く

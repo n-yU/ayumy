@@ -8,7 +8,7 @@
 2フェーズ構成（セッションログは S3 に保管、セッションメタデータは DynamoDB に集約、レポート生成は AWS Lambda で実行）:
 
 1. **フェーズ 1（post-commit hook / 手動同期）**: 各リポジトリでの commit を契機に、`~/.claude/projects/` から未同期の Claude Code セッションの JSONL を S3 バケットにアップロードする。`ayumy sync --report` で S3 転送後に Lambda を呼び出してレポート生成まで実行できる。
-2. **フェーズ 2（AWS Lambda）**: S3 上のセッションログをパースして DynamoDB に書き込んだ後、GitHub API によるアクティビティ取得を行い、Claude API で要約を生成して Notion に書き込み、Slack に通知する。処理済み JSONL は S3 上で `processed/` にアーカイブする。EventBridge Scheduler による日次の定期実行に加え、`ayumy sync --report` による手動実行にも対応する。
+2. **フェーズ 2（AWS Lambda）**: S3 上のセッションログをパースして DynamoDB に書き込み、S3 から JSONL を削除する。DynamoDB からセッションメタデータを読み取り、GitHub API によるアクティビティ取得を行い、Claude API で要約を生成して Notion に書き込み、Slack に通知する。EventBridge Scheduler による日次の定期実行に加え、`ayumy sync --report` による手動実行にも対応する。
 
 ## リポジトリ構成
 ```
