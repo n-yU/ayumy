@@ -14,6 +14,25 @@ Globals:
     Runtime: python3.12
 
 Resources:
+  # DynamoDB table for session metadata
+  SessionTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ayumy-sessions
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      AttributeDefinitions:
+        - AttributeName: date
+          AttributeType: S
+        - AttributeName: "repo#session_id"
+          AttributeType: S
+      KeySchema:
+        - AttributeName: date
+          KeyType: HASH
+        - AttributeName: "repo#session_id"
+          KeyType: RANGE
+
   # S3 bucket for session log storage
   SessionBucket:
     Type: AWS::S3::Bucket
@@ -39,10 +58,13 @@ Resources:
       Environment:
         Variables:
           AYUMY_S3_BUCKET: !Ref SessionBucket
+          AYUMY_DYNAMO_TABLE: !Ref SessionTable
           NOTION_DATABASE_ID: !Ref NotionDatabaseId
       Policies:
         - S3CrudPolicy:
             BucketName: !Ref SessionBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref SessionTable
         - AWSSecretsManagerGetSecretValuePolicy:
             SecretArn: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:ayumy/*"
       Events:
@@ -62,3 +84,6 @@ Outputs:
   SessionBucketName:
     Description: S3 bucket name (set as AYUMY_S3_BUCKET on client)
     Value: !Ref SessionBucket
+  SessionTableName:
+    Description: DynamoDB table name for session metadata
+    Value: !Ref SessionTable

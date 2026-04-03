@@ -147,18 +147,21 @@ class TestRun:
     @patch("report.pipeline.get_target_date_range")
     @patch("report.pipeline.require_env")
     @patch("report.pipeline.SlackClient")
+    @patch("report.pipeline.SessionStore")
     @patch("report.pipeline.SessionClient")
     @patch("report.pipeline.GitHubClient")
     @patch("report.pipeline.NotionClient")
     @patch("report.pipeline.SummaryClient")
     def test_processes_primary_date(
         self, MockSummary, MockNotion, MockGitHub, MockSession,
-        MockSlack, mock_require_env, mock_date_range,
+        MockStore, MockSlack, mock_require_env, mock_date_range,
     ):
         since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
         until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
         mock_date_range.return_value = (since, until)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
+
+        MockStore.return_value.ingest.return_value = 0
 
         session_client = MockSession.return_value
         session_client.scan_entry_dates.return_value = {}
@@ -187,18 +190,21 @@ class TestRun:
     @patch("report.pipeline.get_target_date_range")
     @patch("report.pipeline.require_env")
     @patch("report.pipeline.SlackClient")
+    @patch("report.pipeline.SessionStore")
     @patch("report.pipeline.SessionClient")
     @patch("report.pipeline.GitHubClient")
     @patch("report.pipeline.NotionClient")
     @patch("report.pipeline.SummaryClient")
     def test_passes_memory_limit_to_metrics(
         self, MockSummary, MockNotion, MockGitHub, MockSession,
-        MockSlack, mock_require_env, mock_date_range,
+        MockStore, MockSlack, mock_require_env, mock_date_range,
     ):
         since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
         until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
         mock_date_range.return_value = (since, until)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
+
+        MockStore.return_value.ingest.return_value = 0
 
         session_client = MockSession.return_value
         session_client.scan_entry_dates.return_value = {}
@@ -224,18 +230,21 @@ class TestRun:
     @patch("report.pipeline.get_target_date_range")
     @patch("report.pipeline.require_env")
     @patch("report.pipeline.SlackClient")
+    @patch("report.pipeline.SessionStore")
     @patch("report.pipeline.SessionClient")
     @patch("report.pipeline.GitHubClient")
     @patch("report.pipeline.NotionClient")
     @patch("report.pipeline.SummaryClient")
     def test_backfills_past_dates(
         self, MockSummary, MockNotion, MockGitHub, MockSession,
-        MockSlack, mock_require_env, mock_date_range,
+        MockStore, MockSlack, mock_require_env, mock_date_range,
     ):
         since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
         until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
         mock_date_range.return_value = (since, until)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
+
+        MockStore.return_value.ingest.return_value = 0
 
         session_client = MockSession.return_value
         # Two past dates detected from session logs
@@ -260,18 +269,21 @@ class TestRun:
     @patch("report.pipeline.get_target_date_range")
     @patch("report.pipeline.require_env")
     @patch("report.pipeline.SlackClient")
+    @patch("report.pipeline.SessionStore")
     @patch("report.pipeline.SessionClient")
     @patch("report.pipeline.GitHubClient")
     @patch("report.pipeline.NotionClient")
     @patch("report.pipeline.SummaryClient")
     def test_backfill_limited_to_max(
         self, MockSummary, MockNotion, MockGitHub, MockSession,
-        MockSlack, mock_require_env, mock_date_range,
+        MockStore, MockSlack, mock_require_env, mock_date_range,
     ):
         since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
         until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
         mock_date_range.return_value = (since, until)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
+
+        MockStore.return_value.ingest.return_value = 0
 
         session_client = MockSession.return_value
         # 5 past dates, but only MAX_BACKFILL most recent should be processed
@@ -299,18 +311,21 @@ class TestRun:
     @patch("report.pipeline.get_target_date_range")
     @patch("report.pipeline.require_env")
     @patch("report.pipeline.SlackClient")
+    @patch("report.pipeline.SessionStore")
     @patch("report.pipeline.SessionClient")
     @patch("report.pipeline.GitHubClient")
     @patch("report.pipeline.NotionClient")
     @patch("report.pipeline.SummaryClient")
     def test_rollback_and_notify_on_failure(
         self, MockSummary, MockNotion, MockGitHub, MockSession,
-        MockSlack, mock_require_env, mock_date_range,
+        MockStore, MockSlack, mock_require_env, mock_date_range,
     ):
         since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
         until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
         mock_date_range.return_value = (since, until)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
+
+        MockStore.return_value.ingest.return_value = 0
 
         session_client = MockSession.return_value
         session_client.scan_entry_dates.return_value = {}
@@ -338,18 +353,21 @@ class TestRun:
     @patch("report.pipeline.get_target_date_range")
     @patch("report.pipeline.require_env")
     @patch("report.pipeline.SlackClient")
+    @patch("report.pipeline.SessionStore")
     @patch("report.pipeline.SessionClient")
     @patch("report.pipeline.GitHubClient")
     @patch("report.pipeline.NotionClient")
     @patch("report.pipeline.SummaryClient")
     def test_backfill_failure_does_not_stop_primary(
         self, MockSummary, MockNotion, MockGitHub, MockSession,
-        MockSlack, mock_require_env, mock_date_range,
+        MockStore, MockSlack, mock_require_env, mock_date_range,
     ):
         since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
         until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
         mock_date_range.return_value = (since, until)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
+
+        MockStore.return_value.ingest.return_value = 0
 
         session_client = MockSession.return_value
         session_client.scan_entry_dates.return_value = {
@@ -385,4 +403,46 @@ class TestRun:
         slack_client.notify_error.assert_called_once()
         backfill_since = slack_client.notify_error.call_args[0][0]
         assert backfill_since.date() == date(2026, 3, 27)
+        session_client.archive_sessions.assert_called_once()
+
+    @patch("report.pipeline.get_target_date_range")
+    @patch("report.pipeline.require_env")
+    @patch("report.pipeline.SlackClient")
+    @patch("report.pipeline.SessionStore")
+    @patch("report.pipeline.SessionClient")
+    @patch("report.pipeline.GitHubClient")
+    @patch("report.pipeline.NotionClient")
+    @patch("report.pipeline.SummaryClient")
+    def test_continues_when_ingestion_fails(
+        self, MockSummary, MockNotion, MockGitHub, MockSession,
+        MockStore, MockSlack, mock_require_env, mock_date_range,
+    ):
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+        mock_date_range.return_value = (since, until)
+        mock_require_env.side_effect = lambda k: f"fake-{k}"
+
+        # DynamoDB ingestion fails
+        store = MockStore.return_value
+        store.ingest.side_effect = RuntimeError("DynamoDB error")
+
+        session_client = MockSession.return_value
+        session_client.scan_entry_dates.return_value = {}
+        session_client.fetch_sessions.return_value = SessionActivity({})
+        session_client.snapshot_keys.return_value = 0
+        session_client.archive_sessions.return_value = 0
+
+        github_client = MockGitHub.return_value
+        github_client.fetch_activity.return_value = GitHubActivity({})
+
+        notion_client = MockNotion.return_value
+        notion_client.fetch_allowlists.return_value = ([], [])
+
+        slack_client = MockSlack.return_value
+
+        run(source=None)
+
+        # Ingestion error notified but pipeline continues
+        slack_client.notify_error.assert_called_once()
+        session_client.scan_entry_dates.assert_called_once()
         session_client.archive_sessions.assert_called_once()

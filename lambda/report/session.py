@@ -164,7 +164,7 @@ class SessionClient:
             "tools_used": sorted(tools_used),
         }
 
-    def _read_repo_name(self, project: str) -> str | None:
+    def read_repo_name(self, project: str) -> str | None:
         """Read the repo name from .ayumy_repo metadata file in S3.
 
         Args:
@@ -210,7 +210,7 @@ class SessionClient:
 
             project = session["project"]
             if project not in repo_name_cache:
-                repo_name_cache[project] = self._read_repo_name(project)
+                repo_name_cache[project] = self.read_repo_name(project)
             repo_name = repo_name_cache[project]
             if repo_name is None:
                 continue

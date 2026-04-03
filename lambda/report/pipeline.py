@@ -11,6 +11,7 @@ from .github import GitHubClient
 from .notion import NotionClient
 from .session import SessionClient
 from .slack import SlackClient
+from .store import SessionStore
 from .summarizer import SummaryClient
 
 logger = logging.getLogger(__name__)
@@ -91,6 +92,15 @@ def run(source: str | None = None, memory_limit_mb: int | None = None) -> None:
 
     try:
         session_client = SessionClient(require_env("AYUMY_S3_BUCKET"))
+
+        # Ingest all sessions to DynamoDB (no date filtering)
+        try:
+            store = SessionStore(require_env("AYUMY_DYNAMO_TABLE"))
+            ingested = store.ingest(session_client)
+            logger.info("Ingested %d session item(s) to DynamoDB", ingested)
+        except Exception as e:
+            logger.exception("DynamoDB ingestion failed")
+            slack_client.notify_error(since, e)
 
         # Scan all unarchived files to detect backfill targets
         key_dates = session_client.scan_entry_dates()

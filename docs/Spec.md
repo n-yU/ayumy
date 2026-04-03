@@ -10,7 +10,7 @@ GitHub 上の日次開発アクティビティ（Commit, Pull Request, Issue）�
 
 ## 3. システム構成
 ### 3.1 アーキテクチャ
-本システムは2フェーズで構成される。セッションログは S3 バケットに保管し、レポート生成は AWS Lambda で実行する。
+本システムは2フェーズで構成される。セッションログは S3 バケットに保管し、レポート生成は AWS Lambda で実行する。セッションメタデータは DynamoDB に集約する。
 
 ```
 [クライアントマシン]
@@ -23,6 +23,7 @@ GitHub 上の日次開発アクティビティ（Commit, Pull Request, Issue）�
 [AWS Lambda]                      ▼
   EventBridge (毎日 JST 00:00) → Lambda (report)
   ayumy sync --report ──────────→ Lambda (report)
+    ├─→ JSONL パース → DynamoDB にセッション書き込み
     ├─→ JSONL + GitHub API → Claude API で要約生成
     ├─→ Notion API で記録
     ├─→ Slack Webhook で通知
@@ -31,6 +32,10 @@ GitHub 上の日次開発アクティビティ（Commit, Pull Request, Issue）�
 [S3]
   s3://{bucket}/
   └── claude-sessions/ に JSONL 蓄積
+
+[DynamoDB]
+  ayumy-sessions テーブル
+  └── セッションメタデータ（日付 × リポジトリ × セッション ID）
 ```
 
 ### 3.2 使用する外部サービス・API
@@ -41,6 +46,7 @@ GitHub 上の日次開発アクティビティ（Commit, Pull Request, Issue）�
 | Notion API | 作業記録の書き込み | Internal Integration Token |
 | Slack Incoming Webhook | 完了通知 | Webhook URL |
 | AWS S3 | セッションログの保管 | AWS 認証情報（IAM ユーザー / プロファイル） |
+| Amazon DynamoDB | セッションメタデータの集約 | IAM ロール |
 | AWS Lambda | レポート生成の実行環境 | IAM ロール |
 | Amazon EventBridge Scheduler | 日次の定期実行 | — |
 
@@ -65,6 +71,7 @@ ayumy/
 │   │   ├── notion.py                # Notion API 書き込み
 │   │   ├── session.py               # Claude Code セッションログ読み取り
 │   │   ├── slack.py                 # Slack 通知
+│   │   ├── store.py                 # DynamoDB セッション書き込み
 │   │   └── summarizer.py            # Claude API 要約生成
 │   ├── requirements.txt             # Lambda デプロイ用の依存パッケージ
 │   └── requirements-dev.txt         # ローカル開発用の依存パッケージ（boto3 を含む）
@@ -110,6 +117,23 @@ Claude Code は会話を `~/.claude/projects/` 以下にローカル保存して
 - 個別セッションは JSONL ファイル（`{session-id}.jsonl`）として保存
 - メタデータ（セッション ID、タイムスタンプ、ブランチ等）は JSONL の各エントリに埋め込まれている
 - 外部インデックスファイルは存在しない
+
+JSONL の各エントリは以下の構造を持つ（Claude Code が生成するデータの観測に基づく。公式仕様は存在しない）:
+
+| フィールド | 型 | 説明 |
+|---|---|---|
+| `type` | String | エントリ種別（`"user"`, `"assistant"`, `"summary"` 等） |
+| `timestamp` | String | ISO 8601 形式のタイムスタンプ（例: `"2026-03-28T10:00:00+09:00"`）。常に存在するが、不正な値は観測されていない |
+| `message.content` | String / List | `type=user` の場合は文字列、`type=assistant` の場合はブロックのリスト |
+
+`type=assistant` の `message.content` リスト内のブロック:
+
+| フィールド | 型 | 説明 |
+|---|---|---|
+| `type` | String | ブロック種別（`"text"`, `"tool_use"` 等） |
+| `name` | String | `type=tool_use` の場合のツール名 |
+
+Claude Code が生成するため、タイムスタンプのフォーマットは安定しており、パース時に防御的な例外処理（`ValueError` の catch 等）は行わない
 
 転送対象のセッションは、マーカーファイル（`.ayumy_last_sync`）との mtime 比較で決定する。
 
@@ -199,7 +223,32 @@ Lambda event の `source` フィールドで判定する。`"manual"` なら手�
 4. JSONL から抽出する項目: ユーザーのプロンプト、使用したツール、対象プロジェクト名
 5. プロジェクト名（S3 パス由来、例: `-Users-nyu-Documents-github-ayumy`）を GitHub activity の既知リポジトリ名と最長サフィックスマッチングで解決する。一致しない場合は元のプロジェクト名をそのまま使用する
 
-### 5.3 要約生成（Claude API）
+### 5.3 DynamoDB へのセッション書き込み
+レポート生成の前処理として、S3 上の未アーカイブ JSONL をパースし、セッションメタデータを DynamoDB に書き込む。日付フィルタなしで全エントリを処理し、JST 日付ごとにグルーピングする。
+
+**テーブル設計**（テーブル名: `ayumy-sessions`、オンデマンドモード、PITR 有効）
+
+| Key | Attribute | Type | 説明 |
+|---|---|---|---|
+| PK | `date` | String | JST 日付（`YYYY-MM-DD`） |
+| SK | `repo#session_id` | String | リポジトリ名 + セッション ID |
+| | `repo` | String | リポジトリ名 |
+| | `project` | String | プロジェクトディレクトリ名 |
+| | `start_time` | String | ISO 8601 |
+| | `end_time` | String | ISO 8601 |
+| | `user_messages` | List | ユーザーメッセージ |
+| | `tools_used` | List | 使用ツール |
+| | `updated_at` | String | ISO 8601、書き込み・更新時刻 |
+| | `reported_at` | String | ISO 8601、レポート生成時刻（未生成時は未設定） |
+
+書き込み時の動作:
+
+- 同一キー（PK + SK）のアイテムは上書きされる（冪等性を担保）
+- ユーザーメッセージがないグループはスキップする
+- リポジトリ名は `.ayumy_repo` メタデータファイルから解決する。メタデータがないプロジェクトはスキップする
+- 書き込み失敗時も既存のレポート生成フローは継続する（ベストエフォート）
+
+### 5.4 要約生成（Claude API）
 使用モデル: `claude-sonnet-4-20250514`
 
 GitHub アクティビティと Claude Code セッションログの両方をコンテキストとして渡し、以下の観点で統合的な要約を生成する。
@@ -236,7 +285,7 @@ GitHub アクティビティと Claude Code セッションログの両方をコ
 
 出力には全体サマリー、リポジトリごとの作業概要、タグの提案、ステータスの判定を含める。
 
-### 5.4 Slack 通知
+### 5.5 Slack 通知
 Notion への書き込み完了後、Slack Incoming Webhook で指定チャンネルに通知を送信する。
 
 通知内容:
@@ -247,7 +296,7 @@ Notion への書き込み完了後、Slack Incoming Webhook で指定チャン�
 
 通知が失敗しても処理全体は正常終了とする（通知はベストエフォート）。
 
-### 5.5 処理済み JSONL のアーカイブ
+### 5.6 処理済み JSONL のアーカイブ
 要約生成と Notion 書き込みが正常に完了した後、処理対象の JSONL ファイルを S3 上で `claude-sessions/` から `processed/` に移動（コピー＋削除）する。アーカイブ対象は `fetch_sessions` で取得したオブジェクトキーに限定し、処理中に到着した遅延ファイルが誤ってアーカイブされるのを防ぐ。移動先はプロジェクト名のサブディレクトリを維持する（例: `processed/{project-name}/{session-id}.jsonl`）。JSONL は無期限に保持し、削除しない。
 
 ## 6. Notion データベース仕様
@@ -323,6 +372,7 @@ Lambda 関数の環境変数として設定する。機密情報は AWS Secrets 
 | 環境変数 | 説明 |
 |---|---|
 | `AYUMY_S3_BUCKET` | セッションログの保管先 S3 バケット名 |
+| `AYUMY_DYNAMO_TABLE` | セッションメタデータの DynamoDB テーブル名 |
 | `NOTION_DATABASE_ID` | 書き込み先の Notion データベース ID |
 
 **Secrets Manager に保管**
@@ -339,10 +389,10 @@ Lambda 関数の環境変数として設定する。機密情報は AWS Secrets 
 - **タイムアウト**: 300秒（5分）
 - **メモリ**: 512MB
 - **依存パッケージ**: デプロイ: `requests`, `anthropic`, `PyGithub`（`boto3` は Lambda ランタイム同梱版を利用）、開発: 左記 + `boto3`
-- **IAM ロール**: S3 バケットへの読み書き、Secrets Manager の読み取り、CloudWatch Logs への書き込み
+- **IAM ロール**: S3 バケットへの読み書き、DynamoDB テーブルへの読み書き、Secrets Manager の読み取り、CloudWatch Logs への書き込み
 
 ### 7.4 デプロイ
-AWS SAM（`template.yaml`）で Lambda 関数、EventBridge Scheduler、IAM ロール、S3 バケットを管理する。
+AWS SAM（`template.yaml`）で Lambda 関数、EventBridge Scheduler、IAM ロール、S3 バケット、DynamoDB テーブルを管理する。
 
 ```bash
 sam build && sam deploy

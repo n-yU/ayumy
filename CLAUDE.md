@@ -5,10 +5,10 @@
 **ayumy** — GitHub 上の日次開発アクティビティ（Commit, PR, Issue）と Claude Code セッションログを自動収集し、Claude API で自然言語の要約を生成して Notion データベースに記録するシステム。
 
 ## アーキテクチャ
-2フェーズ構成（セッションログは S3 に保管、レポート生成は AWS Lambda で実行）:
+2フェーズ構成（セッションログは S3 に保管、セッションメタデータは DynamoDB に集約、レポート生成は AWS Lambda で実行）:
 
 1. **フェーズ 1（post-commit hook / 手動同期）**: 各リポジトリでの commit を契機に、`~/.claude/projects/` から未同期の Claude Code セッションの JSONL を S3 バケットにアップロードする。`ayumy sync --report` で S3 転送後に Lambda を呼び出してレポート生成まで実行できる。
-2. **フェーズ 2（AWS Lambda）**: S3 上のセッションログの読み取りと GitHub API によるアクティビティ取得を行い、Claude API で要約を生成して Notion に書き込み、Slack に通知する。処理済み JSONL は S3 上で `processed/` にアーカイブする。EventBridge Scheduler による日次の定期実行に加え、`ayumy sync --report` による手動実行にも対応する。
+2. **フェーズ 2（AWS Lambda）**: S3 上のセッションログをパースして DynamoDB に書き込んだ後、GitHub API によるアクティビティ取得を行い、Claude API で要約を生成して Notion に書き込み、Slack に通知する。処理済み JSONL は S3 上で `processed/` にアーカイブする。EventBridge Scheduler による日次の定期実行に加え、`ayumy sync --report` による手動実行にも対応する。
 
 ## リポジトリ構成
 ```
@@ -19,7 +19,7 @@ lambda/handler.py                    # Lambda ハンドラ（report パッケー
 lambda/report/                       # メインパッケージ: GitHub API + Claude API + Notion API
 lambda/requirements.txt              # Lambda デプロイ用の依存パッケージ
 lambda/requirements-dev.txt          # ローカル開発用の依存パッケージ（boto3 を含む）
-template.yaml                        # AWS SAM テンプレート（Lambda, EventBridge, IAM ロール, S3 バケット）
+template.yaml                        # AWS SAM テンプレート（Lambda, EventBridge, IAM ロール, S3 バケット, DynamoDB テーブル）
 ```
 
 ## 技術詳細
@@ -34,6 +34,7 @@ template.yaml                        # AWS SAM テンプレート（Lambda, Even
 ## 環境変数
 Lambda（環境変数 + Secrets Manager）:
 - `AYUMY_S3_BUCKET` — セッションログの保管先 S3 バケット名（環境変数）
+- `AYUMY_DYNAMO_TABLE` — セッションメタデータの DynamoDB テーブル名（環境変数）
 - `NOTION_DATABASE_ID` — 書き込み先の Notion データベース ID（環境変数）
 - `GITHUB_PAT` — GitHub Fine-grained PAT（Secrets Manager）
 - `ANTHROPIC_API_KEY` — Anthropic API キー（Secrets Manager）
