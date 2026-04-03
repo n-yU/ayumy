@@ -1,4 +1,4 @@
-.PHONY: lambda-install lambda-invoke lambda-deploy test oidc-deploy
+.PHONY: lambda-install lambda-invoke lambda-deploy test oidc-deploy scan-sessions
 
 # Install lambda dependencies into local .venv via uv (includes dev deps like boto3)
 lambda-install:
@@ -16,6 +16,14 @@ lambda-deploy:
 # Run unit tests
 test: lambda-install
 	.venv/bin/python -m pytest tests/ -v
+
+# Scan DynamoDB session items
+scan-sessions:
+	aws dynamodb scan \
+		--table-name ayumy-sessions \
+		--projection-expression "#d, #rs, updated_at" \
+		--expression-attribute-names '{"#d": "date", "#rs": "repo#session_id"}' \
+		--output table
 
 # Deploy OIDC bootstrap stack for GitHub Actions
 oidc-deploy:
