@@ -94,16 +94,21 @@ def run(source: str | None = None, memory_limit_mb: int | None = None) -> None:
         store = SessionStore(require_env("AYUMY_DYNAMO_TABLE"))
 
         # Ingest JSONL to DynamoDB and delete from S3
+        ingested_keys: list[str] = []
         try:
             ingested_keys = store.ingest(session_client)
-            deleted = session_client.delete_sessions(ingested_keys)
-            logger.info(
-                "Ingested %d JSONL file(s), deleted %d from S3",
-                len(ingested_keys), deleted,
-            )
+            logger.info("Ingested %d JSONL file(s)", len(ingested_keys))
         except Exception as e:
             logger.exception("DynamoDB ingestion failed")
             slack_client.notify_error(since, e)
+
+        if ingested_keys:
+            try:
+                deleted = session_client.delete_sessions(ingested_keys)
+                logger.info("Deleted %d JSONL file(s) from S3", deleted)
+            except Exception as e:
+                logger.exception("S3 deletion failed")
+                slack_client.notify_error(since, e)
 
         # Detect backfill targets from DynamoDB
         backfill_dates = store.scan_backfill_dates(primary_date)
