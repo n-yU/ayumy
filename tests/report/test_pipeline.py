@@ -472,6 +472,41 @@ class TestRun:
     @patch("report.pipeline.GitHubClient")
     @patch("report.pipeline.NotionClient")
     @patch("report.pipeline.SummaryClient")
+    def test_passes_target_date_to_date_range(
+        self, MockSummary, MockNotion, MockGitHub, MockSession,
+        MockStore, MockSlack, mock_require_env, mock_date_range,
+    ):
+        since = datetime(2026, 3, 25, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 26, 0, 0, tzinfo=JST)
+        mock_date_range.return_value = (since, until)
+        mock_require_env.side_effect = lambda k: f"fake-{k}"
+
+        store = MockStore.return_value
+        store.ingest.return_value = []
+        store.scan_backfill_dates.return_value = []
+        store.fetch_sessions.return_value = SessionActivity({})
+
+        session_client = MockSession.return_value
+        session_client.delete_sessions.return_value = 0
+
+        github_client = MockGitHub.return_value
+        github_client.fetch_activity.return_value = GitHubActivity({})
+
+        notion_client = MockNotion.return_value
+        notion_client.fetch_allowlists.return_value = ([], [])
+
+        run(source="manual", target_date="2026-03-25")
+
+        mock_date_range.assert_called_once_with("manual", target_date="2026-03-25")
+
+    @patch("report.pipeline.get_target_date_range")
+    @patch("report.pipeline.require_env")
+    @patch("report.pipeline.SlackClient")
+    @patch("report.pipeline.SessionStore")
+    @patch("report.pipeline.SessionClient")
+    @patch("report.pipeline.GitHubClient")
+    @patch("report.pipeline.NotionClient")
+    @patch("report.pipeline.SummaryClient")
     def test_deletes_s3_after_ingest(
         self, MockSummary, MockNotion, MockGitHub, MockSession,
         MockStore, MockSlack, mock_require_env, mock_date_range,

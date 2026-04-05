@@ -75,16 +75,21 @@ def process_date(
     slack_client.notify(since, report, pages, skipped_repos)
 
 
-def run(source: str | None = None, memory_limit_mb: int | None = None) -> None:
+def run(
+    source: str | None = None,
+    target_date: str | None = None,
+    memory_limit_mb: int | None = None,
+) -> None:
     """Run the report generation pipeline.
 
     Args:
         source: Invocation source. "manual" for manual execution,
             None for scheduled execution
+        target_date: Explicit target date (YYYY-MM-DD) for report generation
         memory_limit_mb: Lambda memory limit in MB, or None for CLI
     """
     start = time.monotonic()
-    since, until = get_target_date_range(source)
+    since, until = get_target_date_range(source, target_date=target_date)
     primary_date = since.astimezone(JST).date()
 
     slack_client = SlackClient(require_env("SLACK_WEBHOOK_URL"))

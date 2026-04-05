@@ -9,14 +9,15 @@ MARKER_NAME=".ayumy_last_sync"
 
 usage() {
   cat <<'USAGE'
-Usage: sync_session.sh [--project <name>] [--all] [--background] [--report]
+Usage: sync_session.sh [--project <name>] [--all] [--background] [--report] [--date YYYY-MM-DD]
 
 Options:
-  --project <name>  Sync a specific project
-  --all             Sync all projects
-  --background      Run in the background (for hooks)
-  --report          Invoke Lambda to generate report after sync
-  (no args)         Auto-detect project from current directory
+  --project <name>    Sync a specific project
+  --all               Sync all projects
+  --background        Run in the background (for hooks)
+  --report            Invoke Lambda to generate report after sync
+  --date YYYY-MM-DD   Generate report for a specific date (requires --report)
+  (no args)           Auto-detect project from current directory
 
 Environment variables:
   AYUMY_S3_BUCKET        S3 bucket name for session storage (required)
@@ -100,6 +101,7 @@ mode=""
 project_name=""
 background=false
 report=false
+target_date=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -123,12 +125,26 @@ while [[ $# -gt 0 ]]; do
       report=true
       shift
       ;;
+    --date)
+      target_date="${2:-}"
+      [[ -z "$target_date" ]] && { err "--date requires a value (YYYY-MM-DD)"; usage; }
+      if ! [[ "$target_date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+        err "--date must be in YYYY-MM-DD format"
+        usage
+      fi
+      shift 2
+      ;;
     *)
       err "unknown option: $1"
       usage
       ;;
   esac
 done
+
+if [[ -n "$target_date" && "$report" != true ]]; then
+  err "--date requires --report"
+  usage
+fi
 
 # --- validation ---
 
@@ -178,6 +194,7 @@ if [[ "$background" == true ]]; then
   [[ "$mode" == "project" ]] && args+=(--project "$project_name")
   [[ "$mode" == "all" ]] && args+=(--all)
   [[ "$report" == true ]] && args+=(--report)
+  [[ -n "$target_date" ]] && args+=(--date "$target_date")
   nohup "$0" "${args[@]}" >/dev/null 2>&1 &
   exit 0
 fi
@@ -227,11 +244,16 @@ esac
 # --- report mode: invoke Lambda ---
 
 if [[ "$report" == true ]]; then
+  payload='{"source": "manual"}'
+  if [[ -n "$target_date" ]]; then
+    payload="{\"source\": \"manual\", \"target_date\": \"$target_date\"}"
+  fi
+
   log "invoking Lambda function: $AYUMY_LAMBDA_FUNCTION (async)"
   aws lambda invoke \
     --function-name "$AYUMY_LAMBDA_FUNCTION" \
     --invocation-type Event \
-    --payload '{"source": "manual"}' \
+    --payload "$payload" \
     --cli-binary-format raw-in-base64-out \
     /dev/null > /dev/null
   log "Lambda invocation accepted — check Slack for results"

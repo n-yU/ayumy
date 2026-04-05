@@ -140,7 +140,7 @@ Claude Code が生成するため、タイムスタンプのフォーマット�
 hook と手動実行の両方から呼ばれる共通スクリプト。
 
 ```
-sync_session.sh [--project <project-name>] [--all] [--background] [--report]
+sync_session.sh [--project <project-name>] [--all] [--background] [--report] [--date YYYY-MM-DD]
 ```
 
 | オプション | 動作 |
@@ -149,6 +149,7 @@ sync_session.sh [--project <project-name>] [--all] [--background] [--report]
 | `--all` | 全プロジェクトから差分セッションを一括転送 |
 | `--background` | バックグラウンドで実行（hook 用） |
 | `--report` | S3 転送後に Lambda 関数を呼び出してレポート生成を実行 |
+| `--date YYYY-MM-DD` | 指定日のレポートを生成・再生成（`--report` 必須） |
 | 引数なし | カレントディレクトリに対応するプロジェクトを自動判定 |
 
 要件:
@@ -182,6 +183,7 @@ ayumy sync --all                                                # 全プロジ�
 ayumy sync --project -Users-username-Documents-github-my-project # 特定プロジェクトを指定
 ayumy sync --report                                             # 同期後にレポート生成（Lambda 実行）まで行う
 ayumy sync --all --report                                       # 全プロジェクト同期 + レポート生成
+ayumy sync --report --date 2026-03-25                           # 指定日のレポートを生成・再生成
 ```
 
 `ayumy sync` は `bin/ayumy` CLI を通じて `sync_session.sh` を呼び出す。`bin/ayumy` はサブコマンドをディスパッチするエントリポイントであり、クライアントマシンのセットアップ時に PATH に追加する（例: `export PATH="$HOME/ayumy/bin:$PATH"`）。手動実行時はフォアグラウンドで実行し、転送結果を標準出力に表示する。`--report` 指定時は Lambda の実行結果も標準出力に表示する。
@@ -200,8 +202,9 @@ ayumy sync --all --report                                       # 全プロジ�
 |---|---|
 | 定期実行（EventBridge） | 前日 JST 00:00:00 〜 当日 JST 00:00:00 |
 | 手動実行（`ayumy sync --report`） | 当日 JST 00:00:00 〜 現在時刻 |
+| 日付指定（`ayumy sync --report --date YYYY-MM-DD`） | 指定日 JST 00:00:00 〜 翌日 JST 00:00:00 |
 
-Lambda event の `source` フィールドで判定する。`"manual"` なら手動実行、それ以外（EventBridge の場合は `"aws.scheduler"` 等）なら定期実行として扱う。
+Lambda event の `source` フィールドで判定する。`"manual"` なら手動実行、それ以外（EventBridge の場合は `"aws.scheduler"` 等）なら定期実行として扱う。`target_date` フィールドが指定されている場合は `source` に関わらずその日付の全日範囲を対象とする。
 
 対象リポジトリは S3 上のセッションログから特定する。各プロジェクトディレクトリの `.ayumy_repo` メタデータファイルからリポジトリ名を読み取り、そのリポジトリのみ `GET /repos/{owner}/{repo}` で取得する。
 
@@ -360,9 +363,10 @@ Notion ページの本文には Claude が生成した要約を記載する。�
 
 **手動実行**
 ```bash
-ayumy sync --report    # クライアントマシンから（S3 転送 + Lambda 実行）
+ayumy sync --report                    # クライアントマシンから（S3 転送 + Lambda 実行）
+ayumy sync --report --date 2026-03-25  # 指定日のレポートを生成・再生成
 ```
-内部的には `aws lambda invoke --invocation-type Event` で Lambda 関数を `{"source": "manual"}` ペイロード付きで非同期呼び出しする。Lambda はこのペイロードの `source` フィールドで手動実行を判定し、当日分のアクティビティを対象とする（§5.1）。実行結果は Slack 通知で確認する。
+内部的には `aws lambda invoke --invocation-type Event` で Lambda 関数を `{"source": "manual"}` ペイロード付きで非同期呼び出しする。`--date` 指定時はペイロードに `"target_date": "YYYY-MM-DD"` を追加する。Lambda はこのペイロードの `source` フィールドで手動実行を判定し、当日分のアクティビティを対象とする。`target_date` が指定されている場合はその日付の全日範囲を対象とする（§5.1）。実行結果は Slack 通知で確認する。
 
 ### 7.2 環境変数
 Lambda 関数の環境変数として設定する。機密情報は AWS Secrets Manager に保管し、Lambda から参照する。

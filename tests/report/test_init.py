@@ -55,3 +55,13 @@ class TestGetTargetDateRange:
         since, until = get_target_date_range("manual")
         assert since == datetime(2026, 3, 28, 0, 0, tzinfo=JST)
         assert until == mock_now
+
+    def test_target_date_returns_full_day_range(self):
+        since, until = get_target_date_range(target_date="2026-03-25")
+        assert since == datetime(2026, 3, 25, 0, 0, tzinfo=JST)
+        assert until == datetime(2026, 3, 26, 0, 0, tzinfo=JST)
+
+    def test_target_date_ignores_source(self):
+        since, until = get_target_date_range("manual", target_date="2026-03-25")
+        assert since == datetime(2026, 3, 25, 0, 0, tzinfo=JST)
+        assert until == datetime(2026, 3, 26, 0, 0, tzinfo=JST)
