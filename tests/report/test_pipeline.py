@@ -497,7 +497,7 @@ class TestRun:
 
         run(source="manual", target_date="2026-03-25")
 
-        mock_date_range.assert_called_once_with("manual", "2026-03-25")
+        mock_date_range.assert_called_once_with("manual", target_date="2026-03-25")
 
     @patch("report.pipeline.get_target_date_range")
     @patch("report.pipeline.require_env")

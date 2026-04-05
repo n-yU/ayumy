@@ -89,7 +89,7 @@ def run(
         memory_limit_mb: Lambda memory limit in MB, or None for CLI
     """
     start = time.monotonic()
-    since, until = get_target_date_range(source, target_date)
+    since, until = get_target_date_range(source, target_date=target_date)
     primary_date = since.astimezone(JST).date()
 
     slack_client = SlackClient(require_env("SLACK_WEBHOOK_URL"))
