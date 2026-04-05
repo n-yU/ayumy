@@ -17,11 +17,10 @@ S3 + DynamoDB + AWS Lambda を使用した2フェーズ構成
 [AWS Lambda]                      ▼
   EventBridge (毎日 JST 00:00) → Lambda (report)
   ayumy sync --report ──────────→ Lambda (report)
-    ├─→ JSONL パース → DynamoDB にセッション書き込み
-    ├─→ JSONL + GitHub API → Claude API で要約生成
+    ├─→ JSONL パース → DynamoDB にセッション書き込み → S3 から JSONL 削除
+    ├─→ DynamoDB + GitHub API → Claude API で要約生成
     ├─→ Notion API で記録
-    ├─→ Slack Webhook で通知
-    └─→ 処理済み JSONL を processed/ に移動
+    └─→ Slack Webhook で通知
 ```
 
 ## Tech Stack
