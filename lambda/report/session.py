@@ -85,4 +85,12 @@ class SessionClient:
                 },
             )
             deleted += len(resp.get("Deleted", []))
+
+            errors = resp.get("Errors", [])
+            if errors:
+                logger.error(
+                    "Failed to delete %d S3 object(s): %s",
+                    len(errors),
+                    [{"Key": e.get("Key"), "Code": e.get("Code")} for e in errors],
+                )
         return deleted
