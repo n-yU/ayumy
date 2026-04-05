@@ -61,3 +61,4 @@ Lambda（環境変数 + Secrets Manager）:
 - アクティビティの取得対象期間: 前日 JST 00:00:00 〜 当日 JST 00:00:00
 - アクティビティが 0 件の日はスキップまたは「活動なし」と記録
 - PR での commit 時に、関連するドキュメント（[docs/Spec.md](docs/Spec.md), [docs/InitialDevelopment.md](docs/InitialDevelopment.md), [README.md](README.md)）に矛盾・未反映がないか確認し、必要に応じて更新する
+- デプロイや手動確認が必要な変更（実行フローの変更、外部サービス連携の追加・変更など）を含む PR では、description に `### Verification` セクションを設ける。デプロイ成功・コマンド実行結果・既存機能の正常動作など、手動で確認すべき項目をチェックリストで列挙する。PR 作成後、Copilot review が指摘なし（approved 相当）になってからユーザーに検証の開始を確認する。指摘がある場合は先に対応する
