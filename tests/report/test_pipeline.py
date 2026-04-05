@@ -64,6 +64,7 @@ class TestProcessDate:
         clients["summary_client"].generate_summary.assert_not_called()
         clients["notion_client"].create_report_pages.assert_not_called()
         clients["slack_client"].notify.assert_not_called()
+        clients["slack_client"].notify_no_activity.assert_called_once_with(since)
 
     def test_generates_report_and_publishes(self):
         clients = _make_clients()

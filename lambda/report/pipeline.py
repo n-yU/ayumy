@@ -50,6 +50,7 @@ def process_date(
 
     if not session_activity and not github_activity:
         logger.info("No activity, skipping")
+        slack_client.notify_no_activity(since)
         return
 
     report = summary_client.generate_summary(

@@ -76,6 +76,23 @@ class SlackClient:
                 self._blocks.append({"type": "context", "elements": [{"type": "mrkdwn", "text": f"⚠️ Skipped: {skipped}"}]})
             self._fallback_parts.append(f"✅ Daily Report ({date_str}): No pages created")
 
+    def notify_no_activity(self, target_date: datetime) -> None:
+        """Buffer a no-activity notification.
+
+        Args:
+            target_date: The target date with no activity
+        """
+        date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
+
+        if self._blocks:
+            self._blocks.append({"type": "divider"})
+
+        self._blocks.extend([
+            {"type": "header", "text": {"type": "plain_text", "text": f"💤 Daily Report ({date_str})"}},
+            {"type": "section", "text": {"type": "mrkdwn", "text": "No activity"}},
+        ])
+        self._fallback_parts.append(f"💤 Daily Report ({date_str}): No activity")
+
     def notify_validation_errors(
         self, target_date: datetime, result: ValidationResult,
     ) -> None:

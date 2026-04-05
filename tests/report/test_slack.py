@@ -128,6 +128,33 @@ class TestNotify:
         assert "repo-10" in page_block["text"]["text"]
 
 
+class TestNotifyNoActivity:
+    def test_sends_no_activity_message(self):
+        client = _make_client()
+        target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+
+        client.notify_no_activity(target)
+        client.flush()
+
+        kwargs = _get_send_kwargs(client)
+        text = _blocks_text(kwargs["blocks"])
+        assert "2026-03-28" in text
+        assert "No activity" in text
+        assert kwargs["text"]
+
+    def test_block_structure(self):
+        client = _make_client()
+        target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+
+        client.notify_no_activity(target)
+        client.flush()
+
+        blocks = _get_send_kwargs(client)["blocks"]
+        assert blocks[0]["type"] == "header"
+        assert "💤" in blocks[0]["text"]["text"]
+        assert blocks[1]["type"] == "section"
+
+
 class TestNotifyMetrics:
     def test_sends_metrics_with_memory_limit(self):
         client = _make_client()
