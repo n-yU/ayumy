@@ -2,7 +2,7 @@
 
 import json
 from datetime import date
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 from report.store import SessionStore
 
