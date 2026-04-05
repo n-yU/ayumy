@@ -35,9 +35,10 @@ def lambda_handler(event, context):
             }
 
     source = "manual" if event.get("source") == "manual" else None
+    target_date = event.get("target_date")
 
     try:
-        run(source, memory_limit_mb=int(context.memory_limit_in_mb))
+        run(source, target_date=target_date, memory_limit_mb=int(context.memory_limit_in_mb))
     except Exception:
         logger.exception("Report generation failed")
         return {

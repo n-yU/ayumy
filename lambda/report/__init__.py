@@ -201,18 +201,27 @@ def date_to_range(target: date) -> tuple[datetime, datetime]:
     return since, until
 
 
-def get_target_date_range(source: str | None = None) -> tuple[datetime, datetime]:
+def get_target_date_range(
+    source: str | None = None,
+    target_date: str | None = None,
+) -> tuple[datetime, datetime]:
     """Return the target date range for activity fetching.
 
     Args:
         source: Invocation source. "manual" for manual execution,
             None or other values for scheduled execution
+        target_date: Explicit target date (YYYY-MM-DD). When specified,
+            returns JST 00:00 ~ next day JST 00:00 for that date
 
     Returns:
         A tuple of (since, until) as timezone-aware datetime objects.
+        target_date specified: target day JST 00:00 ~ next day JST 00:00.
         Scheduled: previous day JST 00:00 ~ today JST 00:00.
         Manual: today JST 00:00 ~ now
     """
+    if target_date:
+        return date_to_range(date.fromisoformat(target_date))
+
     now_jst = datetime.now(JST)
     today_jst = now_jst.replace(hour=0, minute=0, second=0, microsecond=0)
 
