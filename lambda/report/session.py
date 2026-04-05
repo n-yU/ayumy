@@ -71,8 +71,18 @@ class SessionClient:
         Returns:
             The number of files deleted
         """
+        if not keys:
+            return 0
+
         deleted = 0
-        for key in keys:
-            self.s3.delete_object(Bucket=self.bucket, Key=key)
-            deleted += 1
+        for i in range(0, len(keys), 1000):
+            batch = keys[i : i + 1000]
+            resp = self.s3.delete_objects(
+                Bucket=self.bucket,
+                Delete={
+                    "Objects": [{"Key": key} for key in batch],
+                    "Quiet": False,
+                },
+            )
+            deleted += len(resp.get("Deleted", []))
         return deleted
