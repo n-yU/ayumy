@@ -29,7 +29,8 @@ class SessionStore:
 
         Downloads every unarchived JSONL from S3, groups entries by
         (JST date, repo, session_id), and writes the resulting items
-        to DynamoDB. Existing items with the same key are overwritten.
+        to DynamoDB. Specified fields are updated while preserving
+        existing attributes such as reported_at.
 
         Args:
             session_client: SessionClient instance for S3 access
