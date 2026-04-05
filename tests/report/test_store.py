@@ -155,24 +155,33 @@ class TestBuildItems:
 
 
 class TestWriteItems:
-    def test_uses_batch_writer(self):
+    def test_uses_update_item(self):
         store = _make_store()
-        batch_writer = MagicMock()
-        store.table.batch_writer.return_value.__enter__ = MagicMock(
-            return_value=batch_writer,
-        )
-        store.table.batch_writer.return_value.__exit__ = MagicMock(
-            return_value=False,
-        )
 
         items = [
-            {"date": "2026-03-28", "repo#session_id": "repo#s1"},
-            {"date": "2026-03-29", "repo#session_id": "repo#s2"},
+            {
+                "date": "2026-03-28",
+                "repo#session_id": "repo#s1",
+                "repo": "repo",
+                "updated_at": "2026-03-28T00:00:00+00:00",
+            },
+            {
+                "date": "2026-03-29",
+                "repo#session_id": "repo#s2",
+                "repo": "repo",
+                "updated_at": "2026-03-29T00:00:00+00:00",
+            },
         ]
 
         store._write_items(items)
 
-        assert batch_writer.put_item.call_count == 2
+        assert store.table.update_item.call_count == 2
+        first_call = store.table.update_item.call_args_list[0]
+        assert first_call.kwargs["Key"] == {
+            "date": "2026-03-28",
+            "repo#session_id": "repo#s1",
+        }
+        assert "UpdateExpression" in first_call.kwargs
 
 
 class TestIngest:
@@ -193,18 +202,10 @@ class TestIngest:
         )
         client.s3.get_object.return_value = _s3_body(lines)
 
-        batch_writer = MagicMock()
-        store.table.batch_writer.return_value.__enter__ = MagicMock(
-            return_value=batch_writer,
-        )
-        store.table.batch_writer.return_value.__exit__ = MagicMock(
-            return_value=False,
-        )
-
         keys = store.ingest(client)
 
         assert keys == ["claude-sessions/proj/s1.jsonl"]
-        batch_writer.put_item.assert_called_once()
+        store.table.update_item.assert_called_once()
 
 
 class TestFetchSessions:

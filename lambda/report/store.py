@@ -137,14 +137,29 @@ class SessionStore:
         return items, processed_keys
 
     def _write_items(self, items: list[dict]) -> None:
-        """Write items to DynamoDB using batch writer.
+        """Write items to DynamoDB using update_item.
+
+        Uses SET with attribute assignments so that existing
+        reported_at values are preserved across re-ingestion.
 
         Args:
             items: List of DynamoDB item dicts
         """
-        with self.table.batch_writer() as batch:
-            for item in items:
-                batch.put_item(Item=item)
+        for item in items:
+            key = {
+                "date": item["date"],
+                "repo#session_id": item["repo#session_id"],
+            }
+            fields = {k: v for k, v in item.items() if k not in key}
+            update_expr = "SET " + ", ".join(
+                f"#f_{k} = :v_{k}" for k in fields
+            )
+            self.table.update_item(
+                Key=key,
+                UpdateExpression=update_expr,
+                ExpressionAttributeNames={f"#f_{k}": k for k in fields},
+                ExpressionAttributeValues={f":v_{k}": v for k, v in fields.items()},
+            )
 
     def fetch_sessions(self, date_str: str) -> SessionActivity:
         """Query sessions for a specific date from DynamoDB.
