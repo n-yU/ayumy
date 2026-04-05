@@ -201,6 +201,35 @@ def date_to_range(target: date) -> tuple[datetime, datetime]:
     return since, until
 
 
+def parse_target_dates(target_date: str) -> list[date]:
+    """Parse a target date string into a list of dates.
+
+    Supports single date (YYYY-MM-DD) and range (YYYY-MM-DD..YYYY-MM-DD).
+
+    Args:
+        target_date: Date string in YYYY-MM-DD or YYYY-MM-DD..YYYY-MM-DD format
+
+    Returns:
+        A list of date objects (inclusive on both ends)
+
+    Raises:
+        ValueError: If the start date is after the end date
+    """
+    if ".." in target_date:
+        start_str, end_str = target_date.split("..", 1)
+        start = date.fromisoformat(start_str)
+        end = date.fromisoformat(end_str)
+        if start > end:
+            raise ValueError(f"Start date {start} is after end date {end}")
+        dates = []
+        current = start
+        while current <= end:
+            dates.append(current)
+            current += timedelta(days=1)
+        return dates
+    return [date.fromisoformat(target_date)]
+
+
 def get_target_date_range(
     source: str | None = None,
     target_date: str | None = None,
@@ -210,17 +239,19 @@ def get_target_date_range(
     Args:
         source: Invocation source. "manual" for manual execution,
             None or other values for scheduled execution
-        target_date: Explicit target date (YYYY-MM-DD). When specified,
-            returns JST 00:00 ~ next day JST 00:00 for that date
+        target_date: Explicit target date (YYYY-MM-DD or YYYY-MM-DD..YYYY-MM-DD).
+            When specified, returns JST 00:00 ~ next day JST 00:00 for the
+            first date in the string
 
     Returns:
         A tuple of (since, until) as timezone-aware datetime objects.
-        target_date specified: target day JST 00:00 ~ next day JST 00:00.
+        target_date specified: first date JST 00:00 ~ next day JST 00:00.
         Scheduled: previous day JST 00:00 ~ today JST 00:00.
         Manual: today JST 00:00 ~ now
     """
     if target_date:
-        return date_to_range(date.fromisoformat(target_date))
+        first = target_date.split("..")[0]
+        return date_to_range(date.fromisoformat(first))
 
     now_jst = datetime.now(JST)
     today_jst = now_jst.replace(hour=0, minute=0, second=0, microsecond=0)

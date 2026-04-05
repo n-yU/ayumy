@@ -6,7 +6,10 @@ import resource
 import time
 from datetime import datetime
 
-from . import JST, SessionActivity, date_to_range, get_target_date_range, require_env
+from . import (
+    JST, SessionActivity, date_to_range, get_target_date_range,
+    parse_target_dates, require_env,
+)
 from .github import GitHubClient
 from .notion import NotionClient
 from .session import SessionClient
@@ -86,7 +89,8 @@ def run(
     Args:
         source: Invocation source. "manual" for manual execution,
             None for scheduled execution
-        target_date: Explicit target date (YYYY-MM-DD) for report generation
+        target_date: Explicit target date (YYYY-MM-DD or YYYY-MM-DD..YYYY-MM-DD)
+            for report generation
         memory_limit_mb: Lambda memory limit in MB, or None for CLI
     """
     start = time.monotonic()
@@ -116,12 +120,17 @@ def run(
                 logger.exception("S3 deletion failed")
                 slack_client.notify_error(since, e)
 
-        # Detect backfill targets from DynamoDB
-        backfill_dates = store.scan_backfill_dates(primary_date)
-        backfill_dates = backfill_dates[-MAX_BACKFILL:]
-        target_dates = backfill_dates + [primary_date]
-        if backfill_dates:
-            logger.info("Backfill dates detected: %s", backfill_dates)
+        # Build target date list
+        if target_date:
+            # Explicit date(s): process only specified dates, skip backfill
+            process_dates = parse_target_dates(target_date)
+        else:
+            # Scheduled/manual without --date: backfill + primary
+            backfill_dates = store.scan_backfill_dates(primary_date)
+            backfill_dates = backfill_dates[-MAX_BACKFILL:]
+            process_dates = backfill_dates + [primary_date]
+            if backfill_dates:
+                logger.info("Backfill dates detected: %s", backfill_dates)
 
         github_client = GitHubClient(require_env("GITHUB_PAT"))
         notion_client = NotionClient(
@@ -130,13 +139,9 @@ def run(
         allowed_tags, allowed_statuses = notion_client.fetch_allowlists()
         summary_client = SummaryClient(require_env("ANTHROPIC_API_KEY"))
 
-        for target_date in target_dates:
-            if target_date == primary_date:
-                day_since, day_until = since, until
-            else:
-                day_since, day_until = date_to_range(target_date)
-
-            date_str = target_date.isoformat()
+        for d in process_dates:
+            day_since, day_until = date_to_range(d)
+            date_str = d.isoformat()
             try:
                 session_activity = store.fetch_sessions(date_str)
                 process_date(
@@ -148,7 +153,7 @@ def run(
                 store.mark_reported(date_str)
             except Exception as e:
                 slack_client.notify_error(day_since, e)
-                if target_date == primary_date:
+                if not target_date and d == primary_date:
                     e._notified = True  # type: ignore[attr-defined]
                     raise
 

@@ -9,14 +9,15 @@ MARKER_NAME=".ayumy_last_sync"
 
 usage() {
   cat <<'USAGE'
-Usage: sync_session.sh [--project <name>] [--all] [--background] [--report] [--date YYYY-MM-DD]
+Usage: sync_session.sh [--project <name>] [--all] [--background] [--report] [--date DATE]
 
 Options:
   --project <name>    Sync a specific project
   --all               Sync all projects
   --background        Run in the background (for hooks)
   --report            Invoke Lambda to generate report after sync
-  --date YYYY-MM-DD   Generate report for a specific date (requires --report)
+  --date DATE         Generate report for a specific date or range (requires --report)
+                      Formats: YYYY-MM-DD or YYYY-MM-DD..YYYY-MM-DD
   (no args)           Auto-detect project from current directory
 
 Environment variables:
@@ -127,9 +128,9 @@ while [[ $# -gt 0 ]]; do
       ;;
     --date)
       target_date="${2:-}"
-      [[ -z "$target_date" ]] && { err "--date requires a value (YYYY-MM-DD)"; usage; }
-      if ! [[ "$target_date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
-        err "--date must be in YYYY-MM-DD format"
+      [[ -z "$target_date" ]] && { err "--date requires a value"; usage; }
+      if ! [[ "$target_date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}(\.\.[0-9]{4}-[0-9]{2}-[0-9]{2})?$ ]]; then
+        err "--date must be YYYY-MM-DD or YYYY-MM-DD..YYYY-MM-DD"
         usage
       fi
       shift 2
