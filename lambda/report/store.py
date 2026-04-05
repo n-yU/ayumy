@@ -234,8 +234,7 @@ class SessionStore:
             for item in response["Items"]:
                 dates.add(date.fromisoformat(item["date"]))
 
-        dates.discard(primary_date)
-        return sorted(dates)
+        return sorted(d for d in dates if d < primary_date)
 
     def mark_reported(self, date_str: str) -> None:
         """Set reported_at on all items for the given date.
