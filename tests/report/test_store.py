@@ -151,7 +151,7 @@ class TestBuildItems:
         items, keys = store._build_items(client)
 
         assert items == []
-        assert keys == ["claude-sessions/proj/s1.jsonl"]
+        assert keys == []
 
 
 class TestWriteItems:

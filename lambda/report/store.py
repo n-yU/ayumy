@@ -66,7 +66,8 @@ class SessionStore:
         )
 
         repo_cache: dict[str, str | None] = {}
-        processed_keys: list[str] = []
+        # Track which S3 keys contributed to each group
+        key_groups: dict[str, set[tuple[str, str, str]]] = defaultdict(set)
 
         for obj in session_client.list_session_objects():
             key = obj["Key"]
@@ -79,7 +80,6 @@ class SessionStore:
             repo = repo_cache[project]
             if repo is None:
                 continue
-            processed_keys.append(key)
 
             resp = session_client.s3.get_object(
                 Bucket=session_client.bucket, Key=key,
@@ -102,6 +102,7 @@ class SessionStore:
                 entry_dt = datetime.fromisoformat(timestamp).astimezone(JST)
                 date_str = entry_dt.date().isoformat()
                 group_key = (date_str, repo, session_id)
+                key_groups[key].add(group_key)
                 group = groups[group_key]
                 group["project"] = project
                 group["timestamps"].append(timestamp)
@@ -134,6 +135,12 @@ class SessionStore:
                 "tools_used": sorted(group["tools_used"]),
                 "updated_at": now,
             })
+
+        # Only return keys that produced at least one DynamoDB item
+        written_groups = {(i["date"], i["repo"], i["repo#session_id"].split("#", 1)[1]) for i in items}
+        processed_keys = list(dict.fromkeys(
+            k for k, gs in key_groups.items() if gs & written_groups
+        ))
 
         return items, processed_keys
 
