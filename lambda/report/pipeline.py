@@ -140,7 +140,10 @@ def run(
         summary_client = SummaryClient(require_env("ANTHROPIC_API_KEY"))
 
         for d in process_dates:
-            day_since, day_until = date_to_range(d)
+            if not target_date and d == primary_date:
+                day_since, day_until = since, until
+            else:
+                day_since, day_until = date_to_range(d)
             date_str = d.isoformat()
             try:
                 session_activity = store.fetch_sessions(date_str)
