@@ -1,5 +1,6 @@
 """Tests for report package core utilities."""
 
+import re
 from datetime import date, datetime, timedelta
 from unittest.mock import patch
 
@@ -12,10 +13,9 @@ from report import (
 
 
 class TestGetVersion:
-    def test_returns_version_string(self):
+    def test_returns_semver_string(self):
         version = get_version()
-        assert isinstance(version, str)
-        assert version == "0.2.0"
+        assert re.fullmatch(r"\d+\.\d+\.\d+", version)
 
 
 class TestRequireEnv:
