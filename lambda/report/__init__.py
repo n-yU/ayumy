@@ -213,14 +213,21 @@ def parse_target_dates(target_date: str) -> list[date]:
         A list of date objects (inclusive on both ends)
 
     Raises:
-        ValueError: If the start date is after the end date
+        ValueError: If the start date is after the end date, or range exceeds
+            31 days
     """
+    MAX_RANGE_DAYS = 31
+
     if ".." in target_date:
         start_str, end_str = target_date.split("..", 1)
         start = date.fromisoformat(start_str)
         end = date.fromisoformat(end_str)
         if start > end:
             raise ValueError(f"Start date {start} is after end date {end}")
+        if (end - start).days >= MAX_RANGE_DAYS:
+            raise ValueError(
+                f"Date range exceeds {MAX_RANGE_DAYS} days: {start}..{end}"
+            )
         dates = []
         current = start
         while current <= end:

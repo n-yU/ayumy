@@ -91,3 +91,7 @@ class TestParseTargetDates:
     def test_start_after_end_raises(self):
         with pytest.raises(ValueError, match="after"):
             parse_target_dates("2026-03-28..2026-03-25")
+
+    def test_range_exceeds_max_days_raises(self):
+        with pytest.raises(ValueError, match="exceeds 31 days"):
+            parse_target_dates("2026-01-01..2026-02-01")
