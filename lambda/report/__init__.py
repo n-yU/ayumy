@@ -7,6 +7,7 @@ date range and formats them for downstream processing.
 import os
 from collections.abc import KeysView
 from datetime import date, datetime, timedelta, timezone
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, TypedDict
 
@@ -188,6 +189,7 @@ def require_env(name: str) -> str:
     return value
 
 
+@lru_cache
 def get_version() -> str:
     """Read the ayumy version from the VERSION file.
 
