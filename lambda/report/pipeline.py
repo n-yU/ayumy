@@ -157,8 +157,8 @@ def run(
                 store.mark_reported(date_str)
             except Exception as e:
                 slack_client.notify_error(day_since, e)
+                e._notified = True  # type: ignore[attr-defined]
                 if not target_date and d == primary_date:
-                    e._notified = True  # type: ignore[attr-defined]
                     raise
                 if target_date:
                     errors.append(e)

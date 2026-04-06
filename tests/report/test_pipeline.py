@@ -537,6 +537,44 @@ class TestRun:
             ["claude-sessions/proj/s1.jsonl"],
         )
 
+    @patch("report.pipeline.process_date")
+    @patch("report.pipeline.get_target_date_range")
+    @patch("report.pipeline.require_env")
+    @patch("report.pipeline.SlackClient")
+    @patch("report.pipeline.SessionStore")
+    @patch("report.pipeline.SessionClient")
+    @patch("report.pipeline.GitHubClient")
+    @patch("report.pipeline.NotionClient")
+    @patch("report.pipeline.SummaryClient")
+    def test_manual_run_uses_original_until(
+        self, MockSummary, MockNotion, MockGitHub, MockSession,
+        MockStore, MockSlack, mock_require_env, mock_date_range,
+        mock_process_date,
+    ):
+        """Manual run without --date passes get_target_date_range's until (not full-day)."""
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 28, 15, 30, tzinfo=JST)
+        mock_date_range.return_value = (since, until)
+        mock_require_env.side_effect = lambda k: f"fake-{k}"
+
+        store = MockStore.return_value
+        store.ingest.return_value = []
+        store.scan_backfill_dates.return_value = []
+        store.fetch_sessions.return_value = SessionActivity({})
+
+        session_client = MockSession.return_value
+        session_client.delete_sessions.return_value = 0
+
+        notion_client = MockNotion.return_value
+        notion_client.fetch_allowlists.return_value = ([], [])
+
+        run(source="manual")
+
+        mock_process_date.assert_called_once()
+        call_args = mock_process_date.call_args
+        assert call_args[0][0] == since
+        assert call_args[0][1] == until
+
     @patch("report.pipeline.get_target_date_range")
     @patch("report.pipeline.require_env")
     @patch("report.pipeline.SlackClient")
