@@ -7,6 +7,8 @@ date range and formats them for downstream processing.
 import os
 from collections.abc import KeysView
 from datetime import date, datetime, timedelta, timezone
+from functools import lru_cache
+from pathlib import Path
 from typing import Any, TypedDict
 
 JST = timezone(timedelta(hours=9))
@@ -185,6 +187,17 @@ def require_env(name: str) -> str:
     if not value:
         raise ValueError(f"{name} is not set")
     return value
+
+
+@lru_cache
+def get_version() -> str:
+    """Read the ayumy version from the VERSION file.
+
+    Returns:
+        The version string (e.g. "0.1.0")
+    """
+    version_path = Path(__file__).resolve().parent.parent / "VERSION"
+    return version_path.read_text().strip()
 
 
 def date_to_range(target: date) -> tuple[datetime, datetime]:
