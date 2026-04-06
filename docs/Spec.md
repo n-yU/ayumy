@@ -149,7 +149,7 @@ sync_session.sh [--project <project-name>] [--all] [--background] [--report] [--
 | `--all` | 全プロジェクトから差分セッションを一括転送 |
 | `--background` | バックグラウンドで実行（hook 用） |
 | `--report` | S3 転送後に Lambda 関数を呼び出してレポート生成を実行 |
-| `--date DATE` | 指定日またはの範囲のレポートを生成・再生成（`--report` 必須）。`YYYY-MM-DD` または `YYYY-MM-DD..YYYY-MM-DD` 形式 |
+| `--date DATE` | 指定日または日付範囲のレポートを生成・再生成（`--report` 必須）。`YYYY-MM-DD` または `YYYY-MM-DD..YYYY-MM-DD` 形式 |
 | 引数なし | カレントディレクトリに対応するプロジェクトを自動判定 |
 
 要件:
