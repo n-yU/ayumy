@@ -5,7 +5,17 @@ from unittest.mock import patch
 
 import pytest
 
-from report import JST, date_to_range, get_target_date_range, parse_target_dates, require_env
+from report import (
+    JST, date_to_range, get_target_date_range, get_version,
+    parse_target_dates, require_env,
+)
+
+
+class TestGetVersion:
+    def test_returns_version_string(self):
+        version = get_version()
+        assert isinstance(version, str)
+        assert version == "0.2.0"
 
 
 class TestRequireEnv:

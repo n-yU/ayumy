@@ -56,6 +56,7 @@ class TestBuildProperties:
         assert props["Issues Closed"]["number"] == 1
         assert props["Claude Sessions"]["number"] == 3
         assert props["Status"]["select"]["name"] == "Active"
+        assert props["Version"]["rich_text"][0]["text"]["content"] == "0.2.0"
 
     def test_empty_status_omitted(self):
         target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)

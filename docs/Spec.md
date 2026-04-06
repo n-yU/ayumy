@@ -320,6 +320,7 @@ Date × Repository 単位でページを作成する。1日に複数ページが
 | PRs Merged | Number | リポジトリのマージ PR 数 | `2` |
 | Issues Closed | Number | リポジトリのクローズ Issue 数 | `1` |
 | Claude Sessions | Number | リポジトリのセッション数 | `3` |
+| Version | Text | レポート生成時の ayumy バージョン | `0.2.0` |
 
 ### 6.2 ページ本文（children blocks）
 Notion ページの本文には Claude が生成した要約を記載する。ブロックタイプとして `heading_2`、`paragraph`、`bulleted_list_item` を使い分けて構造化する。

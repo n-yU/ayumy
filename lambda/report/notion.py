@@ -5,7 +5,9 @@ from datetime import datetime
 
 from notion_client import Client
 
-from . import JST, GitHubActivity, RepoSummary, ReportSummary, SessionActivity
+from . import (
+    JST, GitHubActivity, RepoSummary, ReportSummary, SessionActivity, get_version,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +115,7 @@ class NotionClient:
             "PRs Merged": {"number": prs_merged},
             "Issues Closed": {"number": issues_closed},
             "Claude Sessions": {"number": claude_sessions},
+            "Version": {"rich_text": [{"type": "text", "text": {"content": get_version()}}]},
         }
 
         if repo_summary["status"]:
