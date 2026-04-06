@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from report import JST, date_to_range, get_target_date_range, require_env
+from report import JST, date_to_range, get_target_date_range, parse_target_dates, require_env
 
 
 class TestRequireEnv:
@@ -65,3 +65,33 @@ class TestGetTargetDateRange:
         since, until = get_target_date_range("manual", target_date="2026-03-25")
         assert since == datetime(2026, 3, 25, 0, 0, tzinfo=JST)
         assert until == datetime(2026, 3, 26, 0, 0, tzinfo=JST)
+
+    def test_target_date_range_uses_first_date(self):
+        since, until = get_target_date_range(target_date="2026-03-25..2026-03-28")
+        assert since == datetime(2026, 3, 25, 0, 0, tzinfo=JST)
+        assert until == datetime(2026, 3, 26, 0, 0, tzinfo=JST)
+
+
+class TestParseTargetDates:
+    def test_single_date(self):
+        result = parse_target_dates("2026-03-28")
+        assert result == [date(2026, 3, 28)]
+
+    def test_date_range(self):
+        result = parse_target_dates("2026-03-25..2026-03-28")
+        assert result == [
+            date(2026, 3, 25), date(2026, 3, 26),
+            date(2026, 3, 27), date(2026, 3, 28),
+        ]
+
+    def test_same_start_and_end(self):
+        result = parse_target_dates("2026-03-28..2026-03-28")
+        assert result == [date(2026, 3, 28)]
+
+    def test_start_after_end_raises(self):
+        with pytest.raises(ValueError, match="after"):
+            parse_target_dates("2026-03-28..2026-03-25")
+
+    def test_range_exceeds_max_days_raises(self):
+        with pytest.raises(ValueError, match="exceeds 31 days"):
+            parse_target_dates("2026-01-01..2026-02-01")
