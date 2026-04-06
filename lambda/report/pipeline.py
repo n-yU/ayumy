@@ -139,6 +139,7 @@ def run(
         allowed_tags, allowed_statuses = notion_client.fetch_allowlists()
         summary_client = SummaryClient(require_env("ANTHROPIC_API_KEY"))
 
+        errors: list[Exception] = []
         for d in process_dates:
             if not target_date and d == primary_date:
                 day_since, day_until = since, until
@@ -159,6 +160,10 @@ def run(
                 if not target_date and d == primary_date:
                     e._notified = True  # type: ignore[attr-defined]
                     raise
+                errors.append(e)
+
+        if errors:
+            raise errors[0]
 
     except Exception as e:
         # Errors from process_date are already notified with the correct date
