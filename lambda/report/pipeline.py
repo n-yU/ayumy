@@ -160,7 +160,8 @@ def run(
                 if not target_date and d == primary_date:
                     e._notified = True  # type: ignore[attr-defined]
                     raise
-                errors.append(e)
+                if target_date:
+                    errors.append(e)
 
         if errors:
             raise errors[0]
