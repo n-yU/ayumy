@@ -59,7 +59,7 @@ class TestProcessDate:
         session, github = _empty_activity()
         clients["github_client"].fetch_activity.return_value = github
 
-        process_date(since, until, session, **clients, allowed_tags=[], allowed_statuses=[])
+        process_date(since, until, session, **clients, allowed_tags=[])
 
         clients["summary_client"].generate_summary.assert_not_called()
         clients["notion_client"].create_report_pages.assert_not_called()
@@ -76,8 +76,7 @@ class TestProcessDate:
 
         report = _make_report([{
             "name": "my-repo", "summary": "work", "achievements": [],
-            "ongoing": [], "claude_code": "", "tags": [], "status": "Active",
-        }])
+            "ongoing": [], "claude_code": "", "tags": [],        }])
         clients["summary_client"].generate_summary.return_value = report
         clients["notion_client"].create_report_pages.return_value = [
             ("my-repo", "https://notion.so/page1"),
@@ -85,7 +84,7 @@ class TestProcessDate:
 
         process_date(
             since, until, session, **clients,
-            allowed_tags=["CI/CD"], allowed_statuses=["Active"],
+            allowed_tags=["CI/CD"],
         )
 
         clients["summary_client"].generate_summary.assert_called_once()
@@ -102,14 +101,13 @@ class TestProcessDate:
 
         report = _make_report([{
             "name": "repo", "summary": "", "achievements": [],
-            "ongoing": [], "claude_code": "", "tags": ["BadTag"], "status": "Active",
-        }])
+            "ongoing": [], "claude_code": "", "tags": ["BadTag"],        }])
         clients["summary_client"].generate_summary.return_value = report
         clients["notion_client"].create_report_pages.return_value = []
 
         process_date(
             since, until, session, **clients,
-            allowed_tags=["CI/CD"], allowed_statuses=["Active"],
+            allowed_tags=["CI/CD"],
         )
 
         clients["slack_client"].notify_validation_errors.assert_called_once()
@@ -124,14 +122,13 @@ class TestProcessDate:
 
         report = _make_report([{
             "name": "unknown-repo", "summary": "", "achievements": [],
-            "ongoing": [], "claude_code": "", "tags": [], "status": "",
-        }])
+            "ongoing": [], "claude_code": "", "tags": [],        }])
         clients["summary_client"].generate_summary.return_value = report
         clients["notion_client"].create_report_pages.return_value = []
 
         process_date(
             since, until, session, **clients,
-            allowed_tags=[], allowed_statuses=[],
+            allowed_tags=[],
         )
 
         call_args = clients["slack_client"].notify.call_args
@@ -169,7 +166,7 @@ class TestRun:
         github_client.fetch_activity.return_value = GitHubActivity({})
 
         notion_client = MockNotion.return_value
-        notion_client.fetch_allowlists.return_value = ([], [])
+        notion_client.fetch_allowlists.return_value = []
 
         run(source=None)
 
@@ -212,7 +209,7 @@ class TestRun:
         github_client.fetch_activity.return_value = GitHubActivity({})
 
         notion_client = MockNotion.return_value
-        notion_client.fetch_allowlists.return_value = ([], [])
+        notion_client.fetch_allowlists.return_value = []
 
         slack_client = MockSlack.return_value
 
@@ -254,7 +251,7 @@ class TestRun:
         github_client.fetch_activity.return_value = GitHubActivity({})
 
         notion_client = MockNotion.return_value
-        notion_client.fetch_allowlists.return_value = ([], [])
+        notion_client.fetch_allowlists.return_value = []
 
         run(source=None)
 
@@ -294,7 +291,7 @@ class TestRun:
         github_client.fetch_activity.return_value = GitHubActivity({})
 
         notion_client = MockNotion.return_value
-        notion_client.fetch_allowlists.return_value = ([], [])
+        notion_client.fetch_allowlists.return_value = []
 
         run(source=None)
 
@@ -329,7 +326,7 @@ class TestRun:
         github_client = MockGitHub.return_value
 
         notion_client = MockNotion.return_value
-        notion_client.fetch_allowlists.return_value = ([], [])
+        notion_client.fetch_allowlists.return_value = []
 
         slack_client = MockSlack.return_value
 
@@ -380,7 +377,7 @@ class TestRun:
         github_client.fetch_activity.return_value = GitHubActivity({})
 
         notion_client = MockNotion.return_value
-        notion_client.fetch_allowlists.return_value = ([], [])
+        notion_client.fetch_allowlists.return_value = []
 
         slack_client = MockSlack.return_value
 
@@ -420,7 +417,7 @@ class TestRun:
         github_client.fetch_activity.return_value = GitHubActivity({})
 
         notion_client = MockNotion.return_value
-        notion_client.fetch_allowlists.return_value = ([], [])
+        notion_client.fetch_allowlists.return_value = []
 
         slack_client = MockSlack.return_value
 
@@ -459,7 +456,7 @@ class TestRun:
         github_client.fetch_activity.return_value = GitHubActivity({})
 
         notion_client = MockNotion.return_value
-        notion_client.fetch_allowlists.return_value = ([], [])
+        notion_client.fetch_allowlists.return_value = []
 
         run(source=None)
 
@@ -494,7 +491,7 @@ class TestRun:
         github_client.fetch_activity.return_value = GitHubActivity({})
 
         notion_client = MockNotion.return_value
-        notion_client.fetch_allowlists.return_value = ([], [])
+        notion_client.fetch_allowlists.return_value = []
 
         run(source="manual", target_date="2026-03-25")
 
@@ -529,7 +526,7 @@ class TestRun:
         github_client.fetch_activity.return_value = GitHubActivity({})
 
         notion_client = MockNotion.return_value
-        notion_client.fetch_allowlists.return_value = ([], [])
+        notion_client.fetch_allowlists.return_value = []
 
         run(source=None)
 
@@ -566,7 +563,7 @@ class TestRun:
         session_client.delete_sessions.return_value = 0
 
         notion_client = MockNotion.return_value
-        notion_client.fetch_allowlists.return_value = ([], [])
+        notion_client.fetch_allowlists.return_value = []
 
         run(source="manual")
 
@@ -603,7 +600,7 @@ class TestRun:
         github_client.fetch_activity.return_value = GitHubActivity({})
 
         notion_client = MockNotion.return_value
-        notion_client.fetch_allowlists.return_value = ([], [])
+        notion_client.fetch_allowlists.return_value = []
 
         run(source="manual", target_date="2026-03-25")
 
@@ -638,7 +635,7 @@ class TestRun:
         github_client.fetch_activity.return_value = GitHubActivity({})
 
         notion_client = MockNotion.return_value
-        notion_client.fetch_allowlists.return_value = ([], [])
+        notion_client.fetch_allowlists.return_value = []
 
         run(source="manual", target_date="2026-03-25..2026-03-28")
 

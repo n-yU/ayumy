@@ -57,29 +57,24 @@ class NotionClient:
             )
         return self._data_source_id
 
-    def fetch_allowlists(self) -> tuple[list[str], list[str]]:
-        """Fetch allowed tags and statuses from the database schema.
+    def fetch_allowlists(self) -> list[str]:
+        """Fetch allowed tags from the database schema.
 
-        Reads the Tags (multi-select) and Status (select) property
-        options defined in the Notion database via the data sources API.
+        Reads the Tags (multi-select) property options defined in the
+        Notion database via the data sources API.
 
         Returns:
-            A tuple of (allowed_tags, allowed_statuses) as string lists
+            A list of allowed tag names
         """
         db = self.client.databases.retrieve(database_id=self.database_id)
         self._data_source_id = db["data_sources"][0]["id"]
         ds = self.client.data_sources.retrieve(data_source_id=self._data_source_id)
         properties = ds["properties"]
 
-        tags = [
+        return [
             opt["name"]
             for opt in properties["Tags"]["multi_select"]["options"]
         ]
-        statuses = [
-            opt["name"]
-            for opt in properties["Status"]["select"]["options"]
-        ]
-        return tags, statuses
 
     def _build_properties(
         self,
@@ -106,7 +101,7 @@ class NotionClient:
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
         title_str = f"{target_date.astimezone(JST).strftime('%y-%m-%d')}: {repo_summary['name']}"
 
-        properties: dict = {
+        return {
             "Name": {"title": [{"type": "text", "text": {"content": title_str}}]},
             "Date": {"date": {"start": date_str}},
             "Repository": {"select": {"name": repo_summary["name"]}},
@@ -117,11 +112,6 @@ class NotionClient:
             "Claude Sessions": {"number": claude_sessions},
             "Version": {"rich_text": [{"type": "text", "text": {"content": get_version()}}]},
         }
-
-        if repo_summary["status"]:
-            properties["Status"] = {"select": {"name": repo_summary["status"]}}
-
-        return properties
 
     def _build_children(
         self,

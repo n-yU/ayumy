@@ -106,17 +106,15 @@ class SlackClient:
         lines = []
         for name, tags in result.invalid_tags.items():
             lines.append(f"• {name}: tags={tags}")
-        for name, status in result.invalid_statuses.items():
-            lines.append(f"• {name}: status={status}")
 
         if self._blocks:
             self._blocks.append({"type": "divider"})
 
         self._blocks.extend([
             {"type": "header", "text": {"type": "plain_text", "text": f"⚠️ Daily Report ({date_str})"}},
-            {"type": "section", "text": {"type": "mrkdwn", "text": f"Invalid tags/status detected\n{'\n'.join(lines)}"}},
+            {"type": "section", "text": {"type": "mrkdwn", "text": f"Invalid tags detected\n{'\n'.join(lines)}"}},
         ])
-        self._fallback_parts.append(f"⚠️ Daily Report ({date_str}): Invalid tags/status detected")
+        self._fallback_parts.append(f"⚠️ Daily Report ({date_str}): Invalid tags detected")
 
     def notify_error(self, target_date: datetime, error: Exception) -> None:
         """Buffer an error notification.
