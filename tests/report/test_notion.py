@@ -52,9 +52,9 @@ class TestBuildProperties:
         assert len(props["Tags"]["multi_select"]) == 2
         assert {t["name"] for t in props["Tags"]["multi_select"]} == {"CI/CD", "Testing"}
         assert props["Commits"]["number"] == 5
-        assert props["PRs Merged"]["number"] == 2
-        assert props["Issues Closed"]["number"] == 1
-        assert props["Claude Sessions"]["number"] == 3
+        assert props["Merged"]["number"] == 2
+        assert props["Closed"]["number"] == 1
+        assert props["Sessions"]["number"] == 3
         assert "Status" not in props
         assert re.fullmatch(r"\d+\.\d+\.\d+", props["Version"]["rich_text"][0]["text"]["content"])
 

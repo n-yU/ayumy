@@ -18,9 +18,10 @@
 | Repository | Select | オプションは自動追加される |
 | Tags | Multi-select | 下記のオプションを事前登録 |
 | Commits | Number | |
-| PRs Merged | Number | |
-| Issues Closed | Number | |
-| Claude Sessions | Number | |
+| Merged | Number | |
+| Closed | Number | |
+| Sessions | Number | |
+| Version | Text | |
 
 Tags のオプション: `feature`, `bugfix`, `docs`, `refactor`, `ci`, `review`, `productive`, `maintenance`, `blocked`, `light`
 
