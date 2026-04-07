@@ -107,9 +107,9 @@ class NotionClient:
             "Repository": {"select": {"name": repo_summary["name"]}},
             "Tags": {"multi_select": [{"name": tag} for tag in repo_summary["tags"]]},
             "Commits": {"number": commits},
-            "PRs Merged": {"number": prs_merged},
-            "Issues Closed": {"number": issues_closed},
-            "Claude Sessions": {"number": claude_sessions},
+            "Merged": {"number": prs_merged},
+            "Closed": {"number": issues_closed},
+            "Sessions": {"number": claude_sessions},
             "Version": {"rich_text": [{"type": "text", "text": {"content": get_version()}}]},
         }
 

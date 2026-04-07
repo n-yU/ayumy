@@ -316,9 +316,9 @@ Date × Repository 単位でページを作成する。1日に複数ページが
 | Repository | Select | リポジトリ名 | `ayumy` |
 | Tags | Multi-select | 作業内容の分類タグ | `feature`, `productive` |
 | Commits | Number | リポジトリのコミット数 | `5` |
-| PRs Merged | Number | リポジトリのマージ PR 数 | `2` |
-| Issues Closed | Number | リポジトリのクローズ Issue 数 | `1` |
-| Claude Sessions | Number | リポジトリのセッション数 | `3` |
+| Merged | Number | リポジトリのマージ PR 数 | `2` |
+| Closed | Number | リポジトリのクローズ Issue 数 | `1` |
+| Sessions | Number | リポジトリのセッション数 | `3` |
 | Version | Text | レポート生成時の ayumy バージョン | `0.2.0` |
 
 ### 6.2 ページ本文（children blocks）
