@@ -289,7 +289,7 @@ GitHub アクティビティと Claude Code セッションログの両方をコ
 - ツール使用: ファイル編集 (auth.ts, middleware.ts)
 ```
 
-出力には全体サマリー、リポジトリごとの作業概要、タグの提案、ステータスの判定を含める。
+出力には全体サマリー、リポジトリごとの作業概要、タグの提案を含める。
 
 ### 5.5 Slack 通知
 Notion への書き込み完了後、Slack Incoming Webhook で指定チャンネルに通知を送信する。
@@ -314,8 +314,7 @@ Date × Repository 単位でページを作成する。1日に複数ページが
 | Name | Title | 日付とリポジトリ名 | `26-03-01: ayumy` |
 | Date | Date | 対象日 | `2025-03-01` |
 | Repository | Select | リポジトリ名 | `ayumy` |
-| Tags | Multi-select | 作業内容の分類タグ | `feature`, `ai-assisted` |
-| Status | Select | リポジトリでの進捗状態 | `productive` |
+| Tags | Multi-select | 作業内容の分類タグ | `feature`, `productive` |
 | Commits | Number | リポジトリのコミット数 | `5` |
 | PRs Merged | Number | リポジトリのマージ PR 数 | `2` |
 | Issues Closed | Number | リポジトリのクローズ Issue 数 | `1` |
@@ -346,18 +345,12 @@ Notion ページの本文には Claude が生成した要約を記載する。�
 | `refactor` | リファクタリング |
 | `ci` | CI/CD やビルド設定の変更 |
 | `review` | PR レビューが主な活動だった場合 |
-
-タグは Claude API の要約生成時に自動判定させる。
-
-### 6.4 ステータスの判定基準
-| ステータス | 基準 |
-|---|---|
 | `productive` | 複数の PR マージや Issue クローズがある |
 | `maintenance` | 依存関係更新、CI 修正など保守作業が中心 |
 | `blocked` | PR レビュー待ちや Issue の議論が中心 |
 | `light` | アクティビティが少ない日 |
 
-ステータスも Claude API による要約時に判定させる。
+タグは Claude API の要約生成時に自動判定させる。
 
 ## 7. AWS Lambda の構成
 ### 7.1 実行方式

@@ -163,7 +163,6 @@ class RepoSummary(TypedDict):
     ongoing: list[str]
     claude_code: str
     tags: list[str]
-    status: str
 
 
 class ReportSummary(TypedDict):

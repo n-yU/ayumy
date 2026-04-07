@@ -191,12 +191,11 @@ class TestNotifyMetrics:
 
 
 class TestNotifyValidationErrors:
-    def test_sends_invalid_tags_and_statuses(self):
+    def test_sends_invalid_tags(self):
         client = _make_client()
         target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
         result = ValidationResult()
         result.invalid_tags = {"repo": ["BadTag"]}
-        result.invalid_statuses = {"repo": "BadStatus"}
 
         client.notify_validation_errors(target, result)
         client.flush()
@@ -204,7 +203,6 @@ class TestNotifyValidationErrors:
         kwargs = _get_send_kwargs(client)
         text = _blocks_text(kwargs["blocks"])
         assert "BadTag" in text
-        assert "BadStatus" in text
 
     def test_block_structure(self):
         client = _make_client()

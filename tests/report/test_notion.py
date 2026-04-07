@@ -43,7 +43,6 @@ class TestBuildProperties:
             "ongoing": [],
             "claude_code": "",
             "tags": ["CI/CD", "Testing"],
-            "status": "Active",
         }
         props = self.client._build_properties(target, repo_summary, 5, 2, 1, 3)
 
@@ -56,22 +55,8 @@ class TestBuildProperties:
         assert props["PRs Merged"]["number"] == 2
         assert props["Issues Closed"]["number"] == 1
         assert props["Claude Sessions"]["number"] == 3
-        assert props["Status"]["select"]["name"] == "Active"
-        assert re.fullmatch(r"\d+\.\d+\.\d+", props["Version"]["rich_text"][0]["text"]["content"])
-
-    def test_empty_status_omitted(self):
-        target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
-        repo_summary = {
-            "name": "repo",
-            "summary": "",
-            "achievements": [],
-            "ongoing": [],
-            "claude_code": "",
-            "tags": [],
-            "status": "",
-        }
-        props = self.client._build_properties(target, repo_summary, 0, 0, 0, 0)
         assert "Status" not in props
+        assert re.fullmatch(r"\d+\.\d+\.\d+", props["Version"]["rich_text"][0]["text"]["content"])
 
 
 class TestBuildChildren:
@@ -89,7 +74,6 @@ class TestBuildChildren:
             "ongoing": ["open issue"],
             "claude_code": "session work",
             "tags": [],
-            "status": "",
         }
         children = self.client._build_children("overall", repo_summary)
 
@@ -122,7 +106,6 @@ class TestBuildChildren:
             "ongoing": [],
             "claude_code": "",
             "tags": [],
-            "status": "",
         }
         children = self.client._build_children("overall", repo_summary)
         types = [c["type"] for c in children]

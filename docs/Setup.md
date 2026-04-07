@@ -17,16 +17,14 @@
 | Date | Date | |
 | Repository | Select | オプションは自動追加される |
 | Tags | Multi-select | 下記のオプションを事前登録 |
-| Status | Select | 下記のオプションを事前登録 |
 | Commits | Number | |
 | PRs Merged | Number | |
 | Issues Closed | Number | |
 | Claude Sessions | Number | |
 
-Tags のオプション: `feature`, `bugfix`, `docs`, `refactor`, `ci`, `review`
-Status のオプション: `productive`, `maintenance`, `blocked`, `light`
+Tags のオプション: `feature`, `bugfix`, `docs`, `refactor`, `ci`, `review`, `productive`, `maintenance`, `blocked`, `light`
 
-Tags と Status のオプションは allowlist として機能する（Spec.md §6.3-6.4）。要約生成時にこれらのオプションが候補としてプロンプトに注入され、allowlist 外の値はバリデーションで除外される。オプションの追加・削除は Notion DB の UI から直接行う。
+Tags のオプションは allowlist として機能する（Spec.md §6.3）。要約生成時にこれらのオプションが候補としてプロンプトに注入され、allowlist 外の値はバリデーションで除外される。オプションの追加・削除は Notion DB の UI から直接行う。
 
 4. AWS Secrets Manager（ap-northeast-1）に登録
    - シークレットのタイプ: その他のシークレットのタイプ

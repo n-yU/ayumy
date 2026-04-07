@@ -32,7 +32,6 @@ def process_date(
     summary_client: SummaryClient,
     slack_client: SlackClient,
     allowed_tags: list[str],
-    allowed_statuses: list[str],
 ) -> None:
     """Generate and publish a daily report for a single date range.
 
@@ -45,7 +44,6 @@ def process_date(
         summary_client: Claude API summarizer client
         slack_client: Slack notification client
         allowed_tags: Valid tag names from Notion DB
-        allowed_statuses: Valid status names from Notion DB
     """
     logger.info("Processing: %s ~ %s", since.isoformat(), until.isoformat())
 
@@ -58,10 +56,10 @@ def process_date(
 
     report = summary_client.generate_summary(
         since, github_activity.format(), session_activity.format(),
-        allowed_tags, allowed_statuses,
+        allowed_tags,
     )
 
-    validation = SummaryClient.validate_report(report, allowed_tags, allowed_statuses)
+    validation = SummaryClient.validate_report(report, allowed_tags)
     if validation:
         slack_client.notify_validation_errors(since, validation)
 
@@ -136,7 +134,7 @@ def run(
         notion_client = NotionClient(
             require_env("NOTION_SECRET"), require_env("NOTION_DATABASE_ID"),
         )
-        allowed_tags, allowed_statuses = notion_client.fetch_allowlists()
+        allowed_tags = notion_client.fetch_allowlists()
         summary_client = SummaryClient(require_env("ANTHROPIC_API_KEY"))
 
         errors: list[Exception] = []
@@ -152,7 +150,7 @@ def run(
                     day_since, day_until, session_activity,
                     github_client, notion_client,
                     summary_client, slack_client,
-                    allowed_tags, allowed_statuses,
+                    allowed_tags,
                 )
                 store.mark_reported(date_str)
             except Exception as e:

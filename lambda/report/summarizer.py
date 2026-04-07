@@ -29,8 +29,7 @@ _SYSTEM_PROMPT_TEMPLATE = """\
       "achievements": ["マージされた PR、クローズされた Issue 等の成果"],
       "ongoing": ["オープンな PR や Issue 等の継続中の作業"],
       "claude_code": "Claude Code での作業概要（セッションなしの場合は空文字列）",
-      "tags": ["該当する分類タグ"],
-      "status": "このリポジトリでの進捗状態"
+      "tags": ["該当する分類タグ"]
     }}
   ]
 }}
@@ -41,9 +40,6 @@ Claude Code セッションのプロジェクト名は GitHub リポジトリ名
 
 tags は以下から該当するものをリポジトリごとに選択:
 {tags}
-
-status は以下からリポジトリごとに1つ選択:
-{statuses}
 """
 
 
@@ -52,10 +48,9 @@ class ValidationResult:
 
     def __init__(self) -> None:
         self.invalid_tags: dict[str, list[str]] = {}
-        self.invalid_statuses: dict[str, str] = {}
 
     def __bool__(self) -> bool:
-        return bool(self.invalid_tags or self.invalid_statuses)
+        return bool(self.invalid_tags)
 
 
 class SummaryClient:
@@ -70,21 +65,17 @@ class SummaryClient:
         self.client = anthropic.Anthropic(api_key=api_key)
 
     @staticmethod
-    def _build_system_prompt(
-        allowed_tags: list[str], allowed_statuses: list[str],
-    ) -> str:
-        """Build the system prompt with dynamic tag/status lists.
+    def _build_system_prompt(allowed_tags: list[str]) -> str:
+        """Build the system prompt with dynamic tag list.
 
         Args:
             allowed_tags: Allowed tag names from Notion DB
-            allowed_statuses: Allowed status names from Notion DB
 
         Returns:
             A formatted system prompt string
         """
         tags = "\n".join(f"- {tag}" for tag in allowed_tags)
-        statuses = "\n".join(f"- {status}" for status in allowed_statuses)
-        return _SYSTEM_PROMPT_TEMPLATE.format(tags=tags, statuses=statuses)
+        return _SYSTEM_PROMPT_TEMPLATE.format(tags=tags)
 
     def build_prompt(
         self,
@@ -117,7 +108,6 @@ class SummaryClient:
         formatted_github: str,
         formatted_sessions: str,
         allowed_tags: list[str],
-        allowed_statuses: list[str],
     ) -> ReportSummary:
         """Generate a structured summary using Claude API.
 
@@ -126,7 +116,6 @@ class SummaryClient:
             formatted_github: Formatted GitHub activity text
             formatted_sessions: Formatted Claude Code session text
             allowed_tags: Allowed tag names from Notion DB
-            allowed_statuses: Allowed status names from Notion DB
 
         Returns:
             A ReportSummary dict with summary and per-repository details
@@ -135,7 +124,7 @@ class SummaryClient:
             ValueError: If Claude API response cannot be parsed as JSON
         """
         prompt = self.build_prompt(target_date, formatted_github, formatted_sessions)
-        system_prompt = self._build_system_prompt(allowed_tags, allowed_statuses)
+        system_prompt = self._build_system_prompt(allowed_tags)
 
         message = self.client.messages.create(
             model=MODEL,
@@ -164,24 +153,21 @@ class SummaryClient:
     def validate_report(
         report: ReportSummary,
         allowed_tags: list[str],
-        allowed_statuses: list[str],
     ) -> ValidationResult:
-        """Validate and fix tags/status in a report against allowlists.
+        """Validate and fix tags in a report against the allowlist.
 
-        Removes invalid tags and replaces invalid statuses with an empty
-        string. Mutates the report in place.
+        Removes invalid tags from each repository. Mutates the report
+        in place.
 
         Args:
             report: Report to validate (mutated in place)
             allowed_tags: Allowed tag names
-            allowed_statuses: Allowed status names
 
         Returns:
             A ValidationResult with any invalid values found
         """
         result = ValidationResult()
         tag_set = set(allowed_tags)
-        status_set = set(allowed_statuses)
 
         for repo in report["repositories"]:
             name = repo["name"]
@@ -191,10 +177,5 @@ class SummaryClient:
                 result.invalid_tags[name] = invalid
                 repo["tags"] = [t for t in repo["tags"] if t in tag_set]
                 logger.warning("Removed invalid tags for %s: %s", name, invalid)
-
-            if repo["status"] not in status_set:
-                result.invalid_statuses[name] = repo["status"]
-                logger.warning("Removed invalid status for %s: %s", name, repo["status"])
-                repo["status"] = ""
 
         return result
