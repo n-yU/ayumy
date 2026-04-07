@@ -21,6 +21,7 @@
 | Merged | Number | |
 | Closed | Number | |
 | Sessions | Number | |
+| Version | Text | |
 
 Tags のオプション: `feature`, `bugfix`, `docs`, `refactor`, `ci`, `review`, `productive`, `maintenance`, `blocked`, `light`
 
