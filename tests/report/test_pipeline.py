@@ -76,7 +76,8 @@ class TestProcessDate:
 
         report = _make_report([{
             "name": "my-repo", "summary": "work", "achievements": [],
-            "ongoing": [], "claude_code": "", "tags": [],        }])
+            "ongoing": [], "claude_code": "", "tags": [],
+        }])
         clients["summary_client"].generate_summary.return_value = report
         clients["notion_client"].create_report_pages.return_value = [
             ("my-repo", "https://notion.so/page1"),
@@ -101,7 +102,8 @@ class TestProcessDate:
 
         report = _make_report([{
             "name": "repo", "summary": "", "achievements": [],
-            "ongoing": [], "claude_code": "", "tags": ["BadTag"],        }])
+            "ongoing": [], "claude_code": "", "tags": ["BadTag"],
+        }])
         clients["summary_client"].generate_summary.return_value = report
         clients["notion_client"].create_report_pages.return_value = []
 
@@ -122,7 +124,8 @@ class TestProcessDate:
 
         report = _make_report([{
             "name": "unknown-repo", "summary": "", "achievements": [],
-            "ongoing": [], "claude_code": "", "tags": [],        }])
+            "ongoing": [], "claude_code": "", "tags": [],
+        }])
         clients["summary_client"].generate_summary.return_value = report
         clients["notion_client"].create_report_pages.return_value = []
 
