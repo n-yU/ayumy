@@ -115,13 +115,11 @@ class NotionClient:
 
     def _build_children(
         self,
-        overall_summary: str,
         repo_summary: RepoSummary,
     ) -> list[dict]:
         """Build Notion page body blocks from report data.
 
         Args:
-            overall_summary: Overall daily summary text
             repo_summary: Per-repository summary from Claude API
 
         Returns:
@@ -130,26 +128,22 @@ class NotionClient:
         """
         children: list[dict] = []
 
-        # Overall summary
-        children.append({
-            "object": "block",
-            "type": "paragraph",
-            "paragraph": {"rich_text": _chunk_rich_text(overall_summary)},
-        })
-
-        # Repository summary
+        # Summary (heading_2 + bulleted list)
         children.append({
             "object": "block",
             "type": "heading_2",
             "heading_2": {
-                "rich_text": [{"type": "text", "text": {"content": "概要"}}],
+                "rich_text": [{"type": "text", "text": {"content": "Summary"}}],
             },
         })
-        children.append({
-            "object": "block",
-            "type": "paragraph",
-            "paragraph": {"rich_text": _chunk_rich_text(repo_summary["summary"])},
-        })
+        for item in repo_summary["summary"]:
+            children.append({
+                "object": "block",
+                "type": "bulleted_list_item",
+                "bulleted_list_item": {
+                    "rich_text": _chunk_rich_text(item),
+                },
+            })
 
         # Achievements
         if repo_summary["achievements"]:
@@ -208,7 +202,6 @@ class NotionClient:
         self,
         target_date: datetime,
         repo_summary: RepoSummary,
-        overall_summary: str,
         commits: int,
         prs_merged: int,
         issues_closed: int,
@@ -219,7 +212,6 @@ class NotionClient:
         Args:
             target_date: The target date for the report
             repo_summary: Per-repository summary from Claude API
-            overall_summary: Overall daily summary text
             commits: Number of commits in this repo
             prs_merged: Number of merged PRs in this repo
             issues_closed: Number of closed issues in this repo
@@ -233,7 +225,7 @@ class NotionClient:
             properties=self._build_properties(
                 target_date, repo_summary, commits, prs_merged, issues_closed, claude_sessions,
             ),
-            children=self._build_children(overall_summary, repo_summary),
+            children=self._build_children(repo_summary),
         )
 
         return page["url"]
@@ -314,7 +306,6 @@ class NotionClient:
             url = self.create_page(
                 target_date,
                 repo_summary,
-                report["summary"],
                 commits,
                 prs_merged,
                 issues_closed,

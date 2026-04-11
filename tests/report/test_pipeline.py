@@ -12,7 +12,6 @@ from report.pipeline import MAX_BACKFILL, process_date, run
 def _make_report(repos=None):
     """Create a minimal report dict."""
     return {
-        "summary": "Daily summary",
         "repositories": repos or [],
     }
 
@@ -75,7 +74,7 @@ class TestProcessDate:
         clients["github_client"].fetch_activity.return_value = github
 
         report = _make_report([{
-            "name": "my-repo", "summary": "work", "achievements": [],
+            "name": "my-repo", "summary": ["work"], "achievements": [],
             "ongoing": [], "claude_code": "", "tags": [],
         }])
         clients["summary_client"].generate_summary.return_value = report
@@ -101,7 +100,7 @@ class TestProcessDate:
         clients["github_client"].fetch_activity.return_value = github
 
         report = _make_report([{
-            "name": "repo", "summary": "", "achievements": [],
+            "name": "repo", "summary": [], "achievements": [],
             "ongoing": [], "claude_code": "", "tags": ["BadTag"],
         }])
         clients["summary_client"].generate_summary.return_value = report
@@ -123,7 +122,7 @@ class TestProcessDate:
         clients["github_client"].fetch_activity.return_value = github
 
         report = _make_report([{
-            "name": "unknown-repo", "summary": "", "achievements": [],
+            "name": "unknown-repo", "summary": [], "achievements": [],
             "ongoing": [], "claude_code": "", "tags": [],
         }])
         clients["summary_client"].generate_summary.return_value = report

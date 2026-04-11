@@ -38,7 +38,7 @@ class TestBuildProperties:
         target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
         repo_summary = {
             "name": "my-repo",
-            "summary": "summary",
+            "summary": ["要点1", "要点2"],
             "achievements": [],
             "ongoing": [],
             "claude_code": "",
@@ -69,45 +69,46 @@ class TestBuildChildren:
     def test_basic_structure(self):
         repo_summary = {
             "name": "repo",
-            "summary": "repo summary",
+            "summary": ["point one", "point two"],
             "achievements": ["merged PR"],
             "ongoing": ["open issue"],
             "claude_code": "session work",
             "tags": [],
         }
-        children = self.client._build_children("overall", repo_summary)
+        children = self.client._build_children(repo_summary)
 
         types = [c["type"] for c in children]
-        # paragraph (overall) + heading (概要) + paragraph (summary)
+        # heading (Summary) + 2 bullets
         # + heading (成果) + bullet + heading (継続中) + bullet
         # + heading (Claude Code) + paragraph
         assert types == [
-            "paragraph", "heading_2", "paragraph",
+            "heading_2", "bulleted_list_item", "bulleted_list_item",
             "heading_2", "bulleted_list_item",
             "heading_2", "bulleted_list_item",
             "heading_2", "paragraph",
         ]
 
         # Validate heading texts
-        assert children[1]["heading_2"]["rich_text"][0]["text"]["content"] == "概要"
+        assert children[0]["heading_2"]["rich_text"][0]["text"]["content"] == "Summary"
         assert children[3]["heading_2"]["rich_text"][0]["text"]["content"] == "成果"
         assert children[5]["heading_2"]["rich_text"][0]["text"]["content"] == "継続中の作業"
         assert children[7]["heading_2"]["rich_text"][0]["text"]["content"] == "Claude Code"
 
-        # Validate representative paragraph and bullet contents
-        assert children[2]["paragraph"]["rich_text"][0]["text"]["content"] == "repo summary"
+        # Validate representative bullet contents
+        assert children[1]["bulleted_list_item"]["rich_text"][0]["text"]["content"] == "point one"
+        assert children[2]["bulleted_list_item"]["rich_text"][0]["text"]["content"] == "point two"
         assert children[4]["bulleted_list_item"]["rich_text"][0]["text"]["content"] == "merged PR"
 
     def test_empty_sections_omitted(self):
         repo_summary = {
             "name": "repo",
-            "summary": "summary",
+            "summary": ["only point"],
             "achievements": [],
             "ongoing": [],
             "claude_code": "",
             "tags": [],
         }
-        children = self.client._build_children("overall", repo_summary)
+        children = self.client._build_children(repo_summary)
         types = [c["type"] for c in children]
-        # Only overall paragraph + 概要 heading + summary paragraph
-        assert types == ["paragraph", "heading_2", "paragraph"]
+        # Only Summary heading + one bullet
+        assert types == ["heading_2", "bulleted_list_item"]

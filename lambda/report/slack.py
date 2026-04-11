@@ -46,22 +46,18 @@ class SlackClient:
             self._blocks.append({"type": "divider"})
 
         if pages:
-            page_fields = [
-                {"type": "mrkdwn", "text": f"<{url}|{date_str}: {name}>"}
-                for name, url in pages
-            ]
-            summary = report["summary"] or " "
+            repo_map = {r["name"]: r for r in report["repositories"]}
+            page_lines = []
+            for name, url in pages:
+                repo = repo_map.get(name)
+                headline = repo["summary"][0] if repo and repo["summary"] else ""
+                link = f"<{url}|{date_str}: {name}>"
+                page_lines.append(f"{link} — {headline}" if headline else link)
+
             self._blocks.extend([
                 {"type": "header", "text": {"type": "plain_text", "text": f"📝 Daily Report ({date_str})"}},
-                {"type": "section", "text": {"type": "mrkdwn", "text": summary}},
-                {"type": "divider"},
+                {"type": "section", "text": {"type": "mrkdwn", "text": "\n".join(page_lines)}},
             ])
-            # section.fields allows max 10 items
-            if len(page_fields) <= 10:
-                self._blocks.append({"type": "section", "fields": page_fields})
-            else:
-                page_lines = "\n".join(f["text"] for f in page_fields)
-                self._blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": page_lines}})
             if skipped_repos:
                 skipped = ", ".join(skipped_repos)
                 self._blocks.append({"type": "context", "elements": [{"type": "mrkdwn", "text": f"⚠️ Skipped: {skipped}"}]})

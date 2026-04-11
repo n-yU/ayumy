@@ -27,10 +27,9 @@ class TestBuildPrompt:
 class TestValidateReport:
     def test_valid_report_unchanged(self):
         report = {
-            "summary": "summary",
             "repositories": [{
                 "name": "repo",
-                "summary": "",
+                "summary": [],
                 "achievements": [],
                 "ongoing": [],
                 "claude_code": "",
@@ -43,10 +42,9 @@ class TestValidateReport:
 
     def test_invalid_tags_removed(self):
         report = {
-            "summary": "summary",
             "repositories": [{
                 "name": "repo",
-                "summary": "",
+                "summary": [],
                 "achievements": [],
                 "ongoing": [],
                 "claude_code": "",
