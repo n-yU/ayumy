@@ -10,6 +10,18 @@ from .summarizer import ValidationResult
 
 logger = logging.getLogger(__name__)
 
+# Per-headline max length (truncated with ellipsis beyond this) to keep the
+# aggregated section text comfortably within Slack's 3000-char limit for a
+# realistic number of repos per day
+HEADLINE_MAX = 200
+
+
+def _truncate_headline(headline: str, limit: int = HEADLINE_MAX) -> str:
+    """Truncate a headline string with an ellipsis if it exceeds the limit."""
+    if len(headline) <= limit:
+        return headline
+    return headline[: limit - 1] + "…"
+
 
 class SlackClient:
     """Client for sending daily report notifications via Slack Incoming Webhook."""
@@ -50,7 +62,8 @@ class SlackClient:
             page_lines = []
             for name, url in pages:
                 repo = repo_map.get(name)
-                headline = repo["summary"][0] if repo and repo["summary"] else ""
+                raw_headline = repo["summary"][0] if repo and repo["summary"] else ""
+                headline = _truncate_headline(raw_headline)
                 link = f"<{url}|{date_str}: {name}>"
                 page_lines.append(f"{link} — {headline}" if headline else link)
 

@@ -4,7 +4,7 @@ from datetime import datetime
 from unittest.mock import MagicMock
 
 from report import JST
-from report.slack import SlackClient
+from report.slack import HEADLINE_MAX, SlackClient
 from report.summarizer import ValidationResult
 
 
@@ -154,6 +154,22 @@ class TestNotify:
         assert len(lines) == 2
         assert "a> — first headline" in lines[0]
         assert "b> — second headline" in lines[1]
+
+    def test_long_headline_is_truncated(self):
+        client = _make_client()
+        target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        long_headline = "あ" * (HEADLINE_MAX + 50)
+        report = {"repositories": [_repo("repo", [long_headline])]}
+        pages = [("repo", "https://notion.so/p")]
+
+        client.notify(target, report, pages)
+        client.flush()
+
+        page_text = _get_send_kwargs(client)["blocks"][1]["text"]["text"]
+        # headline portion after " — " should be truncated to HEADLINE_MAX
+        headline_part = page_text.split(" — ", 1)[1]
+        assert len(headline_part) == HEADLINE_MAX
+        assert headline_part.endswith("…")
 
 
 class TestNotifyNoActivity:
