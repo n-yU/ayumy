@@ -23,6 +23,16 @@ def _truncate_headline(headline: str, limit: int = HEADLINE_MAX) -> str:
     return headline[: limit - 1] + "…"
 
 
+def _escape_mrkdwn(text: str) -> str:
+    """Escape Slack mrkdwn special characters to neutralize mentions and markup.
+
+    Per Slack's formatting spec, replacing `&`, `<`, `>` with entities is
+    sufficient: all special sequences (`<!channel>`, `<@U...>`, `<url|text>`)
+    start with `<`, so escaping it disables them entirely.
+    """
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
 class SlackClient:
     """Client for sending daily report notifications via Slack Incoming Webhook."""
 
@@ -63,7 +73,7 @@ class SlackClient:
             for name, url in pages:
                 repo = repo_map.get(name)
                 raw_headline = repo["summary"][0] if repo and repo["summary"] else ""
-                headline = _truncate_headline(raw_headline)
+                headline = _escape_mrkdwn(_truncate_headline(raw_headline))
                 link = f"<{url}|{date_str}: {name}>"
                 page_lines.append(f"{link} — {headline}" if headline else link)
 

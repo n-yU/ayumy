@@ -4,7 +4,7 @@ from datetime import datetime
 from unittest.mock import MagicMock
 
 from report import JST
-from report.slack import HEADLINE_MAX, SlackClient
+from report.slack import HEADLINE_MAX, SlackClient, _escape_mrkdwn
 from report.summarizer import ValidationResult
 
 
@@ -170,6 +170,36 @@ class TestNotify:
         headline_part = page_text.split(" — ", 1)[1]
         assert len(headline_part) == HEADLINE_MAX
         assert headline_part.endswith("…")
+
+    def test_headline_special_chars_are_escaped(self):
+        client = _make_client()
+        target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        headline = "fix <!channel> & <T> generic leak"
+        report = {"repositories": [_repo("repo", [headline])]}
+        pages = [("repo", "https://notion.so/p")]
+
+        client.notify(target, report, pages)
+        client.flush()
+
+        page_text = _get_send_kwargs(client)["blocks"][1]["text"]["text"]
+        headline_part = page_text.split(" — ", 1)[1]
+        # Raw special sequences must not reach Slack as-is
+        assert "<!channel>" not in headline_part
+        assert "<T>" not in headline_part
+        # Escaped entities should be present instead
+        assert "&lt;!channel&gt;" in headline_part
+        assert "&amp;" in headline_part
+        assert "&lt;T&gt;" in headline_part
+
+
+class TestEscapeMrkdwn:
+    def test_escapes_ampersand_and_angle_brackets(self):
+        assert _escape_mrkdwn("a & b") == "a &amp; b"
+        assert _escape_mrkdwn("<!channel>") == "&lt;!channel&gt;"
+        assert _escape_mrkdwn("<@U123>") == "&lt;@U123&gt;"
+
+    def test_passes_plain_text_through(self):
+        assert _escape_mrkdwn("plain text 日本語") == "plain text 日本語"
 
 
 class TestNotifyNoActivity:
