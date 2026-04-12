@@ -34,7 +34,7 @@ class GitHubClient:
         """
         seen: set[str] = set()
         seen_branch_heads: set[str] = set()
-        results: list[CommitInfo] = []
+        keyed: list[tuple[datetime, str, CommitInfo]] = []
 
         for branch in repo.get_branches():
             head_sha = branch.commit.sha
@@ -45,18 +45,15 @@ class GitHubClient:
                 if c.sha in seen:
                     continue
                 seen.add(c.sha)
-                results.append({
+                keyed.append((c.commit.author.date, c.sha, {
                     "sha": c.sha,
                     "message": c.commit.message.split("\n")[0],
                     "author": c.commit.author.name,
                     "date": c.commit.author.date.isoformat(),
-                })
+                }))
 
-        results.sort(
-            key=lambda c: (datetime.fromisoformat(c["date"]), c["sha"]),
-            reverse=True,
-        )
-        return results
+        keyed.sort(reverse=True)
+        return [info for _, _, info in keyed]
 
     def fetch_pulls(
         self, repo: Repository, since: datetime, until: datetime

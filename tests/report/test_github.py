@@ -24,7 +24,7 @@ class TestFetchCommits:
         mock_commit.sha = "abc123"
         mock_commit.commit.message = "Fix bug\n\nDetailed description"
         mock_commit.commit.author.name = "user"
-        mock_commit.commit.author.date.isoformat.return_value = "2026-03-28T10:00:00"
+        mock_commit.commit.author.date = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
 
         branch = MagicMock()
         branch.name = "main"
@@ -49,13 +49,13 @@ class TestFetchCommits:
         shared_commit.sha = "abc123"
         shared_commit.commit.message = "Shared commit"
         shared_commit.commit.author.name = "user"
-        shared_commit.commit.author.date.isoformat.return_value = "2026-03-28T10:00:00"
+        shared_commit.commit.author.date = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
 
         feature_commit = MagicMock()
         feature_commit.sha = "def456"
         feature_commit.commit.message = "Feature work"
         feature_commit.commit.author.name = "user"
-        feature_commit.commit.author.date.isoformat.return_value = "2026-03-28T11:00:00"
+        feature_commit.commit.author.date = datetime(2026, 3, 28, 11, 0, tzinfo=JST)
 
         main_branch = MagicMock()
         main_branch.name = "main"
