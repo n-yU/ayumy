@@ -32,15 +32,22 @@ class GitHubClient:
         Returns:
             A list of dicts with keys: sha, message, author, date
         """
-        return [
-            {
-                "sha": c.sha,
-                "message": c.commit.message.split("\n")[0],
-                "author": c.commit.author.name,
-                "date": c.commit.author.date.isoformat(),
-            }
-            for c in repo.get_commits(since=since, until=until)
-        ]
+        seen: set[str] = set()
+        results: list[CommitInfo] = []
+
+        for branch in repo.get_branches():
+            for c in repo.get_commits(sha=branch.name, since=since, until=until):
+                if c.sha in seen:
+                    continue
+                seen.add(c.sha)
+                results.append({
+                    "sha": c.sha,
+                    "message": c.commit.message.split("\n")[0],
+                    "author": c.commit.author.name,
+                    "date": c.commit.author.date.isoformat(),
+                })
+
+        return results
 
     def fetch_pulls(
         self, repo: Repository, since: datetime, until: datetime

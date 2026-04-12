@@ -26,7 +26,11 @@ class TestFetchCommits:
         mock_commit.commit.author.name = "user"
         mock_commit.commit.author.date.isoformat.return_value = "2026-03-28T10:00:00"
 
+        branch = MagicMock()
+        branch.name = "main"
+
         repo = MagicMock()
+        repo.get_branches.return_value = [branch]
         repo.get_commits.return_value = [mock_commit]
 
         result = client.fetch_commits(repo, since, until)
@@ -34,6 +38,40 @@ class TestFetchCommits:
         assert result[0]["sha"] == "abc123"
         assert result[0]["message"] == "Fix bug"
         assert result[0]["author"] == "user"
+        repo.get_commits.assert_called_once_with(sha="main", since=since, until=until)
+
+    def test_deduplicates_across_branches(self):
+        client = _make_client()
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+
+        shared_commit = MagicMock()
+        shared_commit.sha = "abc123"
+        shared_commit.commit.message = "Shared commit"
+        shared_commit.commit.author.name = "user"
+        shared_commit.commit.author.date.isoformat.return_value = "2026-03-28T10:00:00"
+
+        feature_commit = MagicMock()
+        feature_commit.sha = "def456"
+        feature_commit.commit.message = "Feature work"
+        feature_commit.commit.author.name = "user"
+        feature_commit.commit.author.date.isoformat.return_value = "2026-03-28T11:00:00"
+
+        main_branch = MagicMock()
+        main_branch.name = "main"
+        feature_branch = MagicMock()
+        feature_branch.name = "feature/x"
+
+        repo = MagicMock()
+        repo.get_branches.return_value = [main_branch, feature_branch]
+        repo.get_commits.side_effect = [
+            [shared_commit],
+            [shared_commit, feature_commit],
+        ]
+
+        result = client.fetch_commits(repo, since, until)
+        assert len(result) == 2
+        assert {r["sha"] for r in result} == {"abc123", "def456"}
 
 
 class TestFetchPulls:
