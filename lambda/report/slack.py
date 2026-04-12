@@ -73,6 +73,9 @@ class SlackClient:
             for name, url in pages:
                 repo = repo_map.get(name)
                 raw_headline = repo["summary"][0] if repo and repo["summary"] else ""
+                # Collapse newlines so a multi-line headline cannot break
+                # the one-line-per-repo layout of the Slack section.
+                raw_headline = raw_headline.replace("\n", " ").replace("\r", " ")
                 headline = _escape_mrkdwn(_truncate_headline(raw_headline))
                 link = f"<{url}|{date_str}: {name}>"
                 page_lines.append(f"{link} — {headline}" if headline else link)

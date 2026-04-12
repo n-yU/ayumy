@@ -171,6 +171,22 @@ class TestNotify:
         assert len(headline_part) == HEADLINE_MAX
         assert headline_part.endswith("…")
 
+    def test_headline_newlines_are_collapsed(self):
+        client = _make_client()
+        target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        headline = "first line\nsecond line\rthird line"
+        report = {"repositories": [_repo("repo", [headline])]}
+        pages = [("repo", "https://notion.so/p")]
+
+        client.notify(target, report, pages)
+        client.flush()
+
+        page_text = _get_send_kwargs(client)["blocks"][1]["text"]["text"]
+        # Only one rendered line (page link + headline), no stray newlines
+        # from the headline itself.
+        assert page_text.count("\n") == 0
+        assert "first line second line third line" in page_text
+
     def test_headline_special_chars_are_escaped(self):
         client = _make_client()
         target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
