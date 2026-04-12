@@ -1,6 +1,6 @@
 """GitHub activity client."""
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from github import Github
 from github.Repository import Repository
@@ -37,8 +37,9 @@ class GitHubClient:
             A list of dicts with keys: sha, message, author, date
         """
         since_str = since.strftime("%Y-%m-%dT%H:%M:%S%z")
-        until_str = until.strftime("%Y-%m-%dT%H:%M:%S%z")
-        query = f"repo:{repo.full_name} author-date:>={since_str} author-date:<{until_str}"
+        until_inclusive = until - timedelta(seconds=1)
+        until_str = until_inclusive.strftime("%Y-%m-%dT%H:%M:%S%z")
+        query = f"repo:{repo.full_name} author-date:{since_str}..{until_str}"
 
         return [
             {
