@@ -38,7 +38,7 @@ class GitHubClient:
         """
         since_str = since.strftime("%Y-%m-%dT%H:%M:%S%z")
         until_str = until.strftime("%Y-%m-%dT%H:%M:%S%z")
-        query = f"repo:{repo.full_name} author-date:{since_str}..{until_str}"
+        query = f"repo:{repo.full_name} author-date:>={since_str} author-date:<{until_str}"
 
         return [
             {
