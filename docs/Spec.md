@@ -212,9 +212,11 @@ ayumy sync --report --date 2026-03-01..2026-03-05               # 日付範囲�
 
 対象リポジトリは S3 上のセッションログから特定する。各プロジェクトディレクトリの `.ayumy_repo` メタデータファイルからリポジトリ名を読み取り、そのリポジトリのみ `GET /repos/{owner}/{repo}` で取得する。
 
+Commits の取得には Search Commits API を使用し、author-date で期間を指定する。これにより squash merge 後のブランチ削除など、ブランチの存在有無にかかわらず対象期間の commit を取得できる
+
 | アクティビティ | エンドポイント | フィルタ | 取得項目 |
 |---|---|---|---|
-| Commits | `GET /repos/{owner}/{repo}/commits` | `since`, `until` | メッセージ、作成者、日時、SHA |
+| Commits | `GET /search/commits` | `repo:{owner}/{repo}`, `author-date:>=..author-date:<` | メッセージ、作成者、日時、SHA |
 | Pull Requests | `GET /repos/{owner}/{repo}/pulls` | `state=all`, `sort=updated`, 前日以降 | タイトル、番号、状態、作成者、ラベル |
 | Issues | `GET /repos/{owner}/{repo}/issues` | `since`, `state=all`, PR を除外 | タイトル、番号、状態、作成者、ラベル |
 

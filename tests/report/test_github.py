@@ -37,7 +37,8 @@ class TestFetchCommits:
         assert result[0]["author"] == "user"
         call_args = client.g.search_commits.call_args
         assert "repo:user/repo" in call_args[0][0]
-        assert "author-date:" in call_args[0][0]
+        assert "author-date:>=" in call_args[0][0]
+        assert "author-date:<" in call_args[0][0]
         assert call_args[1] == {"sort": "author-date", "order": "desc"}
 
     def test_returns_sorted_by_author_date(self):
