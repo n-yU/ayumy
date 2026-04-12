@@ -10,6 +10,28 @@ from .summarizer import ValidationResult
 
 logger = logging.getLogger(__name__)
 
+# Per-headline max length (truncated with ellipsis beyond this) to keep the
+# aggregated section text comfortably within Slack's 3000-char limit for a
+# realistic number of repos per day
+HEADLINE_MAX = 200
+
+
+def _truncate_headline(headline: str, limit: int = HEADLINE_MAX) -> str:
+    """Truncate a headline string with an ellipsis if it exceeds the limit."""
+    if len(headline) <= limit:
+        return headline
+    return headline[: limit - 1] + "…"
+
+
+def _escape_mrkdwn(text: str) -> str:
+    """Escape Slack mrkdwn special characters to neutralize mentions and markup.
+
+    Per Slack's formatting spec, replacing `&`, `<`, `>` with entities is
+    sufficient: all special sequences (`<!channel>`, `<@U...>`, `<url|text>`)
+    start with `<`, so escaping it disables them entirely.
+    """
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
 
 class SlackClient:
     """Client for sending daily report notifications via Slack Incoming Webhook."""
@@ -46,22 +68,22 @@ class SlackClient:
             self._blocks.append({"type": "divider"})
 
         if pages:
-            page_fields = [
-                {"type": "mrkdwn", "text": f"<{url}|{date_str}: {name}>"}
-                for name, url in pages
-            ]
-            summary = report["summary"] or " "
+            repo_map = {r["name"]: r for r in report["repositories"]}
+            page_lines = []
+            for name, url in pages:
+                repo = repo_map.get(name)
+                raw_headline = repo["summary"][0] if repo and repo["summary"] else ""
+                # Collapse newlines so a multi-line headline cannot break
+                # the one-line-per-repo layout of the Slack section.
+                raw_headline = raw_headline.replace("\n", " ").replace("\r", " ")
+                headline = _escape_mrkdwn(_truncate_headline(raw_headline))
+                link = f"<{url}|{date_str}: {name}>"
+                page_lines.append(f"{link} — {headline}" if headline else link)
+
             self._blocks.extend([
                 {"type": "header", "text": {"type": "plain_text", "text": f"📝 Daily Report ({date_str})"}},
-                {"type": "section", "text": {"type": "mrkdwn", "text": summary}},
-                {"type": "divider"},
+                {"type": "section", "text": {"type": "mrkdwn", "text": "\n".join(page_lines)}},
             ])
-            # section.fields allows max 10 items
-            if len(page_fields) <= 10:
-                self._blocks.append({"type": "section", "fields": page_fields})
-            else:
-                page_lines = "\n".join(f["text"] for f in page_fields)
-                self._blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": page_lines}})
             if skipped_repos:
                 skipped = ", ".join(skipped_repos)
                 self._blocks.append({"type": "context", "elements": [{"type": "mrkdwn", "text": f"⚠️ Skipped: {skipped}"}]})

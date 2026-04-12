@@ -4,7 +4,7 @@ from datetime import datetime
 from unittest.mock import MagicMock
 
 from report import JST
-from report.slack import SlackClient
+from report.slack import HEADLINE_MAX, SlackClient, _escape_mrkdwn
 from report.summarizer import ValidationResult
 
 
@@ -38,11 +38,23 @@ def _blocks_text(blocks):
     return "\n".join(parts)
 
 
+def _repo(name, summary=None):
+    """Build a minimal RepoSummary for tests."""
+    return {
+        "name": name,
+        "summary": summary or [],
+        "achievements": [],
+        "ongoing": [],
+        "claude_code": "",
+        "tags": [],
+    }
+
+
 class TestNotify:
     def test_sends_report_with_pages(self):
         client = _make_client()
         target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
-        report = {"summary": "Today's work", "repositories": []}
+        report = {"repositories": [_repo("my-repo", ["主要な作業を実施"])]}
         pages = [("my-repo", "https://notion.so/page1")]
 
         client.notify(target, report, pages)
@@ -52,14 +64,13 @@ class TestNotify:
         blocks = kwargs["blocks"]
         text = _blocks_text(blocks)
         assert "2026-03-28" in text
-        assert "Today's work" in text
-        assert "<https://notion.so/page1|2026-03-28: my-repo>" in text
+        assert "<https://notion.so/page1|2026-03-28: my-repo> — 主要な作業を実施" in text
         assert kwargs["text"]  # fallback text exists
 
     def test_sends_no_pages_message(self):
         client = _make_client()
         target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
-        report = {"summary": "", "repositories": []}
+        report = {"repositories": []}
 
         client.notify(target, report, [])
         client.flush()
@@ -71,7 +82,7 @@ class TestNotify:
     def test_includes_skipped_repos(self):
         client = _make_client()
         target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
-        report = {"summary": "summary", "repositories": []}
+        report = {"repositories": [_repo("repo", ["headline"])]}
         pages = [("repo", "https://notion.so/p")]
 
         client.notify(target, report, pages, skipped_repos=["unknown-repo"])
@@ -84,7 +95,7 @@ class TestNotify:
     def test_skipped_repos_with_no_pages(self):
         client = _make_client()
         target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
-        report = {"summary": "", "repositories": []}
+        report = {"repositories": []}
 
         client.notify(target, report, [], skipped_repos=["unknown-repo"])
         client.flush()
@@ -96,7 +107,7 @@ class TestNotify:
     def test_block_structure(self):
         client = _make_client()
         target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
-        report = {"summary": "summary", "repositories": []}
+        report = {"repositories": [_repo("repo", ["h"])]}
         pages = [("repo", "https://notion.so/p")]
 
         client.notify(target, report, pages, skipped_repos=["skipped"])
@@ -104,28 +115,107 @@ class TestNotify:
 
         blocks = _get_send_kwargs(client)["blocks"]
         assert blocks[0]["type"] == "header"
-        assert blocks[1]["type"] == "section"  # summary
-        assert blocks[2]["type"] == "divider"
-        assert blocks[3]["type"] == "section"  # page links as fields
-        assert "fields" in blocks[3]
-        assert "text" not in blocks[3]
-        assert blocks[4]["type"] == "context"  # skipped
+        assert blocks[1]["type"] == "section"  # page links with headlines
+        assert "text" in blocks[1]
+        assert "fields" not in blocks[1]
+        assert blocks[2]["type"] == "context"  # skipped
 
-    def test_falls_back_to_list_when_over_10_pages(self):
+    def test_page_line_omits_dash_when_no_headline(self):
         client = _make_client()
         target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
-        report = {"summary": "summary", "repositories": []}
-        pages = [(f"repo-{i}", f"https://notion.so/p{i}") for i in range(11)]
+        report = {"repositories": [_repo("repo")]}
+        pages = [("repo", "https://notion.so/p")]
 
         client.notify(target, report, pages)
         client.flush()
 
         blocks = _get_send_kwargs(client)["blocks"]
-        page_block = blocks[3]
-        assert "fields" not in page_block
-        assert "text" in page_block
-        assert "repo-0" in page_block["text"]["text"]
-        assert "repo-10" in page_block["text"]["text"]
+        page_text = blocks[1]["text"]["text"]
+        assert page_text == "<https://notion.so/p|2026-03-28: repo>"
+
+    def test_multiple_pages_listed_with_headlines(self):
+        client = _make_client()
+        target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        report = {"repositories": [
+            _repo("a", ["first headline"]),
+            _repo("b", ["second headline"]),
+        ]}
+        pages = [
+            ("a", "https://notion.so/a"),
+            ("b", "https://notion.so/b"),
+        ]
+
+        client.notify(target, report, pages)
+        client.flush()
+
+        blocks = _get_send_kwargs(client)["blocks"]
+        page_text = blocks[1]["text"]["text"]
+        lines = page_text.split("\n")
+        assert len(lines) == 2
+        assert "a> — first headline" in lines[0]
+        assert "b> — second headline" in lines[1]
+
+    def test_long_headline_is_truncated(self):
+        client = _make_client()
+        target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        long_headline = "あ" * (HEADLINE_MAX + 50)
+        report = {"repositories": [_repo("repo", [long_headline])]}
+        pages = [("repo", "https://notion.so/p")]
+
+        client.notify(target, report, pages)
+        client.flush()
+
+        page_text = _get_send_kwargs(client)["blocks"][1]["text"]["text"]
+        # headline portion after " — " should be truncated to HEADLINE_MAX
+        headline_part = page_text.split(" — ", 1)[1]
+        assert len(headline_part) == HEADLINE_MAX
+        assert headline_part.endswith("…")
+
+    def test_headline_newlines_are_collapsed(self):
+        client = _make_client()
+        target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        headline = "first line\nsecond line\rthird line"
+        report = {"repositories": [_repo("repo", [headline])]}
+        pages = [("repo", "https://notion.so/p")]
+
+        client.notify(target, report, pages)
+        client.flush()
+
+        page_text = _get_send_kwargs(client)["blocks"][1]["text"]["text"]
+        # Only one rendered line (page link + headline), no stray newlines
+        # from the headline itself.
+        assert page_text.count("\n") == 0
+        assert "first line second line third line" in page_text
+
+    def test_headline_special_chars_are_escaped(self):
+        client = _make_client()
+        target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        headline = "fix <!channel> & <T> generic leak"
+        report = {"repositories": [_repo("repo", [headline])]}
+        pages = [("repo", "https://notion.so/p")]
+
+        client.notify(target, report, pages)
+        client.flush()
+
+        page_text = _get_send_kwargs(client)["blocks"][1]["text"]["text"]
+        headline_part = page_text.split(" — ", 1)[1]
+        # Raw special sequences must not reach Slack as-is
+        assert "<!channel>" not in headline_part
+        assert "<T>" not in headline_part
+        # Escaped entities should be present instead
+        assert "&lt;!channel&gt;" in headline_part
+        assert "&amp;" in headline_part
+        assert "&lt;T&gt;" in headline_part
+
+
+class TestEscapeMrkdwn:
+    def test_escapes_ampersand_and_angle_brackets(self):
+        assert _escape_mrkdwn("a & b") == "a &amp; b"
+        assert _escape_mrkdwn("<!channel>") == "&lt;!channel&gt;"
+        assert _escape_mrkdwn("<@U123>") == "&lt;@U123&gt;"
+
+    def test_passes_plain_text_through(self):
+        assert _escape_mrkdwn("plain text 日本語") == "plain text 日本語"
 
 
 class TestNotifyNoActivity:

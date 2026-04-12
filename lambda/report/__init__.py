@@ -158,7 +158,7 @@ class SessionActivity:
 
 class RepoSummary(TypedDict):
     name: str
-    summary: str
+    summary: list[str]
     achievements: list[str]
     ongoing: list[str]
     claude_code: str
@@ -166,7 +166,6 @@ class RepoSummary(TypedDict):
 
 
 class ReportSummary(TypedDict):
-    summary: str
     repositories: list[RepoSummary]
 
 
