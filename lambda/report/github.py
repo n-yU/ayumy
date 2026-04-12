@@ -33,9 +33,14 @@ class GitHubClient:
             A list of dicts with keys: sha, message, author, date
         """
         seen: set[str] = set()
+        seen_branch_heads: set[str] = set()
         results: list[CommitInfo] = []
 
         for branch in repo.get_branches():
+            head_sha = branch.commit.sha
+            if head_sha in seen_branch_heads:
+                continue
+            seen_branch_heads.add(head_sha)
             for c in repo.get_commits(sha=branch.name, since=since, until=until):
                 if c.sha in seen:
                     continue
