@@ -52,7 +52,10 @@ class GitHubClient:
                     "date": c.commit.author.date.isoformat(),
                 })
 
-        results.sort(key=lambda c: c["date"], reverse=True)
+        results.sort(
+            key=lambda c: (datetime.fromisoformat(c["date"]), c["sha"]),
+            reverse=True,
+        )
         return results
 
     def fetch_pulls(
