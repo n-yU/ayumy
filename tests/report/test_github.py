@@ -28,6 +28,7 @@ class TestFetchCommits:
 
         branch = MagicMock()
         branch.name = "main"
+        branch.commit.sha = "head111"
 
         repo = MagicMock()
         repo.get_branches.return_value = [branch]
@@ -59,8 +60,10 @@ class TestFetchCommits:
 
         main_branch = MagicMock()
         main_branch.name = "main"
+        main_branch.commit.sha = "head111"
         feature_branch = MagicMock()
         feature_branch.name = "feature/x"
+        feature_branch.commit.sha = "head222"
 
         repo = MagicMock()
         repo.get_branches.return_value = [main_branch, feature_branch]
@@ -72,6 +75,32 @@ class TestFetchCommits:
         result = client.fetch_commits(repo, since, until)
         assert len(result) == 2
         assert {r["sha"] for r in result} == {"abc123", "def456"}
+
+    def test_skips_branches_with_same_head_sha(self):
+        client = _make_client()
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+
+        mock_commit = MagicMock()
+        mock_commit.sha = "abc123"
+        mock_commit.commit.message = "Fix bug"
+        mock_commit.commit.author.name = "user"
+        mock_commit.commit.author.date = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
+
+        branch_a = MagicMock()
+        branch_a.name = "main"
+        branch_a.commit.sha = "head111"
+        branch_b = MagicMock()
+        branch_b.name = "alias"
+        branch_b.commit.sha = "head111"
+
+        repo = MagicMock()
+        repo.get_branches.return_value = [branch_a, branch_b]
+        repo.get_commits.return_value = [mock_commit]
+
+        result = client.fetch_commits(repo, since, until)
+        assert len(result) == 1
+        repo.get_commits.assert_called_once_with(sha="main", since=since, until=until)
 
 
 class TestFetchPulls:
