@@ -24,6 +24,10 @@ class GitHubClient:
     ) -> list[CommitInfo]:
         """Fetch commits for a repo within the target date range.
 
+        Uses the Search Commits API with author-date to find commits
+        regardless of branch existence (including deleted branches
+        after squash merge).
+
         Args:
             repo: Target repository
             since: Start of the target period (inclusive)
@@ -32,6 +36,10 @@ class GitHubClient:
         Returns:
             A list of dicts with keys: sha, message, author, date
         """
+        since_str = since.strftime("%Y-%m-%dT%H:%M:%S%z")
+        until_str = until.strftime("%Y-%m-%dT%H:%M:%S%z")
+        query = f"repo:{repo.full_name} author-date:{since_str}..{until_str}"
+
         return [
             {
                 "sha": c.sha,
@@ -39,7 +47,7 @@ class GitHubClient:
                 "author": c.commit.author.name,
                 "date": c.commit.author.date.isoformat(),
             }
-            for c in repo.get_commits(since=since, until=until)
+            for c in self.g.search_commits(query, sort="author-date", order="desc")
         ]
 
     def fetch_pulls(

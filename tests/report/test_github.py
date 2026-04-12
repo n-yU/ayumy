@@ -24,16 +24,47 @@ class TestFetchCommits:
         mock_commit.sha = "abc123"
         mock_commit.commit.message = "Fix bug\n\nDetailed description"
         mock_commit.commit.author.name = "user"
-        mock_commit.commit.author.date.isoformat.return_value = "2026-03-28T10:00:00"
+        mock_commit.commit.author.date = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
 
         repo = MagicMock()
-        repo.get_commits.return_value = [mock_commit]
+        repo.full_name = "user/repo"
+        client.g.search_commits.return_value = [mock_commit]
 
         result = client.fetch_commits(repo, since, until)
         assert len(result) == 1
         assert result[0]["sha"] == "abc123"
         assert result[0]["message"] == "Fix bug"
         assert result[0]["author"] == "user"
+        call_args = client.g.search_commits.call_args
+        assert "repo:user/repo" in call_args[0][0]
+        assert "author-date:" in call_args[0][0]
+        assert call_args[1] == {"sort": "author-date", "order": "desc"}
+
+    def test_returns_sorted_by_author_date(self):
+        client = _make_client()
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+
+        older_commit = MagicMock()
+        older_commit.sha = "abc123"
+        older_commit.commit.message = "Older commit"
+        older_commit.commit.author.name = "user"
+        older_commit.commit.author.date = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
+
+        newer_commit = MagicMock()
+        newer_commit.sha = "def456"
+        newer_commit.commit.message = "Newer commit"
+        newer_commit.commit.author.name = "user"
+        newer_commit.commit.author.date = datetime(2026, 3, 28, 11, 0, tzinfo=JST)
+
+        repo = MagicMock()
+        repo.full_name = "user/repo"
+        client.g.search_commits.return_value = [newer_commit, older_commit]
+
+        result = client.fetch_commits(repo, since, until)
+        assert len(result) == 2
+        assert result[0]["sha"] == "def456"
+        assert result[1]["sha"] == "abc123"
 
 
 class TestFetchPulls:
