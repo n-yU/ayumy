@@ -49,6 +49,24 @@ def process_date(
 
     github_activity = github_client.fetch_activity(since, until, list(session_activity.keys()))
 
+    # Supplement with session-derived commits for repos where
+    # GitHub API found no commits (e.g. squash-merged branches)
+    for repo_name, sessions in session_activity.repos().items():
+        session_commits = [
+            c for s in sessions for c in s.get("session_commits", [])
+        ]
+        if not session_commits:
+            continue
+        repo_data = github_activity.repos().get(repo_name)
+        if repo_data and not repo_data["commits"]:
+            repo_data["commits"] = session_commits
+        elif repo_name not in github_activity:
+            github_activity.repos()[repo_name] = {
+                "commits": session_commits,
+                "pulls": [],
+                "issues": [],
+            }
+
     if not session_activity and not github_activity:
         logger.info("No activity, skipping")
         slack_client.notify_no_activity(since)

@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 from collections import defaultdict
 from datetime import date, datetime, timezone
 
@@ -55,6 +56,9 @@ class SessionStore:
         Returns:
             A tuple of (DynamoDB items, S3 keys processed)
         """
+        # Pattern: [branch short-sha] commit message
+        commit_pattern = re.compile(r"^\[(\S+)\s+([0-9a-f]+)\]\s+(.+)")
+
         # (date, repo, session_id) -> accumulated entry data
         groups: dict[tuple[str, str, str], dict] = defaultdict(
             lambda: {
@@ -62,6 +66,7 @@ class SessionStore:
                 "timestamps": [],
                 "user_messages": [],
                 "tools_used": set(),
+                "commits": [],
             }
         )
 
@@ -112,6 +117,17 @@ class SessionStore:
                     content = entry.get("message", {}).get("content", "")
                     if isinstance(content, str) and content.strip():
                         group["user_messages"].append(content.strip())
+                    elif isinstance(content, list):
+                        for block in content:
+                            if block.get("type") == "tool_result" and not block.get("is_error"):
+                                text = block.get("content", "")
+                                if isinstance(text, str):
+                                    m = commit_pattern.match(text)
+                                    if m:
+                                        group["commits"].append({
+                                            "sha": m.group(2),
+                                            "message": m.group(3),
+                                        })
                 elif entry_type == "assistant":
                     for block in entry.get("message", {}).get("content", []):
                         if block.get("type") == "tool_use":
@@ -124,7 +140,7 @@ class SessionStore:
                 continue
 
             timestamps = sorted(group["timestamps"])
-            items.append({
+            item = {
                 "date": date_str,
                 "repo#session_id": f"{repo}#{session_id}",
                 "repo": repo,
@@ -134,7 +150,10 @@ class SessionStore:
                 "user_messages": group["user_messages"],
                 "tools_used": sorted(group["tools_used"]),
                 "updated_at": now,
-            })
+            }
+            if group["commits"]:
+                item["session_commits"] = group["commits"]
+            items.append(item)
 
         # Only return keys that produced at least one DynamoDB item
         written_groups = {(i["date"], i["repo"], i["repo#session_id"].split("#", 1)[1]) for i in items}
@@ -202,6 +221,7 @@ class SessionStore:
                 "end_time": item["end_time"],
                 "user_messages": item["user_messages"],
                 "tools_used": item["tools_used"],
+                "session_commits": item.get("session_commits", []),
             }
             data.setdefault(repo, []).append(session_info)
 

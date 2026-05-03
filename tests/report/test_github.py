@@ -27,13 +27,29 @@ class TestFetchCommits:
         mock_commit.commit.author.date.isoformat.return_value = "2026-03-28T10:00:00"
 
         repo = MagicMock()
-        repo.get_commits.return_value = [mock_commit]
+        repo.full_name = "n-yU/my-repo"
+        client.g.search_commits.return_value = [mock_commit]
 
         result = client.fetch_commits(repo, since, until)
         assert len(result) == 1
         assert result[0]["sha"] == "abc123"
         assert result[0]["message"] == "Fix bug"
         assert result[0]["author"] == "user"
+
+    def test_uses_author_date_range_query(self):
+        client = _make_client()
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+
+        repo = MagicMock()
+        repo.full_name = "n-yU/my-repo"
+        client.g.search_commits.return_value = []
+
+        client.fetch_commits(repo, since, until)
+
+        query = client.g.search_commits.call_args[0][0]
+        assert "repo:n-yU/my-repo" in query
+        assert "author-date:2026-03-28..2026-03-28" in query
 
 
 class TestFetchPulls:

@@ -117,6 +117,89 @@ class TestBuildItems:
         assert item["start_time"] == "2026-03-28T10:00:00+09:00"
         assert item["end_time"] == "2026-03-28T10:06:00+09:00"
 
+    def test_extracts_commits_from_tool_result(self):
+        store = _make_store()
+        client = _make_session_client()
+        client.list_session_objects.return_value = [
+            {"Key": "claude-sessions/proj/s1.jsonl"},
+        ]
+        client.read_repo_name.return_value = "repo"
+
+        lines = _jsonl_lines(
+            {
+                "type": "user",
+                "timestamp": "2026-03-28T10:00:00+09:00",
+                "message": {"content": "Fix the bug"},
+            },
+            {
+                "type": "user",
+                "timestamp": "2026-03-28T10:05:00+09:00",
+                "message": {"content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "toolu_123",
+                        "content": "[feat/login a1b2c3d] Implement login flow\n 2 files changed",
+                        "is_error": False,
+                    },
+                ]},
+            },
+            {
+                "type": "user",
+                "timestamp": "2026-03-28T10:10:00+09:00",
+                "message": {"content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "toolu_456",
+                        "content": "[feat/login e5f6a7b] Fix test failure\n 1 file changed",
+                        "is_error": False,
+                    },
+                ]},
+            },
+        )
+        client.s3.get_object.return_value = _s3_body(lines)
+
+        items, keys = store._build_items(client)
+
+        assert len(items) == 1
+        assert items[0]["session_commits"] == [
+            {"sha": "a1b2c3d", "message": "Implement login flow"},
+            {"sha": "e5f6a7b", "message": "Fix test failure"},
+        ]
+
+    def test_ignores_error_tool_results(self):
+        store = _make_store()
+        client = _make_session_client()
+        client.list_session_objects.return_value = [
+            {"Key": "claude-sessions/proj/s1.jsonl"},
+        ]
+        client.read_repo_name.return_value = "repo"
+
+        lines = _jsonl_lines(
+            {
+                "type": "user",
+                "timestamp": "2026-03-28T10:00:00+09:00",
+                "message": {"content": "Try commit"},
+            },
+            {
+                "type": "user",
+                "timestamp": "2026-03-28T10:05:00+09:00",
+                "message": {"content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "toolu_err",
+                        "content": "[main abc1234] Some commit\n 1 file changed",
+                        "is_error": True,
+                    },
+                ]},
+            },
+        )
+        client.s3.get_object.return_value = _s3_body(lines)
+
+        items, keys = store._build_items(client)
+
+        assert len(items) == 1
+        assert "session_commits" not in items[0]
+
     def test_skips_no_repo(self):
         store = _make_store()
         client = _make_session_client()

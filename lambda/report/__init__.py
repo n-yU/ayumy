@@ -86,6 +86,7 @@ class SessionInfo(TypedDict):
     end_time: str
     user_messages: list[str]
     tools_used: list[str]
+    session_commits: list[CommitInfo]
 
 
 class SessionActivity:
