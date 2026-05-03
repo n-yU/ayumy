@@ -250,7 +250,7 @@ DynamoDB の `ayumy-sessions` テーブルから対象日付をパーティシ�
 | | `end_time` | String | ISO 8601 |
 | | `user_messages` | List | ユーザーメッセージ |
 | | `tools_used` | List | 使用ツール |
-| | `session_commits` | List | セッション中の git commit 結果（`[{sha, message}]`、未検出時は未設定） |
+| | `session_commits` | List | セッション中の git commit 結果（`[{sha, message}]`、未検出時は空リスト） |
 | | `updated_at` | String | ISO 8601、書き込み・更新時刻 |
 | | `reported_at` | String | ISO 8601、レポート生成時刻（未生成時は未設定） |
 
