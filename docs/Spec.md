@@ -128,6 +128,16 @@ JSONL の各エントリは以下の構造を持つ（Claude Code が生成す�
 | `type` | String | ブロック種別（`"text"`, `"tool_use"` 等） |
 | `name` | String | `type=tool_use` の場合のツール名 |
 
+`type=user` の `message.content` がリストの場合のブロック:
+
+| フィールド | 型 | 説明 |
+|---|---|---|
+| `type` | String | ブロック種別（`"tool_result"` 等） |
+| `content` | String | ツール実行結果のテキスト |
+| `is_error` | Boolean | エラー結果かどうか |
+
+`tool_result` の `content` が `[<branch> <short-sha>] <message>` で始まる場合、git commit の実行結果として SHA とコミットメッセージを抽出する。これにより squash merge で GitHub API から取得できないコミットを補完する。
+
 Claude Code が生成するため、タイムスタンプのフォーマットは安定しており、パース時に防御的な例外処理（`ValueError` の catch 等）は行わない
 
 転送対象のセッションは、マーカーファイル（`.ayumy_last_sync`）との mtime 比較で決定する。
@@ -214,9 +224,11 @@ ayumy sync --report --date 2026-03-01..2026-03-05               # 日付範囲�
 
 | アクティビティ | エンドポイント | フィルタ | 取得項目 |
 |---|---|---|---|
-| Commits | `GET /repos/{owner}/{repo}/commits` | `since`, `until` | メッセージ、作成者、日時、SHA |
+| Commits | `GET /search/commits` | `repo:{full_name} author-date:{since}..{until}` | メッセージ、作成者、日時、SHA |
 | Pull Requests | `GET /repos/{owner}/{repo}/pulls` | `state=all`, `sort=updated`, 前日以降 | タイトル、番号、状態、作成者、ラベル |
 | Issues | `GET /repos/{owner}/{repo}/issues` | `since`, `state=all`, PR を除外 | タイトル、番号、状態、作成者、ラベル |
+
+Commits の取得には Search Commits API を使用し、`author-date` の range 構文（`YYYY-MM-DD..YYYY-MM-DD`）で期間を指定する。これによりブランチの存在有無にかかわらず対象期間のコミットを取得できる。ただし squash merge によって `author-date` が書き換えられたコミットは検出できないため、セッション JSONL の `tool_result` から抽出したコミット情報で補完する（§5.3 参照）
 
 ### 5.2 Claude Code セッションログの読み取り
 DynamoDB の `ayumy-sessions` テーブルから対象日付をパーティションキーとして Query し、セッションメタデータを取得する。結果をリポジトリ別にグルーピングし、各リポジトリ内のセッションを `start_time` 順にソートする。
@@ -238,6 +250,7 @@ DynamoDB の `ayumy-sessions` テーブルから対象日付をパーティシ�
 | | `end_time` | String | ISO 8601 |
 | | `user_messages` | List | ユーザーメッセージ |
 | | `tools_used` | List | 使用ツール |
+| | `session_commits` | List | セッション中の git commit 結果（`[{sha, message}]`、未検出時は未設定） |
 | | `updated_at` | String | ISO 8601、書き込み・更新時刻 |
 | | `reported_at` | String | ISO 8601、レポート生成時刻（未生成時は未設定） |
 
