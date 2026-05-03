@@ -24,7 +24,7 @@ class TestFetchCommits:
         mock_commit.sha = "abc123"
         mock_commit.commit.message = "Fix bug\n\nDetailed description"
         mock_commit.commit.author.name = "user"
-        mock_commit.commit.author.date.isoformat.return_value = "2026-03-28T10:00:00"
+        mock_commit.commit.author.date = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
 
         repo = MagicMock()
         repo.full_name = "n-yU/my-repo"
@@ -49,7 +49,32 @@ class TestFetchCommits:
 
         query = client.g.search_commits.call_args[0][0]
         assert "repo:n-yU/my-repo" in query
-        assert "author-date:2026-03-28..2026-03-28" in query
+        assert "author-date:2026-03-28..2026-03-29" in query
+
+    def test_filters_commits_outside_time_range(self):
+        client = _make_client()
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 28, 15, 0, tzinfo=JST)
+
+        in_range = MagicMock()
+        in_range.sha = "aaa"
+        in_range.commit.message = "Morning commit"
+        in_range.commit.author.name = "user"
+        in_range.commit.author.date = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
+
+        out_of_range = MagicMock()
+        out_of_range.sha = "bbb"
+        out_of_range.commit.message = "Evening commit"
+        out_of_range.commit.author.name = "user"
+        out_of_range.commit.author.date = datetime(2026, 3, 28, 18, 0, tzinfo=JST)
+
+        repo = MagicMock()
+        repo.full_name = "n-yU/my-repo"
+        client.g.search_commits.return_value = [in_range, out_of_range]
+
+        result = client.fetch_commits(repo, since, until)
+        assert len(result) == 1
+        assert result[0]["sha"] == "aaa"
 
 
 class TestFetchPulls:

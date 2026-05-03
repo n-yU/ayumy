@@ -25,9 +25,9 @@ class GitHubClient:
         """Fetch commits for a repo within the target date range.
 
         Uses the Search Commits API with author-date range to find
-        commits regardless of branch existence. The range syntax
-        (YYYY-MM-DD..YYYY-MM-DD) is inclusive on both ends, so we
-        subtract 1 second from until to achieve exclusive upper bound.
+        commits regardless of branch existence. The Search API only
+        supports date-level granularity, so results are post-filtered
+        against the exact since/until timestamps.
 
         Args:
             repo: Target repository
@@ -38,19 +38,21 @@ class GitHubClient:
             A list of dicts with keys: sha, message, author, date
         """
         since_str = since.strftime("%Y-%m-%d")
-        until_inclusive = until - timedelta(seconds=1)
-        until_str = until_inclusive.strftime("%Y-%m-%d")
+        until_str = until.strftime("%Y-%m-%d")
         query = f"repo:{repo.full_name} author-date:{since_str}..{until_str}"
 
-        return [
-            {
+        results: list[CommitInfo] = []
+        for c in self.g.search_commits(query, sort="author-date", order="desc"):
+            author_date = c.commit.author.date
+            if author_date < since or author_date >= until:
+                continue
+            results.append({
                 "sha": c.sha,
                 "message": c.commit.message.split("\n")[0],
                 "author": c.commit.author.name,
-                "date": c.commit.author.date.isoformat(),
-            }
-            for c in self.g.search_commits(query, sort="author-date", order="desc")
-        ]
+                "date": author_date.isoformat(),
+            })
+        return results
 
     def fetch_pulls(
         self, repo: Repository, since: datetime, until: datetime
