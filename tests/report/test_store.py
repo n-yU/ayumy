@@ -434,6 +434,55 @@ class TestFetchSessions:
         assert sessions[0]["user_messages"] == ["earlier"]
         assert sessions[1]["user_messages"] == ["later"]
 
+    def test_includes_session_commits(self):
+        store = _make_store()
+        store.table.query.return_value = {
+            "Items": [
+                {
+                    "date": "2026-03-28",
+                    "repo#session_id": "repo#s1",
+                    "repo": "repo",
+                    "project": "proj",
+                    "start_time": "2026-03-28T10:00:00+09:00",
+                    "end_time": "2026-03-28T11:00:00+09:00",
+                    "user_messages": ["Fix bug"],
+                    "tools_used": ["Edit"],
+                    "session_commits": [
+                        {"sha": "a1b2c3d", "message": "Fix the bug"},
+                    ],
+                },
+            ],
+        }
+
+        activity = store.fetch_sessions("2026-03-28")
+
+        sessions = activity.get("repo")
+        assert sessions[0]["session_commits"] == [
+            {"sha": "a1b2c3d", "message": "Fix the bug"},
+        ]
+
+    def test_defaults_session_commits_when_missing(self):
+        store = _make_store()
+        store.table.query.return_value = {
+            "Items": [
+                {
+                    "date": "2026-03-28",
+                    "repo#session_id": "repo#s1",
+                    "repo": "repo",
+                    "project": "proj",
+                    "start_time": "2026-03-28T10:00:00+09:00",
+                    "end_time": "2026-03-28T11:00:00+09:00",
+                    "user_messages": ["msg"],
+                    "tools_used": [],
+                },
+            ],
+        }
+
+        activity = store.fetch_sessions("2026-03-28")
+
+        sessions = activity.get("repo")
+        assert sessions[0]["session_commits"] == []
+
 
 class TestScanBackfillDates:
     def test_returns_unreported_dates(self):
