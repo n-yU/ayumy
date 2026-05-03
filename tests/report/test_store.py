@@ -198,7 +198,7 @@ class TestBuildItems:
         items, keys = store._build_items(client)
 
         assert len(items) == 1
-        assert "session_commits" not in items[0]
+        assert items[0]["session_commits"] == []
 
     def test_skips_no_repo(self):
         store = _make_store()

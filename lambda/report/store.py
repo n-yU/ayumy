@@ -140,7 +140,7 @@ class SessionStore:
                 continue
 
             timestamps = sorted(group["timestamps"])
-            item = {
+            items.append({
                 "date": date_str,
                 "repo#session_id": f"{repo}#{session_id}",
                 "repo": repo,
@@ -149,11 +149,9 @@ class SessionStore:
                 "end_time": timestamps[-1],
                 "user_messages": group["user_messages"],
                 "tools_used": sorted(group["tools_used"]),
+                "session_commits": group["commits"],
                 "updated_at": now,
-            }
-            if group["commits"]:
-                item["session_commits"] = group["commits"]
-            items.append(item)
+            })
 
         # Only return keys that produced at least one DynamoDB item
         written_groups = {(i["date"], i["repo"], i["repo#session_id"].split("#", 1)[1]) for i in items}
