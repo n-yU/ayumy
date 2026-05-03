@@ -49,7 +49,7 @@ class TestFetchCommits:
 
         query = client.g.search_commits.call_args[0][0]
         assert "repo:n-yU/my-repo" in query
-        assert "author-date:2026-03-28..2026-03-29" in query
+        assert "author-date:2026-03-28..2026-03-28" in query
 
     def test_filters_commits_outside_time_range(self):
         client = _make_client()
