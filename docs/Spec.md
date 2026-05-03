@@ -228,7 +228,7 @@ ayumy sync --report --date 2026-03-01..2026-03-05               # 日付範囲�
 | Pull Requests | `GET /repos/{owner}/{repo}/pulls` | `state=all`, `sort=updated`, 前日以降 | タイトル、番号、状態、作成者、ラベル |
 | Issues | `GET /repos/{owner}/{repo}/issues` | `since`, `state=all`, PR を除外 | タイトル、番号、状態、作成者、ラベル |
 
-Commits の取得には Search Commits API を使用し、`author-date` の range 構文（`YYYY-MM-DD..YYYY-MM-DD`）で期間を指定する。これによりブランチの存在有無にかかわらず対象期間のコミットを取得できる。ただし squash merge によって `author-date` が書き換えられたコミットは検出できないため、セッション JSONL の `tool_result` から抽出したコミット情報で補完する（§5.3 参照）
+Commits の取得には Search Commits API を使用し、`author-date` の range 構文（`YYYY-MM-DD..YYYY-MM-DD`）で期間を指定する。Search API は日付精度のみをサポートするため、取得後に `since <= author_date < until` で post-filter し、手動実行時の部分日（当日 00:00 〜 現在時刻）にも対応する。これによりブランチの存在有無にかかわらず対象期間のコミットを取得できる。ただし squash merge によって `author-date` が書き換えられたコミットは検出できないため、セッション JSONL の `tool_result` から抽出したコミット情報で補完する（§5.3 参照）
 
 ### 5.2 Claude Code セッションログの読み取り
 DynamoDB の `ayumy-sessions` テーブルから対象日付をパーティションキーとして Query し、セッションメタデータを取得する。結果をリポジトリ別にグルーピングし、各リポジトリ内のセッションを `start_time` 順にソートする。
