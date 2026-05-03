@@ -178,6 +178,44 @@ class TestProcessDate:
         github_md = call_args[1]
         assert "Fix login bug" in github_md
 
+    def test_merges_and_deduplicates_session_commits(self):
+        clients = _make_clients()
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+
+        session = SessionActivity({"my-repo": [{
+            "session_id": "s1", "project": "my-repo",
+            "start_time": "2026-03-28T10:00:00+09:00",
+            "end_time": "2026-03-28T11:00:00+09:00",
+            "user_messages": ["Work"], "tools_used": ["Bash"],
+            "session_commits": [
+                {"sha": "abc", "message": "Existing commit"},
+                {"sha": "def", "message": "Squash-lost commit"},
+            ],
+        }]})
+        # GitHub API found one commit that overlaps with session
+        github = GitHubActivity({"my-repo": {
+            "commits": [{"sha": "abc", "message": "Existing commit",
+                         "author": "user", "date": "2026-03-28T10:00:00"}],
+            "pulls": [], "issues": [],
+        }})
+        clients["github_client"].fetch_activity.return_value = github
+
+        report = _make_report([{
+            "name": "my-repo", "summary": ["work"], "achievements": [],
+            "ongoing": [], "claude_code": "", "tags": [],
+        }])
+        clients["summary_client"].generate_summary.return_value = report
+        clients["notion_client"].create_report_pages.return_value = []
+
+        process_date(since, until, session, **clients, allowed_tags=[])
+
+        call_args = clients["summary_client"].generate_summary.call_args[0]
+        github_md = call_args[1]
+        # Both commits present, no duplicates
+        assert "Existing commit" in github_md
+        assert "Squash-lost commit" in github_md
+
     def test_detects_skipped_repos(self):
         clients = _make_clients()
         since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)

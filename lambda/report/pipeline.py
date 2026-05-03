@@ -49,8 +49,8 @@ def process_date(
 
     github_activity = github_client.fetch_activity(since, until, list(session_activity.keys()))
 
-    # Supplement with session-derived commits for repos where
-    # GitHub API found no commits (e.g. squash-merged branches)
+    # Merge session-derived commits into GitHub activity,
+    # deduplicating by SHA to recover squash-merged commits
     for repo_name, sessions in session_activity.repos().items():
         session_commits = [
             c for s in sessions for c in s.get("session_commits", [])
@@ -58,9 +58,12 @@ def process_date(
         if not session_commits:
             continue
         repo_data = github_activity.repos().get(repo_name)
-        if repo_data and not repo_data["commits"]:
-            repo_data["commits"] = session_commits
-        elif repo_name not in github_activity:
+        if repo_data is not None:
+            existing_shas = {c["sha"] for c in repo_data["commits"]}
+            for sc in session_commits:
+                if sc["sha"] not in existing_shas:
+                    repo_data["commits"].append(sc)
+        else:
             github_activity.repos()[repo_name] = {
                 "commits": session_commits,
                 "pulls": [],
