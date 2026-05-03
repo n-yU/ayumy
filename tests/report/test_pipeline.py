@@ -189,13 +189,14 @@ class TestProcessDate:
             "end_time": "2026-03-28T11:00:00+09:00",
             "user_messages": ["Work"], "tools_used": ["Bash"],
             "session_commits": [
-                {"sha": "abc", "message": "Existing commit"},
-                {"sha": "def", "message": "Squash-lost commit"},
+                {"sha": "abc1234", "message": "Existing commit"},
+                {"sha": "def5678", "message": "Squash-lost commit"},
             ],
         }]})
-        # GitHub API found one commit that overlaps with session
+        # GitHub API found one commit with full SHA that overlaps with session
         github = GitHubActivity({"my-repo": {
-            "commits": [{"sha": "abc", "message": "Existing commit",
+            "commits": [{"sha": "abc1234abcdef1234abcdef1234abcdef12345678",
+                         "message": "Existing commit",
                          "author": "user", "date": "2026-03-28T10:00:00"}],
             "pulls": [], "issues": [],
         }})

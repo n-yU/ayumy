@@ -61,7 +61,7 @@ def process_date(
         if repo_data is not None:
             existing_shas = {c["sha"] for c in repo_data["commits"]}
             for sc in session_commits:
-                if sc["sha"] not in existing_shas:
+                if not any(s.startswith(sc["sha"]) for s in existing_shas):
                     repo_data["commits"].append(sc)
         else:
             github_activity.repos()[repo_name] = {
