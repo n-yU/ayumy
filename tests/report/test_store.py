@@ -200,6 +200,50 @@ class TestBuildItems:
         assert len(items) == 1
         assert items[0]["session_commits"] == []
 
+    def test_cross_midnight_commit_only_day(self):
+        store = _make_store()
+        client = _make_session_client()
+        client.list_session_objects.return_value = [
+            {"Key": "claude-sessions/proj/s1.jsonl"},
+        ]
+        client.read_repo_name.return_value = "repo"
+
+        # Day 1 has a user message; Day 2 has only a tool_result with a commit
+        lines = _jsonl_lines(
+            {
+                "type": "user",
+                "timestamp": "2026-03-28T23:50:00+09:00",
+                "message": {"content": "Fix the bug"},
+            },
+            {
+                "type": "user",
+                "timestamp": "2026-03-29T00:05:00+09:00",
+                "message": {"content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "toolu_abc",
+                        "content": "[main a1b2c3d] Apply fix\n 1 file changed",
+                        "is_error": False,
+                    },
+                ]},
+            },
+        )
+        client.s3.get_object.return_value = _s3_body(lines)
+
+        items, keys = store._build_items(client)
+
+        assert len(items) == 2
+        day1 = next(i for i in items if i["date"] == "2026-03-28")
+        day2 = next(i for i in items if i["date"] == "2026-03-29")
+
+        assert day1["user_messages"] == ["Fix the bug"]
+        assert day1["session_commits"] == []
+        assert day2["user_messages"] == []
+        assert day2["session_commits"] == [
+            {"sha": "a1b2c3d", "message": "Apply fix"},
+        ]
+        assert keys == ["claude-sessions/proj/s1.jsonl"]
+
     def test_skips_no_repo(self):
         store = _make_store()
         client = _make_session_client()
