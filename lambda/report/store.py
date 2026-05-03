@@ -136,7 +136,7 @@ class SessionStore:
         now = datetime.now(timezone.utc).isoformat()
         items = []
         for (date_str, repo, session_id), group in groups.items():
-            if not group["user_messages"]:
+            if not group["user_messages"] and not group["commits"]:
                 continue
 
             timestamps = sorted(group["timestamps"])
