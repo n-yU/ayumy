@@ -221,14 +221,15 @@ class TestFetchActivity:
     def test_sleeps_remaining_window_time(self, mock_time, mock_sleep):
         """Sleeps only the remaining window time when batch limit is hit."""
         client = _make_client()
-        client._search_count = 0
-        # Window started at t=0, batch limit hit at t=5 → sleep 15s
-        client._window_start = 0
-        mock_time.return_value = 5
+        # Simulate: already processed a batch, window started at t=100
+        client._search_count = _SEARCH_BATCH
+        client._window_start = 100
+        # Current time: t=105 → elapsed=5, sleep=15
+        mock_time.return_value = 105
         since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
         until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
 
-        repo_names = [f"repo-{i}" for i in range(_SEARCH_BATCH + 1)]
+        repo_names = ["repo-0"]
 
         mock_user = MagicMock()
         client.g.get_user.return_value = mock_user
@@ -252,14 +253,15 @@ class TestFetchActivity:
     def test_skips_sleep_when_window_elapsed(self, mock_time, mock_sleep):
         """Skips sleep when enough time has passed since window start."""
         client = _make_client()
-        client._search_count = 0
-        # Window started at t=0, batch limit hit at t=25 (> 20s window)
-        client._window_start = 0
-        mock_time.return_value = 25
+        # Simulate: already processed a batch, window started at t=100
+        client._search_count = _SEARCH_BATCH
+        client._window_start = 100
+        # Current time: t=125 → elapsed=25 > 20s window
+        mock_time.return_value = 125
         since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
         until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
 
-        repo_names = [f"repo-{i}" for i in range(_SEARCH_BATCH + 1)]
+        repo_names = ["repo-0"]
 
         mock_user = MagicMock()
         client.g.get_user.return_value = mock_user
@@ -277,3 +279,32 @@ class TestFetchActivity:
 
         mock_sleep.assert_not_called()
         assert client._search_count == 1
+
+    @patch("report.github.time.sleep")
+    @patch("report.github.time.time")
+    def test_window_starts_on_first_request(self, mock_time, mock_sleep):
+        """Window starts when first search request is made, not at init."""
+        client = _make_client()
+        client._search_count = 0
+        client._window_start = 0.0
+        mock_time.return_value = 500
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+
+        mock_user = MagicMock()
+        client.g.get_user.return_value = mock_user
+
+        mock_repo = MagicMock()
+        mock_repo.name = "repo"
+        mock_repo.full_name = "n-yU/repo"
+        mock_user.get_repo.return_value = mock_repo
+
+        client.g.search_commits.return_value = []
+        mock_repo.get_pulls.return_value = []
+        mock_repo.get_issues.return_value = []
+
+        client.fetch_activity(since, until, ["repo-0"])
+
+        # Window should be set to current time on first request
+        assert client._window_start == 500
+        mock_sleep.assert_not_called()

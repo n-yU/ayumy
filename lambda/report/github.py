@@ -27,7 +27,7 @@ class GitHubClient:
         """
         self.g = Github(pat, per_page=100)
         self._search_count = 0
-        self._window_start = time.time()
+        self._window_start = 0.0
 
     def fetch_commits(
         self, repo: Repository, since: datetime, until: datetime
@@ -155,8 +155,9 @@ class GitHubClient:
                     logger.info("Search API throttle: sleeping %.0fs", sleep_time)
                     time.sleep(sleep_time)
                 self._search_count = 0
-                self._window_start = time.time()
             commits = self.fetch_commits(repo, since, until)
+            if self._search_count == 0:
+                self._window_start = time.time()
             self._search_count += 1
             pulls = self.fetch_pulls(repo, since, until)
             issues = self.fetch_issues(repo, since, until)
