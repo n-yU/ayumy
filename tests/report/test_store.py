@@ -166,6 +166,55 @@ class TestBuildItems:
             {"sha": "e5f6a7b", "message": "Fix test failure"},
         ]
 
+    def test_extracts_root_and_detached_head_commits(self):
+        store = _make_store()
+        client = _make_session_client()
+        client.list_session_objects.return_value = [
+            {"Key": "claude-sessions/proj/s1.jsonl"},
+        ]
+        client.read_repo_name.return_value = "repo"
+
+        lines = _jsonl_lines(
+            {
+                "type": "user",
+                "timestamp": "2026-03-28T10:00:00+09:00",
+                "message": {"content": "Init repo"},
+            },
+            {
+                "type": "user",
+                "timestamp": "2026-03-28T10:05:00+09:00",
+                "message": {"content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "toolu_root",
+                        "content": "[main (root-commit) a1b2c3d] Initial commit\n 1 file changed",
+                        "is_error": False,
+                    },
+                ]},
+            },
+            {
+                "type": "user",
+                "timestamp": "2026-03-28T10:10:00+09:00",
+                "message": {"content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "toolu_detach",
+                        "content": "[detached HEAD e5f6a7b] Hotfix\n 1 file changed",
+                        "is_error": False,
+                    },
+                ]},
+            },
+        )
+        client.s3.get_object.return_value = _s3_body(lines)
+
+        items, keys = store._build_items(client)
+
+        assert len(items) == 1
+        assert items[0]["session_commits"] == [
+            {"sha": "a1b2c3d", "message": "Initial commit"},
+            {"sha": "e5f6a7b", "message": "Hotfix"},
+        ]
+
     def test_ignores_error_tool_results(self):
         store = _make_store()
         client = _make_session_client()
