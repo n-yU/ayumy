@@ -58,7 +58,8 @@ class SessionStore:
         """
         # Pattern: [... short-sha] commit message
         # Handles normal, root-commit, and detached HEAD forms
-        commit_pattern = re.compile(r"^\[.+\s+([0-9a-f]+)\]\s+(.+)")
+        # MULTILINE allows matching after hook output preceding the summary line
+        commit_pattern = re.compile(r"^\[.+\s+([0-9a-f]+)\]\s+(.+)", re.MULTILINE)
 
         # (date, repo, session_id) -> accumulated entry data
         groups: dict[tuple[str, str, str], dict] = defaultdict(
@@ -123,7 +124,7 @@ class SessionStore:
                             if block.get("type") == "tool_result" and not block.get("is_error"):
                                 text = block.get("content", "")
                                 if isinstance(text, str):
-                                    m = commit_pattern.match(text)
+                                    m = commit_pattern.search(text)
                                     if m:
                                         group["commits"].append({
                                             "sha": m.group(1),
