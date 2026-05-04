@@ -119,7 +119,7 @@ JSONL の各エントリは以下の構造を持つ（Claude Code が生成す�
 |---|---|---|
 | `type` | String | エントリ種別（`"user"`, `"assistant"`, `"summary"` 等） |
 | `timestamp` | String | ISO 8601 形式のタイムスタンプ（例: `"2026-03-28T10:00:00+09:00"`）。常に存在するが、不正な値は観測されていない |
-| `message.content` | String / List | `type=user` の場合は文字列、`type=assistant` の場合はブロックのリスト |
+| `message.content` | String / List | 文字列またはブロックのリスト。`type=user` は通常文字列だが `tool_result` を含むリストの場合もある |
 
 `type=assistant` の `message.content` リスト内のブロック:
 
@@ -127,6 +127,21 @@ JSONL の各エントリは以下の構造を持つ（Claude Code が生成す�
 |---|---|---|
 | `type` | String | ブロック種別（`"text"`, `"tool_use"` 等） |
 | `name` | String | `type=tool_use` の場合のツール名 |
+
+`type=user` の `message.content` がリストの場合のブロック:
+
+| フィールド | 型 | 説明 |
+|---|---|---|
+| `type` | String | ブロック種別（`"tool_result"` 等） |
+| `content` | String | ツール実行結果のテキスト |
+| `is_error` | Boolean | エラー結果かどうか |
+
+`tool_result` の `content` に `[... <short-sha>] <message>` 形式の行が含まれる場合、git commit の実行結果として SHA とコミットメッセージを抽出する:
+
+- 1つの `tool_result` に複数のコミット行が含まれる場合は全て抽出する
+- pre-commit hook の出力が先行する場合にも対応する（行単位でパターンを検索）
+- 通常の `[branch sha]` 形式に加え、`[branch (root-commit) sha]` や `[detached HEAD sha]` にも対応する
+- これにより squash merge で GitHub API から取得できないコミットを補完する
 
 Claude Code が生成するため、タイムスタンプのフォーマットは安定しており、パース時に防御的な例外処理（`ValueError` の catch 等）は行わない
 
@@ -214,9 +229,13 @@ ayumy sync --report --date 2026-03-01..2026-03-05               # 日付範囲�
 
 | アクティビティ | エンドポイント | フィルタ | 取得項目 |
 |---|---|---|---|
-| Commits | `GET /repos/{owner}/{repo}/commits` | `since`, `until` | メッセージ、作成者、日時、SHA |
+| Commits | `GET /search/commits` | `repo:{full_name} author-date:{since_date}..{until_date}` | メッセージ、作成者、日時、SHA |
 | Pull Requests | `GET /repos/{owner}/{repo}/pulls` | `state=all`, `sort=updated`, 前日以降 | タイトル、番号、状態、作成者、ラベル |
 | Issues | `GET /repos/{owner}/{repo}/issues` | `since`, `state=all`, PR を除外 | タイトル、番号、状態、作成者、ラベル |
+
+Commits の取得には Search Commits API を使用し、`author-date` の range 構文（`YYYY-MM-DD..YYYY-MM-DD`）で期間を指定する。検索範囲の上限は `max(since_date, (until - 1day).date())` で算出し、不要な翌日分のページングを回避する。Search API は日付精度のみをサポートするため、取得後に `since <= author_date < until` で post-filter し、手動実行時の部分日（当日 00:00 〜 現在時刻）にも対応する。これによりブランチの存在有無にかかわらず対象期間のコミットを取得できる。ただし squash merge によって `author-date` が書き換えられたコミットは検出できないため、セッション JSONL の `tool_result` から抽出したコミット情報で補完する（§5.3 参照）
+
+Search API には 30 リクエスト/分の secondary rate limit がある。10 リクエストごとに経過時間をチェックし、20 秒のウィンドウ内であれば残り時間だけ sleep してからカウンタをリセットする
 
 ### 5.2 Claude Code セッションログの読み取り
 DynamoDB の `ayumy-sessions` テーブルから対象日付をパーティションキーとして Query し、セッションメタデータを取得する。結果をリポジトリ別にグルーピングし、各リポジトリ内のセッションを `start_time` 順にソートする。
@@ -238,13 +257,14 @@ DynamoDB の `ayumy-sessions` テーブルから対象日付をパーティシ�
 | | `end_time` | String | ISO 8601 |
 | | `user_messages` | List | ユーザーメッセージ |
 | | `tools_used` | List | 使用ツール |
+| | `session_commits` | List | セッション中の git commit 結果（`[{sha, message}]`、未検出時は空リスト） |
 | | `updated_at` | String | ISO 8601、書き込み・更新時刻 |
 | | `reported_at` | String | ISO 8601、レポート生成時刻（未生成時は未設定） |
 
 書き込み時の動作:
 
 - 同一キー（PK + SK）のアイテムは上書きされる（冪等性を担保）
-- ユーザーメッセージがないグループはスキップする
+- ユーザーメッセージも `session_commits` もないグループはスキップする
 - リポジトリ名は `.ayumy_repo` メタデータファイルから解決する。メタデータがないプロジェクトはスキップする
 - 書き込み成功後、処理した JSONL を S3 から削除する。書き込み失敗時は S3 を削除せず、次回実行時に再試行する
 - 書き込み失敗時も DynamoDB に前回成功分のデータが残っているため、レポート生成フローは継続する

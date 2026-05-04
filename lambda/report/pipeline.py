@@ -49,6 +49,27 @@ def process_date(
 
     github_activity = github_client.fetch_activity(since, until, list(session_activity.keys()))
 
+    # Merge session-derived commits into GitHub activity,
+    # deduplicating by SHA to recover squash-merged commits
+    for repo_name, sessions in session_activity.repos().items():
+        session_commits = [
+            c for s in sessions for c in s.get("session_commits", [])
+        ]
+        if not session_commits:
+            continue
+        repo_data = github_activity.repos().get(repo_name)
+        if repo_data is not None:
+            existing_shas = {c["sha"] for c in repo_data["commits"]}
+            for sc in session_commits:
+                if not any(s.startswith(sc["sha"]) for s in existing_shas):
+                    repo_data["commits"].append(sc)
+        else:
+            github_activity.repos()[repo_name] = {
+                "commits": session_commits,
+                "pulls": [],
+                "issues": [],
+            }
+
     if not session_activity and not github_activity:
         logger.info("No activity, skipping")
         slack_client.notify_no_activity(since)

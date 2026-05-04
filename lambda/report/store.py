@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 from collections import defaultdict
 from datetime import date, datetime, timezone
 
@@ -55,6 +56,11 @@ class SessionStore:
         Returns:
             A tuple of (DynamoDB items, S3 keys processed)
         """
+        # Pattern: [... short-sha] commit message
+        # Handles normal, root-commit, and detached HEAD forms
+        # MULTILINE allows matching after hook output preceding the summary line
+        commit_pattern = re.compile(r"^\[.+\s+([0-9a-f]+)\]\s+(.+)", re.MULTILINE)
+
         # (date, repo, session_id) -> accumulated entry data
         groups: dict[tuple[str, str, str], dict] = defaultdict(
             lambda: {
@@ -62,6 +68,7 @@ class SessionStore:
                 "timestamps": [],
                 "user_messages": [],
                 "tools_used": set(),
+                "commits": [],
             }
         )
 
@@ -112,6 +119,16 @@ class SessionStore:
                     content = entry.get("message", {}).get("content", "")
                     if isinstance(content, str) and content.strip():
                         group["user_messages"].append(content.strip())
+                    elif isinstance(content, list):
+                        for block in content:
+                            if block.get("type") == "tool_result" and not block.get("is_error"):
+                                text = block.get("content", "")
+                                if isinstance(text, str):
+                                    for sha, msg in commit_pattern.findall(text):
+                                        group["commits"].append({
+                                            "sha": sha,
+                                            "message": msg,
+                                        })
                 elif entry_type == "assistant":
                     for block in entry.get("message", {}).get("content", []):
                         if block.get("type") == "tool_use":
@@ -120,7 +137,7 @@ class SessionStore:
         now = datetime.now(timezone.utc).isoformat()
         items = []
         for (date_str, repo, session_id), group in groups.items():
-            if not group["user_messages"]:
+            if not group["user_messages"] and not group["commits"]:
                 continue
 
             timestamps = sorted(group["timestamps"])
@@ -133,6 +150,7 @@ class SessionStore:
                 "end_time": timestamps[-1],
                 "user_messages": group["user_messages"],
                 "tools_used": sorted(group["tools_used"]),
+                "session_commits": group["commits"],
                 "updated_at": now,
             })
 
@@ -202,6 +220,7 @@ class SessionStore:
                 "end_time": item["end_time"],
                 "user_messages": item["user_messages"],
                 "tools_used": item["tools_used"],
+                "session_commits": item.get("session_commits", []),
             }
             data.setdefault(repo, []).append(session_info)
 

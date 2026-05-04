@@ -1,11 +1,19 @@
 """GitHub activity client."""
 
-from datetime import datetime
+import logging
+import time
+from datetime import datetime, timedelta
 
 from github import Github
 from github.Repository import Repository
 
 from . import CommitInfo, GitHubActivity, IssueInfo, PullInfo, RepoActivity
+
+logger = logging.getLogger(__name__)
+
+# Search API rate limit: 30 requests/minute
+_SEARCH_BATCH = 10
+_SEARCH_WINDOW = 20
 
 
 class GitHubClient:
@@ -18,11 +26,18 @@ class GitHubClient:
             pat: GitHub Fine-grained PAT with read access to owner repos
         """
         self.g = Github(pat, per_page=100)
+        self._search_count = 0
+        self._window_start = 0.0
 
     def fetch_commits(
         self, repo: Repository, since: datetime, until: datetime
     ) -> list[CommitInfo]:
         """Fetch commits for a repo within the target date range.
+
+        Uses the Search Commits API with author-date range to find
+        commits regardless of branch existence. The Search API only
+        supports date-level granularity, so results are post-filtered
+        against the exact since/until timestamps.
 
         Args:
             repo: Target repository
@@ -32,15 +47,23 @@ class GitHubClient:
         Returns:
             A list of dicts with keys: sha, message, author, date
         """
-        return [
-            {
+        since_str = since.strftime("%Y-%m-%d")
+        until_date = until - timedelta(days=1)
+        until_str = max(since_str, until_date.strftime("%Y-%m-%d"))
+        query = f"repo:{repo.full_name} author-date:{since_str}..{until_str}"
+
+        results: list[CommitInfo] = []
+        for c in self.g.search_commits(query, sort="author-date", order="desc"):
+            author_date = c.commit.author.date
+            if author_date < since or author_date >= until:
+                continue
+            results.append({
                 "sha": c.sha,
                 "message": c.commit.message.split("\n")[0],
                 "author": c.commit.author.name,
-                "date": c.commit.author.date.isoformat(),
-            }
-            for c in repo.get_commits(since=since, until=until)
-        ]
+                "date": author_date.isoformat(),
+            })
+        return results
 
     def fetch_pulls(
         self, repo: Repository, since: datetime, until: datetime
@@ -125,7 +148,17 @@ class GitHubClient:
 
         for name in repo_names:
             repo = user.get_repo(name)
+            if self._search_count >= _SEARCH_BATCH:
+                elapsed = time.time() - self._window_start
+                if elapsed < _SEARCH_WINDOW:
+                    sleep_time = _SEARCH_WINDOW - elapsed
+                    logger.info("Search API throttle: sleeping %.0fs", sleep_time)
+                    time.sleep(sleep_time)
+                self._search_count = 0
             commits = self.fetch_commits(repo, since, until)
+            if self._search_count == 0:
+                self._window_start = time.time()
+            self._search_count += 1
             pulls = self.fetch_pulls(repo, since, until)
             issues = self.fetch_issues(repo, since, until)
 

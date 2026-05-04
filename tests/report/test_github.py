@@ -1,10 +1,10 @@
 """Tests for GitHubClient API wrappers."""
 
 from datetime import datetime
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from report import JST
-from report.github import GitHubClient
+from report.github import GitHubClient, _SEARCH_BATCH, _SEARCH_WINDOW
 
 
 def _make_client():
@@ -24,16 +24,71 @@ class TestFetchCommits:
         mock_commit.sha = "abc123"
         mock_commit.commit.message = "Fix bug\n\nDetailed description"
         mock_commit.commit.author.name = "user"
-        mock_commit.commit.author.date.isoformat.return_value = "2026-03-28T10:00:00"
+        mock_commit.commit.author.date = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
 
         repo = MagicMock()
-        repo.get_commits.return_value = [mock_commit]
+        repo.full_name = "n-yU/my-repo"
+        client.g.search_commits.return_value = [mock_commit]
 
         result = client.fetch_commits(repo, since, until)
         assert len(result) == 1
         assert result[0]["sha"] == "abc123"
         assert result[0]["message"] == "Fix bug"
         assert result[0]["author"] == "user"
+
+    def test_uses_author_date_range_query(self):
+        client = _make_client()
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+
+        repo = MagicMock()
+        repo.full_name = "n-yU/my-repo"
+        client.g.search_commits.return_value = []
+
+        client.fetch_commits(repo, since, until)
+
+        query = client.g.search_commits.call_args[0][0]
+        assert "repo:n-yU/my-repo" in query
+        assert "author-date:2026-03-28..2026-03-28" in query
+
+    def test_uses_same_day_range_for_partial_day(self):
+        client = _make_client()
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 28, 15, 0, tzinfo=JST)
+
+        repo = MagicMock()
+        repo.full_name = "n-yU/my-repo"
+        client.g.search_commits.return_value = []
+
+        client.fetch_commits(repo, since, until)
+
+        query = client.g.search_commits.call_args[0][0]
+        assert "author-date:2026-03-28..2026-03-28" in query
+
+    def test_filters_commits_outside_time_range(self):
+        client = _make_client()
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 28, 15, 0, tzinfo=JST)
+
+        in_range = MagicMock()
+        in_range.sha = "aaa"
+        in_range.commit.message = "Morning commit"
+        in_range.commit.author.name = "user"
+        in_range.commit.author.date = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
+
+        out_of_range = MagicMock()
+        out_of_range.sha = "bbb"
+        out_of_range.commit.message = "Evening commit"
+        out_of_range.commit.author.name = "user"
+        out_of_range.commit.author.date = datetime(2026, 3, 28, 18, 0, tzinfo=JST)
+
+        repo = MagicMock()
+        repo.full_name = "n-yU/my-repo"
+        client.g.search_commits.return_value = [in_range, out_of_range]
+
+        result = client.fetch_commits(repo, since, until)
+        assert len(result) == 1
+        assert result[0]["sha"] == "aaa"
 
 
 class TestFetchPulls:
@@ -158,3 +213,98 @@ class TestFetchIssues:
 
         result = client.fetch_issues(repo, since, until)
         assert result[0]["labels"] == ["bug"]
+
+
+class TestFetchActivity:
+    @patch("report.github.time.sleep")
+    @patch("report.github.time.time")
+    def test_sleeps_remaining_window_time(self, mock_time, mock_sleep):
+        """Sleeps only the remaining window time when batch limit is hit."""
+        client = _make_client()
+        # Simulate: already processed a batch, window started at t=100
+        client._search_count = _SEARCH_BATCH
+        client._window_start = 100
+        # Current time: t=105 → elapsed=5, sleep=15
+        mock_time.return_value = 105
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+
+        repo_names = ["repo-0"]
+
+        mock_user = MagicMock()
+        client.g.get_user.return_value = mock_user
+
+        mock_repo = MagicMock()
+        mock_repo.name = "repo"
+        mock_repo.full_name = "n-yU/repo"
+        mock_user.get_repo.return_value = mock_repo
+
+        client.g.search_commits.return_value = []
+        mock_repo.get_pulls.return_value = []
+        mock_repo.get_issues.return_value = []
+
+        client.fetch_activity(since, until, repo_names)
+
+        mock_sleep.assert_called_once_with(_SEARCH_WINDOW - 5)
+        assert client._search_count == 1
+
+    @patch("report.github.time.sleep")
+    @patch("report.github.time.time")
+    def test_skips_sleep_when_window_elapsed(self, mock_time, mock_sleep):
+        """Skips sleep when enough time has passed since window start."""
+        client = _make_client()
+        # Simulate: already processed a batch, window started at t=100
+        client._search_count = _SEARCH_BATCH
+        client._window_start = 100
+        # Current time: t=125 → elapsed=25 > 20s window
+        mock_time.return_value = 125
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+
+        repo_names = ["repo-0"]
+
+        mock_user = MagicMock()
+        client.g.get_user.return_value = mock_user
+
+        mock_repo = MagicMock()
+        mock_repo.name = "repo"
+        mock_repo.full_name = "n-yU/repo"
+        mock_user.get_repo.return_value = mock_repo
+
+        client.g.search_commits.return_value = []
+        mock_repo.get_pulls.return_value = []
+        mock_repo.get_issues.return_value = []
+
+        client.fetch_activity(since, until, repo_names)
+
+        mock_sleep.assert_not_called()
+        assert client._search_count == 1
+
+    @patch("report.github.time.sleep")
+    @patch("report.github.time.time")
+    def test_window_starts_on_first_request(self, mock_time, mock_sleep):
+        """Window starts when first search request is made, not at init."""
+        client = _make_client()
+        client._search_count = 0
+        client._window_start = 0.0
+        mock_time.return_value = 500
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+
+        mock_user = MagicMock()
+        client.g.get_user.return_value = mock_user
+
+        mock_repo = MagicMock()
+        mock_repo.name = "repo"
+        mock_repo.full_name = "n-yU/repo"
+        mock_user.get_repo.return_value = mock_repo
+
+        client.g.search_commits.return_value = []
+        mock_repo.get_pulls.return_value = []
+        mock_repo.get_issues.return_value = []
+
+        client.fetch_activity(since, until, ["repo-0"])
+
+        # Window should be set to current time on first request
+        assert client._window_start == 500
+        mock_sleep.assert_not_called()
