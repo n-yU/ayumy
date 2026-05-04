@@ -1,10 +1,10 @@
 """Tests for GitHubClient API wrappers."""
 
 from datetime import datetime
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from report import JST
-from report.github import GitHubClient
+from report.github import GitHubClient, _SEARCH_BATCH, _SEARCH_WAIT
 
 
 def _make_client():
@@ -199,3 +199,33 @@ class TestFetchIssues:
 
         result = client.fetch_issues(repo, since, until)
         assert result[0]["labels"] == ["bug"]
+
+
+class TestFetchActivity:
+    @patch("report.github.time.sleep")
+    def test_throttles_after_batch_limit(self, mock_sleep):
+        client = _make_client()
+        client._search_count = 0
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+
+        # Create 11 repos to trigger throttle after 10th
+        repo_names = [f"repo-{i}" for i in range(11)]
+
+        mock_user = MagicMock()
+        client.g.get_user.return_value = mock_user
+
+        mock_repo = MagicMock()
+        mock_repo.name = "repo"
+        mock_repo.full_name = "n-yU/repo"
+        mock_user.get_repo.return_value = mock_repo
+
+        client.g.search_commits.return_value = []
+        mock_repo.get_pulls.return_value = []
+        mock_repo.get_issues.return_value = []
+
+        client.fetch_activity(since, until, repo_names)
+
+        mock_sleep.assert_called_once_with(_SEARCH_WAIT)
+        # Counter resets after sleep, so final count is 1 (11th repo)
+        assert client._search_count == 1
