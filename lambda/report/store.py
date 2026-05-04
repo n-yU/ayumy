@@ -124,11 +124,10 @@ class SessionStore:
                             if block.get("type") == "tool_result" and not block.get("is_error"):
                                 text = block.get("content", "")
                                 if isinstance(text, str):
-                                    m = commit_pattern.search(text)
-                                    if m:
+                                    for sha, msg in commit_pattern.findall(text):
                                         group["commits"].append({
-                                            "sha": m.group(1),
-                                            "message": m.group(2),
+                                            "sha": sha,
+                                            "message": msg,
                                         })
                 elif entry_type == "assistant":
                     for block in entry.get("message", {}).get("content", []):

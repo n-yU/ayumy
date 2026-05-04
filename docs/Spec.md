@@ -136,7 +136,12 @@ JSONL の各エントリは以下の構造を持つ（Claude Code が生成す�
 | `content` | String | ツール実行結果のテキスト |
 | `is_error` | Boolean | エラー結果かどうか |
 
-`tool_result` の `content` に `[... <short-sha>] <message>` 形式の行が含まれる場合、git commit の実行結果として SHA とコミットメッセージを抽出する。pre-commit hook の出力が先行する場合にも対応する（行単位でパターンを検索）。通常の `[branch sha]` 形式に加え、`[branch (root-commit) sha]` や `[detached HEAD sha]` にも対応する。これにより squash merge で GitHub API から取得できないコミットを補完する。
+`tool_result` の `content` に `[... <short-sha>] <message>` 形式の行が含まれる場合、git commit の実行結果として SHA とコミットメッセージを抽出する:
+
+- 1つの `tool_result` に複数のコミット行が含まれる場合は全て抽出する
+- pre-commit hook の出力が先行する場合にも対応する（行単位でパターンを検索）
+- 通常の `[branch sha]` 形式に加え、`[branch (root-commit) sha]` や `[detached HEAD sha]` にも対応する
+- これにより squash merge で GitHub API から取得できないコミットを補完する
 
 Claude Code が生成するため、タイムスタンプのフォーマットは安定しており、パース時に防御的な例外処理（`ValueError` の catch 等）は行わない
 
