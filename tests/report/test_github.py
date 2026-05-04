@@ -4,7 +4,7 @@ from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 from report import JST
-from report.github import GitHubClient, _SEARCH_BATCH, _SEARCH_WAIT
+from report.github import GitHubClient, _SEARCH_BATCH, _SEARCH_WINDOW
 
 
 def _make_client():
@@ -203,14 +203,18 @@ class TestFetchIssues:
 
 class TestFetchActivity:
     @patch("report.github.time.sleep")
-    def test_throttles_after_batch_limit(self, mock_sleep):
+    @patch("report.github.time.time")
+    def test_sleeps_remaining_window_time(self, mock_time, mock_sleep):
+        """Sleeps only the remaining window time when batch limit is hit."""
         client = _make_client()
         client._search_count = 0
+        # Window started at t=0, batch limit hit at t=5 → sleep 15s
+        client._window_start = 0
+        mock_time.return_value = 5
         since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
         until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
 
-        # Create 11 repos to trigger throttle after 10th
-        repo_names = [f"repo-{i}" for i in range(11)]
+        repo_names = [f"repo-{i}" for i in range(_SEARCH_BATCH + 1)]
 
         mock_user = MagicMock()
         client.g.get_user.return_value = mock_user
@@ -226,6 +230,36 @@ class TestFetchActivity:
 
         client.fetch_activity(since, until, repo_names)
 
-        mock_sleep.assert_called_once_with(_SEARCH_WAIT)
-        # Counter resets after sleep, so final count is 1 (11th repo)
+        mock_sleep.assert_called_once_with(_SEARCH_WINDOW - 5)
+        assert client._search_count == 1
+
+    @patch("report.github.time.sleep")
+    @patch("report.github.time.time")
+    def test_skips_sleep_when_window_elapsed(self, mock_time, mock_sleep):
+        """Skips sleep when enough time has passed since window start."""
+        client = _make_client()
+        client._search_count = 0
+        # Window started at t=0, batch limit hit at t=25 (> 20s window)
+        client._window_start = 0
+        mock_time.return_value = 25
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+
+        repo_names = [f"repo-{i}" for i in range(_SEARCH_BATCH + 1)]
+
+        mock_user = MagicMock()
+        client.g.get_user.return_value = mock_user
+
+        mock_repo = MagicMock()
+        mock_repo.name = "repo"
+        mock_repo.full_name = "n-yU/repo"
+        mock_user.get_repo.return_value = mock_repo
+
+        client.g.search_commits.return_value = []
+        mock_repo.get_pulls.return_value = []
+        mock_repo.get_issues.return_value = []
+
+        client.fetch_activity(since, until, repo_names)
+
+        mock_sleep.assert_not_called()
         assert client._search_count == 1
