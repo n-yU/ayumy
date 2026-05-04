@@ -216,6 +216,7 @@ class TestProcessDate:
         # Both commits present, no duplicates
         assert "Existing commit" in github_md
         assert "Squash-lost commit" in github_md
+        assert github_md.count("Existing commit") == 1
 
     def test_detects_skipped_repos(self):
         clients = _make_clients()
