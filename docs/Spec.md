@@ -136,7 +136,7 @@ JSONL の各エントリは以下の構造を持つ（Claude Code が生成す�
 | `content` | String | ツール実行結果のテキスト |
 | `is_error` | Boolean | エラー結果かどうか |
 
-`tool_result` の `content` が `[... <short-sha>] <message>` 形式で始まる場合、git commit の実行結果として SHA とコミットメッセージを抽出する。通常の `[branch sha]` 形式に加え、`[branch (root-commit) sha]` や `[detached HEAD sha]` にも対応する。これにより squash merge で GitHub API から取得できないコミットを補完する。
+`tool_result` の `content` に `[... <short-sha>] <message>` 形式の行が含まれる場合、git commit の実行結果として SHA とコミットメッセージを抽出する。pre-commit hook の出力が先行する場合にも対応する（行単位でパターンを検索）。通常の `[branch sha]` 形式に加え、`[branch (root-commit) sha]` や `[detached HEAD sha]` にも対応する。これにより squash merge で GitHub API から取得できないコミットを補完する。
 
 Claude Code が生成するため、タイムスタンプのフォーマットは安定しており、パース時に防御的な例外処理（`ValueError` の catch 等）は行わない
 
@@ -229,6 +229,8 @@ ayumy sync --report --date 2026-03-01..2026-03-05               # 日付範囲�
 | Issues | `GET /repos/{owner}/{repo}/issues` | `since`, `state=all`, PR を除外 | タイトル、番号、状態、作成者、ラベル |
 
 Commits の取得には Search Commits API を使用し、`author-date` の range 構文（`YYYY-MM-DD..YYYY-MM-DD`）で期間を指定する。検索範囲の上限は `max(since_date, (until - 1day).date())` で算出し、不要な翌日分のページングを回避する。Search API は日付精度のみをサポートするため、取得後に `since <= author_date < until` で post-filter し、手動実行時の部分日（当日 00:00 〜 現在時刻）にも対応する。これによりブランチの存在有無にかかわらず対象期間のコミットを取得できる。ただし squash merge によって `author-date` が書き換えられたコミットは検出できないため、セッション JSONL の `tool_result` から抽出したコミット情報で補完する（§5.3 参照）
+
+Search API には 30 リクエスト/分の secondary rate limit がある。10 リクエストごとに経過時間をチェックし、20 秒のウィンドウ内であれば残り時間だけ sleep してからカウンタをリセットする
 
 ### 5.2 Claude Code セッションログの読み取り
 DynamoDB の `ayumy-sessions` テーブルから対象日付をパーティションキーとして Query し、セッションメタデータを取得する。結果をリポジトリ別にグルーピングし、各リポジトリ内のセッションを `start_time` 順にソートする。
