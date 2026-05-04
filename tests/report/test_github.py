@@ -51,6 +51,20 @@ class TestFetchCommits:
         assert "repo:n-yU/my-repo" in query
         assert "author-date:2026-03-28..2026-03-28" in query
 
+    def test_uses_same_day_range_for_partial_day(self):
+        client = _make_client()
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 28, 15, 0, tzinfo=JST)
+
+        repo = MagicMock()
+        repo.full_name = "n-yU/my-repo"
+        client.g.search_commits.return_value = []
+
+        client.fetch_commits(repo, since, until)
+
+        query = client.g.search_commits.call_args[0][0]
+        assert "author-date:2026-03-28..2026-03-28" in query
+
     def test_filters_commits_outside_time_range(self):
         client = _make_client()
         since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
