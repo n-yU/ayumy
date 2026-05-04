@@ -147,6 +147,12 @@ class TestProcessDate:
         github_md = call_args[1]
         assert "Fix login bug" in github_md
 
+        # Verify GitHubActivity passed to Notion also contains the commit
+        notion_args = clients["notion_client"].create_report_pages.call_args[0]
+        activity = notion_args[2]
+        assert "my-repo" in activity.repos()
+        assert any(c["sha"] == "a1b2c3d" for c in activity.repos()["my-repo"]["commits"])
+
     def test_supplements_session_commits_for_missing_repo(self):
         clients = _make_clients()
         since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
@@ -177,6 +183,12 @@ class TestProcessDate:
         call_args = clients["summary_client"].generate_summary.call_args[0]
         github_md = call_args[1]
         assert "Fix login bug" in github_md
+
+        # Verify GitHubActivity passed to Notion contains the injected repo
+        notion_args = clients["notion_client"].create_report_pages.call_args[0]
+        activity = notion_args[2]
+        assert "my-repo" in activity.repos()
+        assert len(activity.repos()["my-repo"]["commits"]) == 1
 
     def test_merges_and_deduplicates_session_commits(self):
         clients = _make_clients()
@@ -217,6 +229,11 @@ class TestProcessDate:
         assert "Existing commit" in github_md
         assert "Squash-lost commit" in github_md
         assert github_md.count("Existing commit") == 1
+
+        # Verify GitHubActivity passed to Notion has exactly 2 commits (no duplication)
+        notion_args = clients["notion_client"].create_report_pages.call_args[0]
+        activity = notion_args[2]
+        assert len(activity.repos()["my-repo"]["commits"]) == 2
 
     def test_detects_skipped_repos(self):
         clients = _make_clients()
