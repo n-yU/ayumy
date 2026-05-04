@@ -251,6 +251,43 @@ class TestBuildItems:
             {"sha": "a1b2c3d", "message": "Fix formatting"},
         ]
 
+    def test_extracts_multiple_commits_from_single_tool_result(self):
+        store = _make_store()
+        client = _make_session_client()
+        client.list_session_objects.return_value = [
+            {"Key": "claude-sessions/proj/s1.jsonl"},
+        ]
+        client.read_repo_name.return_value = "repo"
+
+        lines = _jsonl_lines(
+            {
+                "type": "user",
+                "timestamp": "2026-03-28T10:00:00+09:00",
+                "message": {"content": "Run commands"},
+            },
+            {
+                "type": "user",
+                "timestamp": "2026-03-28T10:05:00+09:00",
+                "message": {"content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "toolu_multi",
+                        "content": "[main abc1234] First commit\n 1 file changed\n[main def5678] Second commit\n 2 files changed",
+                        "is_error": False,
+                    },
+                ]},
+            },
+        )
+        client.s3.get_object.return_value = _s3_body(lines)
+
+        items, keys = store._build_items(client)
+
+        assert len(items) == 1
+        assert items[0]["session_commits"] == [
+            {"sha": "abc1234", "message": "First commit"},
+            {"sha": "def5678", "message": "Second commit"},
+        ]
+
     def test_ignores_error_tool_results(self):
         store = _make_store()
         client = _make_session_client()
