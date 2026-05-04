@@ -119,7 +119,7 @@ JSONL の各エントリは以下の構造を持つ（Claude Code が生成す�
 |---|---|---|
 | `type` | String | エントリ種別（`"user"`, `"assistant"`, `"summary"` 等） |
 | `timestamp` | String | ISO 8601 形式のタイムスタンプ（例: `"2026-03-28T10:00:00+09:00"`）。常に存在するが、不正な値は観測されていない |
-| `message.content` | String / List | `type=user` の場合は文字列、`type=assistant` の場合はブロックのリスト |
+| `message.content` | String / List | 文字列またはブロックのリスト。`type=user` は通常文字列だが `tool_result` を含むリストの場合もある |
 
 `type=assistant` の `message.content` リスト内のブロック:
 
