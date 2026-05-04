@@ -56,8 +56,9 @@ class SessionStore:
         Returns:
             A tuple of (DynamoDB items, S3 keys processed)
         """
-        # Pattern: [branch short-sha] commit message
-        commit_pattern = re.compile(r"^\[(\S+)\s+([0-9a-f]+)\]\s+(.+)")
+        # Pattern: [... short-sha] commit message
+        # Handles normal, root-commit, and detached HEAD forms
+        commit_pattern = re.compile(r"^\[.+\s+([0-9a-f]+)\]\s+(.+)")
 
         # (date, repo, session_id) -> accumulated entry data
         groups: dict[tuple[str, str, str], dict] = defaultdict(
@@ -125,8 +126,8 @@ class SessionStore:
                                     m = commit_pattern.match(text)
                                     if m:
                                         group["commits"].append({
-                                            "sha": m.group(2),
-                                            "message": m.group(3),
+                                            "sha": m.group(1),
+                                            "message": m.group(2),
                                         })
                 elif entry_type == "assistant":
                     for block in entry.get("message", {}).get("content", []):
