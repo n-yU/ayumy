@@ -136,7 +136,7 @@ JSONL の各エントリは以下の構造を持つ（Claude Code が生成す�
 | `content` | String | ツール実行結果のテキスト |
 | `is_error` | Boolean | エラー結果かどうか |
 
-`tool_result` の `content` が `[<branch> <short-sha>] <message>` で始まる場合、git commit の実行結果として SHA とコミットメッセージを抽出する。これにより squash merge で GitHub API から取得できないコミットを補完する。
+`tool_result` の `content` が `[... <short-sha>] <message>` 形式で始まる場合、git commit の実行結果として SHA とコミットメッセージを抽出する。通常の `[branch sha]` 形式に加え、`[branch (root-commit) sha]` や `[detached HEAD sha]` にも対応する。これにより squash merge で GitHub API から取得できないコミットを補完する。
 
 Claude Code が生成するため、タイムスタンプのフォーマットは安定しており、パース時に防御的な例外処理（`ValueError` の catch 等）は行わない
 
@@ -257,7 +257,7 @@ DynamoDB の `ayumy-sessions` テーブルから対象日付をパーティシ�
 書き込み時の動作:
 
 - 同一キー（PK + SK）のアイテムは上書きされる（冪等性を担保）
-- ユーザーメッセージがないグループはスキップする
+- ユーザーメッセージも `session_commits` もないグループはスキップする
 - リポジトリ名は `.ayumy_repo` メタデータファイルから解決する。メタデータがないプロジェクトはスキップする
 - 書き込み成功後、処理した JSONL を S3 から削除する。書き込み失敗時は S3 を削除せず、次回実行時に再試行する
 - 書き込み失敗時も DynamoDB に前回成功分のデータが残っているため、レポート生成フローは継続する
