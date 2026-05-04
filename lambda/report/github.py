@@ -1,11 +1,19 @@
 """GitHub activity client."""
 
+import logging
+import time
 from datetime import datetime, timedelta
 
 from github import Github
 from github.Repository import Repository
 
 from . import CommitInfo, GitHubActivity, IssueInfo, PullInfo, RepoActivity
+
+logger = logging.getLogger(__name__)
+
+# Search API rate limit: 30 requests/minute
+_SEARCH_BATCH = 10
+_SEARCH_WAIT = 20
 
 
 class GitHubClient:
@@ -18,6 +26,7 @@ class GitHubClient:
             pat: GitHub Fine-grained PAT with read access to owner repos
         """
         self.g = Github(pat, per_page=100)
+        self._search_count = 0
 
     def fetch_commits(
         self, repo: Repository, since: datetime, until: datetime
@@ -138,7 +147,12 @@ class GitHubClient:
 
         for name in repo_names:
             repo = user.get_repo(name)
+            if self._search_count >= _SEARCH_BATCH:
+                logger.info("Search API throttle: sleeping %ds", _SEARCH_WAIT)
+                time.sleep(_SEARCH_WAIT)
+                self._search_count = 0
             commits = self.fetch_commits(repo, since, until)
+            self._search_count += 1
             pulls = self.fetch_pulls(repo, since, until)
             issues = self.fetch_issues(repo, since, until)
 
