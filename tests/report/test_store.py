@@ -215,6 +215,42 @@ class TestBuildItems:
             {"sha": "e5f6a7b", "message": "Hotfix"},
         ]
 
+    def test_extracts_commit_after_hook_output(self):
+        store = _make_store()
+        client = _make_session_client()
+        client.list_session_objects.return_value = [
+            {"Key": "claude-sessions/proj/s1.jsonl"},
+        ]
+        client.read_repo_name.return_value = "repo"
+
+        lines = _jsonl_lines(
+            {
+                "type": "user",
+                "timestamp": "2026-03-28T10:00:00+09:00",
+                "message": {"content": "Commit with hooks"},
+            },
+            {
+                "type": "user",
+                "timestamp": "2026-03-28T10:05:00+09:00",
+                "message": {"content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "toolu_hook",
+                        "content": "check formatting... ok\nrunning linter... passed\n[main a1b2c3d] Fix formatting\n 2 files changed",
+                        "is_error": False,
+                    },
+                ]},
+            },
+        )
+        client.s3.get_object.return_value = _s3_body(lines)
+
+        items, keys = store._build_items(client)
+
+        assert len(items) == 1
+        assert items[0]["session_commits"] == [
+            {"sha": "a1b2c3d", "message": "Fix formatting"},
+        ]
+
     def test_ignores_error_tool_results(self):
         store = _make_store()
         client = _make_session_client()
