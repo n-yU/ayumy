@@ -121,7 +121,7 @@ class GitHubClient:
 
         Returns:
             A list of dicts with keys: number, title, state, author, labels,
-            url, created_at, closed_at
+            url, created_at, closed_at, state_reason
         """
         results: list[IssueInfo] = []
         for issue in repo.get_issues(since=since, state="all"):
