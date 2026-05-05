@@ -578,7 +578,8 @@ class TestFetchSessions:
                     "user_messages": ["Fix bug"],
                     "tools_used": ["Edit"],
                     "session_commits": [
-                        {"sha": "a1b2c3d", "message": "Fix the bug"},
+                        {"sha": "a1b2c3d", "message": "Fix the bug",
+                         "timestamp": "2026-03-28T10:30:00+09:00"},
                     ],
                 },
             ],
@@ -588,7 +589,8 @@ class TestFetchSessions:
 
         sessions = activity.get("repo")
         assert sessions[0]["session_commits"] == [
-            {"sha": "a1b2c3d", "message": "Fix the bug"},
+            {"sha": "a1b2c3d", "message": "Fix the bug",
+             "timestamp": "2026-03-28T10:30:00+09:00"},
         ]
 
     def test_defaults_session_commits_when_missing(self):
