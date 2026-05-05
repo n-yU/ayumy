@@ -301,24 +301,6 @@ class TestTimelineSection:
         blocks = client._build_timeline_section("repo", repo_activity, SINCE, UNTIL)
         assert blocks == []
 
-    def test_skips_commits_without_url(self):
-        client = _make_client()
-        # Session-recovered commits have empty url and should be skipped
-        repo_activity = {
-            "commits": [
-                {**_commit("real0001", "Real commit", hour=10),
-                 "url": "https://github.com/n-yU/repo/commit/real0001"},
-                {**_commit("session0", "Session-only commit", hour=11),
-                 "url": ""},
-            ],
-            "pulls": [],
-            "issues": [],
-        }
-        blocks = client._build_timeline_section("repo", repo_activity, SINCE, UNTIL)
-        rows = blocks[1]["table"]["children"]
-        # Header + 1 data row (session commit skipped)
-        assert len(rows) == 2
-        assert rows[1]["table_row"]["cells"][2][0]["text"]["content"] == "real000: Real commit"
 
 
 class TestBuildChildren:

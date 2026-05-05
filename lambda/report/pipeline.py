@@ -49,12 +49,9 @@ def process_date(
 
     github_activity = github_client.fetch_activity(since, until, list(session_activity.keys()))
 
-    # Merge session-derived commits into GitHub activity,
-    # deduplicating by SHA to recover squash-merged commits.
-    # Session commits carry only sha and message; normalize them to the
-    # full CommitInfo shape using the session's start_time as a date
-    # approximation and an empty url (these commits have no canonical
-    # GitHub URL since their branch may have been deleted).
+    # Recover squash-merged commits from session logs, normalizing to
+    # the full CommitInfo shape and deduplicating by SHA prefix.
+    owner = github_client.owner
     for repo_name, sessions in session_activity.repos().items():
         session_commits = [
             {
@@ -62,7 +59,7 @@ def process_date(
                 "message": c["message"],
                 "author": "",
                 "date": s["start_time"],
-                "url": "",
+                "url": f"https://github.com/{owner}/{repo_name}/commit/{c['sha']}",
             }
             for s in sessions for c in s.get("session_commits", [])
         ]

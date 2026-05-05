@@ -3,6 +3,7 @@
 import logging
 import time
 from datetime import datetime, timedelta
+from functools import cached_property
 
 from github import Github
 from github.Repository import Repository
@@ -28,6 +29,11 @@ class GitHubClient:
         self.g = Github(pat, per_page=100)
         self._search_count = 0
         self._window_start = 0.0
+
+    @cached_property
+    def owner(self) -> str:
+        """Login name of the authenticated user (owner of accessible repos)."""
+        return self.g.get_user().login
 
     def fetch_commits(
         self, repo: Repository, since: datetime, until: datetime
