@@ -185,6 +185,15 @@ class TestStatusSections:
             "repo#12: Duplicate",
             "repo#13: Legacy closed",
         ]
+        urls = [b["bulleted_list_item"]["rich_text"][1]["text"]["link"]["url"] for b in bullets]
+        assert urls == [
+            "https://github.com/n-yU/repo/pull/1",
+            "https://github.com/n-yU/repo/pull/2",
+            "https://github.com/n-yU/repo/issues/10",
+            "https://github.com/n-yU/repo/issues/11",
+            "https://github.com/n-yU/repo/issues/12",
+            "https://github.com/n-yU/repo/issues/13",
+        ]
 
     def test_in_progress_includes_open_prs_and_existing_open_issues(self):
         client = _make_client()
@@ -202,8 +211,15 @@ class TestStatusSections:
         blocks = client._build_status_sections("repo", repo_activity, SINCE, UNTIL)
         assert blocks[0]["heading_2"]["rich_text"][0]["text"]["content"] == "In Progress"
         # No prefix on In Progress bullets
-        labels = [b["bulleted_list_item"]["rich_text"][0]["text"]["content"] for b in blocks[1:]]
+        bullets = blocks[1:]
+        labels = [b["bulleted_list_item"]["rich_text"][0]["text"]["content"] for b in bullets]
         assert labels == ["repo#3: WIP", "repo#4: Ready", "repo#20: Old open issue"]
+        urls = [b["bulleted_list_item"]["rich_text"][0]["text"]["link"]["url"] for b in bullets]
+        assert urls == [
+            "https://github.com/n-yU/repo/pull/3",
+            "https://github.com/n-yU/repo/pull/4",
+            "https://github.com/n-yU/repo/issues/20",
+        ]
 
     def test_todo_collects_newly_created_open_issues(self):
         client = _make_client()
@@ -224,6 +240,13 @@ class TestStatusSections:
             for b in blocks if b["type"] == "heading_2"
         ]
         assert headings == ["In Progress", "Todo"]
+        # Verify each bullet links to its issue URL
+        bullets = [b for b in blocks if b["type"] == "bulleted_list_item"]
+        urls = [b["bulleted_list_item"]["rich_text"][0]["text"]["link"]["url"] for b in bullets]
+        assert urls == [
+            "https://github.com/n-yU/repo/issues/31",  # In Progress (old)
+            "https://github.com/n-yU/repo/issues/30",  # Todo (newly created)
+        ]
 
     def test_empty_sections_omitted(self):
         client = _make_client()
