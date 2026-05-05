@@ -374,3 +374,25 @@ class TestBuildChildren:
         children = client._build_children(repo_summary, repo_activity, SINCE, UNTIL)
         types = [c["type"] for c in children]
         assert types == ["heading_2", "bulleted_list_item"]
+
+
+class TestCreateReportPagesWiring:
+    def test_passes_since_until_to_create_page(self):
+        from report import GitHubActivity, SessionActivity
+        client = _make_client()
+        client._archive_existing_pages = MagicMock(return_value=0)
+        client.create_page = MagicMock(return_value="https://notion.so/page1")
+
+        target_date = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        report = {"repositories": [{"name": "repo", "summary": [], "tags": []}]}
+        activity = GitHubActivity({"repo": {"commits": [], "pulls": [], "issues": []}})
+        sessions = SessionActivity({})
+
+        client.create_report_pages(target_date, SINCE, UNTIL, report, activity, sessions)
+
+        client.create_page.assert_called_once()
+        args = client.create_page.call_args[0]
+        # Signature: target_date, repo_summary, repo_activity, since, until, ...
+        assert args[0] == target_date
+        assert args[3] == SINCE
+        assert args[4] == UNTIL
