@@ -276,6 +276,14 @@ class TestTimelineSection:
         assert details[2] == "abc1234: Fix typo"
         assert details[3] == "repo#1: Add feature"
 
+        urls = [r["table_row"]["cells"][2][0]["text"]["link"]["url"] for r in rows[1:]]
+        assert urls == [
+            "https://github.com/n-yU/repo/issues/5",
+            "https://github.com/n-yU/repo/pull/1",
+            "https://github.com/n-yU/repo/commit/abc1234567",
+            "https://github.com/n-yU/repo/pull/1",
+        ]
+
     def test_pr_closed_without_merge_emits_pr_closed(self):
         client = _make_client()
         repo_activity = {
