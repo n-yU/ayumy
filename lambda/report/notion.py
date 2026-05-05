@@ -32,17 +32,21 @@ def _chunk_rich_text(text: str) -> list[dict]:
     ]
 
 
-def _linked_text(content: str, url: str) -> dict:
-    """Build a single rich_text object with a hyperlink.
+def _linked_text(content: str, url: str) -> list[dict]:
+    """Build rich_text objects with a hyperlink, split at Notion's per-item limit.
 
     Args:
         content: Display text
         url: Target URL
 
     Returns:
-        A rich_text dict with an embedded link
+        A list of rich_text dicts each within RICH_TEXT_LIMIT chars and
+        sharing the same link
     """
-    return {"type": "text", "text": {"content": content, "link": {"url": url}}}
+    return [
+        {"type": "text", "text": {"content": content[i:i + RICH_TEXT_LIMIT], "link": {"url": url}}}
+        for i in range(0, len(content), RICH_TEXT_LIMIT)
+    ]
 
 
 def _is_in_range(iso_timestamp: str | None, since: datetime, until: datetime) -> bool:
@@ -74,7 +78,7 @@ def _bulleted_link(label: str, url: str, prefix: str = "") -> dict:
     rich_text: list[dict] = []
     if prefix:
         rich_text.append({"type": "text", "text": {"content": prefix}})
-    rich_text.append(_linked_text(label, url))
+    rich_text.extend(_linked_text(label, url))
     return {
         "object": "block",
         "type": "bulleted_list_item",
@@ -348,7 +352,7 @@ class NotionClient:
             rows.append(_table_row([
                 [{"type": "text", "text": {"content": time_str}}],
                 [{"type": "text", "text": {"content": event_type}}],
-                [_linked_text(label, url)],
+                _linked_text(label, url),
             ]))
 
         return [
