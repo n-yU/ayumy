@@ -229,9 +229,9 @@ ayumy sync --report --date 2026-03-01..2026-03-05               # 日付範囲�
 
 | アクティビティ | エンドポイント | フィルタ | 取得項目 |
 |---|---|---|---|
-| Commits | `GET /search/commits` | `repo:{full_name} author-date:{since_date}..{until_date}` | メッセージ、作成者、日時、SHA |
-| Pull Requests | `GET /repos/{owner}/{repo}/pulls` | `state=all`, `sort=updated`, 前日以降 | タイトル、番号、状態、作成者、ラベル |
-| Issues | `GET /repos/{owner}/{repo}/issues` | `since`, `state=all`, PR を除外 | タイトル、番号、状態、作成者、ラベル |
+| Commits | `GET /search/commits` | `repo:{full_name} author-date:{since_date}..{until_date}` | メッセージ、作成者、日時、SHA、URL |
+| Pull Requests | `GET /repos/{owner}/{repo}/pulls` | `state=all`, `sort=updated`, 前日以降 | タイトル、番号、状態、作成者、ラベル、draft フラグ、URL、作成日時、merge 日時、close 日時 |
+| Issues | `GET /repos/{owner}/{repo}/issues` | `since`, `state=all`, PR を除外 | タイトル、番号、状態、作成者、ラベル、URL、作成日時、close 日時、close 理由（state_reason） |
 
 Commits の取得には Search Commits API を使用し、`author-date` の range 構文（`YYYY-MM-DD..YYYY-MM-DD`）で期間を指定する。検索範囲の上限は `max(since_date, (until - 1day).date())` で算出し、不要な翌日分のページングを回避する。Search API は日付精度のみをサポートするため、取得後に `since <= author_date < until` で post-filter し、手動実行時の部分日（当日 00:00 〜 現在時刻）にも対応する。これによりブランチの存在有無にかかわらず対象期間のコミットを取得できる。ただし squash merge によって `author-date` が書き換えられたコミットは検出できないため、セッション JSONL の `tool_result` から抽出したコミット情報で補完する（§5.3 参照）
 
