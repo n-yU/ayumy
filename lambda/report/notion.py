@@ -278,6 +278,10 @@ class NotionClient:
         events: list[tuple[datetime, str, str, str]] = []
 
         for c in repo_activity["commits"]:
+            # Skip session-recovered commits: they lack a canonical URL
+            # (branch may have been deleted) so they cannot be linked
+            if not c["url"]:
+                continue
             ts = datetime.fromisoformat(c["date"])
             sha = c["sha"][:SHA_PREFIX_LEN]
             label = f"{sha}: {c['message']}"

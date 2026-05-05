@@ -145,10 +145,16 @@ class TestProcessDate:
         assert "Fix login bug" in github_md
 
         # Verify GitHubActivity passed to Notion also contains the commit
+        # with normalized fields (date from session, empty url, empty author)
         notion_args = clients["notion_client"].create_report_pages.call_args[0]
         activity = notion_args[4]
         assert "my-repo" in activity.repos()
-        assert any(c["sha"] == "a1b2c3d" for c in activity.repos()["my-repo"]["commits"])
+        injected = next(
+            c for c in activity.repos()["my-repo"]["commits"] if c["sha"] == "a1b2c3d"
+        )
+        assert injected["date"] == "2026-03-28T10:00:00+09:00"
+        assert injected["url"] == ""
+        assert injected["author"] == ""
 
     def test_supplements_session_commits_for_missing_repo(self):
         clients = _make_clients()
