@@ -9,14 +9,41 @@ from collections.abc import KeysView
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import TypedDict
 
 JST = timezone(timedelta(hours=9))
 
-# Type aliases for structured activity data
-CommitInfo = dict[str, str]
-PullInfo = dict[str, Any]
-IssueInfo = dict[str, Any]
+
+class CommitInfo(TypedDict):
+    sha: str
+    message: str
+    author: str
+    date: str
+    url: str
+
+
+class PullInfo(TypedDict):
+    number: int
+    title: str
+    state: str
+    author: str
+    labels: list[str]
+    draft: bool
+    url: str
+    created_at: str
+    merged_at: str | None
+    closed_at: str | None
+
+
+class IssueInfo(TypedDict):
+    number: int
+    title: str
+    state: str
+    author: str
+    labels: list[str]
+    url: str
+    created_at: str
+    closed_at: str | None
 
 
 class RepoActivity(TypedDict):
@@ -160,9 +187,6 @@ class SessionActivity:
 class RepoSummary(TypedDict):
     name: str
     summary: list[str]
-    achievements: list[str]
-    ongoing: list[str]
-    claude_code: str
     tags: list[str]
 
 

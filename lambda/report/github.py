@@ -62,6 +62,7 @@ class GitHubClient:
                 "message": c.commit.message.split("\n")[0],
                 "author": c.commit.author.name,
                 "date": author_date.isoformat(),
+                "url": c.html_url,
             })
         return results
 
@@ -76,8 +77,9 @@ class GitHubClient:
             until: End of the target period (exclusive)
 
         Returns:
-            A list of dicts with keys: number, title, state, author, labels.
-            State is one of "merged", "closed", "open"
+            A list of dicts with keys: number, title, state, author, labels,
+            draft, url, created_at, merged_at, closed_at. State is one of
+            "merged", "closed", "open"
         """
         results: list[PullInfo] = []
         for pr in repo.get_pulls(state="all", sort="updated", direction="desc"):
@@ -99,6 +101,11 @@ class GitHubClient:
                 "state": state,
                 "author": pr.user.login,
                 "labels": [l.name for l in pr.labels],
+                "draft": bool(pr.draft),
+                "url": pr.html_url,
+                "created_at": pr.created_at.isoformat(),
+                "merged_at": pr.merged_at.isoformat() if pr.merged_at else None,
+                "closed_at": pr.closed_at.isoformat() if pr.closed_at else None,
             })
         return results
 
@@ -113,7 +120,8 @@ class GitHubClient:
             until: End of the target period (exclusive)
 
         Returns:
-            A list of dicts with keys: number, title, state, author, labels
+            A list of dicts with keys: number, title, state, author, labels,
+            url, created_at, closed_at
         """
         results: list[IssueInfo] = []
         for issue in repo.get_issues(since=since, state="all"):
@@ -127,6 +135,9 @@ class GitHubClient:
                 "state": issue.state,
                 "author": issue.user.login,
                 "labels": [l.name for l in issue.labels],
+                "url": issue.html_url,
+                "created_at": issue.created_at.isoformat(),
+                "closed_at": issue.closed_at.isoformat() if issue.closed_at else None,
             })
         return results
 

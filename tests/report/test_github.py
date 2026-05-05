@@ -25,6 +25,7 @@ class TestFetchCommits:
         mock_commit.commit.message = "Fix bug\n\nDetailed description"
         mock_commit.commit.author.name = "user"
         mock_commit.commit.author.date = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
+        mock_commit.html_url = "https://github.com/n-yU/my-repo/commit/abc123"
 
         repo = MagicMock()
         repo.full_name = "n-yU/my-repo"
@@ -35,6 +36,7 @@ class TestFetchCommits:
         assert result[0]["sha"] == "abc123"
         assert result[0]["message"] == "Fix bug"
         assert result[0]["author"] == "user"
+        assert result[0]["url"] == "https://github.com/n-yU/my-repo/commit/abc123"
 
     def test_uses_author_date_range_query(self):
         client = _make_client()
@@ -100,6 +102,10 @@ class TestFetchPulls:
         pr = MagicMock()
         pr.updated_at = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
         pr.merged_at = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
+        pr.closed_at = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
+        pr.created_at = datetime(2026, 3, 27, 9, 0, tzinfo=JST)
+        pr.draft = False
+        pr.html_url = "https://github.com/n-yU/repo/pull/1"
         pr.number = 1
         pr.title = "Add feature"
         pr.user.login = "user"
@@ -111,6 +117,11 @@ class TestFetchPulls:
         result = client.fetch_pulls(repo, since, until)
         assert len(result) == 1
         assert result[0]["state"] == "merged"
+        assert result[0]["draft"] is False
+        assert result[0]["url"] == "https://github.com/n-yU/repo/pull/1"
+        assert result[0]["created_at"] == "2026-03-27T09:00:00+09:00"
+        assert result[0]["merged_at"] == "2026-03-28T10:00:00+09:00"
+        assert result[0]["closed_at"] == "2026-03-28T10:00:00+09:00"
 
     def test_determines_closed_state(self):
         client = _make_client()
@@ -120,6 +131,10 @@ class TestFetchPulls:
         pr = MagicMock()
         pr.updated_at = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
         pr.merged_at = None
+        pr.closed_at = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
+        pr.created_at = datetime(2026, 3, 27, 9, 0, tzinfo=JST)
+        pr.draft = False
+        pr.html_url = "https://github.com/n-yU/repo/pull/2"
         pr.state = "closed"
         pr.number = 2
         pr.title = "Rejected PR"
@@ -131,6 +146,8 @@ class TestFetchPulls:
 
         result = client.fetch_pulls(repo, since, until)
         assert result[0]["state"] == "closed"
+        assert result[0]["merged_at"] is None
+        assert result[0]["closed_at"] == "2026-03-28T10:00:00+09:00"
 
     def test_determines_open_state(self):
         client = _make_client()
@@ -140,6 +157,10 @@ class TestFetchPulls:
         pr = MagicMock()
         pr.updated_at = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
         pr.merged_at = None
+        pr.closed_at = None
+        pr.created_at = datetime(2026, 3, 28, 9, 0, tzinfo=JST)
+        pr.draft = True
+        pr.html_url = "https://github.com/n-yU/repo/pull/3"
         pr.state = "open"
         pr.number = 3
         pr.title = "WIP"
@@ -151,6 +172,8 @@ class TestFetchPulls:
 
         result = client.fetch_pulls(repo, since, until)
         assert result[0]["state"] == "open"
+        assert result[0]["draft"] is True
+        assert result[0]["closed_at"] is None
 
     def test_breaks_on_old_prs(self):
         client = _make_client()
@@ -176,6 +199,9 @@ class TestFetchIssues:
         issue = MagicMock()
         issue.pull_request = None
         issue.updated_at = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
+        issue.created_at = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
+        issue.closed_at = None
+        issue.html_url = "https://github.com/n-yU/repo/issues/5"
         issue.number = 5
         issue.title = "Bug report"
         issue.state = "open"
@@ -191,6 +217,9 @@ class TestFetchIssues:
         result = client.fetch_issues(repo, since, until)
         assert len(result) == 1
         assert result[0]["number"] == 5
+        assert result[0]["url"] == "https://github.com/n-yU/repo/issues/5"
+        assert result[0]["created_at"] == "2026-03-28T10:00:00+09:00"
+        assert result[0]["closed_at"] is None
 
     def test_extracts_labels(self):
         client = _make_client()
@@ -202,6 +231,9 @@ class TestFetchIssues:
         issue = MagicMock()
         issue.pull_request = None
         issue.updated_at = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
+        issue.created_at = datetime(2026, 3, 28, 9, 0, tzinfo=JST)
+        issue.closed_at = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
+        issue.html_url = "https://github.com/n-yU/repo/issues/6"
         issue.number = 6
         issue.title = "Issue"
         issue.state = "closed"
@@ -213,6 +245,7 @@ class TestFetchIssues:
 
         result = client.fetch_issues(repo, since, until)
         assert result[0]["labels"] == ["bug"]
+        assert result[0]["closed_at"] == "2026-03-28T10:00:00+09:00"
 
 
 class TestFetchActivity:

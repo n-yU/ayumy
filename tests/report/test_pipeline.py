@@ -74,8 +74,7 @@ class TestProcessDate:
         clients["github_client"].fetch_activity.return_value = github
 
         report = _make_report([{
-            "name": "my-repo", "summary": ["work"], "achievements": [],
-            "ongoing": [], "claude_code": "", "tags": [],
+            "name": "my-repo", "summary": ["work"], "tags": [],
         }])
         clients["summary_client"].generate_summary.return_value = report
         clients["notion_client"].create_report_pages.return_value = [
@@ -100,8 +99,7 @@ class TestProcessDate:
         clients["github_client"].fetch_activity.return_value = github
 
         report = _make_report([{
-            "name": "repo", "summary": [], "achievements": [],
-            "ongoing": [], "claude_code": "", "tags": ["BadTag"],
+            "name": "repo", "summary": [], "tags": ["BadTag"],
         }])
         clients["summary_client"].generate_summary.return_value = report
         clients["notion_client"].create_report_pages.return_value = []
@@ -134,8 +132,7 @@ class TestProcessDate:
         clients["github_client"].fetch_activity.return_value = github
 
         report = _make_report([{
-            "name": "my-repo", "summary": ["work"], "achievements": [],
-            "ongoing": [], "claude_code": "", "tags": [],
+            "name": "my-repo", "summary": ["work"], "tags": [],
         }])
         clients["summary_client"].generate_summary.return_value = report
         clients["notion_client"].create_report_pages.return_value = []
@@ -149,7 +146,7 @@ class TestProcessDate:
 
         # Verify GitHubActivity passed to Notion also contains the commit
         notion_args = clients["notion_client"].create_report_pages.call_args[0]
-        activity = notion_args[2]
+        activity = notion_args[4]
         assert "my-repo" in activity.repos()
         assert any(c["sha"] == "a1b2c3d" for c in activity.repos()["my-repo"]["commits"])
 
@@ -172,8 +169,7 @@ class TestProcessDate:
         clients["github_client"].fetch_activity.return_value = github
 
         report = _make_report([{
-            "name": "my-repo", "summary": ["work"], "achievements": [],
-            "ongoing": [], "claude_code": "", "tags": [],
+            "name": "my-repo", "summary": ["work"], "tags": [],
         }])
         clients["summary_client"].generate_summary.return_value = report
         clients["notion_client"].create_report_pages.return_value = []
@@ -186,7 +182,7 @@ class TestProcessDate:
 
         # Verify GitHubActivity passed to Notion contains the injected repo
         notion_args = clients["notion_client"].create_report_pages.call_args[0]
-        activity = notion_args[2]
+        activity = notion_args[4]
         assert "my-repo" in activity.repos()
         assert len(activity.repos()["my-repo"]["commits"]) == 1
 
@@ -215,8 +211,7 @@ class TestProcessDate:
         clients["github_client"].fetch_activity.return_value = github
 
         report = _make_report([{
-            "name": "my-repo", "summary": ["work"], "achievements": [],
-            "ongoing": [], "claude_code": "", "tags": [],
+            "name": "my-repo", "summary": ["work"], "tags": [],
         }])
         clients["summary_client"].generate_summary.return_value = report
         clients["notion_client"].create_report_pages.return_value = []
@@ -232,7 +227,7 @@ class TestProcessDate:
 
         # Verify GitHubActivity passed to Notion has exactly 2 commits (no duplication)
         notion_args = clients["notion_client"].create_report_pages.call_args[0]
-        activity = notion_args[2]
+        activity = notion_args[4]
         assert len(activity.repos()["my-repo"]["commits"]) == 2
 
     def test_detects_skipped_repos(self):
@@ -244,8 +239,7 @@ class TestProcessDate:
         clients["github_client"].fetch_activity.return_value = github
 
         report = _make_report([{
-            "name": "unknown-repo", "summary": [], "achievements": [],
-            "ongoing": [], "claude_code": "", "tags": [],
+            "name": "unknown-repo", "summary": [], "tags": [],
         }])
         clients["summary_client"].generate_summary.return_value = report
         clients["notion_client"].create_report_pages.return_value = []

@@ -85,7 +85,7 @@ def process_date(
         slack_client.notify_validation_errors(since, validation)
 
     pages = notion_client.create_report_pages(
-        since, report, github_activity, session_activity,
+        since, since, until, report, github_activity, session_activity,
     )
     for name, url in pages:
         logger.info("Created Notion page: %s -> %s", name, url)

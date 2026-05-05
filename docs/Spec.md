@@ -280,9 +280,8 @@ DynamoDB の `ayumy-sessions` テーブルから対象日付をパーティシ�
 GitHub アクティビティと Claude Code セッションログの両方をコンテキストとして渡し、リポジトリごとの要約を生成する。文体は常体で統一し、ですます調は使用しない。
 
 - **リポジトリ別の要点**: 各リポジトリで行われた作業の要点を 2〜5 項目の箇条書きで記述する。最初の項目はそのリポジトリの最重要の要点として単独でも通じる内容にする（Slack 通知ではこの項目を 1 文サマリとして流用する）
-- **Claude Code での作業**: どのプロジェクトで何を相談・実装したか
-- **主な成果・進捗**: マージされた PR、クローズされた Issue など
-- **継続中の作業**: オープンな PR や Issue
+- **Claude Code での作業**: 上記の要点の中に Claude Code セッションでの相談・実装方針の検討内容も含めて構わない
+- PR/Issue のステータス別一覧と時系列のイベントは Notion 本文の生成時にプログラムで組み立てるため、Claude API の出力には含めない
 
 入力フォーマット:
 
@@ -308,7 +307,7 @@ GitHub アクティビティと Claude Code セッションログの両方をコ
 - ツール使用: ファイル編集 (auth.ts, middleware.ts)
 ```
 
-出力にはリポジトリごとの作業要点（箇条書き）、成果、継続中の作業、Claude Code での作業、タグの提案を含める。
+出力にはリポジトリごとの作業要点（箇条書き）とタグの提案を含める。
 
 ### 5.5 Slack 通知
 Notion への書き込み完了後、Slack Incoming Webhook で指定チャンネルに通知を送信する。
@@ -340,18 +339,30 @@ Date × Repository 単位でページを作成する。1日に複数ページが
 | Version | Text | レポート生成時の ayumy バージョン | `0.2.0` |
 
 ### 6.2 ページ本文（children blocks）
-Notion ページの本文には Claude が生成した要約を記載する。ブロックタイプとして `heading_2`、`paragraph`、`bulleted_list_item` を使い分けて構造化する。
+Notion ページの本文は Summary、ステータス別セクション、Timeline で構成する。Summary は Claude API が生成し、それ以外は GitHub アクティビティから決定論的に組み立てる。ブロックタイプは `heading_2`、`bulleted_list_item`、`table` を使い分ける。
 
 ```
 [heading_2]            Summary
 [bulleted_list_item]   リポジトリの作業要点（2〜5項目）
-[heading_2]            成果（該当がある場合のみ）
-[bulleted_list_item]   マージされた PR、クローズされた Issue 等
-[heading_2]            継続中の作業（該当がある場合のみ）
-[bulleted_list_item]   オープンな PR や Issue 等
-[heading_2]            Claude Code（セッションがある場合のみ）
-[paragraph]            Claude Code での作業概要
+[heading_2]            Done（該当がある場合のみ）
+[bulleted_list_item]   マージされた PR、クローズされた Issue
+[heading_2]            In Progress（該当がある場合のみ）
+[bulleted_list_item]   作業中の PR や Issue（draft PR を含む）
+[heading_2]            Todo（該当がある場合のみ）
+[bulleted_list_item]   対象日に新規作成された Issue（バックログ）
+[heading_2]            Timeline（該当がある場合のみ）
+[table]                Time / Type / Detail の3列で commit・PR・Issue のイベントを時系列順に列挙
 ```
+
+ステータスの振り分け基準:
+
+- Done: マージ済み PR、クローズ済み Issue
+- In Progress: オープン PR（draft 含む）、対象日より前に作成されたオープン Issue
+- Todo: 対象日に新規作成され、まだオープンの Issue
+
+Timeline には commit と、PR/Issue のうち対象日のウィンドウ内で発生した状態遷移（opened / merged / closed）を 1 行ずつ表に記録する。同じ PR/Issue が同日に opened と merged の両方を行った場合は別行で記載する。
+
+GitHub アイテムへのリンクは PR/Issue が `repo#xx: Title`、commit が `{sha-prefix}: {commit message}` の形式とし、それぞれ GitHub URL でリンク化する。
 
 ### 6.3 タグの分類基準
 | タグ | 基準 |
