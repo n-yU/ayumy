@@ -208,8 +208,8 @@ class NotionClient:
     ) -> list[dict]:
         """Build Done / In Progress / Todo sections from activity data.
 
-        Status assignment:
-            - Done: merged PRs and closed Issues
+        Status assignment (see Spec.md 6.2 for prefix conventions):
+            - Done: merged / closed PRs and closed Issues
             - Todo: Issues created within [since, until) that are still open
             - In Progress: open PRs (including drafts) and other open Issues
 
