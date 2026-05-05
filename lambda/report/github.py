@@ -45,7 +45,7 @@ class GitHubClient:
             until: End of the target period (exclusive)
 
         Returns:
-            A list of dicts with keys: sha, message, author, date
+            A list of dicts with keys: sha, message, author, date, url
         """
         since_str = since.strftime("%Y-%m-%d")
         until_date = until - timedelta(days=1)
