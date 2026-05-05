@@ -203,6 +203,54 @@ class TestProcessDate:
         assert first["date"] == "2026-03-28T10:45:00+09:00"
         assert second["date"] == "2026-03-28T10:00:00+09:00"
 
+    def test_dedupes_session_commits_across_sessions(self):
+        clients = _make_clients()
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+
+        session = SessionActivity({"my-repo": [
+            {
+                "session_id": "s1", "project": "my-repo",
+                "start_time": "2026-03-28T10:00:00+09:00",
+                "end_time": "2026-03-28T11:00:00+09:00",
+                "user_messages": ["Work"], "tools_used": ["Bash"],
+                "session_commits": [
+                    {"sha": "aaa1111", "message": "Shared commit",
+                     "timestamp": "2026-03-28T10:30:00+09:00"},
+                ],
+            },
+            {
+                "session_id": "s2", "project": "my-repo",
+                "start_time": "2026-03-28T14:00:00+09:00",
+                "end_time": "2026-03-28T15:00:00+09:00",
+                "user_messages": ["More work"], "tools_used": ["Bash"],
+                "session_commits": [
+                    {"sha": "aaa1111", "message": "Shared commit",
+                     "timestamp": "2026-03-28T14:30:00+09:00"},
+                ],
+            },
+        ]})
+        github = GitHubActivity({"my-repo": {
+            "commits": [], "pulls": [], "issues": [],
+        }})
+        clients["github_client"].fetch_activity.return_value = github
+
+        report = _make_report([{
+            "name": "my-repo", "summary": ["work"], "tags": [],
+        }])
+        clients["summary_client"].generate_summary.return_value = report
+        clients["notion_client"].create_report_pages.return_value = []
+
+        process_date(since, until, session, **clients, allowed_tags=[])
+
+        notion_args = clients["notion_client"].create_report_pages.call_args[0]
+        commits = notion_args[4].repos()["my-repo"]["commits"]
+        # Same SHA appearing in two sessions should appear only once,
+        # with the earliest occurrence (s1) winning
+        assert len(commits) == 1
+        assert commits[0]["sha"] == "aaa1111"
+        assert commits[0]["date"] == "2026-03-28T10:30:00+09:00"
+
     def test_supplements_session_commits_for_missing_repo(self):
         clients = _make_clients()
         since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
