@@ -22,6 +22,17 @@ class CommitInfo(TypedDict):
     url: str
 
 
+class SessionCommit(TypedDict):
+    """A commit recovered from Claude Code session logs.
+
+    Only `sha` and `message` are extractable from JSONL tool results.
+    Pipeline-level code normalizes these to CommitInfo when injecting
+    into GitHubActivity.
+    """
+    sha: str
+    message: str
+
+
 class PullInfo(TypedDict):
     number: int
     title: str
@@ -114,7 +125,7 @@ class SessionInfo(TypedDict):
     end_time: str
     user_messages: list[str]
     tools_used: list[str]
-    session_commits: list[CommitInfo]
+    session_commits: list[SessionCommit]
 
 
 class SessionActivity:
