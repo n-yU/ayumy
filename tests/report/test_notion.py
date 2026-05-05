@@ -53,6 +53,7 @@ def _issue(
     *,
     created_at: str | None = None,
     closed_at: str | None = None,
+    state_reason: str | None = None,
 ) -> dict:
     return {
         "number": number,
@@ -63,6 +64,7 @@ def _issue(
         "url": f"https://github.com/n-yU/repo/issues/{number}",
         "created_at": created_at or "2026-03-27T09:00:00+09:00",
         "closed_at": closed_at,
+        "state_reason": state_reason,
     }
 
 
@@ -128,23 +130,42 @@ class TestStatusSections:
                     closed_at="2026-03-28T11:00:00+09:00"),
             ],
             "issues": [
-                _issue(10, "Closed issue", "closed",
-                       closed_at="2026-03-28T12:00:00+09:00"),
+                _issue(10, "Completed issue", "closed",
+                       closed_at="2026-03-28T12:00:00+09:00",
+                       state_reason="completed"),
+                _issue(11, "Not planned", "closed",
+                       closed_at="2026-03-28T13:00:00+09:00",
+                       state_reason="not_planned"),
+                _issue(12, "Duplicate", "closed",
+                       closed_at="2026-03-28T14:00:00+09:00",
+                       state_reason="duplicate"),
+                _issue(13, "Legacy closed", "closed",
+                       closed_at="2026-03-28T15:00:00+09:00"),
             ],
         }
         blocks = client._build_status_sections("repo", repo_activity, SINCE, UNTIL)
 
-        types = [b["type"] for b in blocks]
-        assert types == [
-            "heading_2",
-            "bulleted_list_item", "bulleted_list_item", "bulleted_list_item",
-        ]
         assert blocks[0]["heading_2"]["rich_text"][0]["text"]["content"] == "Done"
-        labels = [b["bulleted_list_item"]["rich_text"][0]["text"]["content"] for b in blocks[1:]]
+
+        # Each bullet has [prefix_text, linked_text]; verify prefix and label
+        bullets = blocks[1:]
+        prefixes = [b["bulleted_list_item"]["rich_text"][0]["text"]["content"] for b in bullets]
+        labels = [b["bulleted_list_item"]["rich_text"][1]["text"]["content"] for b in bullets]
+        assert prefixes == [
+            "✅ ",
+            "⚠️ (closed) ",
+            "✅ ",
+            "⚠️ (not planned) ",
+            "⚠️ (duplicate) ",
+            "✅ ",
+        ]
         assert labels == [
             "repo#1: Merged PR",
             "repo#2: Rejected PR",
-            "repo#10: Closed issue",
+            "repo#10: Completed issue",
+            "repo#11: Not planned",
+            "repo#12: Duplicate",
+            "repo#13: Legacy closed",
         ]
 
     def test_in_progress_includes_open_prs_and_existing_open_issues(self):
@@ -162,6 +183,7 @@ class TestStatusSections:
         }
         blocks = client._build_status_sections("repo", repo_activity, SINCE, UNTIL)
         assert blocks[0]["heading_2"]["rich_text"][0]["text"]["content"] == "In Progress"
+        # No prefix on In Progress bullets
         labels = [b["bulleted_list_item"]["rich_text"][0]["text"]["content"] for b in blocks[1:]]
         assert labels == ["repo#3: WIP", "repo#4: Ready", "repo#20: Old open issue"]
 

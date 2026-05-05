@@ -138,6 +138,7 @@ class GitHubClient:
                 "url": issue.html_url,
                 "created_at": issue.created_at.isoformat(),
                 "closed_at": issue.closed_at.isoformat() if issue.closed_at else None,
+                "state_reason": issue.state_reason,
             })
         return results
 

@@ -44,6 +44,7 @@ class IssueInfo(TypedDict):
     url: str
     created_at: str
     closed_at: str | None
+    state_reason: str | None
 
 
 class RepoActivity(TypedDict):

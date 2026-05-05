@@ -345,7 +345,7 @@ Notion ページの本文は Summary、ステータス別セクション、Timel
 [heading_2]            Summary
 [bulleted_list_item]   リポジトリの作業要点（2〜5項目）
 [heading_2]            Done（該当がある場合のみ）
-[bulleted_list_item]   マージされた PR、クローズされた Issue
+[bulleted_list_item]   マージ済み・クローズ済み PR、クローズ済み Issue
 [heading_2]            In Progress（該当がある場合のみ）
 [bulleted_list_item]   作業中の PR や Issue（draft PR を含む）
 [heading_2]            Todo（該当がある場合のみ）
@@ -356,9 +356,15 @@ Notion ページの本文は Summary、ステータス別セクション、Timel
 
 ステータスの振り分け基準:
 
-- Done: マージ済み PR、クローズ済み Issue
+- Done: マージ済み PR、クローズ済み（unmerged）PR、クローズ済み Issue
 - In Progress: オープン PR（draft 含む）、対象日より前に作成されたオープン Issue
 - Todo: 対象日に新規作成され、まだオープンの Issue
+
+Done セクションの各項目には状態を示す prefix を付ける。通常完了したものには `✅ `、イレギュラーな完了には `⚠️ (理由) ` を付け、後者は以下を区別する:
+
+- マージされず close された PR: `⚠️ (closed) `
+- `not_planned` で close された Issue: `⚠️ (not planned) `
+- `duplicate` で close された Issue: `⚠️ (duplicate) `
 
 Timeline には commit と、PR/Issue のうち対象日のウィンドウ内で発生した状態遷移（opened / merged / closed）を 1 行ずつ表に記録する。同じ PR/Issue が同日に opened と merged の両方を行った場合は別行で記載する。
 

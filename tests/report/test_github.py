@@ -201,6 +201,7 @@ class TestFetchIssues:
         issue.updated_at = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
         issue.created_at = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
         issue.closed_at = None
+        issue.state_reason = None
         issue.html_url = "https://github.com/n-yU/repo/issues/5"
         issue.number = 5
         issue.title = "Bug report"
@@ -233,6 +234,7 @@ class TestFetchIssues:
         issue.updated_at = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
         issue.created_at = datetime(2026, 3, 28, 9, 0, tzinfo=JST)
         issue.closed_at = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
+        issue.state_reason = "completed"
         issue.html_url = "https://github.com/n-yU/repo/issues/6"
         issue.number = 6
         issue.title = "Issue"
@@ -246,6 +248,7 @@ class TestFetchIssues:
         result = client.fetch_issues(repo, since, until)
         assert result[0]["labels"] == ["bug"]
         assert result[0]["closed_at"] == "2026-03-28T10:00:00+09:00"
+        assert result[0]["state_reason"] == "completed"
 
 
 class TestFetchActivity:

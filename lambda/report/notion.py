@@ -63,13 +63,48 @@ def _issue_label(repo_name: str, issue: IssueInfo) -> str:
     return f"{repo_name}#{issue['number']}: {issue['title']}"
 
 
-def _bulleted_link(label: str, url: str) -> dict:
-    """Build a bulleted_list_item block with a single linked rich_text."""
+def _bulleted_link(label: str, url: str, prefix: str = "") -> dict:
+    """Build a bulleted_list_item block with an optional plain-text prefix.
+
+    Args:
+        label: Linked display text (e.g. `repo#12: Title`)
+        url: Target URL
+        prefix: Plain-text content rendered before the link (e.g. `⚠️ (closed) `)
+    """
+    rich_text: list[dict] = []
+    if prefix:
+        rich_text.append({"type": "text", "text": {"content": prefix}})
+    rich_text.append(_linked_text(label, url))
     return {
         "object": "block",
         "type": "bulleted_list_item",
-        "bulleted_list_item": {"rich_text": [_linked_text(label, url)]},
+        "bulleted_list_item": {"rich_text": rich_text},
     }
+
+
+def _done_prefix_pr(pr: PullInfo) -> str:
+    """Return the Done-section prefix for a PR.
+
+    `merged` PRs are regular Done; `closed` (unmerged) PRs are flagged.
+    """
+    if pr["state"] == "merged":
+        return "✅ "
+    return "⚠️ (closed) "
+
+
+_IRREGULAR_ISSUE_REASONS = {"not_planned": "not planned", "duplicate": "duplicate"}
+
+
+def _done_prefix_issue(issue: IssueInfo) -> str:
+    """Return the Done-section prefix for a closed Issue.
+
+    `not_planned` and `duplicate` reasons are flagged. `completed` and
+    legacy issues (state_reason is None) are treated as regular Done.
+    """
+    label = _IRREGULAR_ISSUE_REASONS.get(issue.get("state_reason") or "")
+    if label is None:
+        return "✅ "
+    return f"⚠️ ({label}) "
 
 
 def _table_row(cells: list[list[dict]]) -> dict:
@@ -187,25 +222,25 @@ class NotionClient:
         Returns:
             A list of Notion blocks for status sections (omitted when empty)
         """
-        done: list[tuple[str, str]] = []
-        in_progress: list[tuple[str, str]] = []
-        todo: list[tuple[str, str]] = []
+        done: list[tuple[str, str, str]] = []
+        in_progress: list[tuple[str, str, str]] = []
+        todo: list[tuple[str, str, str]] = []
 
         for pr in repo_activity["pulls"]:
             label = _pr_label(repo_name, pr)
             if pr["state"] == "merged" or pr["state"] == "closed":
-                done.append((label, pr["url"]))
+                done.append((label, pr["url"], _done_prefix_pr(pr)))
             else:
-                in_progress.append((label, pr["url"]))
+                in_progress.append((label, pr["url"], ""))
 
         for issue in repo_activity["issues"]:
             label = _issue_label(repo_name, issue)
             if issue["state"] == "closed":
-                done.append((label, issue["url"]))
+                done.append((label, issue["url"], _done_prefix_issue(issue)))
             elif _is_in_range(issue["created_at"], since, until):
-                todo.append((label, issue["url"]))
+                todo.append((label, issue["url"], ""))
             else:
-                in_progress.append((label, issue["url"]))
+                in_progress.append((label, issue["url"], ""))
 
         blocks: list[dict] = []
         for heading, items in (
@@ -222,8 +257,8 @@ class NotionClient:
                     "rich_text": [{"type": "text", "text": {"content": heading}}],
                 },
             })
-            for label, url in items:
-                blocks.append(_bulleted_link(label, url))
+            for label, url, prefix in items:
+                blocks.append(_bulleted_link(label, url, prefix))
 
         return blocks
 
