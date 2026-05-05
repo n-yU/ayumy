@@ -8,6 +8,8 @@ import pytest
 from report import GitHubActivity, JST, SessionActivity
 from report.pipeline import MAX_BACKFILL, process_date, run
 
+OWNER = "n-yU"
+
 
 def _make_report(repos=None):
     """Create a minimal report dict."""
@@ -18,8 +20,10 @@ def _make_report(repos=None):
 
 def _make_clients():
     """Create mocked client instances."""
+    github_client = MagicMock()
+    github_client.owner = OWNER
     return {
-        "github_client": MagicMock(),
+        "github_client": github_client,
         "notion_client": MagicMock(),
         "summary_client": MagicMock(),
         "slack_client": MagicMock(),
@@ -74,8 +78,7 @@ class TestProcessDate:
         clients["github_client"].fetch_activity.return_value = github
 
         report = _make_report([{
-            "name": "my-repo", "summary": ["work"], "achievements": [],
-            "ongoing": [], "claude_code": "", "tags": [],
+            "name": "my-repo", "summary": ["work"], "tags": [],
         }])
         clients["summary_client"].generate_summary.return_value = report
         clients["notion_client"].create_report_pages.return_value = [
@@ -91,6 +94,12 @@ class TestProcessDate:
         clients["notion_client"].create_report_pages.assert_called_once()
         clients["slack_client"].notify.assert_called_once()
 
+        # Verify the (target_date, since, until) trio is passed in order
+        notion_args = clients["notion_client"].create_report_pages.call_args[0]
+        assert notion_args[0] == since
+        assert notion_args[1] == since
+        assert notion_args[2] == until
+
     def test_notifies_validation_errors(self):
         clients = _make_clients()
         since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
@@ -100,8 +109,7 @@ class TestProcessDate:
         clients["github_client"].fetch_activity.return_value = github
 
         report = _make_report([{
-            "name": "repo", "summary": [], "achievements": [],
-            "ongoing": [], "claude_code": "", "tags": ["BadTag"],
+            "name": "repo", "summary": [], "tags": ["BadTag"],
         }])
         clients["summary_client"].generate_summary.return_value = report
         clients["notion_client"].create_report_pages.return_value = []
@@ -134,8 +142,7 @@ class TestProcessDate:
         clients["github_client"].fetch_activity.return_value = github
 
         report = _make_report([{
-            "name": "my-repo", "summary": ["work"], "achievements": [],
-            "ongoing": [], "claude_code": "", "tags": [],
+            "name": "my-repo", "summary": ["work"], "tags": [],
         }])
         clients["summary_client"].generate_summary.return_value = report
         clients["notion_client"].create_report_pages.return_value = []
@@ -148,10 +155,101 @@ class TestProcessDate:
         assert "Fix login bug" in github_md
 
         # Verify GitHubActivity passed to Notion also contains the commit
+        # with normalized fields (date from session, constructed url, empty author)
         notion_args = clients["notion_client"].create_report_pages.call_args[0]
-        activity = notion_args[2]
+        activity = notion_args[4]
         assert "my-repo" in activity.repos()
-        assert any(c["sha"] == "a1b2c3d" for c in activity.repos()["my-repo"]["commits"])
+        injected = next(
+            c for c in activity.repos()["my-repo"]["commits"] if c["sha"] == "a1b2c3d"
+        )
+        assert injected["date"] == "2026-03-28T10:00:00+09:00"
+        assert injected["url"] == f"https://github.com/{OWNER}/my-repo/commit/a1b2c3d"
+        assert injected["author"] == ""
+
+    def test_session_commit_uses_per_commit_timestamp_when_present(self):
+        clients = _make_clients()
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+
+        session = SessionActivity({"my-repo": [{
+            "session_id": "s1", "project": "my-repo",
+            "start_time": "2026-03-28T10:00:00+09:00",
+            "end_time": "2026-03-28T12:00:00+09:00",
+            "user_messages": ["Work"], "tools_used": ["Bash"],
+            "session_commits": [
+                {"sha": "aaa1111", "message": "Mid commit",
+                 "timestamp": "2026-03-28T10:45:00+09:00"},
+                {"sha": "bbb2222", "message": "Late commit"},  # legacy: no timestamp
+            ],
+        }]})
+        github = GitHubActivity({"my-repo": {
+            "commits": [], "pulls": [], "issues": [],
+        }})
+        clients["github_client"].fetch_activity.return_value = github
+
+        report = _make_report([{
+            "name": "my-repo", "summary": ["work"], "tags": [],
+        }])
+        clients["summary_client"].generate_summary.return_value = report
+        clients["notion_client"].create_report_pages.return_value = []
+
+        process_date(since, until, session, **clients, allowed_tags=[])
+
+        notion_args = clients["notion_client"].create_report_pages.call_args[0]
+        commits = notion_args[4].repos()["my-repo"]["commits"]
+        # Per-commit timestamp wins; legacy entry falls back to session start_time
+        first = next(c for c in commits if c["sha"] == "aaa1111")
+        second = next(c for c in commits if c["sha"] == "bbb2222")
+        assert first["date"] == "2026-03-28T10:45:00+09:00"
+        assert second["date"] == "2026-03-28T10:00:00+09:00"
+
+    def test_dedupes_session_commits_across_sessions(self):
+        clients = _make_clients()
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+
+        session = SessionActivity({"my-repo": [
+            {
+                "session_id": "s1", "project": "my-repo",
+                "start_time": "2026-03-28T10:00:00+09:00",
+                "end_time": "2026-03-28T11:00:00+09:00",
+                "user_messages": ["Work"], "tools_used": ["Bash"],
+                "session_commits": [
+                    {"sha": "aaa1111", "message": "Shared commit",
+                     "timestamp": "2026-03-28T10:30:00+09:00"},
+                ],
+            },
+            {
+                "session_id": "s2", "project": "my-repo",
+                "start_time": "2026-03-28T14:00:00+09:00",
+                "end_time": "2026-03-28T15:00:00+09:00",
+                "user_messages": ["More work"], "tools_used": ["Bash"],
+                "session_commits": [
+                    {"sha": "aaa1111", "message": "Shared commit",
+                     "timestamp": "2026-03-28T14:30:00+09:00"},
+                ],
+            },
+        ]})
+        github = GitHubActivity({"my-repo": {
+            "commits": [], "pulls": [], "issues": [],
+        }})
+        clients["github_client"].fetch_activity.return_value = github
+
+        report = _make_report([{
+            "name": "my-repo", "summary": ["work"], "tags": [],
+        }])
+        clients["summary_client"].generate_summary.return_value = report
+        clients["notion_client"].create_report_pages.return_value = []
+
+        process_date(since, until, session, **clients, allowed_tags=[])
+
+        notion_args = clients["notion_client"].create_report_pages.call_args[0]
+        commits = notion_args[4].repos()["my-repo"]["commits"]
+        # Same SHA appearing in two sessions should appear only once,
+        # with the earliest occurrence (s1) winning
+        assert len(commits) == 1
+        assert commits[0]["sha"] == "aaa1111"
+        assert commits[0]["date"] == "2026-03-28T10:30:00+09:00"
 
     def test_supplements_session_commits_for_missing_repo(self):
         clients = _make_clients()
@@ -172,8 +270,7 @@ class TestProcessDate:
         clients["github_client"].fetch_activity.return_value = github
 
         report = _make_report([{
-            "name": "my-repo", "summary": ["work"], "achievements": [],
-            "ongoing": [], "claude_code": "", "tags": [],
+            "name": "my-repo", "summary": ["work"], "tags": [],
         }])
         clients["summary_client"].generate_summary.return_value = report
         clients["notion_client"].create_report_pages.return_value = []
@@ -185,10 +282,13 @@ class TestProcessDate:
         assert "Fix login bug" in github_md
 
         # Verify GitHubActivity passed to Notion contains the injected repo
+        # with the same URL construction as when the repo was already present
         notion_args = clients["notion_client"].create_report_pages.call_args[0]
-        activity = notion_args[2]
+        activity = notion_args[4]
         assert "my-repo" in activity.repos()
-        assert len(activity.repos()["my-repo"]["commits"]) == 1
+        commits = activity.repos()["my-repo"]["commits"]
+        assert len(commits) == 1
+        assert commits[0]["url"] == f"https://github.com/{OWNER}/my-repo/commit/a1b2c3d"
 
     def test_merges_and_deduplicates_session_commits(self):
         clients = _make_clients()
@@ -215,8 +315,7 @@ class TestProcessDate:
         clients["github_client"].fetch_activity.return_value = github
 
         report = _make_report([{
-            "name": "my-repo", "summary": ["work"], "achievements": [],
-            "ongoing": [], "claude_code": "", "tags": [],
+            "name": "my-repo", "summary": ["work"], "tags": [],
         }])
         clients["summary_client"].generate_summary.return_value = report
         clients["notion_client"].create_report_pages.return_value = []
@@ -232,7 +331,7 @@ class TestProcessDate:
 
         # Verify GitHubActivity passed to Notion has exactly 2 commits (no duplication)
         notion_args = clients["notion_client"].create_report_pages.call_args[0]
-        activity = notion_args[2]
+        activity = notion_args[4]
         assert len(activity.repos()["my-repo"]["commits"]) == 2
 
     def test_detects_skipped_repos(self):
@@ -244,8 +343,7 @@ class TestProcessDate:
         clients["github_client"].fetch_activity.return_value = github
 
         report = _make_report([{
-            "name": "unknown-repo", "summary": [], "achievements": [],
-            "ongoing": [], "claude_code": "", "tags": [],
+            "name": "unknown-repo", "summary": [], "tags": [],
         }])
         clients["summary_client"].generate_summary.return_value = report
         clients["notion_client"].create_report_pages.return_value = []

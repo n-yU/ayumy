@@ -49,12 +49,23 @@ def process_date(
 
     github_activity = github_client.fetch_activity(since, until, list(session_activity.keys()))
 
-    # Merge session-derived commits into GitHub activity,
-    # deduplicating by SHA to recover squash-merged commits
+    # Recover squash-merged commits from session logs, normalizing to
+    # the full CommitInfo shape and deduplicating by SHA prefix.
     for repo_name, sessions in session_activity.repos().items():
-        session_commits = [
-            c for s in sessions for c in s.get("session_commits", [])
-        ]
+        seen_shas: set[str] = set()
+        session_commits: list[dict] = []
+        for s in sessions:
+            for c in s.get("session_commits", []):
+                if c["sha"] in seen_shas:
+                    continue
+                seen_shas.add(c["sha"])
+                session_commits.append({
+                    "sha": c["sha"],
+                    "message": c["message"],
+                    "author": "",
+                    "date": c.get("timestamp") or s["start_time"],
+                    "url": f"https://github.com/{github_client.owner}/{repo_name}/commit/{c['sha']}",
+                })
         if not session_commits:
             continue
         repo_data = github_activity.repos().get(repo_name)
@@ -85,7 +96,7 @@ def process_date(
         slack_client.notify_validation_errors(since, validation)
 
     pages = notion_client.create_report_pages(
-        since, report, github_activity, session_activity,
+        since, since, until, report, github_activity, session_activity,
     )
     for name, url in pages:
         logger.info("Created Notion page: %s -> %s", name, url)

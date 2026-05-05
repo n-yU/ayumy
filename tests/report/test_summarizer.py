@@ -30,9 +30,6 @@ class TestValidateReport:
             "repositories": [{
                 "name": "repo",
                 "summary": [],
-                "achievements": [],
-                "ongoing": [],
-                "claude_code": "",
                 "tags": ["CI/CD"],
             }],
         }
@@ -45,9 +42,6 @@ class TestValidateReport:
             "repositories": [{
                 "name": "repo",
                 "summary": [],
-                "achievements": [],
-                "ongoing": [],
-                "claude_code": "",
                 "tags": ["CI/CD", "InvalidTag"],
             }],
         }

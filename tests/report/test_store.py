@@ -162,8 +162,10 @@ class TestBuildItems:
 
         assert len(items) == 1
         assert items[0]["session_commits"] == [
-            {"sha": "a1b2c3d", "message": "Implement login flow"},
-            {"sha": "e5f6a7b", "message": "Fix test failure"},
+            {"sha": "a1b2c3d", "message": "Implement login flow",
+             "timestamp": "2026-03-28T10:05:00+09:00"},
+            {"sha": "e5f6a7b", "message": "Fix test failure",
+             "timestamp": "2026-03-28T10:10:00+09:00"},
         ]
 
     def test_extracts_root_and_detached_head_commits(self):
@@ -211,8 +213,10 @@ class TestBuildItems:
 
         assert len(items) == 1
         assert items[0]["session_commits"] == [
-            {"sha": "a1b2c3d", "message": "Initial commit"},
-            {"sha": "e5f6a7b", "message": "Hotfix"},
+            {"sha": "a1b2c3d", "message": "Initial commit",
+             "timestamp": "2026-03-28T10:05:00+09:00"},
+            {"sha": "e5f6a7b", "message": "Hotfix",
+             "timestamp": "2026-03-28T10:10:00+09:00"},
         ]
 
     def test_extracts_commit_after_hook_output(self):
@@ -248,7 +252,8 @@ class TestBuildItems:
 
         assert len(items) == 1
         assert items[0]["session_commits"] == [
-            {"sha": "a1b2c3d", "message": "Fix formatting"},
+            {"sha": "a1b2c3d", "message": "Fix formatting",
+             "timestamp": "2026-03-28T10:05:00+09:00"},
         ]
 
     def test_extracts_multiple_commits_from_single_tool_result(self):
@@ -284,8 +289,10 @@ class TestBuildItems:
 
         assert len(items) == 1
         assert items[0]["session_commits"] == [
-            {"sha": "abc1234", "message": "First commit"},
-            {"sha": "def5678", "message": "Second commit"},
+            {"sha": "abc1234", "message": "First commit",
+             "timestamp": "2026-03-28T10:05:00+09:00"},
+            {"sha": "def5678", "message": "Second commit",
+             "timestamp": "2026-03-28T10:05:00+09:00"},
         ]
 
     def test_ignores_error_tool_results(self):
@@ -362,7 +369,8 @@ class TestBuildItems:
         assert day1["session_commits"] == []
         assert day2["user_messages"] == []
         assert day2["session_commits"] == [
-            {"sha": "a1b2c3d", "message": "Apply fix"},
+            {"sha": "a1b2c3d", "message": "Apply fix",
+             "timestamp": "2026-03-29T00:05:00+09:00"},
         ]
         assert keys == ["claude-sessions/proj/s1.jsonl"]
 
@@ -570,7 +578,8 @@ class TestFetchSessions:
                     "user_messages": ["Fix bug"],
                     "tools_used": ["Edit"],
                     "session_commits": [
-                        {"sha": "a1b2c3d", "message": "Fix the bug"},
+                        {"sha": "a1b2c3d", "message": "Fix the bug",
+                         "timestamp": "2026-03-28T10:30:00+09:00"},
                     ],
                 },
             ],
@@ -580,7 +589,8 @@ class TestFetchSessions:
 
         sessions = activity.get("repo")
         assert sessions[0]["session_commits"] == [
-            {"sha": "a1b2c3d", "message": "Fix the bug"},
+            {"sha": "a1b2c3d", "message": "Fix the bug",
+             "timestamp": "2026-03-28T10:30:00+09:00"},
         ]
 
     def test_defaults_session_commits_when_missing(self):

@@ -6,13 +6,15 @@ from datetime import datetime
 from notion_client import Client
 
 from . import (
-    JST, GitHubActivity, RepoSummary, ReportSummary, SessionActivity, get_version,
+    JST, GitHubActivity, IssueInfo, PullInfo, RepoActivity,
+    RepoSummary, ReportSummary, SessionActivity, get_version,
 )
 
 logger = logging.getLogger(__name__)
 
 
 RICH_TEXT_LIMIT = 2000
+SHA_PREFIX_LEN = 7
 
 
 def _chunk_rich_text(text: str) -> list[dict]:
@@ -28,6 +30,94 @@ def _chunk_rich_text(text: str) -> list[dict]:
         {"type": "text", "text": {"content": text[i:i + RICH_TEXT_LIMIT]}}
         for i in range(0, len(text), RICH_TEXT_LIMIT)
     ]
+
+
+def _linked_text(content: str, url: str) -> list[dict]:
+    """Build rich_text objects with a hyperlink, split at Notion's per-item limit.
+
+    Args:
+        content: Display text
+        url: Target URL
+
+    Returns:
+        A list of rich_text dicts each within RICH_TEXT_LIMIT chars and
+        sharing the same link
+    """
+    return [
+        {"type": "text", "text": {"content": content[i:i + RICH_TEXT_LIMIT], "link": {"url": url}}}
+        for i in range(0, len(content), RICH_TEXT_LIMIT)
+    ]
+
+
+def _is_in_range(iso_timestamp: str | None, since: datetime, until: datetime) -> bool:
+    """Check whether an ISO timestamp falls within [since, until)."""
+    if not iso_timestamp:
+        return False
+    dt = datetime.fromisoformat(iso_timestamp)
+    return since <= dt < until
+
+
+def _pr_label(repo_name: str, pr: PullInfo) -> str:
+    """Render `repo#N: title` for a PR."""
+    return f"{repo_name}#{pr['number']}: {pr['title']}"
+
+
+def _issue_label(repo_name: str, issue: IssueInfo) -> str:
+    """Render `repo#N: title` for an Issue."""
+    return f"{repo_name}#{issue['number']}: {issue['title']}"
+
+
+def _bulleted_link(label: str, url: str, prefix: str = "") -> dict:
+    """Build a bulleted_list_item block with an optional plain-text prefix.
+
+    Args:
+        label: Linked display text (e.g. `repo#12: Title`)
+        url: Target URL
+        prefix: Plain-text content rendered before the link (e.g. `⚠️ (closed) `)
+    """
+    rich_text: list[dict] = []
+    if prefix:
+        rich_text.append({"type": "text", "text": {"content": prefix}})
+    rich_text.extend(_linked_text(label, url))
+    return {
+        "object": "block",
+        "type": "bulleted_list_item",
+        "bulleted_list_item": {"rich_text": rich_text},
+    }
+
+
+def _done_prefix_pr(pr: PullInfo) -> str:
+    """Return the Done-section prefix for a PR.
+
+    `merged` PRs are regular Done; `closed` (unmerged) PRs are flagged.
+    """
+    if pr["state"] == "merged":
+        return "✅ "
+    return "⚠️ (closed) "
+
+
+_IRREGULAR_ISSUE_REASONS = {"not_planned": "not planned", "duplicate": "duplicate"}
+
+
+def _done_prefix_issue(issue: IssueInfo) -> str:
+    """Return the Done-section prefix for a closed Issue.
+
+    `not_planned` and `duplicate` reasons are flagged. `completed` and
+    legacy issues (state_reason is None) are treated as regular Done.
+    """
+    label = _IRREGULAR_ISSUE_REASONS.get(issue.get("state_reason") or "")
+    if label is None:
+        return "✅ "
+    return f"⚠️ ({label}) "
+
+
+def _table_row(cells: list[list[dict]]) -> dict:
+    """Build a table_row block."""
+    return {
+        "object": "block",
+        "type": "table_row",
+        "table_row": {"cells": cells},
+    }
 
 
 class NotionClient:
@@ -113,22 +203,197 @@ class NotionClient:
             "Version": {"rich_text": [{"type": "text", "text": {"content": get_version()}}]},
         }
 
+    def _build_status_sections(
+        self,
+        repo_name: str,
+        repo_activity: RepoActivity,
+        since: datetime,
+        until: datetime,
+    ) -> list[dict]:
+        """Build Done / In Progress / Todo sections from activity data.
+
+        Status assignment (see Spec.md 6.2 for prefix conventions):
+            - Done: merged / closed PRs and closed Issues
+            - Todo: Issues created within [since, until) that are still open
+            - In Progress: open PRs (including drafts) and other open Issues
+
+        Args:
+            repo_name: Repository name (for link labels)
+            repo_activity: Activity for this repository
+            since: Start of the target period (inclusive)
+            until: End of the target period (exclusive)
+
+        Returns:
+            A list of Notion blocks for status sections (omitted when empty)
+        """
+        done: list[tuple[str, str, str]] = []
+        in_progress: list[tuple[str, str, str]] = []
+        todo: list[tuple[str, str, str]] = []
+
+        for pr in repo_activity["pulls"]:
+            label = _pr_label(repo_name, pr)
+            if pr["state"] == "merged" or pr["state"] == "closed":
+                done.append((label, pr["url"], _done_prefix_pr(pr)))
+            else:
+                in_progress.append((label, pr["url"], ""))
+
+        for issue in repo_activity["issues"]:
+            label = _issue_label(repo_name, issue)
+            if issue["state"] == "closed":
+                done.append((label, issue["url"], _done_prefix_issue(issue)))
+            elif _is_in_range(issue["created_at"], since, until):
+                todo.append((label, issue["url"], ""))
+            else:
+                in_progress.append((label, issue["url"], ""))
+
+        blocks: list[dict] = []
+        for heading, items in (
+            ("Done", done),
+            ("In Progress", in_progress),
+            ("Todo", todo),
+        ):
+            if not items:
+                continue
+            blocks.append({
+                "object": "block",
+                "type": "heading_2",
+                "heading_2": {
+                    "rich_text": [{"type": "text", "text": {"content": heading}}],
+                },
+            })
+            for label, url, prefix in items:
+                blocks.append(_bulleted_link(label, url, prefix))
+
+        return blocks
+
+    def _build_timeline_events(
+        self,
+        repo_name: str,
+        repo_activity: RepoActivity,
+        since: datetime,
+        until: datetime,
+    ) -> list[tuple[datetime, str, str, str]]:
+        """Collect timeline events that happened within [since, until).
+
+        Returns:
+            A list of (timestamp, event_type, label, url) tuples sorted by
+            timestamp ascending
+        """
+        events: list[tuple[datetime, str, str, str]] = []
+
+        for c in repo_activity["commits"]:
+            ts = datetime.fromisoformat(c["date"])
+            sha = c["sha"][:SHA_PREFIX_LEN]
+            label = f"{sha}: {c['message']}"
+            events.append((ts, "commit", label, c["url"]))
+
+        for pr in repo_activity["pulls"]:
+            label = _pr_label(repo_name, pr)
+            if _is_in_range(pr["created_at"], since, until):
+                events.append((
+                    datetime.fromisoformat(pr["created_at"]),
+                    "PR opened", label, pr["url"],
+                ))
+            if _is_in_range(pr["merged_at"], since, until):
+                events.append((
+                    datetime.fromisoformat(pr["merged_at"]),
+                    "PR merged", label, pr["url"],
+                ))
+            elif _is_in_range(pr["closed_at"], since, until):
+                events.append((
+                    datetime.fromisoformat(pr["closed_at"]),
+                    "PR closed", label, pr["url"],
+                ))
+
+        for issue in repo_activity["issues"]:
+            label = _issue_label(repo_name, issue)
+            if _is_in_range(issue["created_at"], since, until):
+                events.append((
+                    datetime.fromisoformat(issue["created_at"]),
+                    "Issue opened", label, issue["url"],
+                ))
+            if _is_in_range(issue["closed_at"], since, until):
+                events.append((
+                    datetime.fromisoformat(issue["closed_at"]),
+                    "Issue closed", label, issue["url"],
+                ))
+
+        events.sort(key=lambda e: e[0])
+        return events
+
+    def _build_timeline_section(
+        self,
+        repo_name: str,
+        repo_activity: RepoActivity,
+        since: datetime,
+        until: datetime,
+    ) -> list[dict]:
+        """Build the Timeline section as a heading + table block.
+
+        Returns:
+            A list of Notion blocks (empty when no events fall in range)
+        """
+        events = self._build_timeline_events(repo_name, repo_activity, since, until)
+        if not events:
+            return []
+
+        header = _table_row([
+            [{"type": "text", "text": {"content": "Time"}}],
+            [{"type": "text", "text": {"content": "Type"}}],
+            [{"type": "text", "text": {"content": "Detail"}}],
+        ])
+        rows = [header]
+        for ts, event_type, label, url in events:
+            time_str = ts.astimezone(JST).strftime("%H:%M")
+            rows.append(_table_row([
+                [{"type": "text", "text": {"content": time_str}}],
+                [{"type": "text", "text": {"content": event_type}}],
+                _linked_text(label, url),
+            ]))
+
+        return [
+            {
+                "object": "block",
+                "type": "heading_2",
+                "heading_2": {
+                    "rich_text": [{"type": "text", "text": {"content": "Timeline"}}],
+                },
+            },
+            {
+                "object": "block",
+                "type": "table",
+                "table": {
+                    "table_width": 3,
+                    "has_column_header": True,
+                    "has_row_header": False,
+                    "children": rows,
+                },
+            },
+        ]
+
     def _build_children(
         self,
         repo_summary: RepoSummary,
+        repo_activity: RepoActivity,
+        since: datetime,
+        until: datetime,
     ) -> list[dict]:
-        """Build Notion page body blocks from report data.
+        """Build Notion page body blocks from summary and activity data.
+
+        Layout: Summary -> Done -> In Progress -> Todo -> Timeline.
+        Status sections and Timeline are omitted when empty.
 
         Args:
             repo_summary: Per-repository summary from Claude API
+            repo_activity: Activity for this repository
+            since: Start of the target period (inclusive)
+            until: End of the target period (exclusive)
 
         Returns:
-            A list of Notion block objects (heading_2, paragraph,
-            bulleted_list_item)
+            A list of Notion block objects
         """
         children: list[dict] = []
 
-        # Summary (heading_2 + bulleted list)
         children.append({
             "object": "block",
             "type": "heading_2",
@@ -145,56 +410,9 @@ class NotionClient:
                 },
             })
 
-        # Achievements
-        if repo_summary["achievements"]:
-            children.append({
-                "object": "block",
-                "type": "heading_2",
-                "heading_2": {
-                    "rich_text": [{"type": "text", "text": {"content": "成果"}}],
-                },
-            })
-            for item in repo_summary["achievements"]:
-                children.append({
-                    "object": "block",
-                    "type": "bulleted_list_item",
-                    "bulleted_list_item": {
-                        "rich_text": _chunk_rich_text(item),
-                    },
-                })
-
-        # Ongoing work
-        if repo_summary["ongoing"]:
-            children.append({
-                "object": "block",
-                "type": "heading_2",
-                "heading_2": {
-                    "rich_text": [{"type": "text", "text": {"content": "継続中の作業"}}],
-                },
-            })
-            for item in repo_summary["ongoing"]:
-                children.append({
-                    "object": "block",
-                    "type": "bulleted_list_item",
-                    "bulleted_list_item": {
-                        "rich_text": _chunk_rich_text(item),
-                    },
-                })
-
-        # Claude Code
-        if repo_summary["claude_code"]:
-            children.append({
-                "object": "block",
-                "type": "heading_2",
-                "heading_2": {
-                    "rich_text": [{"type": "text", "text": {"content": "Claude Code"}}],
-                },
-            })
-            children.append({
-                "object": "block",
-                "type": "paragraph",
-                "paragraph": {"rich_text": _chunk_rich_text(repo_summary["claude_code"])},
-            })
+        repo_name = repo_summary["name"]
+        children.extend(self._build_status_sections(repo_name, repo_activity, since, until))
+        children.extend(self._build_timeline_section(repo_name, repo_activity, since, until))
 
         return children
 
@@ -202,6 +420,9 @@ class NotionClient:
         self,
         target_date: datetime,
         repo_summary: RepoSummary,
+        repo_activity: RepoActivity,
+        since: datetime,
+        until: datetime,
         commits: int,
         prs_merged: int,
         issues_closed: int,
@@ -212,6 +433,9 @@ class NotionClient:
         Args:
             target_date: The target date for the report
             repo_summary: Per-repository summary from Claude API
+            repo_activity: Activity for this repository
+            since: Start of the target period (inclusive)
+            until: End of the target period (exclusive)
             commits: Number of commits in this repo
             prs_merged: Number of merged PRs in this repo
             issues_closed: Number of closed issues in this repo
@@ -225,7 +449,7 @@ class NotionClient:
             properties=self._build_properties(
                 target_date, repo_summary, commits, prs_merged, issues_closed, claude_sessions,
             ),
-            children=self._build_children(repo_summary),
+            children=self._build_children(repo_summary, repo_activity, since, until),
         )
 
         return page["url"]
@@ -259,6 +483,8 @@ class NotionClient:
     def create_report_pages(
         self,
         target_date: datetime,
+        since: datetime,
+        until: datetime,
         report: ReportSummary,
         activity: GitHubActivity,
         session_activity: SessionActivity,
@@ -270,6 +496,8 @@ class NotionClient:
 
         Args:
             target_date: The target date for the report
+            since: Start of the target period (inclusive)
+            until: End of the target period (exclusive)
             report: Full report summary from Claude API
             activity: GitHub activity data keyed by repo name
             session_activity: Claude Code session data keyed by repo name
@@ -306,6 +534,9 @@ class NotionClient:
             url = self.create_page(
                 target_date,
                 repo_summary,
+                repo_activity,
+                since,
+                until,
                 commits,
                 prs_merged,
                 issues_closed,

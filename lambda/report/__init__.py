@@ -9,14 +9,54 @@ from collections.abc import KeysView
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import NotRequired, TypedDict
 
 JST = timezone(timedelta(hours=9))
 
-# Type aliases for structured activity data
-CommitInfo = dict[str, str]
-PullInfo = dict[str, Any]
-IssueInfo = dict[str, Any]
+
+class CommitInfo(TypedDict):
+    sha: str
+    message: str
+    author: str
+    date: str
+    url: str
+
+
+class SessionCommit(TypedDict):
+    """A commit recovered from Claude Code session logs.
+
+    `timestamp` may be missing on legacy DynamoDB entries; pipeline
+    code falls back to the session's start_time and normalizes the
+    entry to CommitInfo when injecting into GitHubActivity.
+    """
+    sha: str
+    message: str
+    timestamp: NotRequired[str]
+
+
+class PullInfo(TypedDict):
+    number: int
+    title: str
+    state: str
+    author: str
+    labels: list[str]
+    draft: bool
+    url: str
+    created_at: str
+    merged_at: str | None
+    closed_at: str | None
+
+
+class IssueInfo(TypedDict):
+    number: int
+    title: str
+    state: str
+    author: str
+    labels: list[str]
+    url: str
+    created_at: str
+    closed_at: str | None
+    state_reason: str | None
 
 
 class RepoActivity(TypedDict):
@@ -86,7 +126,7 @@ class SessionInfo(TypedDict):
     end_time: str
     user_messages: list[str]
     tools_used: list[str]
-    session_commits: list[CommitInfo]
+    session_commits: list[SessionCommit]
 
 
 class SessionActivity:
@@ -160,9 +200,6 @@ class SessionActivity:
 class RepoSummary(TypedDict):
     name: str
     summary: list[str]
-    achievements: list[str]
-    ongoing: list[str]
-    claude_code: str
     tags: list[str]
 
 
