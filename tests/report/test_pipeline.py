@@ -94,6 +94,12 @@ class TestProcessDate:
         clients["notion_client"].create_report_pages.assert_called_once()
         clients["slack_client"].notify.assert_called_once()
 
+        # Verify the (target_date, since, until) trio is passed in order
+        notion_args = clients["notion_client"].create_report_pages.call_args[0]
+        assert notion_args[0] == since
+        assert notion_args[1] == since
+        assert notion_args[2] == until
+
     def test_notifies_validation_errors(self):
         clients = _make_clients()
         since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
@@ -191,10 +197,13 @@ class TestProcessDate:
         assert "Fix login bug" in github_md
 
         # Verify GitHubActivity passed to Notion contains the injected repo
+        # with the same URL construction as when the repo was already present
         notion_args = clients["notion_client"].create_report_pages.call_args[0]
         activity = notion_args[4]
         assert "my-repo" in activity.repos()
-        assert len(activity.repos()["my-repo"]["commits"]) == 1
+        commits = activity.repos()["my-repo"]["commits"]
+        assert len(commits) == 1
+        assert commits[0]["url"] == f"https://github.com/{OWNER}/my-repo/commit/a1b2c3d"
 
     def test_merges_and_deduplicates_session_commits(self):
         clients = _make_clients()

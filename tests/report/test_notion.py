@@ -289,6 +289,24 @@ class TestTimelineSection:
         rows = blocks[1]["table"]["children"]
         assert rows[1]["table_row"]["cells"][1][0]["text"]["content"] == "PR closed"
 
+    def test_issue_closed_emits_issue_closed_row(self):
+        client = _make_client()
+        repo_activity = {
+            "commits": [],
+            "pulls": [],
+            "issues": [_issue(9, "Old bug", "closed",
+                              created_at="2026-03-20T09:00:00+09:00",
+                              closed_at="2026-03-28T13:30:00+09:00")],
+        }
+        blocks = client._build_timeline_section("repo", repo_activity, SINCE, UNTIL)
+        rows = blocks[1]["table"]["children"]
+        # Header + 1 data row (Issue closed only; created_at is out of range)
+        assert len(rows) == 2
+        cells = rows[1]["table_row"]["cells"]
+        assert cells[0][0]["text"]["content"] == "13:30"
+        assert cells[1][0]["text"]["content"] == "Issue closed"
+        assert cells[2][0]["text"]["content"] == "repo#9: Old bug"
+
     def test_omitted_when_no_events_in_range(self):
         client = _make_client()
         # Open PR with no transition timestamps in range
