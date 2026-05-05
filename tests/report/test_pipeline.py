@@ -166,6 +166,43 @@ class TestProcessDate:
         assert injected["url"] == f"https://github.com/{OWNER}/my-repo/commit/a1b2c3d"
         assert injected["author"] == ""
 
+    def test_session_commit_uses_per_commit_timestamp_when_present(self):
+        clients = _make_clients()
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+
+        session = SessionActivity({"my-repo": [{
+            "session_id": "s1", "project": "my-repo",
+            "start_time": "2026-03-28T10:00:00+09:00",
+            "end_time": "2026-03-28T12:00:00+09:00",
+            "user_messages": ["Work"], "tools_used": ["Bash"],
+            "session_commits": [
+                {"sha": "aaa1111", "message": "Mid commit",
+                 "timestamp": "2026-03-28T10:45:00+09:00"},
+                {"sha": "bbb2222", "message": "Late commit"},  # legacy: no timestamp
+            ],
+        }]})
+        github = GitHubActivity({"my-repo": {
+            "commits": [], "pulls": [], "issues": [],
+        }})
+        clients["github_client"].fetch_activity.return_value = github
+
+        report = _make_report([{
+            "name": "my-repo", "summary": ["work"], "tags": [],
+        }])
+        clients["summary_client"].generate_summary.return_value = report
+        clients["notion_client"].create_report_pages.return_value = []
+
+        process_date(since, until, session, **clients, allowed_tags=[])
+
+        notion_args = clients["notion_client"].create_report_pages.call_args[0]
+        commits = notion_args[4].repos()["my-repo"]["commits"]
+        # Per-commit timestamp wins; legacy entry falls back to session start_time
+        first = next(c for c in commits if c["sha"] == "aaa1111")
+        second = next(c for c in commits if c["sha"] == "bbb2222")
+        assert first["date"] == "2026-03-28T10:45:00+09:00"
+        assert second["date"] == "2026-03-28T10:00:00+09:00"
+
     def test_supplements_session_commits_for_missing_repo(self):
         clients = _make_clients()
         since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)

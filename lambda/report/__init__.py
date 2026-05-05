@@ -9,7 +9,7 @@ from collections.abc import KeysView
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 JST = timezone(timedelta(hours=9))
 
@@ -25,12 +25,13 @@ class CommitInfo(TypedDict):
 class SessionCommit(TypedDict):
     """A commit recovered from Claude Code session logs.
 
-    Only `sha` and `message` are extractable from JSONL tool results.
-    Pipeline-level code normalizes these to CommitInfo when injecting
-    into GitHubActivity.
+    `timestamp` may be missing on legacy DynamoDB entries; pipeline
+    code falls back to the session's start_time and normalizes the
+    entry to CommitInfo when injecting into GitHubActivity.
     """
     sha: str
     message: str
+    timestamp: NotRequired[str]
 
 
 class PullInfo(TypedDict):

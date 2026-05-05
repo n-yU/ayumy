@@ -128,6 +128,7 @@ class SessionStore:
                                         group["commits"].append({
                                             "sha": sha,
                                             "message": msg,
+                                            "timestamp": timestamp,
                                         })
                 elif entry_type == "assistant":
                     for block in entry.get("message", {}).get("content", []):

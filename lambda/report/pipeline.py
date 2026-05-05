@@ -57,7 +57,7 @@ def process_date(
                 "sha": c["sha"],
                 "message": c["message"],
                 "author": "",
-                "date": s["start_time"],
+                "date": c.get("timestamp") or s["start_time"],
                 "url": f"https://github.com/{github_client.owner}/{repo_name}/commit/{c['sha']}",
             }
             for s in sessions for c in s.get("session_commits", [])
