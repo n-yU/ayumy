@@ -38,9 +38,8 @@ def lambda_handler(event, context):
     source = "manual" if event.get("source") == "manual" else None
     target_date = event.get("target_date")
 
-    timeout_seconds = int(require_env("AYUMY_LAMBDA_TIMEOUT"))
-
     try:
+        timeout_seconds = int(require_env("AYUMY_LAMBDA_TIMEOUT"))
         run(
             source,
             target_date=target_date,
