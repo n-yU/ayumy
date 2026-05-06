@@ -269,7 +269,7 @@ class TestNotifyMetrics:
         assert "5.3s" in text
         assert "64 MB" in text
         # No percent indicator when neither memory nor timeout limits are set
-        assert "(50%)" not in text
+        assert "%" not in text
 
     def test_block_structure(self):
         client = _make_client()
