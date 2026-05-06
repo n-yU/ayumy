@@ -158,28 +158,44 @@ class SlackClient:
 
     def notify_metrics(
         self, elapsed: float, peak_memory_mb: float,
+        version: str,
         memory_limit_mb: int | None = None,
+        timeout_seconds: int | None = None,
     ) -> None:
         """Buffer execution metrics.
 
         Args:
             elapsed: Elapsed wall-clock time in seconds
             peak_memory_mb: Peak RSS memory usage in MB
+            version: ayumy version string (e.g. "0.2.1")
             memory_limit_mb: Lambda memory limit in MB, or None for CLI
+            timeout_seconds: Lambda timeout in seconds, or None for CLI
         """
         if self._blocks:
             self._blocks.append({"type": "divider"})
 
+        if timeout_seconds is not None:
+            elapsed_pct = elapsed / timeout_seconds * 100
+            elapsed_text = f"{elapsed:.1f} / {timeout_seconds}s ({elapsed_pct:.0f}%)"
+        else:
+            elapsed_text = f"{elapsed:.1f}s"
+
         if memory_limit_mb is not None:
             pct = peak_memory_mb / memory_limit_mb * 100
-            memory_text = f"Memory: {peak_memory_mb:.0f} / {memory_limit_mb} MB ({pct:.0f}%)"
+            memory_text = f"{peak_memory_mb:.0f} / {memory_limit_mb} MB ({pct:.0f}%)"
         else:
-            memory_text = f"Memory: {peak_memory_mb:.0f} MB"
+            memory_text = f"{peak_memory_mb:.0f} MB"
+
         self._blocks.append({
             "type": "context",
-            "elements": [{"type": "mrkdwn", "text": f"⏱️ {elapsed:.1f}s  |  💾 {memory_text}"}],
+            "elements": [{
+                "type": "mrkdwn",
+                "text": f"🔖 v{version}  |  ⏱️ {elapsed_text}  |  💾 {memory_text}",
+            }],
         })
-        self._fallback_parts.append(f"📊 Execution Metrics: {elapsed:.1f}s, {peak_memory_mb:.0f}MB")
+        self._fallback_parts.append(
+            f"📊 Execution Metrics: v{version}, {elapsed_text}, {memory_text}"
+        )
 
     def flush(self) -> None:
         """Send all buffered blocks as a single Slack message."""

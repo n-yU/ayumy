@@ -35,6 +35,7 @@ template.yaml                        # AWS SAM テンプレート（Lambda, Even
 Lambda（環境変数 + Secrets Manager）:
 - `AYUMY_S3_BUCKET` — セッションログの保管先 S3 バケット名（環境変数）
 - `AYUMY_DYNAMO_TABLE` — セッションメタデータの DynamoDB テーブル名（環境変数）
+- `AYUMY_LAMBDA_TIMEOUT` — Lambda 関数の timeout 秒数（環境変数、template.yaml の `LambdaTimeoutSeconds` パラメータと連動）
 - `NOTION_DATABASE_ID` — 書き込み先の Notion データベース ID（環境変数）
 - `GITHUB_PAT` — GitHub Fine-grained PAT（Secrets Manager）
 - `ANTHROPIC_API_KEY` — Anthropic API キー（Secrets Manager）

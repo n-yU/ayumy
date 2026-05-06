@@ -7,7 +7,7 @@ import time
 from datetime import datetime
 
 from . import (
-    JST, SessionActivity, date_to_range, get_target_date_range,
+    JST, SessionActivity, date_to_range, get_target_date_range, get_version,
     parse_target_dates, require_env,
 )
 from .github import GitHubClient
@@ -113,6 +113,7 @@ def run(
     source: str | None = None,
     target_date: str | None = None,
     memory_limit_mb: int | None = None,
+    timeout_seconds: int | None = None,
 ) -> None:
     """Run the report generation pipeline.
 
@@ -122,6 +123,7 @@ def run(
         target_date: Explicit target date (YYYY-MM-DD or YYYY-MM-DD..YYYY-MM-DD)
             for report generation
         memory_limit_mb: Lambda memory limit in MB, or None for CLI
+        timeout_seconds: Lambda timeout in seconds, or None for CLI
     """
     start = time.monotonic()
     since, until = get_target_date_range(source, target_date=target_date)
@@ -209,8 +211,13 @@ def run(
         divisor = 1024 * 1024 if platform.system() == "Darwin" else 1024
         peak_memory_mb = ru_maxrss / divisor
         logger.info(
-            "Execution metrics: elapsed=%.1fs, peak_memory=%.0fMB, limit=%s",
-            elapsed, peak_memory_mb, memory_limit_mb,
+            "Execution metrics: elapsed=%.1fs, peak_memory=%.0fMB, "
+            "memory_limit=%s, timeout=%s",
+            elapsed, peak_memory_mb, memory_limit_mb, timeout_seconds,
         )
-        slack_client.notify_metrics(elapsed, peak_memory_mb, memory_limit_mb)
+        slack_client.notify_metrics(
+            elapsed, peak_memory_mb, get_version(),
+            memory_limit_mb=memory_limit_mb,
+            timeout_seconds=timeout_seconds,
+        )
         slack_client.flush()
