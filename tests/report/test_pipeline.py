@@ -396,10 +396,11 @@ class TestRun:
         store.fetch_sessions.assert_called_once_with("2026-03-28")
         slack_client = MockSlack.return_value
         slack_client.notify_metrics.assert_called_once()
-        elapsed, peak_mb, limit_mb = slack_client.notify_metrics.call_args[0]
+        args = slack_client.notify_metrics.call_args
+        elapsed, peak_mb, _version = args.args
         assert elapsed >= 0
         assert peak_mb >= 0
-        assert limit_mb is None
+        assert args.kwargs.get("memory_limit_mb") is None
         slack_client.flush.assert_called_once()
 
     @patch("report.pipeline.get_target_date_range")
@@ -438,8 +439,52 @@ class TestRun:
         run(source=None, memory_limit_mb=512)
 
         slack_client.notify_metrics.assert_called_once()
-        _, _, limit_mb = slack_client.notify_metrics.call_args[0]
-        assert limit_mb == 512
+        assert slack_client.notify_metrics.call_args.kwargs["memory_limit_mb"] == 512
+        slack_client.flush.assert_called_once()
+
+    @patch("report.pipeline.get_version")
+    @patch("report.pipeline.get_target_date_range")
+    @patch("report.pipeline.require_env")
+    @patch("report.pipeline.SlackClient")
+    @patch("report.pipeline.SessionStore")
+    @patch("report.pipeline.SessionClient")
+    @patch("report.pipeline.GitHubClient")
+    @patch("report.pipeline.NotionClient")
+    @patch("report.pipeline.SummaryClient")
+    def test_passes_version_and_timeout_to_metrics(
+        self, MockSummary, MockNotion, MockGitHub, MockSession,
+        MockStore, MockSlack, mock_require_env, mock_date_range,
+        mock_get_version,
+    ):
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+        mock_date_range.return_value = (since, until)
+        mock_require_env.side_effect = lambda k: f"fake-{k}"
+        mock_get_version.return_value = "0.2.1"
+
+        store = MockStore.return_value
+        store.ingest.return_value = []
+        store.scan_backfill_dates.return_value = []
+        store.fetch_sessions.return_value = SessionActivity({})
+
+        session_client = MockSession.return_value
+        session_client.delete_sessions.return_value = 0
+
+        github_client = MockGitHub.return_value
+        github_client.fetch_activity.return_value = GitHubActivity({})
+
+        notion_client = MockNotion.return_value
+        notion_client.fetch_allowlists.return_value = []
+
+        slack_client = MockSlack.return_value
+
+        run(source=None, memory_limit_mb=512, timeout_seconds=300)
+
+        slack_client.notify_metrics.assert_called_once()
+        call = slack_client.notify_metrics.call_args
+        # version is the third positional argument
+        assert call.args[2] == "0.2.1"
+        assert call.kwargs["timeout_seconds"] == 300
         slack_client.flush.assert_called_once()
 
     @patch("report.pipeline.get_target_date_range")

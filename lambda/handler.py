@@ -4,6 +4,7 @@ import os
 
 import boto3
 
+from report import require_env
 from report.pipeline import run
 
 logging.getLogger().setLevel(logging.INFO)
@@ -38,7 +39,13 @@ def lambda_handler(event, context):
     target_date = event.get("target_date")
 
     try:
-        run(source, target_date=target_date, memory_limit_mb=int(context.memory_limit_in_mb))
+        timeout_seconds = int(require_env("AYUMY_LAMBDA_TIMEOUT"))
+        run(
+            source,
+            target_date=target_date,
+            memory_limit_mb=int(context.memory_limit_in_mb),
+            timeout_seconds=timeout_seconds,
+        )
     except Exception:
         logger.exception("Report generation failed")
         return {

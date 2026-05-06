@@ -249,7 +249,7 @@ class TestNotifyMetrics:
     def test_sends_metrics_with_memory_limit(self):
         client = _make_client()
 
-        client.notify_metrics(12.5, 128.0, memory_limit_mb=256)
+        client.notify_metrics(12.5, 128.0, "0.2.1", memory_limit_mb=256)
         client.flush()
 
         kwargs = _get_send_kwargs(client)
@@ -261,23 +261,89 @@ class TestNotifyMetrics:
     def test_sends_metrics_without_memory_limit(self):
         client = _make_client()
 
-        client.notify_metrics(5.3, 64.0)
+        client.notify_metrics(5.3, 64.0, "0.2.1")
         client.flush()
 
         kwargs = _get_send_kwargs(client)
         text = _blocks_text(kwargs["blocks"])
         assert "5.3s" in text
         assert "64 MB" in text
+        # No percent indicator when neither memory nor timeout limits are set
         assert "%" not in text
 
     def test_block_structure(self):
         client = _make_client()
 
-        client.notify_metrics(10.0, 100.0, memory_limit_mb=512)
+        client.notify_metrics(10.0, 100.0, "0.2.1", memory_limit_mb=512)
         client.flush()
 
         blocks = _get_send_kwargs(client)["blocks"]
         assert blocks[0]["type"] == "context"
+
+    def test_includes_version(self):
+        client = _make_client()
+
+        client.notify_metrics(10.0, 100.0, "0.2.1", memory_limit_mb=512)
+        client.flush()
+
+        kwargs = _get_send_kwargs(client)
+        text = _blocks_text(kwargs["blocks"])
+        assert "🔖 v0.2.1" in text
+
+    def test_includes_timeout_when_provided(self):
+        client = _make_client()
+
+        client.notify_metrics(
+            45.0, 100.0, "0.2.1",
+            memory_limit_mb=512, timeout_seconds=300,
+        )
+        client.flush()
+
+        kwargs = _get_send_kwargs(client)
+        text = _blocks_text(kwargs["blocks"])
+        assert "45.0 / 300s" in text
+        assert "15%" in text
+
+    def test_omits_timeout_when_not_provided(self):
+        client = _make_client()
+
+        client.notify_metrics(45.0, 100.0, "0.2.1", memory_limit_mb=512)
+        client.flush()
+
+        kwargs = _get_send_kwargs(client)
+        text = _blocks_text(kwargs["blocks"])
+        assert "45.0s" in text
+        assert "/ 300s" not in text
+
+    def test_includes_all_fields_together(self):
+        client = _make_client()
+
+        client.notify_metrics(
+            45.0, 128.0, "0.2.1",
+            memory_limit_mb=256, timeout_seconds=300,
+        )
+        client.flush()
+
+        kwargs = _get_send_kwargs(client)
+        text = _blocks_text(kwargs["blocks"])
+        assert "🔖 v0.2.1" in text
+        assert "⏱️ 45.0 / 300s (15%)" in text
+        assert "💾 128 / 256 MB (50%)" in text
+
+    def test_fallback_text_includes_version_and_timeout(self):
+        client = _make_client()
+
+        client.notify_metrics(
+            45.0, 128.0, "0.2.1",
+            memory_limit_mb=256, timeout_seconds=300,
+        )
+        client.flush()
+
+        # `text` kwarg passed to webhook send() carries the fallback string
+        fallback = client.client.send.call_args.kwargs["text"]
+        assert "v0.2.1" in fallback
+        assert "45.0 / 300s (15%)" in fallback
+        assert "128 / 256 MB (50%)" in fallback
 
 
 class TestNotifyValidationErrors:
@@ -342,7 +408,7 @@ class TestFlush:
         pages = [("repo", "https://notion.so/p")]
 
         client.notify(target, report, pages)
-        client.notify_metrics(10.0, 100.0, memory_limit_mb=512)
+        client.notify_metrics(10.0, 100.0, "0.2.1", memory_limit_mb=512)
         client.flush()
 
         # Single send call

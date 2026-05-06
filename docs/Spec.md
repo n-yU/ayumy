@@ -314,6 +314,7 @@ Notion への書き込み完了後、Slack Incoming Webhook で指定チャン�
 
 通知内容:
 - Notion ページへのリンク（リポジトリごとに 1 行）。Claude API が生成した summary 箇条書きの先頭項目がある場合は 1 文サマリとしてリンクの後ろに付加する
+- 実行メトリクス: ayumy バージョン、経過時間（Lambda 実行時は timeout との比率）、ピークメモリ（Lambda 実行時は memory limit との比率）
 
 アクティビティが 0 件で Notion ページが作成されなかった場合は、正常稼働を示す簡易通知を送信する。処理中にエラーが発生した場合もエラー内容を通知する。
 
@@ -412,6 +413,7 @@ Lambda 関数の環境変数として設定する。機密情報は AWS Secrets 
 |---|---|
 | `AYUMY_S3_BUCKET` | セッションログの保管先 S3 バケット名 |
 | `AYUMY_DYNAMO_TABLE` | セッションメタデータの DynamoDB テーブル名 |
+| `AYUMY_LAMBDA_TIMEOUT` | Lambda 関数の timeout 秒数（template.yaml の `LambdaTimeoutSeconds` パラメータと連動） |
 | `NOTION_DATABASE_ID` | 書き込み先の Notion データベース ID |
 
 **Secrets Manager に保管**
