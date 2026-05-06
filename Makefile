@@ -1,4 +1,11 @@
-.PHONY: lambda-install lambda-invoke lambda-deploy test oidc-deploy scan-sessions
+.PHONY: lambda-install lambda-invoke lambda-deploy test oidc-deploy scan-sessions aws-auth-check
+
+# Verify AWS credentials are valid before running AWS commands
+aws-auth-check:
+	@aws sts get-caller-identity > /dev/null 2>&1 || { \
+		echo "AWS credentials are not valid or have expired. Run 'aws login' and retry."; \
+		exit 1; \
+	}
 
 # Install lambda dependencies into local .venv via uv (includes dev deps like boto3)
 lambda-install:
@@ -10,7 +17,7 @@ lambda-invoke:
 	sam build && sam local invoke ReportFunction
 
 # Build and deploy Lambda function to AWS
-lambda-deploy:
+lambda-deploy: aws-auth-check
 	sam build && sam deploy --no-confirm-changeset
 
 # Run unit tests
@@ -26,7 +33,7 @@ scan-sessions:
 		--output table
 
 # Deploy OIDC bootstrap stack for GitHub Actions
-oidc-deploy:
+oidc-deploy: aws-auth-check
 	aws cloudformation deploy \
 		--template-file .github/oidc-bootstrap.yml \
 		--stack-name ayumy-github-oidc \
