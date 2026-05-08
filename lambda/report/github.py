@@ -249,9 +249,9 @@ class GitHubClient:
     ) -> str:
         """Build a Search Issues query string.
 
-        The date range is widened by one day on each side to absorb
-        UTC/JST boundary skew. Callers must post-filter against the
-        exact since/until timestamps
+        The query covers `since - 1day` through `until` to absorb
+        UTC/JST boundary skew. Callers must filter results against
+        the exact since/until timestamps
         """
         since_str = (since - timedelta(days=1)).strftime("%Y-%m-%d")
         until_str = until.strftime("%Y-%m-%d")
