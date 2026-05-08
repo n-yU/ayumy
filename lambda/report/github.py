@@ -5,7 +5,7 @@ import time
 from datetime import datetime, timedelta
 from functools import cached_property
 
-from github import Github
+from github import Github, UnknownObjectException
 from github.Issue import Issue
 from github.PullRequest import PullRequest
 from github.Repository import Repository
@@ -265,16 +265,14 @@ class GitHubClient:
     ) -> list[int]:
         """Resolve PR numbers associated with a commit SHA.
 
-        Returns an empty list when the commit cannot be resolved or has
-        no associated PR
+        Returns an empty list when the commit is not found (404) or
+        has no associated PR. Other API errors propagate
         """
         try:
             commit = repo.get_commit(sha)
             return [pr.number for pr in commit.get_pulls()]
-        except Exception:
-            logger.warning(
-                "Could not resolve PRs for commit %s", sha[:7], exc_info=True,
-            )
+        except UnknownObjectException:
+            logger.warning("Commit %s not found (404), skipping", sha[:7])
             return []
 
     def _fetch_pulls_hybrid(

@@ -3,6 +3,9 @@
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
+import pytest
+from github import UnknownObjectException
+
 from report import JST
 from report.github import GitHubClient, _SEARCH_BATCH, _SEARCH_WINDOW
 
@@ -456,14 +459,22 @@ class TestFetchPullsForCommit:
         assert result == [7, 12]
         repo.get_commit.assert_called_once_with("abc1234")
 
-    def test_returns_empty_on_error(self):
+    def test_returns_empty_on_404(self):
         client = _make_client()
         repo = MagicMock()
-        repo.get_commit.side_effect = Exception("404")
+        repo.get_commit.side_effect = UnknownObjectException(404, "Not Found", {})
 
         result = client._fetch_pulls_for_commit(repo, "abc1234")
 
         assert result == []
+
+    def test_propagates_non_404_errors(self):
+        client = _make_client()
+        repo = MagicMock()
+        repo.get_commit.side_effect = RuntimeError("transient failure")
+
+        with pytest.raises(RuntimeError):
+            client._fetch_pulls_for_commit(repo, "abc1234")
 
 
 class TestFetchPullsBackfill:
