@@ -560,7 +560,7 @@ class TestFetchPullsBackfill:
         )
         assert [r["number"] for r in result] == [99]
 
-    def test_skips_unfetchable_pull(self):
+    def test_skips_pull_not_found(self):
         client = _make_client()
         since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
         until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
@@ -570,12 +570,29 @@ class TestFetchPullsBackfill:
         client.g.search_issues.side_effect = [
             [_make_pr_issue(50)], [], [],
         ]
-        repo.get_pull.side_effect = Exception("404")
+        repo.get_pull.side_effect = UnknownObjectException(404, "Not Found", {})
 
         result = client.fetch_pulls(
             repo, since, until, is_backfill=True, commits=[],
         )
         assert result == []
+
+    def test_propagates_non_404_pull_fetch_errors(self):
+        client = _make_client()
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+        repo = MagicMock()
+        repo.full_name = "n-yU/repo"
+
+        client.g.search_issues.side_effect = [
+            [_make_pr_issue(50)], [], [],
+        ]
+        repo.get_pull.side_effect = RuntimeError("transient failure")
+
+        with pytest.raises(RuntimeError):
+            client.fetch_pulls(
+                repo, since, until, is_backfill=True, commits=[],
+            )
 
 
 class TestFetchIssuesBackfill:

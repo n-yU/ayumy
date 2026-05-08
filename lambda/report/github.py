@@ -296,8 +296,8 @@ class GitHubClient:
         for n in sorted(event_numbers | commit_numbers):
             try:
                 pr = repo.get_pull(n)
-            except Exception:
-                logger.warning("Could not fetch PR #%d", n, exc_info=True)
+            except UnknownObjectException:
+                logger.warning("PR #%d not found (404), skipping", n)
                 continue
             info = _build_pull_info(pr)
             # Search-only entries must have a state event in [since, until)
