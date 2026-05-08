@@ -65,7 +65,7 @@ class GitHubClient:
 
         Uses the Search Commits API with author-date range to find
         commits regardless of branch existence. The Search API only
-        supports date-level granularity, so results are post-filtered
+        supports date-level granularity, so results are filtered
         against the exact since/until timestamps.
 
         Args:

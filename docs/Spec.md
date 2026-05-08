@@ -233,7 +233,7 @@ ayumy sync --report --date 2026-03-01..2026-03-05               # 日付範囲�
 | Pull Requests | `GET /repos/{owner}/{repo}/pulls` | `state=all`, `sort=updated`, 前日以降 | タイトル、番号、状態、作成者、ラベル、draft フラグ、URL、作成日時、merge 日時、close 日時 |
 | Issues | `GET /repos/{owner}/{repo}/issues` | `since`, `state=all`, PR を除外 | タイトル、番号、状態、作成者、ラベル、URL、作成日時、close 日時、close 理由（state_reason） |
 
-Commits の取得には Search Commits API を使用し、`author-date` の range 構文（`YYYY-MM-DD..YYYY-MM-DD`）で期間を指定する。検索範囲の上限は `max(since_date, (until - 1day).date())` で算出し、不要な翌日分のページングを回避する。Search API は日付精度のみをサポートするため、取得後に `since <= author_date < until` で post-filter し、手動実行時の部分日（当日 00:00 〜 現在時刻）にも対応する。これによりブランチの存在有無にかかわらず対象期間のコミットを取得できる。ただし squash merge によって `author-date` が書き換えられたコミットは検出できないため、セッション JSONL の `tool_result` から抽出したコミット情報で補完する（§5.3 参照）
+Commits の取得には Search Commits API を使用し、`author-date` の range 構文（`YYYY-MM-DD..YYYY-MM-DD`）で期間を指定する。検索範囲の上限は `max(since_date, (until - 1day).date())` で算出し、不要な翌日分のページングを回避する。Search API は日付精度のみをサポートするため、取得後に `since <= author_date < until` で絞り込み、手動実行時の部分日（当日 00:00 〜 現在時刻）にも対応する。これによりブランチの存在有無にかかわらず対象期間のコミットを取得できる。ただし squash merge によって `author-date` が書き換えられたコミットは検出できないため、セッション JSONL の `tool_result` から抽出したコミット情報で補完する（§5.3 参照）
 
 Search API には 30 リクエスト/分の secondary rate limit がある。10 リクエストごとに経過時間をチェックし、20 秒のウィンドウ内であれば残り時間だけ sleep してからカウンタをリセットする
 
@@ -247,7 +247,7 @@ PR/Issue の `updated_at` 経路は対象日以降に状態が更新されると
 | Pull Requests | `GET /search/issues` を `is:pr` + `created:`/`merged:`/`closed:` のレンジクエリで3回呼び出し、状態遷移した PR を取得する。さらに `fetch_commits` 結果の各 SHA に対して `GET /repos/{owner}/{repo}/commits/{sha}/pulls` を呼び、対象日にコミットだけがあった PR も補足する。両者を PR 番号で union し、各番号を `GET /repos/{owner}/{repo}/pulls/{N}` で個別取得する |
 | Issues | `GET /search/issues` を `is:issue` + `created:`/`closed:` のレンジクエリで2回呼び出し、状態遷移した Issue を取得する。番号で union する |
 
-Search クエリの日付範囲は UTC/JST の境界ずれを吸収するため `since - 1day` 〜 `until` まで広げる。取得後に各イベントタイムスタンプ（`created_at` / `merged_at` / `closed_at`）が `[since, until)` に入るかで post-filter する。commit 由来 PR は対象日にコミットが存在する事実をもって採用するため post-filter の対象外とする。削除済み PR/Issue は 404 となるためスキップする
+Search クエリの日付範囲は UTC/JST の境界ずれを吸収するため `since - 1day` 〜 `until` まで広げる。Search 経路で得た PR は `created_at` / `merged_at` / `closed_at`、Issue は `created_at` / `closed_at` のいずれかが `[since, until)` に入るものに絞り込む。commit 由来 PR は対象日にコミットが存在する事実をもって採用するため、この絞り込みの対象外とする。削除済み PR/Issue は 404 となるためスキップする
 
 Search 呼び出しはリポジトリあたり最大 5 回（PR 3 + Issue 2）増えるため、`fetch_commits` の Search 呼び出しと共通の throttle カウンタで管理する
 
