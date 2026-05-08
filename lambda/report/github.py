@@ -6,6 +6,8 @@ from datetime import datetime, timedelta
 from functools import cached_property
 
 from github import Github
+from github.Issue import Issue
+from github.PullRequest import PullRequest
 from github.Repository import Repository
 
 from . import CommitInfo, GitHubActivity, IssueInfo, PullInfo, RepoActivity
@@ -15,6 +17,9 @@ logger = logging.getLogger(__name__)
 # Search API rate limit: 30 requests/minute
 _SEARCH_BATCH = 10
 _SEARCH_WINDOW = 20
+
+_PULL_EVENTS = ("created", "merged", "closed")
+_ISSUE_EVENTS = ("created", "closed")
 
 
 class GitHubClient:
@@ -34,6 +39,24 @@ class GitHubClient:
     def owner(self) -> str:
         """Login name of the authenticated user (owner of accessible repos)."""
         return self.g.get_user().login
+
+    def _search_throttle(self) -> None:
+        """Throttle Search API calls within the secondary rate limit.
+
+        Each call increments the per-window counter. When the counter
+        reaches the batch size, sleep until the window elapses before
+        resetting. Call once before each Search API request
+        """
+        if self._search_count >= _SEARCH_BATCH:
+            elapsed = time.time() - self._window_start
+            if elapsed < _SEARCH_WINDOW:
+                sleep_time = _SEARCH_WINDOW - elapsed
+                logger.info("Search API throttle: sleeping %.0fs", sleep_time)
+                time.sleep(sleep_time)
+            self._search_count = 0
+        if self._search_count == 0:
+            self._window_start = time.time()
+        self._search_count += 1
 
     def fetch_commits(
         self, repo: Repository, since: datetime, until: datetime
@@ -58,6 +81,7 @@ class GitHubClient:
         until_str = max(since_str, until_date.strftime("%Y-%m-%d"))
         query = f"repo:{repo.full_name} author-date:{since_str}..{until_str}"
 
+        self._search_throttle()
         results: list[CommitInfo] = []
         for c in self.g.search_commits(query, sort="author-date", order="desc"):
             author_date = c.commit.author.date
@@ -73,83 +97,86 @@ class GitHubClient:
         return results
 
     def fetch_pulls(
-        self, repo: Repository, since: datetime, until: datetime
+        self,
+        repo: Repository,
+        since: datetime,
+        until: datetime,
+        *,
+        is_backfill: bool = False,
+        commits: list[CommitInfo] | None = None,
     ) -> list[PullInfo]:
-        """Fetch pull requests updated within the target date range.
+        """Fetch pull requests within the target date range.
+
+        Default path filters by `updated_at`. Backfill path unions
+        Search by created/merged/closed event with PRs derived from
+        commits in range
 
         Args:
             repo: Target repository
             since: Start of the target period (inclusive)
             until: End of the target period (exclusive)
+            is_backfill: If True, use the Hybrid fetch path
+            commits: Commits in range, used by the Hybrid path
 
         Returns:
             A list of dicts with keys: number, title, state, author, labels,
             draft, url, created_at, merged_at, closed_at. State is one of
             "merged", "closed", "open"
         """
+        if is_backfill:
+            return self._fetch_pulls_hybrid(repo, since, until, commits or [])
+
         results: list[PullInfo] = []
         for pr in repo.get_pulls(state="all", sort="updated", direction="desc"):
             if pr.updated_at < since:
                 break
             if pr.updated_at >= until:
                 continue
-
-            if pr.merged_at:
-                state = "merged"
-            elif pr.state == "closed":
-                state = "closed"
-            else:
-                state = "open"
-
-            results.append({
-                "number": pr.number,
-                "title": pr.title,
-                "state": state,
-                "author": pr.user.login,
-                "labels": [l.name for l in pr.labels],
-                "draft": bool(pr.draft),
-                "url": pr.html_url,
-                "created_at": pr.created_at.isoformat(),
-                "merged_at": pr.merged_at.isoformat() if pr.merged_at else None,
-                "closed_at": pr.closed_at.isoformat() if pr.closed_at else None,
-            })
+            results.append(_build_pull_info(pr))
         return results
 
     def fetch_issues(
-        self, repo: Repository, since: datetime, until: datetime
+        self,
+        repo: Repository,
+        since: datetime,
+        until: datetime,
+        *,
+        is_backfill: bool = False,
     ) -> list[IssueInfo]:
-        """Fetch issues (excluding PRs) updated within the target date range.
+        """Fetch issues (excluding PRs) within the target date range.
+
+        Default path filters by `updated_at`. Backfill path unions
+        Search by created/closed event
 
         Args:
             repo: Target repository
             since: Start of the target period (inclusive)
             until: End of the target period (exclusive)
+            is_backfill: If True, use the Hybrid fetch path
 
         Returns:
             A list of dicts with keys: number, title, state, author, labels,
             url, created_at, closed_at, state_reason
         """
+        if is_backfill:
+            return self._fetch_issues_hybrid(repo, since, until)
+
         results: list[IssueInfo] = []
         for issue in repo.get_issues(since=since, state="all"):
             if issue.pull_request is not None:
                 continue
             if issue.updated_at >= until:
                 continue
-            results.append({
-                "number": issue.number,
-                "title": issue.title,
-                "state": issue.state,
-                "author": issue.user.login,
-                "labels": [l.name for l in issue.labels],
-                "url": issue.html_url,
-                "created_at": issue.created_at.isoformat(),
-                "closed_at": issue.closed_at.isoformat() if issue.closed_at else None,
-                "state_reason": issue.state_reason,
-            })
+            results.append(_build_issue_info(issue))
         return results
 
     def fetch_activity(
-        self, since: datetime, until: datetime, repo_names: list[str],
+        self,
+        since: datetime,
+        until: datetime,
+        repo_names: list[str],
+        *,
+        is_backfill: bool = False,
     ) -> GitHubActivity:
         """Fetch GitHub activity for the specified repositories.
 
@@ -157,6 +184,8 @@ class GitHubClient:
             since: Start of the target period (inclusive)
             until: End of the target period (exclusive)
             repo_names: Repository names to fetch activity for
+            is_backfill: If True, use the Hybrid fetch path for PRs
+                and Issues
 
         Returns:
             A GitHubActivity instance. Repos with no activity are omitted
@@ -166,19 +195,13 @@ class GitHubClient:
 
         for name in repo_names:
             repo = user.get_repo(name)
-            if self._search_count >= _SEARCH_BATCH:
-                elapsed = time.time() - self._window_start
-                if elapsed < _SEARCH_WINDOW:
-                    sleep_time = _SEARCH_WINDOW - elapsed
-                    logger.info("Search API throttle: sleeping %.0fs", sleep_time)
-                    time.sleep(sleep_time)
-                self._search_count = 0
             commits = self.fetch_commits(repo, since, until)
-            if self._search_count == 0:
-                self._window_start = time.time()
-            self._search_count += 1
-            pulls = self.fetch_pulls(repo, since, until)
-            issues = self.fetch_issues(repo, since, until)
+            pulls = self.fetch_pulls(
+                repo, since, until, is_backfill=is_backfill, commits=commits,
+            )
+            issues = self.fetch_issues(
+                repo, since, until, is_backfill=is_backfill,
+            )
 
             if commits or pulls or issues:
                 data[repo.name] = {
@@ -187,3 +210,176 @@ class GitHubClient:
                     "issues": issues,
                 }
         return GitHubActivity(data)
+
+    def _search_pulls_by_event(
+        self, repo: Repository, since: datetime, until: datetime, event: str,
+    ) -> list[Issue]:
+        """Search PRs whose state-transition event lies in the date range.
+
+        Args:
+            repo: Target repository
+            since: Start of the target period (inclusive)
+            until: End of the target period (exclusive)
+            event: One of "created", "merged", "closed"
+
+        Returns:
+            A list of Issue objects (search_issues returns Issues even
+            for PR queries; convert via repo.get_pull(number) when full
+            PR fields are needed)
+        """
+        query = self._build_search_query(repo, since, until, "pr", event)
+        self._search_throttle()
+        return list(self.g.search_issues(query))
+
+    def _search_issues_by_event(
+        self, repo: Repository, since: datetime, until: datetime, event: str,
+    ) -> list[Issue]:
+        """Search issues (excluding PRs) by state-transition event."""
+        query = self._build_search_query(repo, since, until, "issue", event)
+        self._search_throttle()
+        return list(self.g.search_issues(query))
+
+    @staticmethod
+    def _build_search_query(
+        repo: Repository,
+        since: datetime,
+        until: datetime,
+        kind: str,
+        event: str,
+    ) -> str:
+        """Build a Search Issues query string.
+
+        The date range is widened by one day on each side to absorb
+        UTC/JST boundary skew. Callers must post-filter against the
+        exact since/until timestamps
+        """
+        since_str = (since - timedelta(days=1)).strftime("%Y-%m-%d")
+        until_str = until.strftime("%Y-%m-%d")
+        return (
+            f"repo:{repo.full_name} is:{kind} "
+            f"{event}:{since_str}..{until_str}"
+        )
+
+    def _fetch_pulls_for_commit(
+        self, repo: Repository, sha: str,
+    ) -> list[int]:
+        """Resolve PR numbers associated with a commit SHA.
+
+        Returns an empty list when the commit cannot be resolved or has
+        no associated PR
+        """
+        try:
+            commit = repo.get_commit(sha)
+            return [pr.number for pr in commit.get_pulls()]
+        except Exception:
+            logger.warning(
+                "Could not resolve PRs for commit %s", sha[:7], exc_info=True,
+            )
+            return []
+
+    def _fetch_pulls_hybrid(
+        self,
+        repo: Repository,
+        since: datetime,
+        until: datetime,
+        commits: list[CommitInfo],
+    ) -> list[PullInfo]:
+        """Fetch PRs via Search events + commit-derived union (backfill)."""
+        event_numbers: set[int] = set()
+        for event in _PULL_EVENTS:
+            for item in self._search_pulls_by_event(repo, since, until, event):
+                event_numbers.add(item.number)
+
+        commit_numbers: set[int] = set()
+        for c in commits:
+            commit_numbers.update(self._fetch_pulls_for_commit(repo, c["sha"]))
+
+        results: list[PullInfo] = []
+        for n in sorted(event_numbers | commit_numbers):
+            try:
+                pr = repo.get_pull(n)
+            except Exception:
+                logger.warning("Could not fetch PR #%d", n, exc_info=True)
+                continue
+            info = _build_pull_info(pr)
+            # Search-only entries must have a state event in [since, until)
+            if n in event_numbers and n not in commit_numbers:
+                if not _pull_has_event_in_range(info, since, until):
+                    continue
+            results.append(info)
+        return results
+
+    def _fetch_issues_hybrid(
+        self, repo: Repository, since: datetime, until: datetime,
+    ) -> list[IssueInfo]:
+        """Fetch issues via Search created/closed event union (backfill)."""
+        seen: dict[int, Issue] = {}
+        for event in _ISSUE_EVENTS:
+            for item in self._search_issues_by_event(repo, since, until, event):
+                seen.setdefault(item.number, item)
+
+        results: list[IssueInfo] = []
+        for number in sorted(seen):
+            issue = seen[number]
+            info = _build_issue_info(issue)
+            if not _issue_has_event_in_range(info, since, until):
+                continue
+            results.append(info)
+        return results
+
+
+def _build_pull_info(pr: PullRequest) -> PullInfo:
+    """Construct a PullInfo dict from a PyGithub PullRequest."""
+    if pr.merged_at:
+        state = "merged"
+    elif pr.state == "closed":
+        state = "closed"
+    else:
+        state = "open"
+    return {
+        "number": pr.number,
+        "title": pr.title,
+        "state": state,
+        "author": pr.user.login,
+        "labels": [l.name for l in pr.labels],
+        "draft": bool(pr.draft),
+        "url": pr.html_url,
+        "created_at": pr.created_at.isoformat(),
+        "merged_at": pr.merged_at.isoformat() if pr.merged_at else None,
+        "closed_at": pr.closed_at.isoformat() if pr.closed_at else None,
+    }
+
+
+def _build_issue_info(issue: Issue) -> IssueInfo:
+    """Construct an IssueInfo dict from a PyGithub Issue."""
+    return {
+        "number": issue.number,
+        "title": issue.title,
+        "state": issue.state,
+        "author": issue.user.login,
+        "labels": [l.name for l in issue.labels],
+        "url": issue.html_url,
+        "created_at": issue.created_at.isoformat(),
+        "closed_at": issue.closed_at.isoformat() if issue.closed_at else None,
+        "state_reason": issue.state_reason,
+    }
+
+
+def _pull_has_event_in_range(
+    info: PullInfo, since: datetime, until: datetime,
+) -> bool:
+    """Return True if any of created/merged/closed falls within range."""
+    for ts in (info["created_at"], info["merged_at"], info["closed_at"]):
+        if ts and since <= datetime.fromisoformat(ts) < until:
+            return True
+    return False
+
+
+def _issue_has_event_in_range(
+    info: IssueInfo, since: datetime, until: datetime,
+) -> bool:
+    """Return True if either created or closed falls within range."""
+    for ts in (info["created_at"], info["closed_at"]):
+        if ts and since <= datetime.fromisoformat(ts) < until:
+            return True
+    return False
