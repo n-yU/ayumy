@@ -3,6 +3,7 @@
 import json
 import logging
 import re
+import shlex
 from collections import defaultdict
 from datetime import date, datetime, timezone
 
@@ -22,8 +23,6 @@ _GH_API_RE = re.compile(r"\bgh\s+api\b")
 # PR/Issue number embedded in a `gh api` REST path
 _API_PATH_PR_RE = re.compile(r"\b(?:pulls|pull)/(\d+)\b")
 _API_PATH_ISSUE_RE = re.compile(r"\bissues/(\d+)\b")
-# Standalone integer (not surrounded by word chars or hyphens)
-_STANDALONE_INT_RE = re.compile(r"(?<![\w-])(\d+)(?![\w-])")
 # `#N` reference inside `git` command arguments. Treated as ambiguous
 # between PR and Issue
 _HASH_REF_RE = re.compile(r"(?<![A-Za-z0-9])#(\d+)\b")
@@ -41,6 +40,26 @@ def _command_segment(command: str, start: int) -> str:
         if i != -1 and i < end:
             end = i
     return command[start:end]
+
+
+def _first_positional_int(segment: str) -> int | None:
+    """Return the first positional integer token in `segment`.
+
+    Tokenizes via shlex so that quoted flag values count as a single
+    token; this prevents matching integers that live inside strings
+    like `--body "fix 999"`. Tokens beginning with `-` are treated as
+    flags and skipped
+    """
+    try:
+        tokens = shlex.split(segment, posix=True)
+    except ValueError:
+        return None
+    for tok in tokens:
+        if tok.startswith("-"):
+            continue
+        if tok.isdigit():
+            return int(tok)
+    return None
 
 
 def _extract_pr_issue_refs(command: str) -> tuple[set[int], set[int]]:
@@ -63,9 +82,8 @@ def _extract_pr_issue_refs(command: str) -> tuple[set[int], set[int]]:
         if sub in _GH_CLI_NO_NUMBER_SUBS:
             continue
         segment = _command_segment(command, m.end())
-        first = _STANDALONE_INT_RE.search(segment)
-        if first:
-            n = int(first.group(1))
+        n = _first_positional_int(segment)
+        if n is not None:
             (pulls if kind == "pr" else issues).add(n)
 
     for m in _GH_API_RE.finditer(command):

@@ -92,6 +92,14 @@ class TestExtractPrIssueRefs:
         assert pulls == {87}
         assert issues == set()
 
+    def test_gh_pr_skips_quoted_integer_in_flag_value(self):
+        """Numbers inside quoted flag values must not be picked up."""
+        pulls, issues = _extract_pr_issue_refs(
+            'gh pr edit --body "fix 999" 87'
+        )
+        assert pulls == {87}
+        assert issues == set()
+
     def test_ignores_unrelated_commands(self):
         pulls, issues = _extract_pr_issue_refs(
             "ls /tmp/file_42.txt && python build.py 7"
