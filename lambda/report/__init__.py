@@ -127,6 +127,8 @@ class SessionInfo(TypedDict):
     user_messages: list[str]
     tools_used: list[str]
     session_commits: list[SessionCommit]
+    session_pulls: list[int]
+    session_issues: list[int]
 
 
 class SessionActivity:

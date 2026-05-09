@@ -13,6 +13,73 @@ from . import JST, SessionActivity, SessionInfo
 
 logger = logging.getLogger(__name__)
 
+# `gh pr|issue` invocation. `gh pr create`, `gh pr list`, `gh pr status`
+# (and the issue equivalents) do not take a number positional argument
+_GH_CLI_RE = re.compile(r"\bgh\s+(pr|issue)\s+(\w[\w-]*)")
+_GH_CLI_NO_NUMBER_SUBS = {"create", "list", "status"}
+# `gh api` calls with a PR/Issue number embedded in the path
+_GH_API_PR_RE = re.compile(r"\b(?:pulls|pull)/(\d+)\b")
+_GH_API_ISSUE_RE = re.compile(r"\bissues/(\d+)\b")
+# Standalone integer (not surrounded by word chars or hyphens)
+_STANDALONE_INT_RE = re.compile(r"(?<![\w-])(\d+)(?![\w-])")
+# `#N` reference inside `git` command arguments. Treated as ambiguous
+# between PR and Issue
+_HASH_REF_RE = re.compile(r"(?<![A-Za-z0-9])#(\d+)\b")
+# `git` invocation anchor
+_GIT_CLI_RE = re.compile(r"\bgit\s+\w[\w-]*")
+# Stop characters that delimit a single shell command within a Bash line
+_SHELL_STOPS = ("\n", "&&", "||", ";", "|")
+
+
+def _command_segment(command: str, start: int) -> str:
+    """Return the portion of `command` from `start` up to the next shell stop."""
+    end = len(command)
+    for stop in _SHELL_STOPS:
+        i = command.find(stop, start)
+        if i != -1 and i < end:
+            end = i
+    return command[start:end]
+
+
+def _extract_pr_issue_refs(command: str) -> tuple[set[int], set[int]]:
+    """Extract PR and Issue numbers from a Bash command string.
+
+    Recognizes `gh pr|issue {sub} {N}`, `gh api .../pulls|issues/{N}`,
+    and `#N` inside `git` arguments. `#N` is ambiguous, so it is
+    placed in both sets and the fetcher reconciles via 404 / the
+    `pull_request` attribute
+
+    Returns:
+        A tuple of (pull numbers, issue numbers)
+    """
+    pulls: set[int] = set()
+    issues: set[int] = set()
+
+    for m in _GH_CLI_RE.finditer(command):
+        kind = m.group(1)
+        sub = m.group(2)
+        if sub in _GH_CLI_NO_NUMBER_SUBS:
+            continue
+        segment = _command_segment(command, m.end())
+        first = _STANDALONE_INT_RE.search(segment)
+        if first:
+            n = int(first.group(1))
+            (pulls if kind == "pr" else issues).add(n)
+
+    for m in _GH_API_PR_RE.finditer(command):
+        pulls.add(int(m.group(1)))
+    for m in _GH_API_ISSUE_RE.finditer(command):
+        issues.add(int(m.group(1)))
+
+    for m in _GIT_CLI_RE.finditer(command):
+        segment = _command_segment(command, m.end())
+        for ref in _HASH_REF_RE.findall(segment):
+            n = int(ref)
+            pulls.add(n)
+            issues.add(n)
+
+    return pulls, issues
+
 
 class SessionStore:
     """Client for reading and writing session metadata in DynamoDB."""
@@ -69,6 +136,8 @@ class SessionStore:
                 "user_messages": [],
                 "tools_used": set(),
                 "commits": [],
+                "pulls": set(),
+                "issues": set(),
             }
         )
 
@@ -132,8 +201,17 @@ class SessionStore:
                                         })
                 elif entry_type == "assistant":
                     for block in entry.get("message", {}).get("content", []):
-                        if block.get("type") == "tool_use":
-                            group["tools_used"].add(block["name"])
+                        if block.get("type") != "tool_use":
+                            continue
+                        group["tools_used"].add(block["name"])
+                        if block.get("name") != "Bash":
+                            continue
+                        command = block.get("input", {}).get("command", "")
+                        if not isinstance(command, str) or not command:
+                            continue
+                        pulls, issues = _extract_pr_issue_refs(command)
+                        group["pulls"].update(pulls)
+                        group["issues"].update(issues)
 
         now = datetime.now(timezone.utc).isoformat()
         items = []
@@ -152,6 +230,8 @@ class SessionStore:
                 "user_messages": group["user_messages"],
                 "tools_used": sorted(group["tools_used"]),
                 "session_commits": group["commits"],
+                "session_pulls": sorted(group["pulls"]),
+                "session_issues": sorted(group["issues"]),
                 "updated_at": now,
             })
 
@@ -222,6 +302,8 @@ class SessionStore:
                 "user_messages": item["user_messages"],
                 "tools_used": item["tools_used"],
                 "session_commits": item.get("session_commits", []),
+                "session_pulls": [int(n) for n in item.get("session_pulls", [])],
+                "session_issues": [int(n) for n in item.get("session_issues", [])],
             }
             data.setdefault(repo, []).append(session_info)
 

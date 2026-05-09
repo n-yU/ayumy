@@ -4,7 +4,7 @@ import json
 from datetime import date
 from unittest.mock import MagicMock, patch
 
-from report.store import SessionStore
+from report.store import SessionStore, _extract_pr_issue_refs
 
 
 def _make_store():
@@ -32,6 +32,72 @@ def _s3_body(text: str):
 def _jsonl_lines(*entries):
     """Build a JSONL string from entry dicts."""
     return "\n".join(json.dumps(e) for e in entries)
+
+
+class TestExtractPrIssueRefs:
+    def test_gh_pr_view(self):
+        pulls, issues = _extract_pr_issue_refs("gh pr view 87 --json body")
+        assert pulls == {87}
+        assert issues == set()
+
+    def test_gh_issue_close(self):
+        pulls, issues = _extract_pr_issue_refs("gh issue close 84")
+        assert pulls == set()
+        assert issues == {84}
+
+    def test_gh_pr_create_skipped(self):
+        pulls, issues = _extract_pr_issue_refs(
+            'gh pr create --title "PR 999" --body "..."'
+        )
+        assert pulls == set()
+        assert issues == set()
+
+    def test_gh_issue_list_skipped(self):
+        pulls, issues = _extract_pr_issue_refs("gh issue list --limit 30")
+        assert pulls == set()
+        assert issues == set()
+
+    def test_gh_api_pulls_path(self):
+        pulls, issues = _extract_pr_issue_refs(
+            "gh api repos/n-yU/ayumy/pulls/82/comments"
+        )
+        assert pulls == {82}
+        assert issues == set()
+
+    def test_gh_api_issues_path(self):
+        pulls, issues = _extract_pr_issue_refs(
+            "gh api repos/n-yU/ayumy/issues/84"
+        )
+        assert pulls == set()
+        assert issues == {84}
+
+    def test_git_hash_ref_ambiguous(self):
+        pulls, issues = _extract_pr_issue_refs(
+            'git commit -m "Fix #91"'
+        )
+        assert pulls == {91}
+        assert issues == {91}
+
+    def test_chained_commands(self):
+        pulls, issues = _extract_pr_issue_refs(
+            "gh pr view 87 && gh issue close 84"
+        )
+        assert pulls == {87}
+        assert issues == {84}
+
+    def test_gh_pr_with_flag_value_before_number(self):
+        pulls, issues = _extract_pr_issue_refs(
+            'gh pr edit --body "fix" 87'
+        )
+        assert pulls == {87}
+        assert issues == set()
+
+    def test_ignores_unrelated_commands(self):
+        pulls, issues = _extract_pr_issue_refs(
+            "ls /tmp/file_42.txt && python build.py 7"
+        )
+        assert pulls == set()
+        assert issues == set()
 
 
 class TestBuildItems:
@@ -388,6 +454,115 @@ class TestBuildItems:
         assert keys == []
         client.s3.get_object.assert_not_called()
 
+    def test_extracts_pr_issue_refs_from_bash(self):
+        store = _make_store()
+        client = _make_session_client()
+        client.list_session_objects.return_value = [
+            {"Key": "claude-sessions/proj/s1.jsonl"},
+        ]
+        client.read_repo_name.return_value = "ayumy"
+
+        lines = _jsonl_lines(
+            {
+                "type": "user",
+                "timestamp": "2026-03-28T10:00:00+09:00",
+                "message": {"content": "do work"},
+            },
+            {
+                "type": "assistant",
+                "timestamp": "2026-03-28T10:01:00+09:00",
+                "message": {"content": [
+                    {
+                        "type": "tool_use",
+                        "name": "Bash",
+                        "input": {"command": "gh pr view 87 --json body"},
+                    },
+                ]},
+            },
+            {
+                "type": "assistant",
+                "timestamp": "2026-03-28T10:02:00+09:00",
+                "message": {"content": [
+                    {
+                        "type": "tool_use",
+                        "name": "Bash",
+                        "input": {"command": "gh issue close 84"},
+                    },
+                ]},
+            },
+            {
+                "type": "assistant",
+                "timestamp": "2026-03-28T10:03:00+09:00",
+                "message": {"content": [
+                    {
+                        "type": "tool_use",
+                        "name": "Bash",
+                        "input": {
+                            "command": "gh api repos/n-yU/ayumy/pulls/82/comments",
+                        },
+                    },
+                ]},
+            },
+            {
+                "type": "assistant",
+                "timestamp": "2026-03-28T10:04:00+09:00",
+                "message": {"content": [
+                    {
+                        "type": "tool_use",
+                        "name": "Bash",
+                        "input": {
+                            "command": 'git commit -m "Fix #91 and close #92"',
+                        },
+                    },
+                ]},
+            },
+        )
+        client.s3.get_object.return_value = _s3_body(lines)
+
+        items, _ = store._build_items(client)
+
+        assert len(items) == 1
+        item = items[0]
+        # 87 from `gh pr view`, 82 from `gh api .../pulls/82/...`, 91/92 from git #N
+        assert item["session_pulls"] == [82, 87, 91, 92]
+        # 84 from `gh issue close`, 91/92 from git #N (ambiguous)
+        assert item["session_issues"] == [84, 91, 92]
+
+    def test_ignores_non_bash_tool_use(self):
+        store = _make_store()
+        client = _make_session_client()
+        client.list_session_objects.return_value = [
+            {"Key": "claude-sessions/proj/s1.jsonl"},
+        ]
+        client.read_repo_name.return_value = "ayumy"
+
+        lines = _jsonl_lines(
+            {
+                "type": "user",
+                "timestamp": "2026-03-28T10:00:00+09:00",
+                "message": {"content": "look at #87"},
+            },
+            {
+                "type": "assistant",
+                "timestamp": "2026-03-28T10:01:00+09:00",
+                "message": {"content": [
+                    {"type": "text", "text": "https://github.com/n-yU/ayumy/pull/87"},
+                    {
+                        "type": "tool_use",
+                        "name": "Read",
+                        "input": {"file_path": "/tmp/notes_42.md"},
+                    },
+                ]},
+            },
+        )
+        client.s3.get_object.return_value = _s3_body(lines)
+
+        items, _ = store._build_items(client)
+
+        assert len(items) == 1
+        assert items[0]["session_pulls"] == []
+        assert items[0]["session_issues"] == []
+
     def test_skips_no_user_messages(self):
         store = _make_store()
         client = _make_session_client()
@@ -592,6 +767,54 @@ class TestFetchSessions:
             {"sha": "a1b2c3d", "message": "Fix the bug",
              "timestamp": "2026-03-28T10:30:00+09:00"},
         ]
+
+    def test_includes_session_pulls_and_issues(self):
+        store = _make_store()
+        store.table.query.return_value = {
+            "Items": [
+                {
+                    "date": "2026-03-28",
+                    "repo#session_id": "repo#s1",
+                    "repo": "repo",
+                    "project": "proj",
+                    "start_time": "2026-03-28T10:00:00+09:00",
+                    "end_time": "2026-03-28T11:00:00+09:00",
+                    "user_messages": ["msg"],
+                    "tools_used": [],
+                    "session_pulls": [87, 82],
+                    "session_issues": [84],
+                },
+            ],
+        }
+
+        activity = store.fetch_sessions("2026-03-28")
+
+        sessions = activity.get("repo")
+        assert sessions[0]["session_pulls"] == [87, 82]
+        assert sessions[0]["session_issues"] == [84]
+
+    def test_defaults_session_pulls_and_issues_when_missing(self):
+        store = _make_store()
+        store.table.query.return_value = {
+            "Items": [
+                {
+                    "date": "2026-03-28",
+                    "repo#session_id": "repo#s1",
+                    "repo": "repo",
+                    "project": "proj",
+                    "start_time": "2026-03-28T10:00:00+09:00",
+                    "end_time": "2026-03-28T11:00:00+09:00",
+                    "user_messages": ["msg"],
+                    "tools_used": [],
+                },
+            ],
+        }
+
+        activity = store.fetch_sessions("2026-03-28")
+
+        sessions = activity.get("repo")
+        assert sessions[0]["session_pulls"] == []
+        assert sessions[0]["session_issues"] == []
 
     def test_defaults_session_commits_when_missing(self):
         store = _make_store()
