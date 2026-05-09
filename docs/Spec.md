@@ -244,10 +244,10 @@ PR/Issue の `updated_at` 経路は対象日以降に状態が更新されると
 
 | アクティビティ | 取得経路 |
 |---|---|
-| Pull Requests | `GET /search/issues` を `is:pr` + `created:`/`merged:`/`closed:` のレンジクエリで3回呼び出し、状態遷移した PR を取得する。さらに `fetch_commits` 結果の各 SHA に対して `GET /repos/{owner}/{repo}/commits/{sha}/pulls` を呼び、対象日にコミットだけがあった PR も補足する。両者を PR 番号で union し、各番号を `GET /repos/{owner}/{repo}/pulls/{N}` で個別取得する |
-| Issues | `GET /search/issues` を `is:issue` + `created:`/`closed:` のレンジクエリで2回呼び出し、状態遷移した Issue を取得する。番号で union する |
+| Pull Requests | `GET /search/issues` を `is:pr` + `created:`/`merged:`/`closed:` のレンジクエリで3回呼び出し、状態遷移した PR を取得する。さらに `fetch_commits` 結果の各 SHA に対して `GET /repos/{owner}/{repo}/commits/{sha}/pulls` を呼び、対象日にコミットだけがあった PR も補足する。これに DynamoDB の `session_pulls`（§5.3）を加えて PR 番号で union し、各番号を `GET /repos/{owner}/{repo}/pulls/{N}` で個別取得する |
+| Issues | `GET /search/issues` を `is:issue` + `created:`/`closed:` のレンジクエリで2回呼び出し、状態遷移した Issue を取得する。これに DynamoDB の `session_issues`（§5.3）を加えて Issue 番号で union する。session 由来の番号のみで Search に含まれないものは `GET /repos/{owner}/{repo}/issues/{N}` で個別取得し、PR を返した場合（`pull_request` 属性が設定）は除外する |
 
-Search クエリの日付範囲は UTC/JST の境界ずれを吸収するため `since - 1day` 〜 `until` まで広げる。Search 経路で得た PR は `created_at` / `merged_at` / `closed_at`、Issue は `created_at` / `closed_at` のいずれかが `[since, until)` に入るものに絞り込む。commit 由来 PR は対象日にコミットが存在する事実をもって採用するため、この絞り込みの対象外とする。削除済み PR は 404 となるためスキップする
+Search クエリの日付範囲は UTC/JST の境界ずれを吸収するため `since - 1day` 〜 `until` まで広げる。Search 経路で得た PR は `created_at` / `merged_at` / `closed_at`、Issue は `created_at` / `closed_at` のいずれかが `[since, until)` に入るものに絞り込む。commit 由来 PR は対象日にコミットが存在する事実、session 由来 PR/Issue は session で対象日に touch された事実をもって採用するため、いずれもこの絞り込みの対象外とする。削除済み PR/Issue は 404 となるためスキップする
 
 Search 呼び出しはリポジトリあたり最大 5 回（PR 3 + Issue 2）増えるため、`fetch_commits` の Search 呼び出しと共通の throttle カウンタで管理する
 
@@ -272,6 +272,8 @@ DynamoDB の `ayumy-sessions` テーブルから対象日付をパーティシ�
 | | `user_messages` | List | ユーザーメッセージ |
 | | `tools_used` | List | 使用ツール |
 | | `session_commits` | List | セッション中の git commit 結果（`[{sha, message, timestamp}]`、未検出時は空リスト） |
+| | `session_pulls` | List | session 中の Bash tool 操作で言及された PR 番号のソート済みリスト（未検出時は空リスト） |
+| | `session_issues` | List | session 中の Bash tool 操作で言及された Issue 番号のソート済みリスト（未検出時は空リスト） |
 | | `updated_at` | String | ISO 8601、書き込み・更新時刻 |
 | | `reported_at` | String | ISO 8601、レポート生成時刻（未生成時は未設定） |
 
@@ -280,6 +282,7 @@ DynamoDB の `ayumy-sessions` テーブルから対象日付をパーティシ�
 - 同一キー（PK + SK）のアイテムは上書きされる（冪等性を担保）
 - ユーザーメッセージも `session_commits` もないグループはスキップする
 - リポジトリ名は `.ayumy_repo` メタデータファイルから解決する。メタデータがないプロジェクトはスキップする
+- assistant の Bash tool_use のコマンドから PR/Issue 番号を抽出する。対象は `gh pr|issue {sub} {N}` の位置引数、`gh api` の `pulls|issues/{N}` パス、`git` コマンドの引数中の `#番号`。本文中で言及されただけの URL や `#番号` はノイズとなるため対象外とする。`git` 由来の `#番号` は PR/Issue の種別を判別できないため、PR と Issue の両方の候補として保持し fetch 側で振り分ける（§5.1.1）
 - 書き込み成功後、処理した JSONL を S3 から削除する。書き込み失敗時は S3 を削除せず、次回実行時に再試行する
 - 書き込み失敗時も DynamoDB に前回成功分のデータが残っているため、レポート生成フローは継続する
 
