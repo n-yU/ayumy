@@ -10,6 +10,10 @@ from report.pipeline import MAX_BACKFILL, process_date, run
 
 OWNER = "n-yU"
 
+# Default JST day window used across most tests
+SINCE = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+UNTIL = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+
 
 def _make_report(repos=None):
     """Create a minimal report dict."""
@@ -56,23 +60,19 @@ def _nonempty_activity(repo="my-repo"):
 class TestProcessDate:
     def test_skips_when_no_activity(self):
         clients = _make_clients()
-        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
-        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
 
         session, github = _empty_activity()
         clients["github_client"].fetch_activity.return_value = github
 
-        process_date(since, until, session, **clients, allowed_tags=[])
+        process_date(SINCE, UNTIL, session, **clients, allowed_tags=[])
 
         clients["summary_client"].generate_summary.assert_not_called()
         clients["notion_client"].create_report_pages.assert_not_called()
         clients["slack_client"].notify.assert_not_called()
-        clients["slack_client"].notify_no_activity.assert_called_once_with(since)
+        clients["slack_client"].notify_no_activity.assert_called_once_with(SINCE)
 
     def test_generates_report_and_publishes(self):
         clients = _make_clients()
-        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
-        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
 
         session, github = _nonempty_activity("my-repo")
         clients["github_client"].fetch_activity.return_value = github
@@ -86,7 +86,7 @@ class TestProcessDate:
         ]
 
         process_date(
-            since, until, session, **clients,
+            SINCE, UNTIL, session, **clients,
             allowed_tags=["CI/CD"],
         )
 
@@ -94,16 +94,14 @@ class TestProcessDate:
         clients["notion_client"].create_report_pages.assert_called_once()
         clients["slack_client"].notify.assert_called_once()
 
-        # Verify the (target_date, since, until) trio is passed in order
+        # Verify the (target_date, SINCE, UNTIL) trio is passed in order
         notion_args = clients["notion_client"].create_report_pages.call_args[0]
-        assert notion_args[0] == since
-        assert notion_args[1] == since
-        assert notion_args[2] == until
+        assert notion_args[0] == SINCE
+        assert notion_args[1] == SINCE
+        assert notion_args[2] == UNTIL
 
     def test_notifies_validation_errors(self):
         clients = _make_clients()
-        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
-        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
 
         session, github = _nonempty_activity("repo")
         clients["github_client"].fetch_activity.return_value = github
@@ -115,7 +113,7 @@ class TestProcessDate:
         clients["notion_client"].create_report_pages.return_value = []
 
         process_date(
-            since, until, session, **clients,
+            SINCE, UNTIL, session, **clients,
             allowed_tags=["CI/CD"],
         )
 
@@ -123,8 +121,6 @@ class TestProcessDate:
 
     def test_supplements_session_commits_when_github_has_none(self):
         clients = _make_clients()
-        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
-        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
 
         session = SessionActivity({"my-repo": [{
             "session_id": "s1", "project": "my-repo",
@@ -147,7 +143,7 @@ class TestProcessDate:
         clients["summary_client"].generate_summary.return_value = report
         clients["notion_client"].create_report_pages.return_value = []
 
-        process_date(since, until, session, **clients, allowed_tags=[])
+        process_date(SINCE, UNTIL, session, **clients, allowed_tags=[])
 
         # Session commits should be injected into github_activity
         call_args = clients["summary_client"].generate_summary.call_args[0]
@@ -168,8 +164,6 @@ class TestProcessDate:
 
     def test_session_commit_uses_per_commit_timestamp_when_present(self):
         clients = _make_clients()
-        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
-        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
 
         session = SessionActivity({"my-repo": [{
             "session_id": "s1", "project": "my-repo",
@@ -193,7 +187,7 @@ class TestProcessDate:
         clients["summary_client"].generate_summary.return_value = report
         clients["notion_client"].create_report_pages.return_value = []
 
-        process_date(since, until, session, **clients, allowed_tags=[])
+        process_date(SINCE, UNTIL, session, **clients, allowed_tags=[])
 
         notion_args = clients["notion_client"].create_report_pages.call_args[0]
         commits = notion_args[4].repos()["my-repo"]["commits"]
@@ -205,8 +199,6 @@ class TestProcessDate:
 
     def test_dedupes_session_commits_across_sessions(self):
         clients = _make_clients()
-        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
-        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
 
         session = SessionActivity({"my-repo": [
             {
@@ -241,7 +233,7 @@ class TestProcessDate:
         clients["summary_client"].generate_summary.return_value = report
         clients["notion_client"].create_report_pages.return_value = []
 
-        process_date(since, until, session, **clients, allowed_tags=[])
+        process_date(SINCE, UNTIL, session, **clients, allowed_tags=[])
 
         notion_args = clients["notion_client"].create_report_pages.call_args[0]
         commits = notion_args[4].repos()["my-repo"]["commits"]
@@ -253,8 +245,6 @@ class TestProcessDate:
 
     def test_supplements_session_commits_for_missing_repo(self):
         clients = _make_clients()
-        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
-        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
 
         session = SessionActivity({"my-repo": [{
             "session_id": "s1", "project": "my-repo",
@@ -275,7 +265,7 @@ class TestProcessDate:
         clients["summary_client"].generate_summary.return_value = report
         clients["notion_client"].create_report_pages.return_value = []
 
-        process_date(since, until, session, **clients, allowed_tags=[])
+        process_date(SINCE, UNTIL, session, **clients, allowed_tags=[])
 
         call_args = clients["summary_client"].generate_summary.call_args[0]
         github_md = call_args[1]
@@ -292,8 +282,6 @@ class TestProcessDate:
 
     def test_merges_and_deduplicates_session_commits(self):
         clients = _make_clients()
-        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
-        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
 
         session = SessionActivity({"my-repo": [{
             "session_id": "s1", "project": "my-repo",
@@ -320,7 +308,7 @@ class TestProcessDate:
         clients["summary_client"].generate_summary.return_value = report
         clients["notion_client"].create_report_pages.return_value = []
 
-        process_date(since, until, session, **clients, allowed_tags=[])
+        process_date(SINCE, UNTIL, session, **clients, allowed_tags=[])
 
         call_args = clients["summary_client"].generate_summary.call_args[0]
         github_md = call_args[1]
@@ -336,8 +324,6 @@ class TestProcessDate:
 
     def test_detects_skipped_repos(self):
         clients = _make_clients()
-        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
-        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
 
         session, github = _nonempty_activity("repo")
         clients["github_client"].fetch_activity.return_value = github
@@ -349,13 +335,66 @@ class TestProcessDate:
         clients["notion_client"].create_report_pages.return_value = []
 
         process_date(
-            since, until, session, **clients,
+            SINCE, UNTIL, session, **clients,
             allowed_tags=[],
         )
 
         call_args = clients["slack_client"].notify.call_args
         skipped = call_args[0][3] if len(call_args[0]) > 3 else call_args[1].get("skipped_repos", [])
         assert "unknown-repo" in skipped
+
+    def test_passes_session_refs_to_github_client_when_backfill(self):
+        clients = _make_clients()
+
+        session = SessionActivity({"repo-a": [
+            {
+                "session_id": "s1", "project": "repo-a",
+                "start_time": "2026-03-28T10:00:00+09:00",
+                "end_time": "2026-03-28T11:00:00+09:00",
+                "user_messages": ["msg"], "tools_used": [],
+                "session_pulls": [10, 20],
+                "session_issues": [30],
+            },
+            {
+                "session_id": "s2", "project": "repo-a",
+                "start_time": "2026-03-28T12:00:00+09:00",
+                "end_time": "2026-03-28T13:00:00+09:00",
+                "user_messages": ["msg"], "tools_used": [],
+                "session_pulls": [20, 21],
+                "session_issues": [],
+            },
+        ]})
+        clients["github_client"].fetch_activity.return_value = GitHubActivity({})
+        clients["slack_client"] = MagicMock()
+
+        process_date(
+            SINCE, UNTIL, session, **clients,
+            allowed_tags=[], is_backfill=True,
+        )
+
+        kwargs = clients["github_client"].fetch_activity.call_args.kwargs
+        assert kwargs["is_backfill"] is True
+        assert kwargs["session_pulls"] == {"repo-a": [10, 20, 21]}
+        assert kwargs["session_issues"] == {"repo-a": [30]}
+
+    def test_omits_session_refs_when_not_backfill(self):
+        clients = _make_clients()
+
+        session = SessionActivity({"repo-a": [{
+            "session_id": "s1", "project": "repo-a",
+            "start_time": "2026-03-28T10:00:00+09:00",
+            "end_time": "2026-03-28T11:00:00+09:00",
+            "user_messages": ["msg"], "tools_used": [],
+            "session_pulls": [10],
+            "session_issues": [20],
+        }]})
+        clients["github_client"].fetch_activity.return_value = GitHubActivity({})
+
+        process_date(SINCE, UNTIL, session, **clients, allowed_tags=[])
+
+        kwargs = clients["github_client"].fetch_activity.call_args.kwargs
+        assert kwargs["session_pulls"] == {}
+        assert kwargs["session_issues"] == {}
 
 
 class TestRun:
@@ -371,9 +410,7 @@ class TestRun:
         self, MockSummary, MockNotion, MockGitHub, MockSession,
         MockStore, MockSlack, mock_require_env, mock_date_range,
     ):
-        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
-        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
-        mock_date_range.return_value = (since, until)
+        mock_date_range.return_value = (SINCE, UNTIL)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
 
         store = MockStore.return_value
@@ -415,9 +452,7 @@ class TestRun:
         self, MockSummary, MockNotion, MockGitHub, MockSession,
         MockStore, MockSlack, mock_require_env, mock_date_range,
     ):
-        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
-        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
-        mock_date_range.return_value = (since, until)
+        mock_date_range.return_value = (SINCE, UNTIL)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
 
         store = MockStore.return_value
@@ -456,9 +491,7 @@ class TestRun:
         MockStore, MockSlack, mock_require_env, mock_date_range,
         mock_get_version,
     ):
-        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
-        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
-        mock_date_range.return_value = (since, until)
+        mock_date_range.return_value = (SINCE, UNTIL)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
         mock_get_version.return_value = "0.2.1"
 
@@ -499,9 +532,7 @@ class TestRun:
         self, MockSummary, MockNotion, MockGitHub, MockSession,
         MockStore, MockSlack, mock_require_env, mock_date_range,
     ):
-        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
-        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
-        mock_date_range.return_value = (since, until)
+        mock_date_range.return_value = (SINCE, UNTIL)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
 
         store = MockStore.return_value
@@ -537,9 +568,7 @@ class TestRun:
         self, MockSummary, MockNotion, MockGitHub, MockSession,
         MockStore, MockSlack, mock_require_env, mock_date_range,
     ):
-        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
-        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
-        mock_date_range.return_value = (since, until)
+        mock_date_range.return_value = (SINCE, UNTIL)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
 
         store = MockStore.return_value
@@ -577,9 +606,7 @@ class TestRun:
         self, MockSummary, MockNotion, MockGitHub, MockSession,
         MockStore, MockSlack, mock_require_env, mock_date_range,
     ):
-        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
-        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
-        mock_date_range.return_value = (since, until)
+        mock_date_range.return_value = (SINCE, UNTIL)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
 
         store = MockStore.return_value
@@ -617,9 +644,7 @@ class TestRun:
         self, MockSummary, MockNotion, MockGitHub, MockSession,
         MockStore, MockSlack, mock_require_env, mock_date_range,
     ):
-        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
-        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
-        mock_date_range.return_value = (since, until)
+        mock_date_range.return_value = (SINCE, UNTIL)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
 
         store = MockStore.return_value
@@ -668,9 +693,7 @@ class TestRun:
         self, MockSummary, MockNotion, MockGitHub, MockSession,
         MockStore, MockSlack, mock_require_env, mock_date_range,
     ):
-        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
-        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
-        mock_date_range.return_value = (since, until)
+        mock_date_range.return_value = (SINCE, UNTIL)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
 
         store = MockStore.return_value
@@ -706,9 +729,7 @@ class TestRun:
         self, MockSummary, MockNotion, MockGitHub, MockSession,
         MockStore, MockSlack, mock_require_env, mock_date_range,
     ):
-        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
-        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
-        mock_date_range.return_value = (since, until)
+        mock_date_range.return_value = (SINCE, UNTIL)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
 
         store = MockStore.return_value
@@ -741,9 +762,9 @@ class TestRun:
         self, MockSummary, MockNotion, MockGitHub, MockSession,
         MockStore, MockSlack, mock_require_env, mock_date_range,
     ):
-        since = datetime(2026, 3, 25, 0, 0, tzinfo=JST)
-        until = datetime(2026, 3, 26, 0, 0, tzinfo=JST)
-        mock_date_range.return_value = (since, until)
+        target_since = datetime(2026, 3, 25, 0, 0, tzinfo=JST)
+        target_until = datetime(2026, 3, 26, 0, 0, tzinfo=JST)
+        mock_date_range.return_value = (target_since, target_until)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
 
         store = MockStore.return_value
@@ -776,9 +797,7 @@ class TestRun:
         self, MockSummary, MockNotion, MockGitHub, MockSession,
         MockStore, MockSlack, mock_require_env, mock_date_range,
     ):
-        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
-        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
-        mock_date_range.return_value = (since, until)
+        mock_date_range.return_value = (SINCE, UNTIL)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
 
         store = MockStore.return_value
@@ -815,10 +834,9 @@ class TestRun:
         MockStore, MockSlack, mock_require_env, mock_date_range,
         mock_process_date,
     ):
-        """Manual run without --date passes get_target_date_range's until (not full-day)."""
-        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
-        until = datetime(2026, 3, 28, 15, 30, tzinfo=JST)
-        mock_date_range.return_value = (since, until)
+        """Manual run without --date passes get_target_date_range's partial_until (not full-day)."""
+        partial_until = datetime(2026, 3, 28, 15, 30, tzinfo=JST)
+        mock_date_range.return_value = (SINCE, partial_until)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
 
         store = MockStore.return_value
@@ -836,8 +854,8 @@ class TestRun:
 
         mock_process_date.assert_called_once()
         call_args = mock_process_date.call_args
-        assert call_args[0][0] == since
-        assert call_args[0][1] == until
+        assert call_args[0][0] == SINCE
+        assert call_args[0][1] == partial_until
 
     @patch("report.pipeline.get_target_date_range")
     @patch("report.pipeline.require_env")
@@ -851,9 +869,9 @@ class TestRun:
         self, MockSummary, MockNotion, MockGitHub, MockSession,
         MockStore, MockSlack, mock_require_env, mock_date_range,
     ):
-        since = datetime(2026, 3, 25, 0, 0, tzinfo=JST)
-        until = datetime(2026, 3, 26, 0, 0, tzinfo=JST)
-        mock_date_range.return_value = (since, until)
+        target_since = datetime(2026, 3, 25, 0, 0, tzinfo=JST)
+        target_until = datetime(2026, 3, 26, 0, 0, tzinfo=JST)
+        mock_date_range.return_value = (target_since, target_until)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
 
         store = MockStore.return_value
@@ -886,9 +904,9 @@ class TestRun:
         self, MockSummary, MockNotion, MockGitHub, MockSession,
         MockStore, MockSlack, mock_require_env, mock_date_range,
     ):
-        since = datetime(2026, 3, 25, 0, 0, tzinfo=JST)
-        until = datetime(2026, 3, 26, 0, 0, tzinfo=JST)
-        mock_date_range.return_value = (since, until)
+        target_since = datetime(2026, 3, 25, 0, 0, tzinfo=JST)
+        target_until = datetime(2026, 3, 26, 0, 0, tzinfo=JST)
+        mock_date_range.return_value = (target_since, target_until)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
 
         store = MockStore.return_value
@@ -926,9 +944,9 @@ class TestRun:
         MockStore, MockSlack, mock_require_env, mock_date_range,
     ):
         """target_date 指定時は Hybrid 経路（is_backfill=True）になる"""
-        since = datetime(2026, 3, 25, 0, 0, tzinfo=JST)
-        until = datetime(2026, 3, 26, 0, 0, tzinfo=JST)
-        mock_date_range.return_value = (since, until)
+        target_since = datetime(2026, 3, 25, 0, 0, tzinfo=JST)
+        target_until = datetime(2026, 3, 26, 0, 0, tzinfo=JST)
+        mock_date_range.return_value = (target_since, target_until)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
 
         store = MockStore.return_value
@@ -962,9 +980,7 @@ class TestRun:
         MockStore, MockSlack, mock_require_env, mock_date_range,
     ):
         """scan_backfill_dates 由来の日付のみ is_backfill=True、primary は False"""
-        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
-        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
-        mock_date_range.return_value = (since, until)
+        mock_date_range.return_value = (SINCE, UNTIL)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
 
         store = MockStore.return_value
@@ -990,7 +1006,7 @@ class TestRun:
             for call in github_client.fetch_activity.call_args_list
         ]
         # 2 backfill + 1 primary
-        backfill_flags = [f for s, f in flags if s != since]
-        primary_flags = [f for s, f in flags if s == since]
+        backfill_flags = [f for s, f in flags if s != SINCE]
+        primary_flags = [f for s, f in flags if s == SINCE]
         assert backfill_flags == [True, True]
         assert primary_flags == [False]
