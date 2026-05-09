@@ -321,7 +321,7 @@ class TestFetchActivity:
     @patch("report.github.time.sleep")
     @patch("report.github.time.time")
     def test_skips_sleep_when_window_elapsed(self, mock_time, mock_sleep):
-        """Skips sleep when enough time has passed SINCE window start."""
+        """Skips sleep when enough time has passed since window start."""
         client = _make_client()
         # Simulate: already processed a batch, window started at t=100
         client._search_count = _SEARCH_BATCH
