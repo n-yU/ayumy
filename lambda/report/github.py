@@ -306,9 +306,10 @@ class GitHubClient:
     ) -> list[PullInfo]:
         """Fetch PRs via Search events + commit + session union (backfill).
 
-        commit-derived and session-derived numbers are exempt from the
-        date-range filter: their inclusion is justified by the session
-        having touched the PR on the target day
+        commit-derived numbers are exempt from the date-range filter
+        because a commit on the target day is itself proof of activity;
+        session-derived numbers are exempt because the session touched
+        the PR on the target day
         """
         event_numbers: set[int] = set()
         for event in _PULL_EVENTS:
