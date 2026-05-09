@@ -50,8 +50,25 @@ def process_date(
     """
     logger.info("Processing: %s ~ %s", since.isoformat(), until.isoformat())
 
+    session_pulls: dict[str, list[int]] = {}
+    session_issues: dict[str, list[int]] = {}
+    if is_backfill:
+        for repo_name, sessions in session_activity.repos().items():
+            pulls: set[int] = set()
+            issues: set[int] = set()
+            for s in sessions:
+                pulls.update(s.get("session_pulls", []))
+                issues.update(s.get("session_issues", []))
+            if pulls:
+                session_pulls[repo_name] = sorted(pulls)
+            if issues:
+                session_issues[repo_name] = sorted(issues)
+
     github_activity = github_client.fetch_activity(
-        since, until, list(session_activity.keys()), is_backfill=is_backfill,
+        since, until, list(session_activity.keys()),
+        is_backfill=is_backfill,
+        session_pulls=session_pulls,
+        session_issues=session_issues,
     )
 
     # Recover squash-merged commits from session logs, normalizing to

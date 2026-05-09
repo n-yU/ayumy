@@ -3,6 +3,7 @@
 import json
 import logging
 import re
+import shlex
 from collections import defaultdict
 from datetime import date, datetime, timezone
 
@@ -12,6 +13,94 @@ from boto3.dynamodb.conditions import Key
 from . import JST, SessionActivity, SessionInfo
 
 logger = logging.getLogger(__name__)
+
+# `gh pr|issue` invocation. `gh pr create`, `gh pr list`, `gh pr status`
+# (and the issue equivalents) do not take a number positional argument
+_GH_CLI_RE = re.compile(r"\bgh\s+(pr|issue)\s+(\w[\w-]*)")
+_GH_CLI_NO_NUMBER_SUBS = {"create", "list", "status"}
+# `gh api` invocation anchor; the path is scanned in the segment that follows
+_GH_API_RE = re.compile(r"\bgh\s+api\b")
+# PR/Issue number embedded in a `gh api` REST path
+_API_PATH_PR_RE = re.compile(r"\b(?:pulls|pull)/(\d+)\b")
+_API_PATH_ISSUE_RE = re.compile(r"\bissues/(\d+)\b")
+# `#N` reference inside `git` command arguments. Treated as ambiguous
+# between PR and Issue
+_HASH_REF_RE = re.compile(r"(?<![A-Za-z0-9])#(\d+)\b")
+# `git` invocation anchor
+_GIT_CLI_RE = re.compile(r"\bgit\s+\w[\w-]*")
+# Stop characters that delimit a single shell command within a Bash line
+_SHELL_STOPS = ("\n", "&&", "||", ";", "|")
+
+
+def _command_segment(command: str, start: int) -> str:
+    """Return the portion of `command` from `start` up to the next shell stop."""
+    end = len(command)
+    for stop in _SHELL_STOPS:
+        i = command.find(stop, start)
+        if i != -1 and i < end:
+            end = i
+    return command[start:end]
+
+
+def _first_positional_int(segment: str) -> int | None:
+    """Return the first positional integer token in `segment`.
+
+    Tokenizes via shlex so that quoted flag values count as a single
+    token; this prevents matching integers that live inside strings
+    like `--body "fix 999"`. Tokens beginning with `-` are treated as
+    flags and skipped
+    """
+    try:
+        tokens = shlex.split(segment, posix=True)
+    except ValueError:
+        return None
+    for tok in tokens:
+        if tok.startswith("-"):
+            continue
+        if tok.isdigit():
+            return int(tok)
+    return None
+
+
+def _extract_pr_issue_refs(command: str) -> tuple[set[int], set[int]]:
+    """Extract PR and Issue numbers from a Bash command string.
+
+    Recognizes `gh pr|issue {sub} {N}`, `gh api .../pulls|issues/{N}`,
+    and `#N` inside `git` arguments. `#N` is ambiguous, so it is
+    placed in both sets and the fetcher reconciles via 404 / the
+    `pull_request` attribute
+
+    Returns:
+        A tuple of (pull numbers, issue numbers)
+    """
+    pulls: set[int] = set()
+    issues: set[int] = set()
+
+    for m in _GH_CLI_RE.finditer(command):
+        kind = m.group(1)
+        sub = m.group(2)
+        if sub in _GH_CLI_NO_NUMBER_SUBS:
+            continue
+        segment = _command_segment(command, m.end())
+        n = _first_positional_int(segment)
+        if n is not None:
+            (pulls if kind == "pr" else issues).add(n)
+
+    for m in _GH_API_RE.finditer(command):
+        segment = _command_segment(command, m.end())
+        for sm in _API_PATH_PR_RE.finditer(segment):
+            pulls.add(int(sm.group(1)))
+        for sm in _API_PATH_ISSUE_RE.finditer(segment):
+            issues.add(int(sm.group(1)))
+
+    for m in _GIT_CLI_RE.finditer(command):
+        segment = _command_segment(command, m.end())
+        for ref in _HASH_REF_RE.findall(segment):
+            n = int(ref)
+            pulls.add(n)
+            issues.add(n)
+
+    return pulls, issues
 
 
 class SessionStore:
@@ -69,6 +158,8 @@ class SessionStore:
                 "user_messages": [],
                 "tools_used": set(),
                 "commits": [],
+                "pulls": set(),
+                "issues": set(),
             }
         )
 
@@ -132,8 +223,17 @@ class SessionStore:
                                         })
                 elif entry_type == "assistant":
                     for block in entry.get("message", {}).get("content", []):
-                        if block.get("type") == "tool_use":
-                            group["tools_used"].add(block["name"])
+                        if block.get("type") != "tool_use":
+                            continue
+                        group["tools_used"].add(block["name"])
+                        if block.get("name") != "Bash":
+                            continue
+                        command = block.get("input", {}).get("command", "")
+                        if not isinstance(command, str) or not command:
+                            continue
+                        pulls, issues = _extract_pr_issue_refs(command)
+                        group["pulls"].update(pulls)
+                        group["issues"].update(issues)
 
         now = datetime.now(timezone.utc).isoformat()
         items = []
@@ -152,6 +252,8 @@ class SessionStore:
                 "user_messages": group["user_messages"],
                 "tools_used": sorted(group["tools_used"]),
                 "session_commits": group["commits"],
+                "session_pulls": sorted(group["pulls"]),
+                "session_issues": sorted(group["issues"]),
                 "updated_at": now,
             })
 
@@ -222,6 +324,8 @@ class SessionStore:
                 "user_messages": item["user_messages"],
                 "tools_used": item["tools_used"],
                 "session_commits": item.get("session_commits", []),
+                "session_pulls": [int(n) for n in item.get("session_pulls", [])],
+                "session_issues": [int(n) for n in item.get("session_issues", [])],
             }
             data.setdefault(repo, []).append(session_info)
 

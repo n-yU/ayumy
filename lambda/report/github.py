@@ -104,12 +104,13 @@ class GitHubClient:
         *,
         is_backfill: bool = False,
         commits: list[CommitInfo] | None = None,
+        session_numbers: list[int] | None = None,
     ) -> list[PullInfo]:
         """Fetch pull requests within the target date range.
 
         Default path filters by `updated_at`. Backfill path unions
         Search by created/merged/closed event with PRs derived from
-        commits in range
+        commits in range and from session-extracted PR references
 
         Args:
             repo: Target repository
@@ -117,6 +118,8 @@ class GitHubClient:
             until: End of the target period (exclusive)
             is_backfill: If True, use the Hybrid fetch path
             commits: Commits in range, used by the Hybrid path
+            session_numbers: PR numbers extracted from session tool
+                operations, unioned by the Hybrid path
 
         Returns:
             A list of dicts with keys: number, title, state, author, labels,
@@ -124,7 +127,9 @@ class GitHubClient:
             "merged", "closed", "open"
         """
         if is_backfill:
-            return self._fetch_pulls_hybrid(repo, since, until, commits or [])
+            return self._fetch_pulls_hybrid(
+                repo, since, until, commits or [], session_numbers or [],
+            )
 
         results: list[PullInfo] = []
         for pr in repo.get_pulls(state="all", sort="updated", direction="desc"):
@@ -142,24 +147,30 @@ class GitHubClient:
         until: datetime,
         *,
         is_backfill: bool = False,
+        session_numbers: list[int] | None = None,
     ) -> list[IssueInfo]:
         """Fetch issues (excluding PRs) within the target date range.
 
         Default path filters by `updated_at`. Backfill path unions
-        Search by created/closed event
+        Search by created/closed event with issues from
+        session-extracted references
 
         Args:
             repo: Target repository
             since: Start of the target period (inclusive)
             until: End of the target period (exclusive)
             is_backfill: If True, use the Hybrid fetch path
+            session_numbers: Issue numbers extracted from session tool
+                operations, unioned by the Hybrid path
 
         Returns:
             A list of dicts with keys: number, title, state, author, labels,
             url, created_at, closed_at, state_reason
         """
         if is_backfill:
-            return self._fetch_issues_hybrid(repo, since, until)
+            return self._fetch_issues_hybrid(
+                repo, since, until, session_numbers or [],
+            )
 
         results: list[IssueInfo] = []
         for issue in repo.get_issues(since=since, state="all"):
@@ -177,6 +188,8 @@ class GitHubClient:
         repo_names: list[str],
         *,
         is_backfill: bool = False,
+        session_pulls: dict[str, list[int]] | None = None,
+        session_issues: dict[str, list[int]] | None = None,
     ) -> GitHubActivity:
         """Fetch GitHub activity for the specified repositories.
 
@@ -186,21 +199,29 @@ class GitHubClient:
             repo_names: Repository names to fetch activity for
             is_backfill: If True, use the Hybrid fetch path for PRs
                 and Issues
+            session_pulls: Per-repo PR numbers from session tool
+                operations, unioned by the Hybrid path
+            session_issues: Per-repo Issue numbers from session tool
+                operations, unioned by the Hybrid path
 
         Returns:
             A GitHubActivity instance. Repos with no activity are omitted
         """
         user = self.g.get_user()
         data: dict[str, RepoActivity] = {}
+        session_pulls = session_pulls or {}
+        session_issues = session_issues or {}
 
         for name in repo_names:
             repo = user.get_repo(name)
             commits = self.fetch_commits(repo, since, until)
             pulls = self.fetch_pulls(
                 repo, since, until, is_backfill=is_backfill, commits=commits,
+                session_numbers=session_pulls.get(name),
             )
             issues = self.fetch_issues(
                 repo, since, until, is_backfill=is_backfill,
+                session_numbers=session_issues.get(name),
             )
 
             if commits or pulls or issues:
@@ -281,8 +302,15 @@ class GitHubClient:
         since: datetime,
         until: datetime,
         commits: list[CommitInfo],
+        session_numbers: list[int],
     ) -> list[PullInfo]:
-        """Fetch PRs via Search events + commit-derived union (backfill)."""
+        """Fetch PRs via Search events + commit + session union (backfill).
+
+        commit-derived numbers are exempt from the date-range filter
+        because a commit on the target day is itself proof of activity;
+        session-derived numbers are exempt because the session touched
+        the PR on the target day
+        """
         event_numbers: set[int] = set()
         for event in _PULL_EVENTS:
             for item in self._search_pulls_by_event(repo, since, until, event):
@@ -292,8 +320,11 @@ class GitHubClient:
         for c in commits:
             commit_numbers.update(self._fetch_pulls_for_commit(repo, c["sha"]))
 
+        session_set: set[int] = set(session_numbers)
+        exempt_numbers = commit_numbers | session_set
+
         results: list[PullInfo] = []
-        for n in sorted(event_numbers | commit_numbers):
+        for n in sorted(event_numbers | exempt_numbers):
             try:
                 pr = repo.get_pull(n)
             except UnknownObjectException:
@@ -301,27 +332,50 @@ class GitHubClient:
                 continue
             info = _build_pull_info(pr)
             # Search-only entries must have a state event in [since, until)
-            if n in event_numbers and n not in commit_numbers:
+            if n in event_numbers and n not in exempt_numbers:
                 if not _pull_has_event_in_range(info, since, until):
                     continue
             results.append(info)
         return results
 
     def _fetch_issues_hybrid(
-        self, repo: Repository, since: datetime, until: datetime,
+        self,
+        repo: Repository,
+        since: datetime,
+        until: datetime,
+        session_numbers: list[int],
     ) -> list[IssueInfo]:
-        """Fetch issues via Search created/closed event union (backfill)."""
+        """Fetch issues via Search events + session-derived union (backfill).
+
+        Session-derived numbers may resolve to PRs (PR/Issue numbering
+        is shared); fetch them via `get_issue` and skip when the
+        `pull_request` attribute is set
+        """
         seen: dict[int, Issue] = {}
         for event in _ISSUE_EVENTS:
             for item in self._search_issues_by_event(repo, since, until, event):
                 seen.setdefault(item.number, item)
+        event_numbers = set(seen)
+
+        session_set: set[int] = set(session_numbers)
+        for number in session_set - event_numbers:
+            try:
+                issue = repo.get_issue(number)
+            except UnknownObjectException:
+                logger.warning("Issue #%d not found (404), skipping", number)
+                continue
+            if issue.pull_request is not None:
+                continue
+            seen[number] = issue
 
         results: list[IssueInfo] = []
         for number in sorted(seen):
             issue = seen[number]
             info = _build_issue_info(issue)
-            if not _issue_has_event_in_range(info, since, until):
-                continue
+            # Search-only entries must have a state event in [since, until)
+            if number in event_numbers and number not in session_set:
+                if not _issue_has_event_in_range(info, since, until):
+                    continue
             results.append(info)
         return results
 
