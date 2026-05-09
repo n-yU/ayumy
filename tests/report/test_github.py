@@ -3,6 +3,9 @@
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
+import pytest
+from github import UnknownObjectException
+
 from report import JST
 from report.github import GitHubClient, _SEARCH_BATCH, _SEARCH_WINDOW
 
@@ -11,7 +14,52 @@ def _make_client():
     """Create a GitHubClient with mocked PyGithub."""
     client = GitHubClient.__new__(GitHubClient)
     client.g = MagicMock()
+    client._search_count = 0
+    client._window_start = 0.0
     return client
+
+
+def _make_pr_issue(number):
+    """Create a search_issues result mock with just a PR number."""
+    item = MagicMock()
+    item.number = number
+    return item
+
+
+def _make_pull(number, *, created_at, merged_at=None, closed_at=None,
+               state=None, title="PR", labels=None, draft=False):
+    """Create a PullRequest mock with the fields _build_pull_info reads."""
+    pr = MagicMock()
+    pr.number = number
+    pr.title = title
+    pr.created_at = created_at
+    pr.merged_at = merged_at
+    pr.closed_at = closed_at
+    if state is None:
+        pr.state = "closed" if closed_at else "open"
+    else:
+        pr.state = state
+    pr.draft = draft
+    pr.html_url = f"https://github.com/n-yU/repo/pull/{number}"
+    pr.user.login = "user"
+    pr.labels = labels or []
+    return pr
+
+
+def _make_issue(number, *, created_at, closed_at=None, state=None,
+                state_reason=None, title="Issue", labels=None):
+    """Create an Issue mock matching _build_issue_info."""
+    issue = MagicMock()
+    issue.number = number
+    issue.title = title
+    issue.created_at = created_at
+    issue.closed_at = closed_at
+    issue.state = state or ("closed" if closed_at else "open")
+    issue.state_reason = state_reason
+    issue.html_url = f"https://github.com/n-yU/repo/issues/{number}"
+    issue.user.login = "user"
+    issue.labels = labels or []
+    return issue
 
 
 class TestFetchCommits:
@@ -344,3 +392,271 @@ class TestFetchActivity:
         # Window should be set to current time on first request
         assert client._window_start == 500
         mock_sleep.assert_not_called()
+
+
+class TestSearchPullsByEvent:
+    def test_query_includes_kind_event_and_widened_range(self):
+        client = _make_client()
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+        repo = MagicMock()
+        repo.full_name = "n-yU/repo"
+        client.g.search_issues.return_value = []
+
+        client._search_pulls_by_event(repo, since, until, "merged")
+
+        query = client.g.search_issues.call_args[0][0]
+        assert "repo:n-yU/repo" in query
+        assert "is:pr" in query
+        # Range starts at since - 1day; until is the literal date
+        assert "merged:2026-03-27..2026-03-29" in query
+
+    def test_increments_search_throttle_counter(self):
+        client = _make_client()
+        repo = MagicMock()
+        repo.full_name = "n-yU/repo"
+        client.g.search_issues.return_value = []
+
+        client._search_pulls_by_event(
+            repo,
+            datetime(2026, 3, 28, 0, 0, tzinfo=JST),
+            datetime(2026, 3, 29, 0, 0, tzinfo=JST),
+            "created",
+        )
+        assert client._search_count == 1
+
+
+class TestSearchIssuesByEvent:
+    def test_query_uses_issue_kind(self):
+        client = _make_client()
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+        repo = MagicMock()
+        repo.full_name = "n-yU/repo"
+        client.g.search_issues.return_value = []
+
+        client._search_issues_by_event(repo, since, until, "closed")
+
+        query = client.g.search_issues.call_args[0][0]
+        assert "is:issue" in query
+        assert "closed:2026-03-27..2026-03-29" in query
+
+
+class TestFetchPullsForCommit:
+    def test_returns_pr_numbers(self):
+        client = _make_client()
+        repo = MagicMock()
+        commit = MagicMock()
+        pr1 = MagicMock()
+        pr1.number = 7
+        pr2 = MagicMock()
+        pr2.number = 12
+        commit.get_pulls.return_value = [pr1, pr2]
+        repo.get_commit.return_value = commit
+
+        result = client._fetch_pulls_for_commit(repo, "abc1234")
+
+        assert result == [7, 12]
+        repo.get_commit.assert_called_once_with("abc1234")
+
+    def test_returns_empty_on_404(self):
+        client = _make_client()
+        repo = MagicMock()
+        repo.get_commit.side_effect = UnknownObjectException(404, "Not Found", {})
+
+        result = client._fetch_pulls_for_commit(repo, "abc1234")
+
+        assert result == []
+
+    def test_propagates_non_404_errors(self):
+        client = _make_client()
+        repo = MagicMock()
+        repo.get_commit.side_effect = RuntimeError("transient failure")
+
+        with pytest.raises(RuntimeError):
+            client._fetch_pulls_for_commit(repo, "abc1234")
+
+
+class TestFetchPullsBackfill:
+    def test_unions_search_events_and_commit_derived_pulls(self):
+        client = _make_client()
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+        repo = MagicMock()
+        repo.full_name = "n-yU/repo"
+
+        # Search returns: created→#1, merged→#2, closed→#3
+        client.g.search_issues.side_effect = [
+            [_make_pr_issue(1)],
+            [_make_pr_issue(2)],
+            [_make_pr_issue(3)],
+        ]
+        # Commit derived: #4 (and overlap #1)
+        commit_obj = MagicMock()
+        pr_a = MagicMock(); pr_a.number = 1
+        pr_b = MagicMock(); pr_b.number = 4
+        commit_obj.get_pulls.return_value = [pr_a, pr_b]
+        repo.get_commit.return_value = commit_obj
+
+        # Each PR refetch returns a pull whose timestamps are in range
+        in_range = datetime(2026, 3, 28, 12, 0, tzinfo=JST)
+        repo.get_pull.side_effect = lambda n: _make_pull(
+            n, created_at=in_range,
+        )
+
+        commits = [{"sha": "deadbee", "message": "", "author": "",
+                    "date": in_range.isoformat(), "url": ""}]
+        result = client.fetch_pulls(
+            repo, since, until, is_backfill=True, commits=commits,
+        )
+
+        numbers = sorted(r["number"] for r in result)
+        assert numbers == [1, 2, 3, 4]
+
+    def test_post_filters_search_only_pulls_outside_range(self):
+        """Search-derived PRs without an in-range event are dropped."""
+        client = _make_client()
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+        repo = MagicMock()
+        repo.full_name = "n-yU/repo"
+
+        client.g.search_issues.side_effect = [
+            [_make_pr_issue(10)],  # created
+            [],                     # merged
+            [],                     # closed
+        ]
+        # PR #10 was created on a different day (search widens window by 1 day)
+        out_of_range = datetime(2026, 3, 27, 23, 0, tzinfo=JST)
+        repo.get_pull.return_value = _make_pull(10, created_at=out_of_range)
+
+        result = client.fetch_pulls(
+            repo, since, until, is_backfill=True, commits=[],
+        )
+        assert result == []
+
+    def test_keeps_commit_derived_pull_without_in_range_event(self):
+        """Commit-derived PRs are kept regardless of state-event timing."""
+        client = _make_client()
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+        repo = MagicMock()
+        repo.full_name = "n-yU/repo"
+
+        client.g.search_issues.side_effect = [[], [], []]
+        commit_obj = MagicMock()
+        pr_x = MagicMock(); pr_x.number = 99
+        commit_obj.get_pulls.return_value = [pr_x]
+        repo.get_commit.return_value = commit_obj
+        # PR opened weeks ago, no merged/closed yet
+        repo.get_pull.return_value = _make_pull(
+            99, created_at=datetime(2026, 3, 1, 0, 0, tzinfo=JST),
+        )
+
+        commits = [{"sha": "abc", "message": "", "author": "",
+                    "date": "", "url": ""}]
+        result = client.fetch_pulls(
+            repo, since, until, is_backfill=True, commits=commits,
+        )
+        assert [r["number"] for r in result] == [99]
+
+    def test_skips_pull_not_found(self):
+        client = _make_client()
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+        repo = MagicMock()
+        repo.full_name = "n-yU/repo"
+
+        client.g.search_issues.side_effect = [
+            [_make_pr_issue(50)], [], [],
+        ]
+        repo.get_pull.side_effect = UnknownObjectException(404, "Not Found", {})
+
+        result = client.fetch_pulls(
+            repo, since, until, is_backfill=True, commits=[],
+        )
+        assert result == []
+
+    def test_propagates_non_404_pull_fetch_errors(self):
+        client = _make_client()
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+        repo = MagicMock()
+        repo.full_name = "n-yU/repo"
+
+        client.g.search_issues.side_effect = [
+            [_make_pr_issue(50)], [], [],
+        ]
+        repo.get_pull.side_effect = RuntimeError("transient failure")
+
+        with pytest.raises(RuntimeError):
+            client.fetch_pulls(
+                repo, since, until, is_backfill=True, commits=[],
+            )
+
+
+class TestFetchIssuesBackfill:
+    def test_unions_created_and_closed_search(self):
+        client = _make_client()
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+        repo = MagicMock()
+        repo.full_name = "n-yU/repo"
+
+        in_range = datetime(2026, 3, 28, 12, 0, tzinfo=JST)
+        i_created = _make_issue(1, created_at=in_range)
+        i_closed = _make_issue(
+            2, created_at=datetime(2026, 3, 1, 0, 0, tzinfo=JST),
+            closed_at=in_range, state_reason="completed",
+        )
+        client.g.search_issues.side_effect = [
+            [i_created], [i_closed],
+        ]
+
+        result = client.fetch_issues(
+            repo, since, until, is_backfill=True,
+        )
+        assert sorted(r["number"] for r in result) == [1, 2]
+        assert result[1]["state_reason"] == "completed"
+
+    def test_post_filters_issue_outside_range(self):
+        client = _make_client()
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+        repo = MagicMock()
+        repo.full_name = "n-yU/repo"
+
+        # Returned by search but actually outside JST window
+        out_of_range = datetime(2026, 3, 27, 22, 0, tzinfo=JST)
+        client.g.search_issues.side_effect = [
+            [_make_issue(5, created_at=out_of_range)], [],
+        ]
+
+        result = client.fetch_issues(repo, since, until, is_backfill=True)
+        assert result == []
+
+
+class TestFetchActivityBackfill:
+    def test_propagates_is_backfill_flag(self):
+        client = _make_client()
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+
+        mock_user = MagicMock()
+        client.g.get_user.return_value = mock_user
+        mock_repo = MagicMock()
+        mock_repo.name = "repo"
+        mock_repo.full_name = "n-yU/repo"
+        mock_user.get_repo.return_value = mock_repo
+
+        client.g.search_commits.return_value = []
+        # Hybrid path uses search_issues, not get_pulls/get_issues
+        client.g.search_issues.return_value = []
+
+        client.fetch_activity(since, until, ["repo"], is_backfill=True)
+
+        # Default updated_at path must NOT be invoked under backfill
+        mock_repo.get_pulls.assert_not_called()
+        mock_repo.get_issues.assert_not_called()
+        # 5 search calls expected (created/merged/closed PR + created/closed issue)
+        assert client.g.search_issues.call_count == 5

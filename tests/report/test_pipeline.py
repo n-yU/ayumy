@@ -912,3 +912,85 @@ class TestRun:
         store.fetch_sessions.assert_any_call("2026-03-26")
         store.fetch_sessions.assert_any_call("2026-03-27")
         store.fetch_sessions.assert_any_call("2026-03-28")
+
+    @patch("report.pipeline.get_target_date_range")
+    @patch("report.pipeline.require_env")
+    @patch("report.pipeline.SlackClient")
+    @patch("report.pipeline.SessionStore")
+    @patch("report.pipeline.SessionClient")
+    @patch("report.pipeline.GitHubClient")
+    @patch("report.pipeline.NotionClient")
+    @patch("report.pipeline.SummaryClient")
+    def test_target_date_uses_backfill_fetch(
+        self, MockSummary, MockNotion, MockGitHub, MockSession,
+        MockStore, MockSlack, mock_require_env, mock_date_range,
+    ):
+        """target_date 指定時は Hybrid 経路（is_backfill=True）になる"""
+        since = datetime(2026, 3, 25, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 26, 0, 0, tzinfo=JST)
+        mock_date_range.return_value = (since, until)
+        mock_require_env.side_effect = lambda k: f"fake-{k}"
+
+        store = MockStore.return_value
+        store.ingest.return_value = []
+        store.fetch_sessions.return_value = SessionActivity({})
+
+        session_client = MockSession.return_value
+        session_client.delete_sessions.return_value = 0
+
+        github_client = MockGitHub.return_value
+        github_client.fetch_activity.return_value = GitHubActivity({})
+
+        notion_client = MockNotion.return_value
+        notion_client.fetch_allowlists.return_value = []
+
+        run(source="manual", target_date="2026-03-25")
+
+        for call in github_client.fetch_activity.call_args_list:
+            assert call.kwargs.get("is_backfill") is True
+
+    @patch("report.pipeline.get_target_date_range")
+    @patch("report.pipeline.require_env")
+    @patch("report.pipeline.SlackClient")
+    @patch("report.pipeline.SessionStore")
+    @patch("report.pipeline.SessionClient")
+    @patch("report.pipeline.GitHubClient")
+    @patch("report.pipeline.NotionClient")
+    @patch("report.pipeline.SummaryClient")
+    def test_scan_backfill_dates_use_hybrid_but_primary_does_not(
+        self, MockSummary, MockNotion, MockGitHub, MockSession,
+        MockStore, MockSlack, mock_require_env, mock_date_range,
+    ):
+        """scan_backfill_dates 由来の日付のみ is_backfill=True、primary は False"""
+        since = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        until = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+        mock_date_range.return_value = (since, until)
+        mock_require_env.side_effect = lambda k: f"fake-{k}"
+
+        store = MockStore.return_value
+        store.ingest.return_value = []
+        store.scan_backfill_dates.return_value = [
+            date(2026, 3, 26), date(2026, 3, 27),
+        ]
+        store.fetch_sessions.return_value = SessionActivity({})
+
+        session_client = MockSession.return_value
+        session_client.delete_sessions.return_value = 0
+
+        github_client = MockGitHub.return_value
+        github_client.fetch_activity.return_value = GitHubActivity({})
+
+        notion_client = MockNotion.return_value
+        notion_client.fetch_allowlists.return_value = []
+
+        run(source=None)
+
+        flags = [
+            (call.args[0], call.kwargs.get("is_backfill"))
+            for call in github_client.fetch_activity.call_args_list
+        ]
+        # 2 backfill + 1 primary
+        backfill_flags = [f for s, f in flags if s != since]
+        primary_flags = [f for s, f in flags if s == since]
+        assert backfill_flags == [True, True]
+        assert primary_flags == [False]

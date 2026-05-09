@@ -32,6 +32,8 @@ def process_date(
     summary_client: SummaryClient,
     slack_client: SlackClient,
     allowed_tags: list[str],
+    *,
+    is_backfill: bool = False,
 ) -> None:
     """Generate and publish a daily report for a single date range.
 
@@ -44,10 +46,13 @@ def process_date(
         summary_client: Claude API summarizer client
         slack_client: Slack notification client
         allowed_tags: Valid tag names from Notion DB
+        is_backfill: If True, use the Hybrid PR/Issue fetch path
     """
     logger.info("Processing: %s ~ %s", since.isoformat(), until.isoformat())
 
-    github_activity = github_client.fetch_activity(since, until, list(session_activity.keys()))
+    github_activity = github_client.fetch_activity(
+        since, until, list(session_activity.keys()), is_backfill=is_backfill,
+    )
 
     # Recover squash-merged commits from session logs, normalizing to
     # the full CommitInfo shape and deduplicating by SHA prefix.
@@ -152,15 +157,18 @@ def run(
                 logger.exception("S3 deletion failed")
                 slack_client.notify_error(since, e)
 
-        # Build target date list
+        # Build target date list and mark which ones use the Hybrid fetch path
+        backfill_set: set[str] = set()
         if target_date:
             # Explicit date(s): process only specified dates, skip backfill
             process_dates = parse_target_dates(target_date)
+            backfill_set = {d.isoformat() for d in process_dates}
         else:
             # Scheduled/manual without --date: backfill + primary
             backfill_dates = store.scan_backfill_dates(primary_date)
             backfill_dates = backfill_dates[-MAX_BACKFILL:]
             process_dates = backfill_dates + [primary_date]
+            backfill_set = {d.isoformat() for d in backfill_dates}
             if backfill_dates:
                 logger.info("Backfill dates detected: %s", backfill_dates)
 
@@ -185,6 +193,7 @@ def run(
                     github_client, notion_client,
                     summary_client, slack_client,
                     allowed_tags,
+                    is_backfill=date_str in backfill_set,
                 )
                 store.mark_reported(date_str)
             except Exception as e:
