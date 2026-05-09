@@ -408,7 +408,7 @@ class TestSearchPullsByEvent:
         query = client.g.search_issues.call_args[0][0]
         assert "repo:n-yU/repo" in query
         assert "is:pr" in query
-        # Widened by 1 day on each side to absorb UTC/JST skew
+        # Range starts at since - 1day; until is the literal date
         assert "merged:2026-03-27..2026-03-29" in query
 
     def test_increments_search_throttle_counter(self):
