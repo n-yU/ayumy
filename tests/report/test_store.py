@@ -99,6 +99,14 @@ class TestExtractPrIssueRefs:
         assert pulls == set()
         assert issues == set()
 
+    def test_does_not_match_path_outside_gh_api(self):
+        """`pulls/N` / `issues/N` outside of `gh api` are ignored."""
+        pulls, issues = _extract_pr_issue_refs(
+            "curl https://example.com/repo/pulls/123 && cat ./issues/456.txt"
+        )
+        assert pulls == set()
+        assert issues == set()
+
 
 class TestBuildItems:
     def test_groups_by_date(self):

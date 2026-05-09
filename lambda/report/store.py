@@ -17,9 +17,11 @@ logger = logging.getLogger(__name__)
 # (and the issue equivalents) do not take a number positional argument
 _GH_CLI_RE = re.compile(r"\bgh\s+(pr|issue)\s+(\w[\w-]*)")
 _GH_CLI_NO_NUMBER_SUBS = {"create", "list", "status"}
-# `gh api` calls with a PR/Issue number embedded in the path
-_GH_API_PR_RE = re.compile(r"\b(?:pulls|pull)/(\d+)\b")
-_GH_API_ISSUE_RE = re.compile(r"\bissues/(\d+)\b")
+# `gh api` invocation anchor; the path is scanned in the segment that follows
+_GH_API_RE = re.compile(r"\bgh\s+api\b")
+# PR/Issue number embedded in a `gh api` REST path
+_API_PATH_PR_RE = re.compile(r"\b(?:pulls|pull)/(\d+)\b")
+_API_PATH_ISSUE_RE = re.compile(r"\bissues/(\d+)\b")
 # Standalone integer (not surrounded by word chars or hyphens)
 _STANDALONE_INT_RE = re.compile(r"(?<![\w-])(\d+)(?![\w-])")
 # `#N` reference inside `git` command arguments. Treated as ambiguous
@@ -66,10 +68,12 @@ def _extract_pr_issue_refs(command: str) -> tuple[set[int], set[int]]:
             n = int(first.group(1))
             (pulls if kind == "pr" else issues).add(n)
 
-    for m in _GH_API_PR_RE.finditer(command):
-        pulls.add(int(m.group(1)))
-    for m in _GH_API_ISSUE_RE.finditer(command):
-        issues.add(int(m.group(1)))
+    for m in _GH_API_RE.finditer(command):
+        segment = _command_segment(command, m.end())
+        for sm in _API_PATH_PR_RE.finditer(segment):
+            pulls.add(int(sm.group(1)))
+        for sm in _API_PATH_ISSUE_RE.finditer(segment):
+            issues.add(int(sm.group(1)))
 
     for m in _GIT_CLI_RE.finditer(command):
         segment = _command_segment(command, m.end())
