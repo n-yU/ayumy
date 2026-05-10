@@ -304,8 +304,9 @@ class GitHubClient:
 
         - Targets commits whose pull_numbers is unresolved (empty
           list or missing key)
-        - Replaces short SHA with the full 40-char form so downstream
-          equality checks (e.g., merge_commit_sha) work uniformly
+        - Replaces short SHA with the full 40-char form (and updates
+          the matching URL) so downstream equality checks (e.g.,
+          merge_commit_sha) work uniformly
         - Used to enrich session-recovered commits whose PR association
           cannot be determined from session logs alone
         """
