@@ -302,7 +302,8 @@ class GitHubClient:
     ) -> None:
         """Resolve pull_numbers and normalize SHA in-place.
 
-        - Targets commits without a pull_numbers value
+        - Targets commits whose pull_numbers is unresolved (empty
+          list or missing key)
         - Replaces short SHA with the full 40-char form so downstream
           equality checks (e.g., merge_commit_sha) work uniformly
         - Used to enrich session-recovered commits whose PR association
