@@ -337,7 +337,8 @@ class NotionClient:
 
         for pr_number, pr in pr_by_number.items():
             nested = sorted(
-                pr_nested_commits[pr_number], key=lambda c: c["date"]
+                pr_nested_commits[pr_number],
+                key=lambda c: datetime.fromisoformat(c["date"]),
             )
             candidates: list[datetime] = []
             if _is_in_range(pr["created_at"], since, until):

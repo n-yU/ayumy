@@ -274,8 +274,10 @@ def _bullet_children(block: dict) -> list[dict]:
 
 
 class TestTimelineSection:
+    def setup_method(self):
+        self.client = _make_client()
+
     def test_pr_block_nests_non_merge_commits(self):
-        client = _make_client()
         repo_activity = {
             "commits": [
                 _commit("aaa1111", "branch commit 1",
@@ -292,7 +294,7 @@ class TestTimelineSection:
                           merge_commit_sha="ccc3333")],
             "issues": [],
         }
-        blocks = client._build_timeline_section("repo", repo_activity, SINCE, UNTIL)
+        blocks = self.client._build_timeline_section("repo", repo_activity, SINCE, UNTIL)
 
         # Heading + PR block + merge commit at top level
         assert [b["type"] for b in blocks] == [
@@ -309,8 +311,34 @@ class TestTimelineSection:
         merge_block = blocks[2]
         assert _bullet_text(merge_block) == "🔸 ccc3333: Squash merge"
 
+    def test_pr_nested_commits_sort_by_datetime_across_timezones(self):
+        # ISO string sort would put +00:00 before +09:00, but actual
+        # chronological order is the opposite: 10:00+09:00 (= 01:00 UTC)
+        # comes before 09:00+00:00 (= 18:00 JST)
+        early = _commit("aaa1111", "earlier in time",
+                        hour=10, minute=0, pull_numbers=[1])
+        late = {
+            "sha": "bbb2222",
+            "message": "later in time",
+            "author": "user",
+            "date": "2026-03-28T09:00:00+00:00",
+            "url": "https://github.com/n-yU/repo/commit/bbb2222",
+            "pull_numbers": [1],
+        }
+        repo_activity = {
+            "commits": [late, early],
+            "pulls": [_pr(1, "feat", "open",
+                          created_at="2026-03-28T09:00:00+09:00")],
+            "issues": [],
+        }
+        blocks = self.client._build_timeline_section("repo", repo_activity, SINCE, UNTIL)
+        children = _bullet_children(blocks[1])
+        assert [_bullet_text(c) for c in children] == [
+            "🔸 aaa1111: earlier in time",
+            "🔸 bbb2222: later in time",
+        ]
+
     def test_pr_header_sorts_before_merge_commit_at_same_time(self):
-        client = _make_client()
         # PR opened before window; only the squash merge commit lands in range
         repo_activity = {
             "commits": [
@@ -324,24 +352,22 @@ class TestTimelineSection:
                           merge_commit_sha="ccc3333")],
             "issues": [],
         }
-        blocks = client._build_timeline_section("repo", repo_activity, SINCE, UNTIL)
+        blocks = self.client._build_timeline_section("repo", repo_activity, SINCE, UNTIL)
         # PR header (no children) appears immediately before its merge commit
         assert _bullet_text(blocks[1]) == "🔀 repo#2: Old PR finally merged"
         assert _bullet_children(blocks[1]) == []
         assert _bullet_text(blocks[2]) == "🔸 ccc3333: Squash merge"
 
     def test_direct_commit_renders_at_top_level(self):
-        client = _make_client()
         repo_activity = {
             "commits": [_commit("ddd4444", "Direct commit", hour=10)],
             "pulls": [],
             "issues": [],
         }
-        blocks = client._build_timeline_section("repo", repo_activity, SINCE, UNTIL)
+        blocks = self.client._build_timeline_section("repo", repo_activity, SINCE, UNTIL)
         assert _bullet_text(blocks[1]) == "🔸 ddd4444: Direct commit"
 
     def test_pr_with_no_in_range_activity_is_omitted(self):
-        client = _make_client()
         # Session-touched PR with no commits/state changes in range
         repo_activity = {
             "commits": [],
@@ -349,11 +375,10 @@ class TestTimelineSection:
                           created_at="2026-03-20T09:00:00+09:00")],
             "issues": [],
         }
-        blocks = client._build_timeline_section("repo", repo_activity, SINCE, UNTIL)
+        blocks = self.client._build_timeline_section("repo", repo_activity, SINCE, UNTIL)
         assert blocks == []
 
     def test_unmerged_pr_close_appears_at_top_level(self):
-        client = _make_client()
         repo_activity = {
             "commits": [],
             "pulls": [_pr(7, "Rejected", "closed",
@@ -361,13 +386,12 @@ class TestTimelineSection:
                           closed_at="2026-03-28T15:00:00+09:00")],
             "issues": [],
         }
-        blocks = client._build_timeline_section("repo", repo_activity, SINCE, UNTIL)
+        blocks = self.client._build_timeline_section("repo", repo_activity, SINCE, UNTIL)
         # PR header (no commits) + top-level close line
         assert _bullet_text(blocks[1]) == "🔀 repo#7: Rejected"
         assert _bullet_text(blocks[2]) == "⚠️ close: repo#7: Rejected"
 
     def test_issue_open_and_close_emojis(self):
-        client = _make_client()
         repo_activity = {
             "commits": [],
             "pulls": [],
@@ -384,7 +408,7 @@ class TestTimelineSection:
                        state_reason="not_planned"),
             ],
         }
-        blocks = client._build_timeline_section("repo", repo_activity, SINCE, UNTIL)
+        blocks = self.client._build_timeline_section("repo", repo_activity, SINCE, UNTIL)
         texts = [_bullet_text(b) for b in blocks[1:]]
         assert texts == [
             "🟢 open: repo#5: New bug",
@@ -393,7 +417,6 @@ class TestTimelineSection:
         ]
 
     def test_chronological_order_across_types(self):
-        client = _make_client()
         repo_activity = {
             "commits": [
                 _commit("aaa1111", "commit on PR#1",
@@ -407,7 +430,7 @@ class TestTimelineSection:
                        created_at="2026-03-28T08:00:00+09:00"),
             ],
         }
-        blocks = client._build_timeline_section("repo", repo_activity, SINCE, UNTIL)
+        blocks = self.client._build_timeline_section("repo", repo_activity, SINCE, UNTIL)
         texts = [_bullet_text(b) for b in blocks[1:]]
         assert texts == [
             "🟢 open: repo#5: Bug",            # 08:00
@@ -420,9 +443,8 @@ class TestTimelineSection:
         ]
 
     def test_omitted_when_no_entries(self):
-        client = _make_client()
         repo_activity = {"commits": [], "pulls": [], "issues": []}
-        blocks = client._build_timeline_section("repo", repo_activity, SINCE, UNTIL)
+        blocks = self.client._build_timeline_section("repo", repo_activity, SINCE, UNTIL)
         assert blocks == []
 
 
