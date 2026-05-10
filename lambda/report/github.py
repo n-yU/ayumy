@@ -76,9 +76,11 @@ class GitHubClient:
             A list of dicts with keys: sha, message, author, date, url,
             pull_numbers
         """
-        since_str = since.strftime("%Y-%m-%d")
-        until_date = until - timedelta(days=1)
-        until_str = max(since_str, until_date.strftime("%Y-%m-%d"))
+        # Widen by 1 day on each side to absorb GitHub Search's UTC date
+        # semantics (a JST day spans two UTC dates); precise filtering
+        # happens below via the timezone-aware datetime compare
+        since_str = (since - timedelta(days=1)).strftime("%Y-%m-%d")
+        until_str = until.strftime("%Y-%m-%d")
         query = f"repo:{repo.full_name} author-date:{since_str}..{until_str}"
 
         self._search_throttle()

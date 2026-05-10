@@ -235,7 +235,7 @@ ayumy sync --report --date 2026-03-01..2026-03-05               # 日付範囲�
 
 各アクティビティの取得項目は `lambda/report/__init__.py` の `CommitInfo` / `PullInfo` / `IssueInfo` を参照する
 
-Commits の取得には Search Commits API を使用し、`author-date` の range 構文（`YYYY-MM-DD..YYYY-MM-DD`）で期間を指定する。検索範囲の上限は `max(since_date, (until - 1day).date())` で算出し、不要な翌日分のページングを回避する。Search API は日付精度のみをサポートするため、取得後に `since <= author_date < until` で絞り込み、手動実行時の部分日（当日 00:00 〜 現在時刻）にも対応する。これによりブランチの存在有無にかかわらず対象期間のコミットを取得できる。ただし squash merge によって `author-date` が書き換えられたコミットは検出できないため、セッション JSONL の `tool_result` から抽出したコミット情報で補完する（§5.3 参照）
+Commits の取得には Search Commits API を使用し、`author-date` の range 構文（`YYYY-MM-DD..YYYY-MM-DD`）で期間を指定する。GitHub Search の date 比較は UTC 解釈であり、JST 1 日分は連続する 2 つの UTC 日付にまたがるため、検索範囲を `since - 1day` 〜 `until` に広げて取りこぼしを防ぐ。取得後にタイムゾーン対応の `since <= author_date < until` で精密に絞り込み、手動実行時の部分日（当日 00:00 〜 現在時刻）にも対応する。これによりブランチの存在有無にかかわらず対象期間のコミットを取得できる。ただし squash merge によって `author-date` が書き換えられたコミットは検出できないため、セッション JSONL の `tool_result` から抽出したコミット情報で補完する（§5.3 参照）
 
 各コミットには `GET /repos/{owner}/{repo}/commits/{sha}/pulls` を追加で呼び出し、紐づく PR 番号も付与する。これは Notion Timeline で commit を親 PR ブロック配下にネストする際の参照キーとして利用するほか、Hybrid 経路の PR 取得（§5.1.1）でも再利用する
 

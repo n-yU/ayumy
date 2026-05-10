@@ -120,7 +120,7 @@ class TestFetchCommits:
         assert result[0]["pull_numbers"] == [5, 9]
         repo.get_commit.assert_called_once_with("abc123")
 
-    def test_uses_author_date_range_query(self):
+    def test_widens_query_one_day_each_side_for_utc_safety(self):
         client = _make_client()
 
         repo = MagicMock()
@@ -131,9 +131,9 @@ class TestFetchCommits:
 
         query = client.g.search_commits.call_args[0][0]
         assert "repo:n-yU/my-repo" in query
-        assert "author-date:2026-03-28..2026-03-28" in query
+        assert "author-date:2026-03-27..2026-03-29" in query
 
-    def test_uses_same_day_range_for_partial_day(self):
+    def test_widens_query_for_partial_day(self):
         client = _make_client()
         partial_until = datetime(2026, 3, 28, 15, 0, tzinfo=JST)
 
@@ -144,7 +144,7 @@ class TestFetchCommits:
         client.fetch_commits(repo, SINCE, partial_until)
 
         query = client.g.search_commits.call_args[0][0]
-        assert "author-date:2026-03-28..2026-03-28" in query
+        assert "author-date:2026-03-27..2026-03-28" in query
 
     def test_filters_commits_outside_time_range(self):
         client = _make_client()
