@@ -324,10 +324,12 @@ class NotionClient:
                     (ts, 1, _bulleted_link(_commit_label(c), c["url"], prefix="🔸 "))
                 )
                 continue
-            attached_pr = next(
-                (n for n in c.get("pull_numbers", []) if n in pr_by_number),
-                None,
-            )
+            # Pick the smallest PR number to keep nesting deterministic
+            # regardless of pull_numbers input order
+            attached_prs = [
+                n for n in c.get("pull_numbers", []) if n in pr_by_number
+            ]
+            attached_pr = min(attached_prs) if attached_prs else None
             if attached_pr is not None:
                 pr_nested_commits[attached_pr].append(c)
             else:

@@ -338,6 +338,27 @@ class TestTimelineSection:
             "🔸 bbb2222: later in time",
         ]
 
+    def test_commit_with_multiple_pulls_nests_under_smallest_pr(self):
+        # Cherry-picked commit appears in two PRs; nesting must not
+        # depend on pull_numbers input order
+        repo_activity = {
+            "commits": [_commit("aaa1111", "shared commit",
+                                hour=10, pull_numbers=[5, 2])],
+            "pulls": [
+                _pr(2, "PR two", "open",
+                    created_at="2026-03-28T09:00:00+09:00"),
+                _pr(5, "PR five", "open",
+                    created_at="2026-03-28T09:00:00+09:00"),
+            ],
+            "issues": [],
+        }
+        blocks = self.client._build_timeline_section("repo", repo_activity, SINCE, UNTIL)
+        pr_blocks = {_bullet_text(b): _bullet_children(b) for b in blocks[1:]}
+        assert [_bullet_text(c) for c in pr_blocks["🔀 repo#2: PR two"]] == [
+            "🔸 aaa1111: shared commit",
+        ]
+        assert pr_blocks["🔀 repo#5: PR five"] == []
+
     def test_pr_header_sorts_before_merge_commit_at_same_time(self):
         # PR opened before window; only the squash merge commit lands in range
         repo_activity = {
