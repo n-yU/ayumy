@@ -227,11 +227,13 @@ ayumy sync --report --date 2026-03-01..2026-03-05               # 日付範囲�
 
 対象リポジトリは S3 上のセッションログから特定する。各プロジェクトディレクトリの `.ayumy_repo` メタデータファイルからリポジトリ名を読み取り、そのリポジトリのみ `GET /repos/{owner}/{repo}` で取得する。
 
-| アクティビティ | エンドポイント | フィルタ | 取得項目 |
-|---|---|---|---|
-| Commits | `GET /search/commits` | `repo:{full_name} author-date:{since_date}..{until_date}` | メッセージ、作成者、日時、SHA、URL、関連 PR 番号 |
-| Pull Requests | `GET /repos/{owner}/{repo}/pulls` | `state=all`, `sort=updated`, 前日以降 | タイトル、番号、状態、作成者、ラベル、draft フラグ、URL、作成日時、merge 日時、close 日時 |
-| Issues | `GET /repos/{owner}/{repo}/issues` | `since`, `state=all`, PR を除外 | タイトル、番号、状態、作成者、ラベル、URL、作成日時、close 日時、close 理由（state_reason） |
+| アクティビティ | エンドポイント | フィルタ |
+|---|---|---|
+| Commits | `GET /search/commits` | `repo:{full_name} author-date:{since_date}..{until_date}` |
+| Pull Requests | `GET /repos/{owner}/{repo}/pulls` | `state=all`, `sort=updated`, 前日以降 |
+| Issues | `GET /repos/{owner}/{repo}/issues` | `since`, `state=all`, PR を除外 |
+
+各アクティビティの取得項目は `lambda/report/__init__.py` の `CommitInfo` / `PullInfo` / `IssueInfo` を参照する
 
 Commits の取得には Search Commits API を使用し、`author-date` の range 構文（`YYYY-MM-DD..YYYY-MM-DD`）で期間を指定する。検索範囲の上限は `max(since_date, (until - 1day).date())` で算出し、不要な翌日分のページングを回避する。Search API は日付精度のみをサポートするため、取得後に `since <= author_date < until` で絞り込み、手動実行時の部分日（当日 00:00 〜 現在時刻）にも対応する。これによりブランチの存在有無にかかわらず対象期間のコミットを取得できる。ただし squash merge によって `author-date` が書き換えられたコミットは検出できないため、セッション JSONL の `tool_result` から抽出したコミット情報で補完する（§5.3 参照）
 
