@@ -26,6 +26,8 @@ def _make_clients():
     """Create mocked client instances."""
     github_client = MagicMock()
     github_client.owner = OWNER
+    # populate returns its input by default; tests can override side_effect
+    github_client.populate_commit_pull_numbers.side_effect = lambda _, c: c
     return {
         "github_client": github_client,
         "notion_client": MagicMock(),
@@ -51,7 +53,9 @@ def _nonempty_activity(repo="my-repo"):
     }]})
     github = GitHubActivity({repo: {
         "commits": [{"message": "Fix bug", "sha": "abc", "author": "user",
-                      "date": "2026-03-28T10:00:00"}],
+                      "date": "2026-03-28T10:00:00",
+                      "url": f"https://github.com/{OWNER}/{repo}/commit/abc",
+                      "pull_numbers": []}],
         "pulls": [], "issues": [],
     }})
     return session, github
@@ -295,9 +299,13 @@ class TestProcessDate:
         }]})
         # GitHub API found one commit with full SHA that overlaps with session
         github = GitHubActivity({"my-repo": {
-            "commits": [{"sha": "abc1234abcdef1234abcdef1234abcdef12345678",
-                         "message": "Existing commit",
-                         "author": "user", "date": "2026-03-28T10:00:00"}],
+            "commits": [{
+                "sha": "abc1234abcdef1234abcdef1234abcdef12345678",
+                "message": "Existing commit",
+                "author": "user", "date": "2026-03-28T10:00:00",
+                "url": f"https://github.com/{OWNER}/my-repo/commit/abc1234",
+                "pull_numbers": [],
+            }],
             "pulls": [], "issues": [],
         }})
         clients["github_client"].fetch_activity.return_value = github
@@ -395,6 +403,83 @@ class TestProcessDate:
         kwargs = clients["github_client"].fetch_activity.call_args.kwargs
         assert kwargs["session_pulls"] == {}
         assert kwargs["session_issues"] == {}
+
+
+class TestSessionCommitPullNumbersPopulation:
+    def setup_method(self):
+        self.clients = _make_clients()
+        self.report = _make_report([
+            {"name": "my-repo", "summary": [], "tags": []},
+        ])
+        self.clients["summary_client"].generate_summary.return_value = self.report
+        self.clients["notion_client"].create_report_pages.return_value = []
+
+    def _session(self, session_commits):
+        return SessionActivity({"my-repo": [{
+            "session_id": "s1", "project": "my-repo",
+            "start_time": "2026-03-28T10:00:00+09:00",
+            "end_time": "2026-03-28T11:00:00+09:00",
+            "user_messages": ["Work"], "tools_used": ["Bash"],
+            "session_commits": session_commits,
+        }]})
+
+    def test_populates_for_new_session_commits_only(self):
+        session = self._session([
+            {"sha": "abc1234", "message": "Existing"},
+            {"sha": "def5678", "message": "Squash-lost"},
+        ])
+        github = GitHubActivity({"my-repo": {
+            "commits": [{
+                "sha": "abc1234abcdef1234abcdef1234abcdef12345678",
+                "message": "Existing", "author": "user",
+                "date": "2026-03-28T10:00:00",
+                "url": f"https://github.com/{OWNER}/my-repo/commit/abc1234",
+                "pull_numbers": [],
+            }],
+            "pulls": [], "issues": [],
+        }})
+        self.clients["github_client"].fetch_activity.return_value = github
+
+        process_date(SINCE, UNTIL, session, **self.clients, allowed_tags=[])
+
+        populate = self.clients["github_client"].populate_commit_pull_numbers
+        populate.assert_called_once()
+        args = populate.call_args.args
+        assert args[0] == "my-repo"
+        assert [c["sha"] for c in args[1]] == ["def5678"]
+
+    def test_populates_all_session_commits_when_repo_missing(self):
+        session = self._session([
+            {"sha": "aaa1111", "message": "C1"},
+            {"sha": "bbb2222", "message": "C2"},
+        ])
+        self.clients["github_client"].fetch_activity.return_value = GitHubActivity({})
+
+        process_date(SINCE, UNTIL, session, **self.clients, allowed_tags=[])
+
+        populate = self.clients["github_client"].populate_commit_pull_numbers
+        populate.assert_called_once()
+        args = populate.call_args.args
+        assert args[0] == "my-repo"
+        assert [c["sha"] for c in args[1]] == ["aaa1111", "bbb2222"]
+
+    def test_skips_populate_when_all_session_commits_overlap_with_search(self):
+        session = self._session([{"sha": "abc1234", "message": "Existing"}])
+        github = GitHubActivity({"my-repo": {
+            "commits": [{
+                "sha": "abc1234abcdef1234abcdef1234abcdef12345678",
+                "message": "Existing", "author": "user",
+                "date": "2026-03-28T10:00:00",
+                "url": f"https://github.com/{OWNER}/my-repo/commit/abc1234",
+                "pull_numbers": [],
+            }],
+            "pulls": [], "issues": [],
+        }})
+        self.clients["github_client"].fetch_activity.return_value = github
+
+        process_date(SINCE, UNTIL, session, **self.clients, allowed_tags=[])
+
+        self.clients["github_client"].populate_commit_pull_numbers.assert_not_called()
 
 
 class TestRun:

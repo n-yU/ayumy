@@ -87,21 +87,35 @@ def process_date(
                     "author": "",
                     "date": c.get("timestamp") or s["start_time"],
                     "url": f"https://github.com/{github_client.owner}/{repo_name}/commit/{c['sha']}",
+                    "pull_numbers": [],
                 })
         if not session_commits:
             continue
+        # Resolve PR association on commits we will actually inject so these
+        # nest under their parent PR in the Notion timeline rather than
+        # render as direct commits. Skip ones already covered by search.
         repo_data = github_activity.repos().get(repo_name)
         if repo_data is not None:
             existing_shas = {c["sha"] for c in repo_data["commits"]}
-            for sc in session_commits:
-                if not any(s.startswith(sc["sha"]) for s in existing_shas):
-                    repo_data["commits"].append(sc)
+            new_commits = [
+                sc for sc in session_commits
+                if not any(s.startswith(sc["sha"]) for s in existing_shas)
+            ]
+            if new_commits:
+                new_commits = github_client.populate_commit_pull_numbers(
+                    repo_name, new_commits,
+                )
+                repo_data["commits"].extend(new_commits)
         else:
-            github_activity.repos()[repo_name] = {
-                "commits": session_commits,
-                "pulls": [],
-                "issues": [],
-            }
+            session_commits = github_client.populate_commit_pull_numbers(
+                repo_name, session_commits,
+            )
+            if session_commits:
+                github_activity.repos()[repo_name] = {
+                    "commits": session_commits,
+                    "pulls": [],
+                    "issues": [],
+                }
 
     if not session_activity and not github_activity:
         logger.info("No activity, skipping")

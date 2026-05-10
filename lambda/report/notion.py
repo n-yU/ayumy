@@ -6,7 +6,7 @@ from datetime import datetime
 from notion_client import Client
 
 from . import (
-    JST, GitHubActivity, IssueInfo, PullInfo, RepoActivity,
+    JST, CommitInfo, GitHubActivity, IssueInfo, PullInfo, RepoActivity,
     RepoSummary, ReportSummary, SessionActivity, get_version,
 )
 
@@ -67,22 +67,29 @@ def _issue_label(repo_name: str, issue: IssueInfo) -> str:
     return f"{repo_name}#{issue['number']}: {issue['title']}"
 
 
-def _bulleted_link(label: str, url: str, prefix: str = "") -> dict:
-    """Build a bulleted_list_item block with an optional plain-text prefix.
+def _bulleted_link(
+    label: str, url: str, prefix: str = "", children: list[dict] | None = None,
+) -> dict:
+    """Build a bulleted_list_item block with an optional prefix and children.
 
     Args:
         label: Linked display text (e.g. `repo#12: Title`)
         url: Target URL
         prefix: Plain-text content rendered before the link (e.g. `⚠️ (closed) `)
+        children: Sub-blocks nested under this bullet (Notion API supports
+            children at creation time)
     """
     rich_text: list[dict] = []
     if prefix:
         rich_text.append({"type": "text", "text": {"content": prefix}})
     rich_text.extend(_linked_text(label, url))
+    body: dict = {"rich_text": rich_text}
+    if children:
+        body["children"] = children
     return {
         "object": "block",
         "type": "bulleted_list_item",
-        "bulleted_list_item": {"rich_text": rich_text},
+        "bulleted_list_item": body,
     }
 
 
@@ -111,13 +118,17 @@ def _done_prefix_issue(issue: IssueInfo) -> str:
     return f"⚠️ ({label}) "
 
 
-def _table_row(cells: list[list[dict]]) -> dict:
-    """Build a table_row block."""
-    return {
-        "object": "block",
-        "type": "table_row",
-        "table_row": {"cells": cells},
-    }
+def _commit_label(c: CommitInfo) -> str:
+    """Render `sha7: message` for a commit."""
+    return f"{c['sha'][:SHA_PREFIX_LEN]}: {c['message']}"
+
+
+def _issue_close_prefix(issue: IssueInfo) -> str:
+    """Return the timeline close-line prefix for a closed Issue."""
+    label = _IRREGULAR_ISSUE_REASONS.get(issue.get("state_reason") or "")
+    if label is None:
+        return "✅ close: "
+    return f"⚠️ close ({label}): "
 
 
 class NotionClient:
@@ -266,61 +277,6 @@ class NotionClient:
 
         return blocks
 
-    def _build_timeline_events(
-        self,
-        repo_name: str,
-        repo_activity: RepoActivity,
-        since: datetime,
-        until: datetime,
-    ) -> list[tuple[datetime, str, str, str]]:
-        """Collect timeline events that happened within [since, until).
-
-        Returns:
-            A list of (timestamp, event_type, label, url) tuples sorted by
-            timestamp ascending
-        """
-        events: list[tuple[datetime, str, str, str]] = []
-
-        for c in repo_activity["commits"]:
-            ts = datetime.fromisoformat(c["date"])
-            sha = c["sha"][:SHA_PREFIX_LEN]
-            label = f"{sha}: {c['message']}"
-            events.append((ts, "commit", label, c["url"]))
-
-        for pr in repo_activity["pulls"]:
-            label = _pr_label(repo_name, pr)
-            if _is_in_range(pr["created_at"], since, until):
-                events.append((
-                    datetime.fromisoformat(pr["created_at"]),
-                    "PR opened", label, pr["url"],
-                ))
-            if _is_in_range(pr["merged_at"], since, until):
-                events.append((
-                    datetime.fromisoformat(pr["merged_at"]),
-                    "PR merged", label, pr["url"],
-                ))
-            elif _is_in_range(pr["closed_at"], since, until):
-                events.append((
-                    datetime.fromisoformat(pr["closed_at"]),
-                    "PR closed", label, pr["url"],
-                ))
-
-        for issue in repo_activity["issues"]:
-            label = _issue_label(repo_name, issue)
-            if _is_in_range(issue["created_at"], since, until):
-                events.append((
-                    datetime.fromisoformat(issue["created_at"]),
-                    "Issue opened", label, issue["url"],
-                ))
-            if _is_in_range(issue["closed_at"], since, until):
-                events.append((
-                    datetime.fromisoformat(issue["closed_at"]),
-                    "Issue closed", label, issue["url"],
-                ))
-
-        events.sort(key=lambda e: e[0])
-        return events
-
     def _build_timeline_section(
         self,
         repo_name: str,
@@ -328,28 +284,127 @@ class NotionClient:
         since: datetime,
         until: datetime,
     ) -> list[dict]:
-        """Build the Timeline section as a heading + table block.
+        """Build Timeline as a nested bullet list grouped by parent PR.
+
+        Layout:
+            - PR block: header `🔀 repo#N: title` with non-merge PR-linked
+              commits nested via `children`
+            - Top-level: merge commits (`🔸 sha: msg`), direct commits,
+              Issue open/close, unmerged PR close lines
+            - Sort key: time of first activity in [since, until). Ties
+              between a PR header and its merge commit place the header
+              first (priority 0 vs 1)
 
         Returns:
-            A list of Notion blocks (empty when no events fall in range)
+            A list of Notion blocks (empty when no entries fall in range)
         """
-        events = self._build_timeline_events(repo_name, repo_activity, since, until)
-        if not events:
+        pulls = repo_activity["pulls"]
+        issues = repo_activity["issues"]
+
+        merge_sha_to_pr: dict[str, PullInfo] = {
+            pr["merge_commit_sha"]: pr
+            for pr in pulls
+            if pr.get("merge_commit_sha")
+        }
+        pr_by_number: dict[int, PullInfo] = {pr["number"]: pr for pr in pulls}
+        pr_nested_commits: dict[int, list[CommitInfo]] = {
+            n: [] for n in pr_by_number
+        }
+
+        # (timestamp, secondary_priority, block) — secondary 0 for PR
+        # headers (sorted before adjacent merge commits at same time)
+        entries: list[tuple[datetime, int, dict]] = []
+
+        for c in repo_activity["commits"]:
+            if not _is_in_range(c["date"], since, until):
+                continue
+            ts = datetime.fromisoformat(c["date"])
+            if c["sha"] in merge_sha_to_pr:
+                entries.append(
+                    (ts, 1, _bulleted_link(_commit_label(c), c["url"], prefix="🔸 "))
+                )
+                continue
+            # Pick the smallest PR number to keep nesting deterministic
+            # regardless of pull_numbers input order
+            attached_prs = [
+                n for n in c.get("pull_numbers", []) if n in pr_by_number
+            ]
+            attached_pr = min(attached_prs) if attached_prs else None
+            if attached_pr is not None:
+                pr_nested_commits[attached_pr].append(c)
+            else:
+                entries.append(
+                    (ts, 1, _bulleted_link(_commit_label(c), c["url"], prefix="🔸 "))
+                )
+
+        for pr_number, pr in pr_by_number.items():
+            nested = sorted(
+                pr_nested_commits[pr_number],
+                key=lambda c: datetime.fromisoformat(c["date"]),
+            )
+            candidates: list[datetime] = []
+            if _is_in_range(pr["created_at"], since, until):
+                candidates.append(datetime.fromisoformat(pr["created_at"]))
+            if nested:
+                candidates.append(datetime.fromisoformat(nested[0]["date"]))
+            if _is_in_range(pr["merged_at"], since, until):
+                candidates.append(datetime.fromisoformat(pr["merged_at"]))
+            if (
+                pr["state"] == "closed"
+                and not pr["merged_at"]
+                and _is_in_range(pr["closed_at"], since, until)
+            ):
+                candidates.append(datetime.fromisoformat(pr["closed_at"]))
+            if not candidates:
+                continue
+            children = [
+                _bulleted_link(_commit_label(c), c["url"], prefix="🔸 ")
+                for c in nested
+            ]
+            entries.append((
+                min(candidates),
+                0,
+                _bulleted_link(
+                    _pr_label(repo_name, pr), pr["url"],
+                    prefix="🔀 ",
+                    children=children or None,
+                ),
+            ))
+            # Unmerged-closed PR also gets a top-level close line
+            if (
+                pr["state"] == "closed"
+                and _is_in_range(pr["closed_at"], since, until)
+            ):
+                entries.append((
+                    datetime.fromisoformat(pr["closed_at"]),
+                    1,
+                    _bulleted_link(
+                        _pr_label(repo_name, pr), pr["url"],
+                        prefix="⚠️ close: ",
+                    ),
+                ))
+
+        for issue in issues:
+            label = _issue_label(repo_name, issue)
+            if _is_in_range(issue["created_at"], since, until):
+                entries.append((
+                    datetime.fromisoformat(issue["created_at"]),
+                    1,
+                    _bulleted_link(label, issue["url"], prefix="🟢 open: "),
+                ))
+            if _is_in_range(issue["closed_at"], since, until):
+                entries.append((
+                    datetime.fromisoformat(issue["closed_at"]),
+                    1,
+                    _bulleted_link(
+                        label, issue["url"], prefix=_issue_close_prefix(issue),
+                    ),
+                ))
+
+        if not entries:
             return []
 
-        header = _table_row([
-            [{"type": "text", "text": {"content": "Time"}}],
-            [{"type": "text", "text": {"content": "Type"}}],
-            [{"type": "text", "text": {"content": "Detail"}}],
-        ])
-        rows = [header]
-        for ts, event_type, label, url in events:
-            time_str = ts.astimezone(JST).strftime("%H:%M")
-            rows.append(_table_row([
-                [{"type": "text", "text": {"content": time_str}}],
-                [{"type": "text", "text": {"content": event_type}}],
-                _linked_text(label, url),
-            ]))
+        entries.sort(key=lambda e: (e[0], e[1]))
 
         return [
             {
@@ -359,16 +414,7 @@ class NotionClient:
                     "rich_text": [{"type": "text", "text": {"content": "Timeline"}}],
                 },
             },
-            {
-                "object": "block",
-                "type": "table",
-                "table": {
-                    "table_width": 3,
-                    "has_column_header": True,
-                    "has_row_header": False,
-                    "children": rows,
-                },
-            },
+            *(e[2] for e in entries),
         ]
 
     def _build_children(

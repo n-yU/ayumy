@@ -227,24 +227,28 @@ ayumy sync --report --date 2026-03-01..2026-03-05               # 日付範囲�
 
 対象リポジトリは S3 上のセッションログから特定する。各プロジェクトディレクトリの `.ayumy_repo` メタデータファイルからリポジトリ名を読み取り、そのリポジトリのみ `GET /repos/{owner}/{repo}` で取得する。
 
-| アクティビティ | エンドポイント | フィルタ | 取得項目 |
-|---|---|---|---|
-| Commits | `GET /search/commits` | `repo:{full_name} author-date:{since_date}..{until_date}` | メッセージ、作成者、日時、SHA、URL |
-| Pull Requests | `GET /repos/{owner}/{repo}/pulls` | `state=all`, `sort=updated`, 前日以降 | タイトル、番号、状態、作成者、ラベル、draft フラグ、URL、作成日時、merge 日時、close 日時 |
-| Issues | `GET /repos/{owner}/{repo}/issues` | `since`, `state=all`, PR を除外 | タイトル、番号、状態、作成者、ラベル、URL、作成日時、close 日時、close 理由（state_reason） |
+| アクティビティ | エンドポイント | フィルタ |
+|---|---|---|
+| Commits | `GET /search/commits` | `repo:{full_name} author-date:{since_date}..{until_date}` |
+| Pull Requests | `GET /repos/{owner}/{repo}/pulls` | `state=all`, `sort=updated`, 前日以降 |
+| Issues | `GET /repos/{owner}/{repo}/issues` | `since`, `state=all`, PR を除外 |
 
-Commits の取得には Search Commits API を使用し、`author-date` の range 構文（`YYYY-MM-DD..YYYY-MM-DD`）で期間を指定する。検索範囲の上限は `max(since_date, (until - 1day).date())` で算出し、不要な翌日分のページングを回避する。Search API は日付精度のみをサポートするため、取得後に `since <= author_date < until` で絞り込み、手動実行時の部分日（当日 00:00 〜 現在時刻）にも対応する。これによりブランチの存在有無にかかわらず対象期間のコミットを取得できる。ただし squash merge によって `author-date` が書き換えられたコミットは検出できないため、セッション JSONL の `tool_result` から抽出したコミット情報で補完する（§5.3 参照）
+各アクティビティの取得項目は `lambda/report/__init__.py` の `CommitInfo` / `PullInfo` / `IssueInfo` を参照する
+
+Commits の取得には Search Commits API を使用し、`author-date` の range 構文（`YYYY-MM-DD..YYYY-MM-DD`）で期間を指定する。GitHub Search の date 比較は UTC 解釈であり、JST 1 日分は連続する 2 つの UTC 日付にまたがるため、検索範囲を `since - 1day` 〜 `until` に広げて取りこぼしを防ぐ。取得後にタイムゾーン対応の `since <= author_date < until` で精密に絞り込み、手動実行時の部分日（当日 00:00 〜 現在時刻）にも対応する。これによりブランチの存在有無にかかわらず対象期間のコミットを取得できる。ただし squash merge によって `author-date` が書き換えられたコミットは検出できないため、セッション JSONL の `tool_result` から抽出したコミット情報で補完する（§5.3 参照）
+
+各コミットには `GET /repos/{owner}/{repo}/commits/{sha}/pulls` を追加で呼び出し、紐づく PR 番号も付与する。これは Notion Timeline で commit を親 PR ブロック配下にネストする際の参照キーとして利用するほか、Hybrid 経路の PR 取得（§5.1.1）でも再利用する
 
 Search API には 30 リクエスト/分の secondary rate limit がある。10 リクエストごとに経過時間をチェックし、20 秒のウィンドウ内であれば残り時間だけ sleep してからカウンタをリセットする
 
 #### 5.1.1 Backfill 時の Hybrid 取得経路
-PR/Issue の `updated_at` 経路は対象日以降に状態が更新されると `updated_at` がウィンドウから外れて取得対象から漏れる。例えば T 日に open された PR が T+1 日に merge された場合、T 日の再生成では PR が取得できず Timeline に「PR opened」イベントが現れない
+PR/Issue の `updated_at` 経路は対象日以降に状態が更新されると `updated_at` がウィンドウから外れて取得対象から漏れる。例えば T 日に open された PR が T+1 日に merge された場合、T 日の再生成では PR が取得できず Timeline に PR ブロックが現れない
 
 通常運用（前日定期実行・手動当日実行）では影響軽微なため `updated_at` 経路を維持する。`target_date` 指定時、または `scan_backfill_dates` で検出された未レポート日に対しては Hybrid 経路に切り替える
 
 | アクティビティ | 取得経路 |
 |---|---|
-| Pull Requests | `GET /search/issues` を `is:pr` + `created:`/`merged:`/`closed:` のレンジクエリで3回呼び出し、状態遷移した PR を取得する。さらに `fetch_commits` 結果の各 SHA に対して `GET /repos/{owner}/{repo}/commits/{sha}/pulls` を呼び、対象日にコミットだけがあった PR も補足する。これに DynamoDB の `session_pulls`（§5.3）を加えて PR 番号で union し、各番号を `GET /repos/{owner}/{repo}/pulls/{N}` で個別取得する |
+| Pull Requests | `GET /search/issues` を `is:pr` + `created:`/`merged:`/`closed:` のレンジクエリで3回呼び出し、状態遷移した PR を取得する。さらに `fetch_commits` で各コミットに付与済みの関連 PR 番号を再利用し、対象日にコミットだけがあった PR も補足する。これに DynamoDB の `session_pulls`（§5.3）を加えて PR 番号で union し、各番号を `GET /repos/{owner}/{repo}/pulls/{N}` で個別取得する |
 | Issues | `GET /search/issues` を `is:issue` + `created:`/`closed:` のレンジクエリで2回呼び出し、状態遷移した Issue を取得する。これに DynamoDB の `session_issues`（§5.3）を加えて Issue 番号で union する。session 由来の番号のみで Search に含まれないものは `GET /repos/{owner}/{repo}/issues/{N}` で個別取得し、PR を返した場合（`pull_request` 属性が設定）は除外する |
 
 Search クエリの日付範囲は UTC/JST の境界ずれを吸収するため `since - 1day` 〜 `until` まで広げる。Search 経路で得た PR は `created_at` / `merged_at` / `closed_at`、Issue は `created_at` / `closed_at` のいずれかが `[since, until)` に入るものに絞り込む。commit 由来 PR は対象日にコミットが存在する事実、session 由来 PR/Issue は session で対象日に touch された事実をもって採用するため、いずれもこの絞り込みの対象外とする。削除済み PR/Issue は 404 となるためスキップする
@@ -357,7 +361,7 @@ Date × Repository 単位でページを作成する。1日に複数ページが
 | Version | Text | レポート生成時の ayumy バージョン | `0.2.0` |
 
 ### 6.2 ページ本文（children blocks）
-Notion ページの本文は Summary、ステータス別セクション、Timeline で構成する。Summary は Claude API が生成し、それ以外は GitHub アクティビティから決定論的に組み立てる。ブロックタイプは `heading_2`、`bulleted_list_item`、`table` を使い分ける。
+Notion ページの本文は Summary、ステータス別セクション、Timeline で構成する。Summary は Claude API が生成し、それ以外は GitHub アクティビティから決定論的に組み立てる。ブロックタイプは `heading_2` と `bulleted_list_item` を使い分け、Timeline では `bulleted_list_item` の `children` フィールドで PR 配下の commit をネストする。
 
 ```
 [heading_2]            Summary
@@ -369,7 +373,7 @@ Notion ページの本文は Summary、ステータス別セクション、Timel
 [heading_2]            Todo（該当がある場合のみ）
 [bulleted_list_item]   対象日に新規作成された Issue（バックログ）
 [heading_2]            Timeline（該当がある場合のみ）
-[table]                Time / Type / Detail の3列で commit・PR・Issue のイベントを時系列順に列挙
+[bulleted_list_item]   PR ブロック親 + 配下 commit を `children` でネスト、merge commit / 直接 commit / Issue open / close / unmerged PR close を最上位に時系列で interleave
 ```
 
 ステータスの振り分け基準:
@@ -384,7 +388,18 @@ Done セクションの各項目には状態を示す prefix を付ける。通�
 - `not_planned` で close された Issue: `⚠️ (not planned) `
 - `duplicate` で close された Issue: `⚠️ (duplicate) `
 
-Timeline には commit と、PR/Issue のうち対象日のウィンドウ内で発生した状態遷移（opened / merged / closed）を 1 行ずつ表に記録する。同じ PR/Issue が同日に opened と merged の両方を行った場合は別行で記載する。
+Timeline は `bulleted_list_item` のネスト構造で表現する。PR 親エントリは進行中・merged を問わず `🔀 repo#xx: Title` の形式で表示し、その PR に紐づく非 merge commit を `children` フィールドにネストする。merge commit（PR の `merge_commit_sha` と一致する commit）は PR 配下にネストせず最上位に配置し、`🔸 sha: message` の形式で表示する。これは「PR の `close` 行は merge commit の存在で自明」という規則を反映するため、merge commit 自体が PR close のマーカーとして機能する。
+
+最上位に置く要素の種類と表記は以下の通り。
+
+- merge commit: `🔸 sha: message`
+- 直接 commit（PR に紐づかない default branch への commit）: `🔸 sha: message`
+- Issue open: `🟢 open: repo#xx: Title`
+- Issue close（completed）: `✅ close: repo#xx: Title`
+- Issue close（not_planned / duplicate）: `⚠️ close (理由): repo#xx: Title`
+- merge せず close された PR: `⚠️ close: repo#xx: Title`（PR 親エントリとは別に top-level に配置）
+
+並び順は対象日ウィンドウ内における最初の活動時刻を基準に、PR ブロックと他のトップレベル要素を時系列で interleave する。PR ブロックの並び順キーは PR open（in range の場合）・最初の配下 commit・merge 時刻のうち最も早いものを採る。同時刻のタイブレークは PR 親エントリ → 同じ時刻の merge commit の順とする。
 
 GitHub アイテムへのリンクは PR/Issue が `repo#xx: Title`、commit が `{sha-prefix}: {commit message}` の形式とし、それぞれ GitHub URL でリンク化する。
 

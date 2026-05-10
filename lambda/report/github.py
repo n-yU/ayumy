@@ -5,7 +5,7 @@ import time
 from datetime import datetime, timedelta
 from functools import cached_property
 
-from github import Github, UnknownObjectException
+from github import Github, GithubException, UnknownObjectException
 from github.Issue import Issue
 from github.PullRequest import PullRequest
 from github.Repository import Repository
@@ -63,10 +63,9 @@ class GitHubClient:
     ) -> list[CommitInfo]:
         """Fetch commits for a repo within the target date range.
 
-        Uses the Search Commits API with author-date range to find
-        commits regardless of branch existence. The Search API only
-        supports date-level granularity, so results are filtered
-        against the exact since/until timestamps.
+        - Uses Search Commits API (author-date range) to cover all branches
+        - Search API is date-granular; re-filter against exact since/until
+        - Annotates each commit with PR numbers via GET /repos/.../commits/{sha}/pulls
 
         Args:
             repo: Target repository
@@ -74,11 +73,14 @@ class GitHubClient:
             until: End of the target period (exclusive)
 
         Returns:
-            A list of dicts with keys: sha, message, author, date, url
+            A list of dicts with keys: sha, message, author, date, url,
+            pull_numbers
         """
-        since_str = since.strftime("%Y-%m-%d")
-        until_date = until - timedelta(days=1)
-        until_str = max(since_str, until_date.strftime("%Y-%m-%d"))
+        # Widen by 1 day on each side to absorb GitHub Search's UTC date
+        # semantics (a JST day spans two UTC dates); precise filtering
+        # happens below via the timezone-aware datetime compare
+        since_str = (since - timedelta(days=1)).strftime("%Y-%m-%d")
+        until_str = until.strftime("%Y-%m-%d")
         query = f"repo:{repo.full_name} author-date:{since_str}..{until_str}"
 
         self._search_throttle()
@@ -93,6 +95,7 @@ class GitHubClient:
                 "author": c.commit.author.name,
                 "date": author_date.isoformat(),
                 "url": c.html_url,
+                "pull_numbers": self._fetch_pulls_for_commit(repo, c.sha),
             })
         return results
 
@@ -296,6 +299,44 @@ class GitHubClient:
             logger.warning("Commit %s not found (404), skipping", sha[:7])
             return []
 
+    def populate_commit_pull_numbers(
+        self, repo_name: str, commits: list[CommitInfo],
+    ) -> list[CommitInfo]:
+        """Resolve session-recovered commits and drop cross-repo entries.
+
+        - Targets commits whose pull_numbers is unresolved (empty
+          list or missing key); already-resolved commits pass through
+        - Replaces short SHA with the full 40-char form (and updates
+          the matching URL) so downstream equality checks (e.g.,
+          merge_commit_sha) work uniformly
+        - Drops commits the repo cannot resolve (404 / 422), which
+          typically indicates the commit was made against a different
+          repo touched during the same session
+        """
+        if not any(not c.get("pull_numbers") for c in commits):
+            return commits
+        repo = self.g.get_user().get_repo(repo_name)
+        result: list[CommitInfo] = []
+        for c in commits:
+            if c.get("pull_numbers"):
+                result.append(c)
+                continue
+            try:
+                commit = repo.get_commit(c["sha"])
+            except GithubException as e:
+                if e.status not in (404, 422):
+                    raise
+                logger.warning(
+                    "Commit %s not in %s (%s), dropping as cross-repo",
+                    c["sha"][:7], repo_name, e.status,
+                )
+                continue
+            c["sha"] = commit.sha
+            c["url"] = commit.html_url
+            c["pull_numbers"] = [pr.number for pr in commit.get_pulls()]
+            result.append(c)
+        return result
+
     def _fetch_pulls_hybrid(
         self,
         repo: Repository,
@@ -306,10 +347,10 @@ class GitHubClient:
     ) -> list[PullInfo]:
         """Fetch PRs via Search events + commit + session union (backfill).
 
-        commit-derived numbers are exempt from the date-range filter
-        because a commit on the target day is itself proof of activity;
-        session-derived numbers are exempt because the session touched
-        the PR on the target day
+        - Commit-derived numbers are exempt from the date-range filter
+          (a commit on the target day proves activity)
+        - Session-derived numbers are exempt (session touched the PR)
+        - Reuses pull_numbers populated by fetch_commits to avoid duplicate API calls
         """
         event_numbers: set[int] = set()
         for event in _PULL_EVENTS:
@@ -318,7 +359,7 @@ class GitHubClient:
 
         commit_numbers: set[int] = set()
         for c in commits:
-            commit_numbers.update(self._fetch_pulls_for_commit(repo, c["sha"]))
+            commit_numbers.update(c.get("pull_numbers", []))
 
         session_set: set[int] = set(session_numbers)
         exempt_numbers = commit_numbers | session_set
@@ -399,6 +440,9 @@ def _build_pull_info(pr: PullRequest) -> PullInfo:
         "created_at": pr.created_at.isoformat(),
         "merged_at": pr.merged_at.isoformat() if pr.merged_at else None,
         "closed_at": pr.closed_at.isoformat() if pr.closed_at else None,
+        # GitHub returns a "test merge" SHA for unmerged PRs; only meaningful
+        # when the PR is actually merged
+        "merge_commit_sha": pr.merge_commit_sha if pr.merged_at else None,
     }
 
 
