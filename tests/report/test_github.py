@@ -503,6 +503,7 @@ class TestPopulateCommitPullNumbers:
 
     def test_resolves_only_unresolved_commits(self):
         commit_obj = MagicMock()
+        commit_obj.sha = "bbb"
         pr = MagicMock(); pr.number = 11
         commit_obj.get_pulls.return_value = [pr]
         self.repo.get_commit.return_value = commit_obj
@@ -513,6 +514,19 @@ class TestPopulateCommitPullNumbers:
         self.repo.get_commit.assert_called_once_with("bbb")
         assert commits[0]["pull_numbers"] == [3]
         assert commits[1]["pull_numbers"] == [11]
+
+    def test_normalizes_short_sha_to_full(self):
+        full_sha = "bbb2222abcdef1234abcdef1234abcdef12345678"
+        commit_obj = MagicMock()
+        commit_obj.sha = full_sha
+        commit_obj.get_pulls.return_value = []
+        self.repo.get_commit.return_value = commit_obj
+
+        commits = [self._commit("bbb2222", [])]
+        self.client.populate_commit_pull_numbers("repo", commits)
+
+        self.repo.get_commit.assert_called_once_with("bbb2222")
+        assert commits[0]["sha"] == full_sha
 
     def test_assigns_empty_list_on_404(self):
         self.repo.get_commit.side_effect = UnknownObjectException(

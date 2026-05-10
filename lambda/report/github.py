@@ -300,17 +300,27 @@ class GitHubClient:
     def populate_commit_pull_numbers(
         self, repo_name: str, commits: list[CommitInfo],
     ) -> None:
-        """Resolve pull_numbers in-place for commits without a value.
+        """Resolve pull_numbers and normalize SHA in-place.
 
-        Used to enrich session-recovered commits whose PR association
-        cannot be determined from session logs alone
+        - Targets commits without a pull_numbers value
+        - Replaces short SHA with the full 40-char form so downstream
+          equality checks (e.g., merge_commit_sha) work uniformly
+        - Used to enrich session-recovered commits whose PR association
+          cannot be determined from session logs alone
         """
         unresolved = [c for c in commits if not c.get("pull_numbers")]
         if not unresolved:
             return
         repo = self.g.get_user().get_repo(repo_name)
         for c in unresolved:
-            c["pull_numbers"] = self._fetch_pulls_for_commit(repo, c["sha"])
+            try:
+                commit = repo.get_commit(c["sha"])
+            except UnknownObjectException:
+                logger.warning("Commit %s not found (404), skipping", c["sha"][:7])
+                c["pull_numbers"] = []
+                continue
+            c["sha"] = commit.sha
+            c["pull_numbers"] = [pr.number for pr in commit.get_pulls()]
 
     def _fetch_pulls_hybrid(
         self,
