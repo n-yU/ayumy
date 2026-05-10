@@ -321,6 +321,7 @@ class GitHubClient:
                 c["pull_numbers"] = []
                 continue
             c["sha"] = commit.sha
+            c["url"] = commit.html_url
             c["pull_numbers"] = [pr.number for pr in commit.get_pulls()]
 
     def _fetch_pulls_hybrid(

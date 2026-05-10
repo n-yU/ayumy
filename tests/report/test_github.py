@@ -517,8 +517,10 @@ class TestPopulateCommitPullNumbers:
 
     def test_normalizes_short_sha_to_full(self):
         full_sha = "bbb2222abcdef1234abcdef1234abcdef12345678"
+        full_url = f"https://github.com/n-yU/repo/commit/{full_sha}"
         commit_obj = MagicMock()
         commit_obj.sha = full_sha
+        commit_obj.html_url = full_url
         commit_obj.get_pulls.return_value = []
         self.repo.get_commit.return_value = commit_obj
 
@@ -527,6 +529,7 @@ class TestPopulateCommitPullNumbers:
 
         self.repo.get_commit.assert_called_once_with("bbb2222")
         assert commits[0]["sha"] == full_sha
+        assert commits[0]["url"] == full_url
 
     def test_assigns_empty_list_on_404(self):
         self.repo.get_commit.side_effect = UnknownObjectException(
