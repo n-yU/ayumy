@@ -63,10 +63,10 @@ class GitHubClient:
     ) -> list[CommitInfo]:
         """Fetch commits for a repo within the target date range.
 
-        Uses the Search Commits API with author-date range to find
-        commits regardless of branch existence. The Search API only
-        supports date-level granularity, so results are filtered
-        against the exact since/until timestamps.
+        - Uses Search Commits API (author-date range) to cover all branches
+        - Search API is date-granular; re-filter against exact since/until
+        - Annotates each commit with PR numbers via
+          GET /repos/.../commits/{sha}/pulls
 
         Args:
             repo: Target repository
@@ -74,7 +74,8 @@ class GitHubClient:
             until: End of the target period (exclusive)
 
         Returns:
-            A list of dicts with keys: sha, message, author, date, url
+            A list of dicts with keys: sha, message, author, date, url,
+            pull_numbers
         """
         since_str = since.strftime("%Y-%m-%d")
         until_date = until - timedelta(days=1)
@@ -93,6 +94,7 @@ class GitHubClient:
                 "author": c.commit.author.name,
                 "date": author_date.isoformat(),
                 "url": c.html_url,
+                "pull_numbers": self._fetch_pulls_for_commit(repo, c.sha),
             })
         return results
 
@@ -306,10 +308,11 @@ class GitHubClient:
     ) -> list[PullInfo]:
         """Fetch PRs via Search events + commit + session union (backfill).
 
-        commit-derived numbers are exempt from the date-range filter
-        because a commit on the target day is itself proof of activity;
-        session-derived numbers are exempt because the session touched
-        the PR on the target day
+        - Commit-derived numbers are exempt from the date-range filter
+          (a commit on the target day proves activity)
+        - Session-derived numbers are exempt (session touched the PR)
+        - Reuses pull_numbers populated by fetch_commits to avoid
+          duplicate API calls
         """
         event_numbers: set[int] = set()
         for event in _PULL_EVENTS:
@@ -318,7 +321,7 @@ class GitHubClient:
 
         commit_numbers: set[int] = set()
         for c in commits:
-            commit_numbers.update(self._fetch_pulls_for_commit(repo, c["sha"]))
+            commit_numbers.update(c.get("pull_numbers", []))
 
         session_set: set[int] = set(session_numbers)
         exempt_numbers = commit_numbers | session_set

@@ -87,6 +87,7 @@ def process_date(
                     "author": "",
                     "date": c.get("timestamp") or s["start_time"],
                     "url": f"https://github.com/{github_client.owner}/{repo_name}/commit/{c['sha']}",
+                    "pull_numbers": [],
                 })
         if not session_commits:
             continue

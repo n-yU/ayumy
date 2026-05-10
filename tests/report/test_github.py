@@ -83,12 +83,42 @@ class TestFetchCommits:
         repo.full_name = "n-yU/my-repo"
         client.g.search_commits.return_value = [mock_commit]
 
+        # Commit has no associated PR
+        commit_obj = MagicMock()
+        commit_obj.get_pulls.return_value = []
+        repo.get_commit.return_value = commit_obj
+
         result = client.fetch_commits(repo, SINCE, UNTIL)
         assert len(result) == 1
         assert result[0]["sha"] == "abc123"
         assert result[0]["message"] == "Fix bug"
         assert result[0]["author"] == "user"
         assert result[0]["url"] == "https://github.com/n-yU/my-repo/commit/abc123"
+        assert result[0]["pull_numbers"] == []
+
+    def test_populates_pull_numbers_from_associated_prs(self):
+        client = _make_client()
+
+        mock_commit = MagicMock()
+        mock_commit.sha = "abc123"
+        mock_commit.commit.message = "Squash merge"
+        mock_commit.commit.author.name = "user"
+        mock_commit.commit.author.date = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
+        mock_commit.html_url = "https://github.com/n-yU/my-repo/commit/abc123"
+
+        repo = MagicMock()
+        repo.full_name = "n-yU/my-repo"
+        client.g.search_commits.return_value = [mock_commit]
+
+        commit_obj = MagicMock()
+        pr1 = MagicMock(); pr1.number = 5
+        pr2 = MagicMock(); pr2.number = 9
+        commit_obj.get_pulls.return_value = [pr1, pr2]
+        repo.get_commit.return_value = commit_obj
+
+        result = client.fetch_commits(repo, SINCE, UNTIL)
+        assert result[0]["pull_numbers"] == [5, 9]
+        repo.get_commit.assert_called_once_with("abc123")
 
     def test_uses_author_date_range_query(self):
         client = _make_client()
@@ -135,6 +165,7 @@ class TestFetchCommits:
         repo = MagicMock()
         repo.full_name = "n-yU/my-repo"
         client.g.search_commits.return_value = [in_range, out_of_range]
+        repo.get_commit.return_value.get_pulls.return_value = []
 
         result = client.fetch_commits(repo, SINCE, partial_until)
         assert len(result) == 1
@@ -462,12 +493,6 @@ class TestFetchPullsBackfill:
             [_make_pr_issue(2)],
             [_make_pr_issue(3)],
         ]
-        # Commit derived: #4 (and overlap #1)
-        commit_obj = MagicMock()
-        pr_a = MagicMock(); pr_a.number = 1
-        pr_b = MagicMock(); pr_b.number = 4
-        commit_obj.get_pulls.return_value = [pr_a, pr_b]
-        repo.get_commit.return_value = commit_obj
 
         # Each PR refetch returns a pull whose timestamps are in range
         in_range = datetime(2026, 3, 28, 12, 0, tzinfo=JST)
@@ -475,14 +500,18 @@ class TestFetchPullsBackfill:
             n, created_at=in_range,
         )
 
+        # Commits already carry pull_numbers populated by fetch_commits
         commits = [{"sha": "deadbee", "message": "", "author": "",
-                    "date": in_range.isoformat(), "url": ""}]
+                    "date": in_range.isoformat(), "url": "",
+                    "pull_numbers": [1, 4]}]
         result = client.fetch_pulls(
             repo, SINCE, UNTIL, is_backfill=True, commits=commits,
         )
 
         numbers = sorted(r["number"] for r in result)
         assert numbers == [1, 2, 3, 4]
+        # Hybrid path no longer calls get_commit (data comes from pull_numbers)
+        repo.get_commit.assert_not_called()
 
     def test_post_filters_search_only_pulls_outside_range(self):
         """Search-derived PRs without an in-range event are dropped."""
@@ -511,17 +540,13 @@ class TestFetchPullsBackfill:
         repo.full_name = "n-yU/repo"
 
         client.g.search_issues.side_effect = [[], [], []]
-        commit_obj = MagicMock()
-        pr_x = MagicMock(); pr_x.number = 99
-        commit_obj.get_pulls.return_value = [pr_x]
-        repo.get_commit.return_value = commit_obj
         # PR opened weeks ago, no merged/closed yet
         repo.get_pull.return_value = _make_pull(
             99, created_at=datetime(2026, 3, 1, 0, 0, tzinfo=JST),
         )
 
         commits = [{"sha": "abc", "message": "", "author": "",
-                    "date": "", "url": ""}]
+                    "date": "", "url": "", "pull_numbers": [99]}]
         result = client.fetch_pulls(
             repo, SINCE, UNTIL, is_backfill=True, commits=commits,
         )

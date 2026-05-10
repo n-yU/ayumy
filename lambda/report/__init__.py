@@ -20,6 +20,7 @@ class CommitInfo(TypedDict):
     author: str
     date: str
     url: str
+    pull_numbers: list[int]
 
 
 class SessionCommit(TypedDict):
