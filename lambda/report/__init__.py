@@ -46,6 +46,7 @@ class PullInfo(TypedDict):
     created_at: str
     merged_at: str | None
     closed_at: str | None
+    merge_commit_sha: str | None
 
 
 class IssueInfo(TypedDict):

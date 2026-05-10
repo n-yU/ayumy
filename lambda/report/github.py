@@ -65,8 +65,7 @@ class GitHubClient:
 
         - Uses Search Commits API (author-date range) to cover all branches
         - Search API is date-granular; re-filter against exact since/until
-        - Annotates each commit with PR numbers via
-          GET /repos/.../commits/{sha}/pulls
+        - Annotates each commit with PR numbers via GET /repos/.../commits/{sha}/pulls
 
         Args:
             repo: Target repository
@@ -298,6 +297,21 @@ class GitHubClient:
             logger.warning("Commit %s not found (404), skipping", sha[:7])
             return []
 
+    def populate_commit_pull_numbers(
+        self, repo_name: str, commits: list[CommitInfo],
+    ) -> None:
+        """Resolve pull_numbers in-place for commits without a value.
+
+        Used to enrich session-recovered commits whose PR association
+        cannot be determined from session logs alone
+        """
+        unresolved = [c for c in commits if not c.get("pull_numbers")]
+        if not unresolved:
+            return
+        repo = self.g.get_user().get_repo(repo_name)
+        for c in unresolved:
+            c["pull_numbers"] = self._fetch_pulls_for_commit(repo, c["sha"])
+
     def _fetch_pulls_hybrid(
         self,
         repo: Repository,
@@ -311,8 +325,7 @@ class GitHubClient:
         - Commit-derived numbers are exempt from the date-range filter
           (a commit on the target day proves activity)
         - Session-derived numbers are exempt (session touched the PR)
-        - Reuses pull_numbers populated by fetch_commits to avoid
-          duplicate API calls
+        - Reuses pull_numbers populated by fetch_commits to avoid duplicate API calls
         """
         event_numbers: set[int] = set()
         for event in _PULL_EVENTS:
@@ -402,6 +415,9 @@ def _build_pull_info(pr: PullRequest) -> PullInfo:
         "created_at": pr.created_at.isoformat(),
         "merged_at": pr.merged_at.isoformat() if pr.merged_at else None,
         "closed_at": pr.closed_at.isoformat() if pr.closed_at else None,
+        # GitHub returns a "test merge" SHA for unmerged PRs; only meaningful
+        # when the PR is actually merged
+        "merge_commit_sha": pr.merge_commit_sha if pr.merged_at else None,
     }
 
 
