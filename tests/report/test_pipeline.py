@@ -51,7 +51,9 @@ def _nonempty_activity(repo="my-repo"):
     }]})
     github = GitHubActivity({repo: {
         "commits": [{"message": "Fix bug", "sha": "abc", "author": "user",
-                      "date": "2026-03-28T10:00:00"}],
+                      "date": "2026-03-28T10:00:00",
+                      "url": f"https://github.com/{OWNER}/{repo}/commit/abc",
+                      "pull_numbers": []}],
         "pulls": [], "issues": [],
     }})
     return session, github
@@ -295,9 +297,13 @@ class TestProcessDate:
         }]})
         # GitHub API found one commit with full SHA that overlaps with session
         github = GitHubActivity({"my-repo": {
-            "commits": [{"sha": "abc1234abcdef1234abcdef1234abcdef12345678",
-                         "message": "Existing commit",
-                         "author": "user", "date": "2026-03-28T10:00:00"}],
+            "commits": [{
+                "sha": "abc1234abcdef1234abcdef1234abcdef12345678",
+                "message": "Existing commit",
+                "author": "user", "date": "2026-03-28T10:00:00",
+                "url": f"https://github.com/{OWNER}/my-repo/commit/abc1234",
+                "pull_numbers": [],
+            }],
             "pulls": [], "issues": [],
         }})
         clients["github_client"].fetch_activity.return_value = github
@@ -421,9 +427,13 @@ class TestSessionCommitPullNumbersPopulation:
             {"sha": "def5678", "message": "Squash-lost"},
         ])
         github = GitHubActivity({"my-repo": {
-            "commits": [{"sha": "abc1234abcdef1234abcdef1234abcdef12345678",
-                         "message": "Existing", "author": "user",
-                         "date": "2026-03-28T10:00:00"}],
+            "commits": [{
+                "sha": "abc1234abcdef1234abcdef1234abcdef12345678",
+                "message": "Existing", "author": "user",
+                "date": "2026-03-28T10:00:00",
+                "url": f"https://github.com/{OWNER}/my-repo/commit/abc1234",
+                "pull_numbers": [],
+            }],
             "pulls": [], "issues": [],
         }})
         self.clients["github_client"].fetch_activity.return_value = github
@@ -454,9 +464,13 @@ class TestSessionCommitPullNumbersPopulation:
     def test_skips_populate_when_all_session_commits_overlap_with_search(self):
         session = self._session([{"sha": "abc1234", "message": "Existing"}])
         github = GitHubActivity({"my-repo": {
-            "commits": [{"sha": "abc1234abcdef1234abcdef1234abcdef12345678",
-                         "message": "Existing", "author": "user",
-                         "date": "2026-03-28T10:00:00"}],
+            "commits": [{
+                "sha": "abc1234abcdef1234abcdef1234abcdef12345678",
+                "message": "Existing", "author": "user",
+                "date": "2026-03-28T10:00:00",
+                "url": f"https://github.com/{OWNER}/my-repo/commit/abc1234",
+                "pull_numbers": [],
+            }],
             "pulls": [], "issues": [],
         }})
         self.clients["github_client"].fetch_activity.return_value = github
