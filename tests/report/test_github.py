@@ -481,6 +481,56 @@ class TestFetchPullsForCommit:
             client._fetch_pulls_for_commit(repo, "abc1234")
 
 
+class TestPopulateCommitPullNumbers:
+    def setup_method(self):
+        self.client = _make_client()
+        self.repo = MagicMock()
+        self.client.g.get_user.return_value.get_repo.return_value = self.repo
+
+    def _commit(self, sha, pull_numbers):
+        return {
+            "sha": sha, "message": "m", "author": "u", "date": "...",
+            "url": "...", "pull_numbers": pull_numbers,
+        }
+
+    def test_skips_commits_with_existing_pull_numbers(self):
+        commits = [self._commit("aaa", [3]), self._commit("bbb", [7])]
+        self.client.populate_commit_pull_numbers("repo", commits)
+
+        self.repo.get_commit.assert_not_called()
+        assert commits[0]["pull_numbers"] == [3]
+        assert commits[1]["pull_numbers"] == [7]
+
+    def test_resolves_only_unresolved_commits(self):
+        commit_obj = MagicMock()
+        pr = MagicMock(); pr.number = 11
+        commit_obj.get_pulls.return_value = [pr]
+        self.repo.get_commit.return_value = commit_obj
+
+        commits = [self._commit("aaa", [3]), self._commit("bbb", [])]
+        self.client.populate_commit_pull_numbers("repo", commits)
+
+        self.repo.get_commit.assert_called_once_with("bbb")
+        assert commits[0]["pull_numbers"] == [3]
+        assert commits[1]["pull_numbers"] == [11]
+
+    def test_assigns_empty_list_on_404(self):
+        self.repo.get_commit.side_effect = UnknownObjectException(
+            404, "Not Found", {},
+        )
+
+        commits = [self._commit("aaa", [])]
+        self.client.populate_commit_pull_numbers("repo", commits)
+
+        assert commits[0]["pull_numbers"] == []
+
+    def test_skips_api_call_when_no_unresolved(self):
+        commits = [self._commit("aaa", [3])]
+        self.client.populate_commit_pull_numbers("repo", commits)
+
+        self.client.g.get_user.assert_not_called()
+
+
 class TestFetchPullsBackfill:
     def test_unions_search_events_and_commit_derived_pulls(self):
         client = _make_client()
