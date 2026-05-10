@@ -5,7 +5,7 @@ import time
 from datetime import datetime, timedelta
 from functools import cached_property
 
-from github import Github, UnknownObjectException
+from github import Github, GithubException, UnknownObjectException
 from github.Issue import Issue
 from github.PullRequest import PullRequest
 from github.Repository import Repository
@@ -299,31 +299,41 @@ class GitHubClient:
 
     def populate_commit_pull_numbers(
         self, repo_name: str, commits: list[CommitInfo],
-    ) -> None:
-        """Resolve pull_numbers and normalize SHA in-place.
+    ) -> list[CommitInfo]:
+        """Resolve session-recovered commits and drop cross-repo entries.
 
         - Targets commits whose pull_numbers is unresolved (empty
-          list or missing key)
+          list or missing key); already-resolved commits pass through
         - Replaces short SHA with the full 40-char form (and updates
           the matching URL) so downstream equality checks (e.g.,
           merge_commit_sha) work uniformly
-        - Used to enrich session-recovered commits whose PR association
-          cannot be determined from session logs alone
+        - Drops commits the repo cannot resolve (404 / 422), which
+          typically indicates the commit was made against a different
+          repo touched during the same session
         """
-        unresolved = [c for c in commits if not c.get("pull_numbers")]
-        if not unresolved:
-            return
+        if not any(not c.get("pull_numbers") for c in commits):
+            return commits
         repo = self.g.get_user().get_repo(repo_name)
-        for c in unresolved:
+        result: list[CommitInfo] = []
+        for c in commits:
+            if c.get("pull_numbers"):
+                result.append(c)
+                continue
             try:
                 commit = repo.get_commit(c["sha"])
-            except UnknownObjectException:
-                logger.warning("Commit %s not found (404), skipping", c["sha"][:7])
-                c["pull_numbers"] = []
+            except GithubException as e:
+                if e.status not in (404, 422):
+                    raise
+                logger.warning(
+                    "Commit %s not in %s (%s), dropping as cross-repo",
+                    c["sha"][:7], repo_name, e.status,
+                )
                 continue
             c["sha"] = commit.sha
             c["url"] = commit.html_url
             c["pull_numbers"] = [pr.number for pr in commit.get_pulls()]
+            result.append(c)
+        return result
 
     def _fetch_pulls_hybrid(
         self,

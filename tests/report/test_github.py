@@ -4,7 +4,7 @@ from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
-from github import UnknownObjectException
+from github import GithubException, UnknownObjectException
 
 from report import JST
 from report.github import GitHubClient, _SEARCH_BATCH, _SEARCH_WINDOW
@@ -493,27 +493,27 @@ class TestPopulateCommitPullNumbers:
             "url": "...", "pull_numbers": pull_numbers,
         }
 
-    def test_skips_commits_with_existing_pull_numbers(self):
+    def test_passes_through_commits_with_existing_pull_numbers(self):
         commits = [self._commit("aaa", [3]), self._commit("bbb", [7])]
-        self.client.populate_commit_pull_numbers("repo", commits)
+        result = self.client.populate_commit_pull_numbers("repo", commits)
 
         self.repo.get_commit.assert_not_called()
-        assert commits[0]["pull_numbers"] == [3]
-        assert commits[1]["pull_numbers"] == [7]
+        assert [c["sha"] for c in result] == ["aaa", "bbb"]
+        assert [c["pull_numbers"] for c in result] == [[3], [7]]
 
     def test_resolves_only_unresolved_commits(self):
         commit_obj = MagicMock()
         commit_obj.sha = "bbb"
+        commit_obj.html_url = "https://github.com/n-yU/repo/commit/bbb"
         pr = MagicMock(); pr.number = 11
         commit_obj.get_pulls.return_value = [pr]
         self.repo.get_commit.return_value = commit_obj
 
         commits = [self._commit("aaa", [3]), self._commit("bbb", [])]
-        self.client.populate_commit_pull_numbers("repo", commits)
+        result = self.client.populate_commit_pull_numbers("repo", commits)
 
         self.repo.get_commit.assert_called_once_with("bbb")
-        assert commits[0]["pull_numbers"] == [3]
-        assert commits[1]["pull_numbers"] == [11]
+        assert [c["pull_numbers"] for c in result] == [[3], [11]]
 
     def test_normalizes_short_sha_to_full(self):
         full_sha = "bbb2222abcdef1234abcdef1234abcdef12345678"
@@ -525,27 +525,47 @@ class TestPopulateCommitPullNumbers:
         self.repo.get_commit.return_value = commit_obj
 
         commits = [self._commit("bbb2222", [])]
-        self.client.populate_commit_pull_numbers("repo", commits)
+        result = self.client.populate_commit_pull_numbers("repo", commits)
 
         self.repo.get_commit.assert_called_once_with("bbb2222")
-        assert commits[0]["sha"] == full_sha
-        assert commits[0]["url"] == full_url
+        assert result[0]["sha"] == full_sha
+        assert result[0]["url"] == full_url
 
-    def test_assigns_empty_list_on_404(self):
+    def test_drops_cross_repo_commit_on_404(self):
         self.repo.get_commit.side_effect = UnknownObjectException(
             404, "Not Found", {},
         )
 
         commits = [self._commit("aaa", [])]
-        self.client.populate_commit_pull_numbers("repo", commits)
+        result = self.client.populate_commit_pull_numbers("repo", commits)
 
-        assert commits[0]["pull_numbers"] == []
+        assert result == []
+
+    def test_drops_cross_repo_commit_on_422(self):
+        self.repo.get_commit.side_effect = GithubException(
+            422, {"message": "No commit found for SHA: aaa"}, {},
+        )
+
+        commits = [self._commit("aaa", [])]
+        result = self.client.populate_commit_pull_numbers("repo", commits)
+
+        assert result == []
+
+    def test_propagates_other_github_errors(self):
+        self.repo.get_commit.side_effect = GithubException(
+            500, {"message": "server error"}, {},
+        )
+
+        commits = [self._commit("aaa", [])]
+        with pytest.raises(GithubException):
+            self.client.populate_commit_pull_numbers("repo", commits)
 
     def test_skips_api_call_when_no_unresolved(self):
         commits = [self._commit("aaa", [3])]
-        self.client.populate_commit_pull_numbers("repo", commits)
+        result = self.client.populate_commit_pull_numbers("repo", commits)
 
         self.client.g.get_user.assert_not_called()
+        assert result == commits
 
 
 class TestFetchPullsBackfill:
