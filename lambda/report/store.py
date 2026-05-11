@@ -84,13 +84,15 @@ def _effective_cwd(command: str, project_cwd: str | None) -> str | None:
     """Return the effective cwd of a Bash command, or None for project cwd.
 
     Only the leading `cd <path> && ...` form is recognized; subshells,
-    pushd, and other variants are treated as project cwd.
+    pushd, `cd -`, and other variants are treated as project cwd.
     """
     try:
         tokens = shlex.split(command, posix=True)
     except ValueError:
         return None
-    if len(tokens) < 2 or tokens[0] != "cd":
+    if len(tokens) < 3 or tokens[0] != "cd" or tokens[2] != "&&":
+        return None
+    if tokens[1] == "-":
         return None
     target = _expand_home(tokens[1], project_cwd)
     p = PurePosixPath(target)

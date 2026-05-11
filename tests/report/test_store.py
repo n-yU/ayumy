@@ -99,6 +99,21 @@ class TestEffectiveCwd:
     def test_returns_none_for_quoted_cd_in_subshell(self):
         assert _effective_cwd("( cd /other && git commit )", "/proj") is None
 
+    def test_returns_none_for_cd_without_chain(self):
+        # `cd <path>` alone is not followed by an `&&` chained command;
+        # treat as project cwd to avoid mis-tagging unrelated tool uses
+        assert _effective_cwd("cd /other", "/proj") is None
+
+    def test_returns_none_for_cd_dash(self):
+        # `cd -` points to the previous directory which is not derivable
+        # from the session log
+        assert _effective_cwd("cd - && git commit", "/proj") is None
+
+    def test_returns_none_when_separator_is_not_amp_amp(self):
+        # `cd <path>; ...` and `cd <path> | ...` are out of recognized scope
+        assert _effective_cwd("cd /other; git commit", "/proj") is None
+        assert _effective_cwd("cd /other | tee log", "/proj") is None
+
 
 class TestIsCrossRepo:
     def test_false_when_project_cwd_unknown(self):
