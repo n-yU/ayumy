@@ -5,7 +5,7 @@ import time
 from datetime import datetime, timedelta
 from functools import cached_property
 
-from github import Github, UnknownObjectException
+from github import Github, GithubException, UnknownObjectException
 from github.Issue import Issue
 from github.PullRequest import PullRequest
 from github.Repository import Repository
@@ -306,8 +306,10 @@ class GitHubClient:
 
         Cross-repo commits are filtered upstream by session ingest
         (cwd-based gate in store.py), so this method assumes every
-        commit belongs to repo_name. A 404 is still tolerated as a
-        safety net for force-deleted SHAs.
+        commit belongs to repo_name. 404 and 422 are tolerated as
+        safety nets for force-deleted SHAs and ambiguous short SHAs
+        respectively so a single missing commit does not abort the
+        whole report.
         """
         unresolved = [c for c in commits if not c.get("pull_numbers")]
         if not unresolved:
@@ -316,8 +318,13 @@ class GitHubClient:
         for c in unresolved:
             try:
                 commit = repo.get_commit(c["sha"])
-            except UnknownObjectException:
-                logger.warning("Commit %s not found (404), skipping", c["sha"][:7])
+            except GithubException as e:
+                if e.status not in (404, 422):
+                    raise
+                logger.warning(
+                    "Commit %s lookup failed (%s), skipping",
+                    c["sha"][:7], e.status,
+                )
                 c["pull_numbers"] = []
                 continue
             c["sha"] = commit.sha

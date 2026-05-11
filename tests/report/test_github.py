@@ -4,7 +4,7 @@ from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
-from github import UnknownObjectException
+from github import GithubException, UnknownObjectException
 
 from report import JST
 from report.github import GitHubClient, _SEARCH_BATCH, _SEARCH_WINDOW
@@ -541,6 +541,27 @@ class TestPopulateCommitPullNumbers:
         self.client.populate_commit_pull_numbers("repo", commits)
 
         assert commits[0]["pull_numbers"] == []
+
+    def test_assigns_empty_list_on_422(self):
+        # Short SHA ambiguity / not-found is reported as 422 by
+        # GET /commits/{sha}
+        self.repo.get_commit.side_effect = GithubException(
+            422, {"message": "No commit found for SHA: aaa"}, {},
+        )
+
+        commits = [self._commit("aaa", [])]
+        self.client.populate_commit_pull_numbers("repo", commits)
+
+        assert commits[0]["pull_numbers"] == []
+
+    def test_propagates_other_github_errors(self):
+        self.repo.get_commit.side_effect = GithubException(
+            500, {"message": "server error"}, {},
+        )
+
+        commits = [self._commit("aaa", [])]
+        with pytest.raises(GithubException):
+            self.client.populate_commit_pull_numbers("repo", commits)
 
     def test_skips_api_call_when_no_unresolved(self):
         commits = [self._commit("aaa", [3])]
