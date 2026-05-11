@@ -4,7 +4,13 @@ import json
 from datetime import date
 from unittest.mock import MagicMock, patch
 
-from report.store import SessionStore, _extract_pr_issue_refs
+from report.store import (
+    SessionStore,
+    _effective_cwd,
+    _expand_home,
+    _extract_pr_issue_refs,
+    _is_cross_repo,
+)
 
 
 def _make_store():
@@ -32,6 +38,83 @@ def _s3_body(text: str):
 def _jsonl_lines(*entries):
     """Build a JSONL string from entry dicts."""
     return "\n".join(json.dumps(e) for e in entries)
+
+
+class TestExpandHome:
+    def test_returns_path_unchanged_when_no_tilde(self):
+        assert _expand_home("/abs/path", "/Users/foo/proj") == "/abs/path"
+        assert _expand_home("relative", "/Users/foo/proj") == "relative"
+
+    def test_expands_against_users_prefix(self):
+        assert (
+            _expand_home("~/Documents/x", "/Users/alice/proj")
+            == "/Users/alice/Documents/x"
+        )
+
+    def test_expands_against_home_prefix(self):
+        assert (
+            _expand_home("~/work/x", "/home/bob/proj")
+            == "/home/bob/work/x"
+        )
+
+    def test_falls_back_when_project_cwd_unknown(self, monkeypatch):
+        monkeypatch.setenv("HOME", "/tmp/fakehome")
+        assert _expand_home("~/foo", None) == "/tmp/fakehome/foo"
+
+    def test_falls_back_for_atypical_project_cwd(self, monkeypatch):
+        monkeypatch.setenv("HOME", "/tmp/fakehome")
+        assert _expand_home("~/foo", "/srv/app") == "/tmp/fakehome/foo"
+
+
+class TestEffectiveCwd:
+    def test_returns_none_when_no_cd(self):
+        assert _effective_cwd("git commit -m x", "/proj") is None
+
+    def test_returns_none_for_unparseable_command(self):
+        assert _effective_cwd('echo "unterminated', "/proj") is None
+
+    def test_resolves_absolute_cd(self):
+        assert (
+            _effective_cwd("cd /Users/a/other && git commit", "/Users/a/proj")
+            == "/Users/a/other"
+        )
+
+    def test_resolves_relative_cd_against_project_cwd(self):
+        assert (
+            _effective_cwd("cd ../other && git commit", "/Users/a/proj")
+            == "/Users/a/other"
+        )
+
+    def test_resolves_tilde_cd_against_inferred_home(self):
+        assert (
+            _effective_cwd("cd ~/work && git commit", "/Users/a/proj")
+            == "/Users/a/work"
+        )
+
+    def test_returns_none_when_cd_is_not_leading(self):
+        # Only the leading `cd` is recognized; subshells / chained-then-cd
+        # are intentionally out of scope
+        assert _effective_cwd("ls && cd /other && git commit", "/proj") is None
+
+    def test_returns_none_for_quoted_cd_in_subshell(self):
+        assert _effective_cwd("( cd /other && git commit )", "/proj") is None
+
+
+class TestIsCrossRepo:
+    def test_false_when_project_cwd_unknown(self):
+        assert _is_cross_repo("/anywhere", None) is False
+
+    def test_false_when_effective_cwd_is_none(self):
+        assert _is_cross_repo(None, "/Users/a/proj") is False
+
+    def test_false_when_within_project(self):
+        assert _is_cross_repo("/Users/a/proj", "/Users/a/proj") is False
+        assert _is_cross_repo("/Users/a/proj/sub", "/Users/a/proj") is False
+
+    def test_true_when_outside_project(self):
+        assert _is_cross_repo("/Users/a/other", "/Users/a/proj") is True
+        # Same parent path prefix but not a descendant
+        assert _is_cross_repo("/Users/a/project2", "/Users/a/project") is True
 
 
 class TestExtractPrIssueRefs:
@@ -600,6 +683,127 @@ class TestBuildItems:
 
         assert items == []
         assert keys == []
+
+
+class TestBuildItemsCwdFilter:
+    """`cd <path>` to another repo must drop both commits and refs."""
+
+    def setup_method(self):
+        self.store = _make_store()
+        self.client = _make_session_client()
+        self.client.list_session_objects.return_value = [
+            {"Key": "claude-sessions/proj/s1.jsonl"},
+        ]
+        self.client.read_repo_name.return_value = "repo"
+
+    def _run(self, *entries):
+        self.client.s3.get_object.return_value = _s3_body(_jsonl_lines(*entries))
+        items, _ = self.store._build_items(self.client)
+        return items
+
+    def test_drops_commit_after_cd_to_other_repo(self):
+        items = self._run(
+            {
+                "type": "user",
+                "cwd": "/Users/a/proj",
+                "timestamp": "2026-03-28T10:00:00+09:00",
+                "message": {"content": "work"},
+            },
+            {
+                "type": "assistant",
+                "cwd": "/Users/a/proj",
+                "timestamp": "2026-03-28T10:01:00+09:00",
+                "message": {"content": [{
+                    "type": "tool_use", "id": "tu_x", "name": "Bash",
+                    "input": {"command": "cd ~/other && git commit -m x"},
+                }]},
+            },
+            {
+                "type": "user",
+                "cwd": "/Users/a/proj",
+                "timestamp": "2026-03-28T10:02:00+09:00",
+                "message": {"content": [{
+                    "type": "tool_result", "tool_use_id": "tu_x",
+                    "content": "[main abc1234] cross-repo commit\n 1 file",
+                    "is_error": False,
+                }]},
+            },
+        )
+        assert items[0]["session_commits"] == []
+
+    def test_keeps_commit_within_project_cwd(self):
+        items = self._run(
+            {
+                "type": "user",
+                "cwd": "/Users/a/proj",
+                "timestamp": "2026-03-28T10:00:00+09:00",
+                "message": {"content": "work"},
+            },
+            {
+                "type": "assistant",
+                "cwd": "/Users/a/proj",
+                "timestamp": "2026-03-28T10:01:00+09:00",
+                "message": {"content": [{
+                    "type": "tool_use", "id": "tu_x", "name": "Bash",
+                    "input": {"command": "git commit -m x"},
+                }]},
+            },
+            {
+                "type": "user",
+                "cwd": "/Users/a/proj",
+                "timestamp": "2026-03-28T10:02:00+09:00",
+                "message": {"content": [{
+                    "type": "tool_result", "tool_use_id": "tu_x",
+                    "content": "[main abc1234] in-repo commit\n 1 file",
+                    "is_error": False,
+                }]},
+            },
+        )
+        assert items[0]["session_commits"] == [{
+            "sha": "abc1234", "message": "in-repo commit",
+            "timestamp": "2026-03-28T10:02:00+09:00",
+        }]
+
+    def test_drops_refs_after_cd_to_other_repo(self):
+        items = self._run(
+            {
+                "type": "user",
+                "cwd": "/Users/a/proj",
+                "timestamp": "2026-03-28T10:00:00+09:00",
+                "message": {"content": "work"},
+            },
+            {
+                "type": "assistant",
+                "cwd": "/Users/a/proj",
+                "timestamp": "2026-03-28T10:01:00+09:00",
+                "message": {"content": [{
+                    "type": "tool_use", "id": "tu_x", "name": "Bash",
+                    "input": {"command": "cd ~/other && gh pr view 99"},
+                }]},
+            },
+        )
+        assert items[0]["session_pulls"] == []
+
+    def test_does_not_filter_when_project_cwd_missing(self):
+        # No entry exposes cwd; the filter must stay disabled so legacy
+        # sessions without cwd still record commits
+        items = self._run(
+            {
+                "type": "user",
+                "timestamp": "2026-03-28T10:00:00+09:00",
+                "message": {"content": "work"},
+            },
+            {
+                "type": "user",
+                "timestamp": "2026-03-28T10:02:00+09:00",
+                "message": {"content": [{
+                    "type": "tool_result", "tool_use_id": "tu_x",
+                    "content": "[main abc1234] no cwd info\n 1 file",
+                    "is_error": False,
+                }]},
+            },
+        )
+        assert len(items[0]["session_commits"]) == 1
 
 
 class TestWriteItems:
