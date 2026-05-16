@@ -120,6 +120,13 @@ class TestEffectiveCwd:
         assert _effective_cwd("cd /other; git commit", "/proj") is None
         assert _effective_cwd("cd /other | tee log", "/proj") is None
 
+    def test_resolves_cd_with_unspaced_amp_amp(self):
+        # Bash allows `&&` without surrounding whitespace; shlex does not
+        # split on it, so the implementation normalizes spacing first
+        assert _effective_cwd("cd /other&&git commit", "/proj") == "/other"
+        assert _effective_cwd("cd /other &&git commit", "/proj") == "/other"
+        assert _effective_cwd("cd /other&& git commit", "/proj") == "/other"
+
 
 class TestIsCrossRepo:
     def test_false_when_project_cwd_unknown(self):

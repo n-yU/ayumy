@@ -87,7 +87,9 @@ def _effective_cwd(command: str, project_cwd: str | None) -> str | None:
     pushd, `cd -`, and other variants are treated as project cwd.
     """
     try:
-        tokens = shlex.split(command, posix=True)
+        # shlex does not treat `&&` as an operator, so normalize spacing
+        # to recognize forms like `cd /path&&git ...`.
+        tokens = shlex.split(command.replace("&&", " && "), posix=True)
     except ValueError:
         return None
     if len(tokens) < 3 or tokens[0] != "cd" or tokens[2] != "&&":
