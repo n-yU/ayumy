@@ -254,10 +254,14 @@ class SessionStore:
                     logger.warning("Skipping malformed line in %s", key)
                     continue
 
-                if project_cwd is None:
-                    entry_cwd = entry.get("cwd")
-                    if isinstance(entry_cwd, str) and entry_cwd:
-                        project_cwd = entry_cwd
+                entry_cwd_raw = entry.get("cwd")
+                entry_cwd = (
+                    entry_cwd_raw
+                    if isinstance(entry_cwd_raw, str) and entry_cwd_raw
+                    else None
+                )
+                if project_cwd is None and entry_cwd:
+                    project_cwd = entry_cwd
 
                 timestamp = entry.get("timestamp")
                 if not timestamp:
@@ -302,7 +306,11 @@ class SessionStore:
                         command = block.get("input", {}).get("command", "")
                         if not isinstance(command, str) or not command:
                             continue
-                        cwd = _effective_cwd(command, project_cwd)
+                        cwd = _effective_cwd(command, entry_cwd or project_cwd)
+                        if cwd is None:
+                            # No leading `cd`; the command runs in the entry's
+                            # recorded cwd, which may itself be outside project.
+                            cwd = entry_cwd
                         tool_use_id = block.get("id")
                         if tool_use_id:
                             tool_use_cwds[tool_use_id] = cwd

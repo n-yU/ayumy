@@ -842,6 +842,38 @@ class TestBuildItemsCwdFilter:
         )
         assert len(items[0]["session_commits"]) == 1
 
+    def test_drops_commit_when_entry_cwd_is_outside_project(self):
+        # project_cwd is fixed by the first entry; a later assistant entry
+        # with cwd outside project must drop commits even without a leading `cd`
+        items = self._run(
+            {
+                "type": "user",
+                "cwd": "/Users/a/proj",
+                "timestamp": "2026-03-28T10:00:00+09:00",
+                "message": {"content": "work"},
+            },
+            {
+                "type": "assistant",
+                "cwd": "/Users/a/other",
+                "timestamp": "2026-03-28T10:01:00+09:00",
+                "message": {"content": [{
+                    "type": "tool_use", "id": "tu_x", "name": "Bash",
+                    "input": {"command": "git commit -m x"},
+                }]},
+            },
+            {
+                "type": "user",
+                "cwd": "/Users/a/other",
+                "timestamp": "2026-03-28T10:02:00+09:00",
+                "message": {"content": [{
+                    "type": "tool_result", "tool_use_id": "tu_x",
+                    "content": "[main abc1234] outside cwd\n 1 file",
+                    "is_error": False,
+                }]},
+            },
+        )
+        assert items[0]["session_commits"] == []
+
 
 class TestWriteItems:
     def test_uses_update_item(self):
