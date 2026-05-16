@@ -81,11 +81,7 @@ def _expand_home(path: str, project_cwd: str | None) -> str:
 
 
 def _effective_cwd(command: str, project_cwd: str | None) -> str | None:
-    """Return the effective cwd of a Bash command, or None for project cwd.
-
-    Only the leading `cd <path> && ...` form is recognized; subshells,
-    pushd, `cd -`, and other variants are treated as project cwd.
-    """
+    """Return the inferred cwd of a Bash command, or None if not inferable."""
     try:
         # shlex does not treat `&&` as an operator, so normalize spacing
         # to recognize forms like `cd /path&&git ...`.
