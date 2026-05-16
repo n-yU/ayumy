@@ -65,6 +65,12 @@ class TestExpandHome:
         monkeypatch.setenv("HOME", "/tmp/fakehome")
         assert _expand_home("~/foo", "/srv/app") == "/tmp/fakehome/foo"
 
+    def test_does_not_expand_named_user_tilde(self):
+        assert _expand_home("~bob/work", "/Users/alice/proj") == "~bob/work"
+
+    def test_expands_bare_tilde(self):
+        assert _expand_home("~", "/Users/alice/proj") == "/Users/alice"
+
 
 class TestEffectiveCwd:
     def test_returns_none_when_no_cd(self):

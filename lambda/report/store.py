@@ -70,7 +70,7 @@ def _expand_home(path: str, project_cwd: str | None) -> str:
     Lambda's runtime user differs from the session author, so
     Path.expanduser would resolve to the wrong home.
     """
-    if not path.startswith("~"):
+    if path != "~" and not path.startswith("~/"):
         return path
     if project_cwd:
         parts = PurePosixPath(project_cwd).parts
