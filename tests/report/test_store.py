@@ -136,6 +136,20 @@ class TestEffectiveCwd:
         assert result is not None
         assert _is_cross_repo(result, "/Users/alice/proj") is True
 
+    def test_shell_expansion_classified_as_cross_repo(self):
+        # Variable expansions and command substitutions cannot be resolved
+        # from the session log; treat as cross-repo rather than joining
+        # under project_cwd
+        proj = "/Users/alice/proj"
+        for cmd in (
+            "cd $OTHER_REPO && git commit",
+            "cd ${OTHER_REPO}/sub && git commit",
+            "cd $(pwd)/.. && git commit",
+        ):
+            result = _effective_cwd(cmd, proj)
+            assert result is not None, cmd
+            assert _is_cross_repo(result, proj) is True, cmd
+
 
 class TestIsCrossRepo:
     def test_false_when_project_cwd_unknown(self):

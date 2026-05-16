@@ -96,9 +96,9 @@ def _effective_cwd(command: str, project_cwd: str | None) -> str | None:
     target = _expand_home(raw, project_cwd)
     p = PurePosixPath(target)
     if not p.is_absolute():
-        if raw.startswith("~"):
-            # `~user/...` cannot be resolved from the session log; return as
-            # absolute so it is classified as cross-repo, not joined under project_cwd.
+        if raw.startswith("~") or "$" in raw or "`" in raw:
+            # `~user/...` and shell expansions cannot be resolved from the
+            # session log; classify as cross-repo instead of joining under project_cwd.
             return normpath("/" + raw)
         if project_cwd:
             p = PurePosixPath(project_cwd) / p
