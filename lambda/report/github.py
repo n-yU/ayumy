@@ -322,7 +322,8 @@ class GitHubClient:
                 if e.status not in (404, 422):
                     raise
                 logger.warning(
-                    "Commit %s lookup failed (%s), skipping",
+                    "Commit %s lookup failed (%s); keeping commit but "
+                    "skipping PR association",
                     c["sha"][:7], e.status,
                 )
                 c["pull_numbers"] = []
