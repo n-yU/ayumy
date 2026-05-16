@@ -128,12 +128,15 @@ JSONL の各エントリは以下の構造を持つ（Claude Code が生成す�
 |---|---|---|
 | `type` | String | ブロック種別（`"text"`, `"tool_use"` 等） |
 | `name` | String | `type=tool_use` の場合のツール名 |
+| `id` | String | `type=tool_use` の識別子。後続の `type=user` ブロックの `tool_use_id` から参照され、tool_use と tool_result を突き合わせる |
+| `input.command` | String | `name="Bash"` の場合の実行コマンド文字列。冒頭の `cd <path>` を解釈して per-tool_use の effective cwd を求める（§5.3） |
 
 `type=user` の `message.content` がリストの場合のブロック:
 
 | フィールド | 型 | 説明 |
 |---|---|---|
 | `type` | String | ブロック種別（`"tool_result"` 等） |
+| `tool_use_id` | String | 対応する assistant の `tool_use.id`。cross-repo 判定で対応する tool_use の effective cwd を引くために使う（§5.3） |
 | `content` | String | ツール実行結果のテキスト |
 | `is_error` | Boolean | エラー結果かどうか |
 
