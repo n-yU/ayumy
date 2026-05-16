@@ -96,10 +96,16 @@ def _effective_cwd(command: str, project_cwd: str | None) -> str | None:
         return None
     if tokens[1] == "-":
         return None
-    target = _expand_home(tokens[1], project_cwd)
+    raw = tokens[1]
+    target = _expand_home(raw, project_cwd)
     p = PurePosixPath(target)
-    if not p.is_absolute() and project_cwd:
-        p = PurePosixPath(project_cwd) / p
+    if not p.is_absolute():
+        if raw.startswith("~"):
+            # `~user/...` cannot be resolved from the session log; return as
+            # absolute so it is classified as cross-repo, not joined under project_cwd.
+            return normpath("/" + raw)
+        if project_cwd:
+            p = PurePosixPath(project_cwd) / p
     # normpath collapses `..` / `.` segments without touching the filesystem
     return normpath(str(p))
 

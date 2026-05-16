@@ -127,6 +127,15 @@ class TestEffectiveCwd:
         assert _effective_cwd("cd /other &&git commit", "/proj") == "/other"
         assert _effective_cwd("cd /other&& git commit", "/proj") == "/other"
 
+    def test_named_user_tilde_classified_as_cross_repo(self):
+        # `~bob/work` cannot be resolved from the session log; should be
+        # returned as absolute so _is_cross_repo flags it as outside project
+        result = _effective_cwd(
+            "cd ~bob/work && git commit", "/Users/alice/proj",
+        )
+        assert result is not None
+        assert _is_cross_repo(result, "/Users/alice/proj") is True
+
 
 class TestIsCrossRepo:
     def test_false_when_project_cwd_unknown(self):
