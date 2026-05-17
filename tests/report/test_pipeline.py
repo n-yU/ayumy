@@ -7,6 +7,7 @@ import pytest
 
 from report import GitHubActivity, JST, SessionActivity
 from report.pipeline import MAX_BACKFILL, process_date, run
+from report.summarizer import ValidationResult
 
 OWNER = "n-yU"
 
@@ -62,6 +63,9 @@ def _nonempty_activity(repo="my-repo"):
 class TestProcessDate:
     def setup_method(self):
         self.clients = _make_clients()
+        # Default to a clean ValidationResult so notify_validation_errors is
+        # only triggered when a test explicitly sets a truthy result.
+        self.clients["summary_client"].validate_report.return_value = ValidationResult()
 
     def test_skips_when_no_activity(self):
         session, github = _empty_activity()
@@ -72,6 +76,7 @@ class TestProcessDate:
         self.clients["summary_client"].generate_summary.assert_not_called()
         self.clients["notion_client"].create_report_pages.assert_not_called()
         self.clients["slack_client"].notify.assert_not_called()
+        self.clients["slack_client"].notify_validation_errors.assert_not_called()
         self.clients["slack_client"].notify_no_activity.assert_called_once_with(SINCE)
 
     def test_generates_report_and_publishes(self):
@@ -91,6 +96,7 @@ class TestProcessDate:
         self.clients["summary_client"].generate_summary.assert_called_once()
         self.clients["notion_client"].create_report_pages.assert_called_once()
         self.clients["slack_client"].notify.assert_called_once()
+        self.clients["slack_client"].notify_validation_errors.assert_not_called()
 
         # Verify the (target_date, SINCE, UNTIL) trio is passed in order
         notion_args = self.clients["notion_client"].create_report_pages.call_args[0]
@@ -106,6 +112,9 @@ class TestProcessDate:
             "name": "repo", "summary": [], "tags": ["BadTag"],
         }])
         self.clients["summary_client"].generate_summary.return_value = report
+        invalid = ValidationResult()
+        invalid.invalid_tags = {"repo": ["BadTag"]}
+        self.clients["summary_client"].validate_report.return_value = invalid
         self.clients["notion_client"].create_report_pages.return_value = []
 
         process_date(SINCE, UNTIL, session, **self.clients)
