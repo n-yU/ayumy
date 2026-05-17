@@ -31,7 +31,6 @@ def process_date(
     notion_client: NotionClient,
     summary_client: SummaryClient,
     slack_client: SlackClient,
-    allowed_tags: list[str],
     *,
     is_backfill: bool = False,
 ) -> None:
@@ -43,9 +42,9 @@ def process_date(
         session_activity: Pre-fetched session data from DynamoDB
         github_client: GitHub API client
         notion_client: Notion API client
-        summary_client: Claude API summarizer client
+        summary_client: Claude API summarizer client (already configured
+            with the tag allowlist)
         slack_client: Slack notification client
-        allowed_tags: Valid tag names from Notion DB
         is_backfill: If True, use the Hybrid PR/Issue fetch path
     """
     logger.info("Processing: %s ~ %s", since.isoformat(), until.isoformat())
@@ -119,10 +118,9 @@ def process_date(
 
     report = summary_client.generate_summary(
         since, github_activity.format(), session_activity.format(),
-        allowed_tags,
     )
 
-    validation = SummaryClient.validate_report(report, allowed_tags)
+    validation = summary_client.validate_report(report)
     if validation:
         slack_client.notify_validation_errors(since, validation)
 
@@ -203,7 +201,9 @@ def run(
             require_env("NOTION_SECRET"), require_env("NOTION_DATABASE_ID"),
         )
         allowed_tags = notion_client.fetch_allowlists()
-        summary_client = SummaryClient(require_env("ANTHROPIC_API_KEY"))
+        summary_client = SummaryClient(
+            require_env("ANTHROPIC_API_KEY"), allowed_tags,
+        )
 
         errors: list[Exception] = []
         for d in process_dates:
@@ -218,7 +218,6 @@ def run(
                     day_since, day_until, session_activity,
                     github_client, notion_client,
                     summary_client, slack_client,
-                    allowed_tags,
                     is_backfill=date_str in backfill_set,
                 )
                 store.mark_reported(date_str)

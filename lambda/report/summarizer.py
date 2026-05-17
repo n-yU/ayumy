@@ -64,25 +64,20 @@ class ValidationResult:
 class SummaryClient:
     """Client for generating daily report summaries via Claude API."""
 
-    def __init__(self, api_key: str) -> None:
-        """Initialize the client with an Anthropic API key.
+    def __init__(self, api_key: str, allowed_tags: list[str]) -> None:
+        """Initialize the client with an Anthropic API key and tag allowlist.
 
         Args:
             api_key: Anthropic API key
+            allowed_tags: Allowed tag names from Notion DB. Held for the
+                lifetime of the client; not refreshed mid-run
         """
         self.client = anthropic.Anthropic(api_key=api_key)
+        self.allowed_tags = allowed_tags
 
-    @staticmethod
-    def _build_system_prompt(allowed_tags: list[str]) -> str:
-        """Build the system prompt with dynamic tag list.
-
-        Args:
-            allowed_tags: Allowed tag names from Notion DB
-
-        Returns:
-            A formatted system prompt string
-        """
-        tags = "\n".join(f"- {tag}" for tag in allowed_tags)
+    def _build_system_prompt(self) -> str:
+        """Build the system prompt with dynamic tag list."""
+        tags = "\n".join(f"- {tag}" for tag in self.allowed_tags)
         return _SYSTEM_PROMPT_TEMPLATE.format(tags=tags)
 
     def build_prompt(
@@ -115,15 +110,8 @@ class SummaryClient:
         target_date: datetime,
         formatted_github: str,
         formatted_sessions: str,
-        allowed_tags: list[str],
     ) -> ReportSummary:
         """Generate a structured summary using Claude API.
-
-        Args:
-            target_date: The target date for the report
-            formatted_github: Formatted GitHub activity text
-            formatted_sessions: Formatted Claude Code session text
-            allowed_tags: Allowed tag names from Notion DB
 
         Returns:
             A ReportSummary dict with summary and per-repository details
@@ -132,7 +120,7 @@ class SummaryClient:
             ValueError: If Claude API response cannot be parsed as JSON
         """
         prompt = self.build_prompt(target_date, formatted_github, formatted_sessions)
-        system_prompt = self._build_system_prompt(allowed_tags)
+        system_prompt = self._build_system_prompt()
 
         message = self.client.messages.create(
             model=MODEL,
@@ -157,11 +145,7 @@ class SummaryClient:
                 f"Response (truncated): {response_text[:500]}"
             ) from e
 
-    @staticmethod
-    def validate_report(
-        report: ReportSummary,
-        allowed_tags: list[str],
-    ) -> ValidationResult:
+    def validate_report(self, report: ReportSummary) -> ValidationResult:
         """Validate and fix tags in a report against the allowlist.
 
         Removes invalid tags from each repository. Mutates the report
@@ -169,13 +153,12 @@ class SummaryClient:
 
         Args:
             report: Report to validate (mutated in place)
-            allowed_tags: Allowed tag names
 
         Returns:
             A ValidationResult with any invalid values found
         """
         result = ValidationResult()
-        tag_set = set(allowed_tags)
+        tag_set = set(self.allowed_tags)
 
         for repo in report["repositories"]:
             name = repo["name"]
