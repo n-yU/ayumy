@@ -1,9 +1,12 @@
 """Tests for SummaryClient pure logic."""
 
 from datetime import datetime
+from unittest.mock import MagicMock
+
+import pytest
 
 from report import JST
-from report.summarizer import SummaryClient, ValidationResult
+from report.summarizer import TOOL_NAME, SummaryClient, ValidationResult
 
 
 def _make_client(allowed_tags: list[str]) -> SummaryClient:
@@ -60,6 +63,34 @@ class TestValidateReport:
         assert result
         assert result.invalid_tags == {"repo": ["InvalidTag"]}
         assert report["repositories"][0]["tags"] == ["CI/CD"]
+
+
+class TestGenerateSummary:
+    def setup_method(self):
+        self.client = _make_client(["CI/CD"])
+        self.client.client = MagicMock()
+        self.target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+
+    def _set_response(self, blocks):
+        self.client.client.messages.create.return_value = MagicMock(content=blocks)
+
+    def test_returns_input_from_tool_use_block(self):
+        report = {"repositories": [{"name": "r", "summary": ["s"], "tags": ["CI/CD"]}]}
+        tool_use = MagicMock(type="tool_use", input=report)
+        tool_use.name = TOOL_NAME  # `name` kwarg on MagicMock sets the mock label, not attr
+        text_block = MagicMock(type="text")
+        self._set_response([text_block, tool_use])
+
+        result = self.client.generate_summary(self.target, "gh", "sess")
+
+        assert result == report
+
+    def test_raises_when_no_tool_use_block(self):
+        text_block = MagicMock(type="text")
+        self._set_response([text_block])
+
+        with pytest.raises(ValueError, match=TOOL_NAME):
+            self.client.generate_summary(self.target, "gh", "sess")
 
 
 class TestValidationResult:
