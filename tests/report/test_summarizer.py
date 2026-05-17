@@ -13,12 +13,12 @@ def _make_client(allowed_tags: list[str]) -> SummaryClient:
     return client
 
 
-class TestBuildSystemPrompt:
-    def test_includes_tags(self):
+class TestBuildToolSchema:
+    def test_enforces_allowed_tags_via_enum(self):
         client = _make_client(["CI/CD", "Testing"])
-        result = client._build_system_prompt()
-        assert "- CI/CD" in result
-        assert "- Testing" in result
+        schema = client._build_tool_schema()
+        repo_props = schema["input_schema"]["properties"]["repositories"]["items"]["properties"]
+        assert repo_props["tags"]["items"]["enum"] == ["CI/CD", "Testing"]
 
 
 class TestBuildPrompt:
