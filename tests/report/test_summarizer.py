@@ -75,7 +75,7 @@ class TestGenerateSummary:
         self.client.client.messages.create.return_value = MagicMock(content=blocks)
 
     def test_returns_input_from_tool_use_block(self):
-        report = {"repositories": [{"name": "r", "summary": ["s"], "tags": ["CI/CD"]}]}
+        report = {"repositories": [{"name": "r", "summary": ["s1", "s2"], "tags": ["CI/CD"]}]}
         tool_use = MagicMock(type="tool_use", input=report)
         tool_use.name = TOOL_NAME  # `name` kwarg on MagicMock sets the mock label, not attr
         text_block = MagicMock(type="text")
