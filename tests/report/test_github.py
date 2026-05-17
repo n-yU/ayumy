@@ -493,13 +493,13 @@ class TestPopulateCommitPullNumbers:
             "url": "...", "pull_numbers": pull_numbers,
         }
 
-    def test_passes_through_commits_with_existing_pull_numbers(self):
+    def test_skips_commits_with_existing_pull_numbers(self):
         commits = [self._commit("aaa", [3]), self._commit("bbb", [7])]
-        result = self.client.populate_commit_pull_numbers("repo", commits)
+        self.client.populate_commit_pull_numbers("repo", commits)
 
         self.repo.get_commit.assert_not_called()
-        assert [c["sha"] for c in result] == ["aaa", "bbb"]
-        assert [c["pull_numbers"] for c in result] == [[3], [7]]
+        assert commits[0]["pull_numbers"] == [3]
+        assert commits[1]["pull_numbers"] == [7]
 
     def test_resolves_only_unresolved_commits(self):
         commit_obj = MagicMock()
@@ -510,10 +510,11 @@ class TestPopulateCommitPullNumbers:
         self.repo.get_commit.return_value = commit_obj
 
         commits = [self._commit("aaa", [3]), self._commit("bbb", [])]
-        result = self.client.populate_commit_pull_numbers("repo", commits)
+        self.client.populate_commit_pull_numbers("repo", commits)
 
         self.repo.get_commit.assert_called_once_with("bbb")
-        assert [c["pull_numbers"] for c in result] == [[3], [11]]
+        assert commits[0]["pull_numbers"] == [3]
+        assert commits[1]["pull_numbers"] == [11]
 
     def test_normalizes_short_sha_to_full(self):
         full_sha = "bbb2222abcdef1234abcdef1234abcdef12345678"
@@ -525,31 +526,33 @@ class TestPopulateCommitPullNumbers:
         self.repo.get_commit.return_value = commit_obj
 
         commits = [self._commit("bbb2222", [])]
-        result = self.client.populate_commit_pull_numbers("repo", commits)
+        self.client.populate_commit_pull_numbers("repo", commits)
 
         self.repo.get_commit.assert_called_once_with("bbb2222")
-        assert result[0]["sha"] == full_sha
-        assert result[0]["url"] == full_url
+        assert commits[0]["sha"] == full_sha
+        assert commits[0]["url"] == full_url
 
-    def test_drops_cross_repo_commit_on_404(self):
+    def test_assigns_empty_list_on_404(self):
         self.repo.get_commit.side_effect = UnknownObjectException(
             404, "Not Found", {},
         )
 
         commits = [self._commit("aaa", [])]
-        result = self.client.populate_commit_pull_numbers("repo", commits)
+        self.client.populate_commit_pull_numbers("repo", commits)
 
-        assert result == []
+        assert commits[0]["pull_numbers"] == []
 
-    def test_drops_cross_repo_commit_on_422(self):
+    def test_assigns_empty_list_on_422(self):
+        # Short SHA ambiguity / not-found is reported as 422 by
+        # GET /commits/{sha}
         self.repo.get_commit.side_effect = GithubException(
             422, {"message": "No commit found for SHA: aaa"}, {},
         )
 
         commits = [self._commit("aaa", [])]
-        result = self.client.populate_commit_pull_numbers("repo", commits)
+        self.client.populate_commit_pull_numbers("repo", commits)
 
-        assert result == []
+        assert commits[0]["pull_numbers"] == []
 
     def test_propagates_other_github_errors(self):
         self.repo.get_commit.side_effect = GithubException(
@@ -562,10 +565,9 @@ class TestPopulateCommitPullNumbers:
 
     def test_skips_api_call_when_no_unresolved(self):
         commits = [self._commit("aaa", [3])]
-        result = self.client.populate_commit_pull_numbers("repo", commits)
+        self.client.populate_commit_pull_numbers("repo", commits)
 
         self.client.g.get_user.assert_not_called()
-        assert result == commits
 
 
 class TestFetchPullsBackfill:

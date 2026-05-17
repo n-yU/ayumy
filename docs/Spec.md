@@ -119,6 +119,7 @@ JSONL の各エントリは以下の構造を持つ（Claude Code が生成す�
 |---|---|---|
 | `type` | String | エントリ種別（`"user"`, `"assistant"`, `"summary"` 等） |
 | `timestamp` | String | ISO 8601 形式のタイムスタンプ（例: `"2026-03-28T10:00:00+09:00"`）。常に存在するが、不正な値は観測されていない |
+| `cwd` | String | エントリ発生時の作業ディレクトリ絶対パス。`type=user` / `type=assistant` の各エントリに付与される。session 抽出時に project の作業ディレクトリの根拠として用い、Bash tool_use 内の `cd` による cross-repo 判定の基準にする（§5.3） |
 | `message.content` | String / List | 文字列またはブロックのリスト。`type=user` は通常文字列だが `tool_result` を含むリストの場合もある |
 
 `type=assistant` の `message.content` リスト内のブロック:
@@ -127,12 +128,15 @@ JSONL の各エントリは以下の構造を持つ（Claude Code が生成す�
 |---|---|---|
 | `type` | String | ブロック種別（`"text"`, `"tool_use"` 等） |
 | `name` | String | `type=tool_use` の場合のツール名 |
+| `id` | String | `type=tool_use` の識別子。後続の `type=user` ブロックの `tool_use_id` から参照され、tool_use と tool_result を突き合わせる |
+| `input.command` | String | `name="Bash"` の場合の実行コマンド文字列。冒頭の `cd <path>` を解釈して per-tool_use の effective cwd を求める（§5.3） |
 
 `type=user` の `message.content` がリストの場合のブロック:
 
 | フィールド | 型 | 説明 |
 |---|---|---|
 | `type` | String | ブロック種別（`"tool_result"` 等） |
+| `tool_use_id` | String | 対応する assistant の `tool_use.id`。cross-repo 判定で対応する tool_use の effective cwd を引くために使う（§5.3） |
 | `content` | String | ツール実行結果のテキスト |
 | `is_error` | Boolean | エラー結果かどうか |
 
@@ -287,6 +291,9 @@ DynamoDB の `ayumy-sessions` テーブルから対象日付をパーティシ�
 - ユーザーメッセージも `session_commits` もないグループはスキップする
 - リポジトリ名は `.ayumy_repo` メタデータファイルから解決する。メタデータがないプロジェクトはスキップする
 - assistant の Bash tool_use のコマンドから PR/Issue 番号を抽出する。対象は `gh pr|issue {sub} {N}` の位置引数、`gh api` の `pulls|issues/{N}` パス、`git` コマンドの引数中の `#番号`。本文中で言及されただけの URL や `#番号` はノイズとなるため対象外とする。`git` 由来の `#番号` は PR/Issue の種別を判別できないため、PR と Issue の両方の候補として保持し fetch 側で振り分ける（§5.1.1）
+- 抽出は project の作業ディレクトリ内で実行されたコマンドのみを対象とする。Bash tool の冒頭で `cd <他 repo path>` 等により別ディレクトリへ移動した場合、そのコマンド由来の commit / PR / Issue 番号は除外する
+  - 認識する形式は先頭の `cd <path> && ...` 連結のみ。それ以外の形式は当該 entry の `cwd` を effective cwd として判定する
+  - `cd` のパス指定が解決できない形式（別ユーザーの `~user/...` 等）は project 外として扱う
 - 書き込み成功後、処理した JSONL を S3 から削除する。書き込み失敗時は S3 を削除せず、次回実行時に再試行する
 - 書き込み失敗時も DynamoDB に前回成功分のデータが残っているため、レポート生成フローは継続する
 

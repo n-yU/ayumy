@@ -301,41 +301,36 @@ class GitHubClient:
 
     def populate_commit_pull_numbers(
         self, repo_name: str, commits: list[CommitInfo],
-    ) -> list[CommitInfo]:
-        """Resolve session-recovered commits and drop cross-repo entries.
+    ) -> None:
+        """Fill pull_numbers and normalize SHA for the given commits.
 
-        - Targets commits whose pull_numbers is unresolved (empty
-          list or missing key); already-resolved commits pass through
-        - Replaces short SHA with the full 40-char form (and updates
-          the matching URL) so downstream equality checks (e.g.,
-          merge_commit_sha) work uniformly
-        - Drops commits the repo cannot resolve (404 / 422), which
-          typically indicates the commit was made against a different
-          repo touched during the same session
+        Cross-repo commits are filtered upstream by session ingest
+        (cwd-based gate in store.py), so this method assumes every
+        commit belongs to repo_name. 404 and 422 are tolerated as
+        safety nets for force-deleted SHAs and ambiguous short SHAs
+        respectively so a single missing commit does not abort the
+        whole report.
         """
-        if not any(not c.get("pull_numbers") for c in commits):
-            return commits
+        unresolved = [c for c in commits if not c.get("pull_numbers")]
+        if not unresolved:
+            return
         repo = self.g.get_user().get_repo(repo_name)
-        result: list[CommitInfo] = []
-        for c in commits:
-            if c.get("pull_numbers"):
-                result.append(c)
-                continue
+        for c in unresolved:
             try:
                 commit = repo.get_commit(c["sha"])
             except GithubException as e:
                 if e.status not in (404, 422):
                     raise
                 logger.warning(
-                    "Commit %s not in %s (%s), dropping as cross-repo",
-                    c["sha"][:7], repo_name, e.status,
+                    "Commit %s lookup failed (%s); keeping commit but "
+                    "skipping PR association",
+                    c["sha"][:7], e.status,
                 )
+                c["pull_numbers"] = []
                 continue
             c["sha"] = commit.sha
             c["url"] = commit.html_url
             c["pull_numbers"] = [pr.number for pr in commit.get_pulls()]
-            result.append(c)
-        return result
 
     def _fetch_pulls_hybrid(
         self,

@@ -102,20 +102,15 @@ def process_date(
                 if not any(s.startswith(sc["sha"]) for s in existing_shas)
             ]
             if new_commits:
-                new_commits = github_client.populate_commit_pull_numbers(
-                    repo_name, new_commits,
-                )
+                github_client.populate_commit_pull_numbers(repo_name, new_commits)
                 repo_data["commits"].extend(new_commits)
         else:
-            session_commits = github_client.populate_commit_pull_numbers(
-                repo_name, session_commits,
-            )
-            if session_commits:
-                github_activity.repos()[repo_name] = {
-                    "commits": session_commits,
-                    "pulls": [],
-                    "issues": [],
-                }
+            github_client.populate_commit_pull_numbers(repo_name, session_commits)
+            github_activity.repos()[repo_name] = {
+                "commits": session_commits,
+                "pulls": [],
+                "issues": [],
+            }
 
     if not session_activity and not github_activity:
         logger.info("No activity, skipping")

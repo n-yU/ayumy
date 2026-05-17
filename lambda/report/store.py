@@ -6,6 +6,8 @@ import re
 import shlex
 from collections import defaultdict
 from datetime import date, datetime, timezone
+from os.path import normpath
+from pathlib import Path, PurePosixPath
 
 import boto3
 from boto3.dynamodb.conditions import Key
@@ -60,6 +62,57 @@ def _first_positional_int(segment: str) -> int | None:
         if tok.isdigit():
             return int(tok)
     return None
+
+
+def _expand_home(path: str, project_cwd: str | None) -> str:
+    """Expand a leading `~` using project_cwd's home as the anchor.
+
+    Lambda's runtime user differs from the session author, so
+    Path.expanduser would resolve to the wrong home.
+    """
+    if path != "~" and not path.startswith("~/"):
+        return path
+    if project_cwd:
+        parts = PurePosixPath(project_cwd).parts
+        if len(parts) >= 3 and parts[0] == "/" and parts[1] in ("Users", "home"):
+            home = PurePosixPath("/", parts[1], parts[2])
+            return str(home) + path[1:]
+    return str(Path(path).expanduser())
+
+
+def _effective_cwd(command: str, project_cwd: str | None) -> str | None:
+    """Return the inferred cwd of a Bash command, or None if not inferable."""
+    try:
+        # shlex does not treat `&&` as an operator, so normalize spacing
+        # to recognize forms like `cd /path&&git ...`.
+        tokens = shlex.split(command.replace("&&", " && "), posix=True)
+    except ValueError:
+        return None
+    if len(tokens) < 3 or tokens[0] != "cd" or tokens[2] != "&&":
+        return None
+    if tokens[1] == "-":
+        return None
+    raw = tokens[1]
+    target = _expand_home(raw, project_cwd)
+    p = PurePosixPath(target)
+    if not p.is_absolute():
+        if raw.startswith("~") or "$" in raw or "`" in raw:
+            # `~user/...` and shell expansions cannot be resolved from the
+            # session log; classify as cross-repo instead of joining under project_cwd.
+            return normpath("/" + raw)
+        if project_cwd:
+            p = PurePosixPath(project_cwd) / p
+    # normpath collapses `..` / `.` segments without touching the filesystem
+    return normpath(str(p))
+
+
+def _is_cross_repo(effective_cwd: str | None, project_cwd: str | None) -> bool:
+    """Return True when the command runs outside the project working directory."""
+    if not project_cwd or effective_cwd is None:
+        return False
+    cwd = PurePosixPath(effective_cwd)
+    root = PurePosixPath(project_cwd)
+    return cwd != root and not cwd.is_relative_to(root)
 
 
 def _extract_pr_issue_refs(command: str) -> tuple[set[int], set[int]]:
@@ -184,6 +237,10 @@ class SessionStore:
             )
             body = resp["Body"].read().decode("utf-8")
 
+            # cwd-based cross-repo filter state, scoped per session file
+            project_cwd: str | None = None
+            tool_use_cwds: dict[str, str | None] = {}
+
             for line in body.splitlines():
                 if not line.strip():
                     continue
@@ -192,6 +249,15 @@ class SessionStore:
                 except json.JSONDecodeError:
                     logger.warning("Skipping malformed line in %s", key)
                     continue
+
+                entry_cwd_raw = entry.get("cwd")
+                entry_cwd = (
+                    entry_cwd_raw
+                    if isinstance(entry_cwd_raw, str) and entry_cwd_raw
+                    else None
+                )
+                if project_cwd is None and entry_cwd:
+                    project_cwd = entry_cwd
 
                 timestamp = entry.get("timestamp")
                 if not timestamp:
@@ -212,15 +278,20 @@ class SessionStore:
                         group["user_messages"].append(content.strip())
                     elif isinstance(content, list):
                         for block in content:
-                            if block.get("type") == "tool_result" and not block.get("is_error"):
-                                text = block.get("content", "")
-                                if isinstance(text, str):
-                                    for sha, msg in commit_pattern.findall(text):
-                                        group["commits"].append({
-                                            "sha": sha,
-                                            "message": msg,
-                                            "timestamp": timestamp,
-                                        })
+                            if block.get("type") != "tool_result" or block.get("is_error"):
+                                continue
+                            tool_use_id = block.get("tool_use_id")
+                            cwd = tool_use_cwds.get(tool_use_id) if tool_use_id else None
+                            if _is_cross_repo(cwd, project_cwd):
+                                continue
+                            text = block.get("content", "")
+                            if isinstance(text, str):
+                                for sha, msg in commit_pattern.findall(text):
+                                    group["commits"].append({
+                                        "sha": sha,
+                                        "message": msg,
+                                        "timestamp": timestamp,
+                                    })
                 elif entry_type == "assistant":
                     for block in entry.get("message", {}).get("content", []):
                         if block.get("type") != "tool_use":
@@ -230,6 +301,16 @@ class SessionStore:
                             continue
                         command = block.get("input", {}).get("command", "")
                         if not isinstance(command, str) or not command:
+                            continue
+                        cwd = _effective_cwd(command, entry_cwd or project_cwd)
+                        if cwd is None:
+                            # No leading `cd`; the command runs in the entry's
+                            # recorded cwd, which may itself be outside project.
+                            cwd = entry_cwd
+                        tool_use_id = block.get("id")
+                        if tool_use_id:
+                            tool_use_cwds[tool_use_id] = cwd
+                        if _is_cross_repo(cwd, project_cwd):
                             continue
                         pulls, issues = _extract_pr_issue_refs(command)
                         group["pulls"].update(pulls)

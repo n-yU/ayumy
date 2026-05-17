@@ -26,8 +26,6 @@ def _make_clients():
     """Create mocked client instances."""
     github_client = MagicMock()
     github_client.owner = OWNER
-    # populate returns its input by default; tests can override side_effect
-    github_client.populate_commit_pull_numbers.side_effect = lambda _, c: c
     return {
         "github_client": github_client,
         "notion_client": MagicMock(),
