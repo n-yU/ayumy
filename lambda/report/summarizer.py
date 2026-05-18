@@ -6,13 +6,17 @@ from datetime import datetime
 import anthropic
 
 from . import JST, ReportSummary
-from .tags import ALLOWED_TAG_NAMES
+from .tags import ALLOWED_TAG_NAMES, TAG_DEFINITIONS
 
 logger = logging.getLogger(__name__)
 
 MODEL = "claude-sonnet-4-20250514"
 MAX_TOKENS = 2048
 TOOL_NAME = "submit_daily_report"
+
+_TAG_GUIDANCE = "\n".join(
+    f"- {t.name}: {t.description}" for t in TAG_DEFINITIONS
+)
 
 _SYSTEM_PROMPT = f"""\
 あなたは開発者の日次アクティビティを要約するアシスタントです。
@@ -30,6 +34,10 @@ PR/Issue の状態別一覧や時系列のイベントは別途プログラム�
 Claude Code セッションのプロジェクト名は GitHub リポジトリ名と対応させてください。
 プロジェクト名からリポジトリを特定できない場合は、name を "unknown ({{プロジェクト名}})" としてください。
 無理に推測して既存のリポジトリに紐づけないでください。
+
+tags にはその日の作業内容を表す値を以下から選んでください:
+{_TAG_GUIDANCE}
+GitHub の Issue/PR ラベル（enhancement など）に引きずられず、必ず上記のいずれかを使用してください。当てはまるものがない場合は other を使用してください。
 """
 
 
@@ -80,6 +88,11 @@ class SummaryClient:
                                 },
                                 "tags": {
                                     "type": "array",
+                                    "description": (
+                                        "その日の作業内容を表す tag のリスト。"
+                                        "enum で指定された値のみ使用可:\n"
+                                        f"{_TAG_GUIDANCE}"
+                                    ),
                                     "items": {
                                         "type": "string",
                                         "enum": list(ALLOWED_TAG_NAMES),

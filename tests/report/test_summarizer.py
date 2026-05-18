@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from report import JST
-from report.summarizer import TOOL_NAME, SummaryClient, ValidationResult
-from report.tags import ALLOWED_TAG_NAMES
+from report.summarizer import _SYSTEM_PROMPT, TOOL_NAME, SummaryClient, ValidationResult
+from report.tags import ALLOWED_TAG_NAMES, TAG_DEFINITIONS
 
 
 def _make_client() -> SummaryClient:
@@ -21,6 +21,21 @@ class TestBuildToolSchema:
         schema = client._build_tool_schema()
         repo_props = schema["input_schema"]["properties"]["repositories"]["items"]["properties"]
         assert repo_props["tags"]["items"]["enum"] == list(ALLOWED_TAG_NAMES)
+
+    def test_tags_field_carries_description_per_tag(self):
+        client = _make_client()
+        schema = client._build_tool_schema()
+        tags_field = schema["input_schema"]["properties"]["repositories"]["items"]["properties"]["tags"]
+        for tag in TAG_DEFINITIONS:
+            assert tag.name in tags_field["description"]
+            assert tag.description in tags_field["description"]
+
+
+class TestSystemPrompt:
+    def test_lists_each_tag_with_description(self):
+        for tag in TAG_DEFINITIONS:
+            assert tag.name in _SYSTEM_PROMPT
+            assert tag.description in _SYSTEM_PROMPT
 
 
 class TestBuildPrompt:
