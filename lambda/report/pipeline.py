@@ -200,10 +200,8 @@ def run(
         notion_client = NotionClient(
             require_env("NOTION_SECRET"), require_env("NOTION_DATABASE_ID"),
         )
-        allowed_tags = notion_client.fetch_allowlists()
-        summary_client = SummaryClient(
-            require_env("ANTHROPIC_API_KEY"), allowed_tags,
-        )
+        notion_client.init_data_source()
+        summary_client = SummaryClient(require_env("ANTHROPIC_API_KEY"))
 
         errors: list[Exception] = []
         for d in process_dates:

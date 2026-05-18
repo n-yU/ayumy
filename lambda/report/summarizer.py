@@ -6,6 +6,7 @@ from datetime import datetime
 import anthropic
 
 from . import JST, ReportSummary
+from .tags import ALLOWED_TAG_NAMES
 
 logger = logging.getLogger(__name__)
 
@@ -45,22 +46,19 @@ class ValidationResult:
 class SummaryClient:
     """Client for generating daily report summaries via Claude API."""
 
-    def __init__(self, api_key: str, allowed_tags: list[str]) -> None:
-        """Initialize the client with an Anthropic API key and tag allowlist.
+    def __init__(self, api_key: str) -> None:
+        """Initialize the client with an Anthropic API key.
 
         Args:
             api_key: Anthropic API key
-            allowed_tags: Allowed tag names from Notion DB. Held for the
-                lifetime of the client; not refreshed mid-run
         """
         self.client = anthropic.Anthropic(api_key=api_key)
-        self.allowed_tags = allowed_tags
 
     def _build_tool_schema(self) -> dict:
-        """Build the tool definition with allowed_tags enforced via enum.
+        """Build the tool definition with tag allowlist enforced via enum.
 
         The enum constraint on tags[] makes the model unable to emit values
-        outside the Notion allowlist.
+        outside the code-defined allowlist.
         """
         return {
             "name": TOOL_NAME,
@@ -84,7 +82,7 @@ class SummaryClient:
                                     "type": "array",
                                     "items": {
                                         "type": "string",
-                                        "enum": self.allowed_tags,
+                                        "enum": list(ALLOWED_TAG_NAMES),
                                     },
                                 },
                             },
@@ -168,7 +166,7 @@ class SummaryClient:
             A ValidationResult with any invalid values found
         """
         result = ValidationResult()
-        tag_set = set(self.allowed_tags)
+        tag_set = set(ALLOWED_TAG_NAMES)
 
         for repo in report["repositories"]:
             name = repo["name"]

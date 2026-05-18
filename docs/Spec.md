@@ -360,7 +360,7 @@ Date × Repository 単位でページを作成する。1日に複数ページが
 | Name | Title | 日付とリポジトリ名 | `26-03-01: ayumy` |
 | Date | Date | 対象日 | `2025-03-01` |
 | Repository | Select | リポジトリ名 | `ayumy` |
-| Tags | Multi-select | 作業内容の分類タグ | `feature`, `productive` |
+| Tags | Multi-select | 作業内容の分類タグ | `feature`, `refactor` |
 | Commits | Number | リポジトリのコミット数 | `5` |
 | Merged | Number | リポジトリのマージ PR 数 | `2` |
 | Closed | Number | リポジトリのクローズ Issue 数 | `1` |
