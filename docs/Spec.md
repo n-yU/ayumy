@@ -78,7 +78,7 @@ ayumy/
 ├── docs/
 │   ├── Setup.md
 │   ├── Spec.md
-│   └── InitialDevelopment.md
+│   └── Initial-Development.md
 ├── CLAUDE.md
 └── README.md
 ```
@@ -360,7 +360,7 @@ Date × Repository 単位でページを作成する。1日に複数ページが
 | Name | Title | 日付とリポジトリ名 | `26-03-01: ayumy` |
 | Date | Date | 対象日 | `2025-03-01` |
 | Repository | Select | リポジトリ名 | `ayumy` |
-| Tags | Multi-select | 作業内容の分類タグ | `feature`, `productive` |
+| Tags | Multi-select | 作業内容の分類タグ | `feature`, `refactor` |
 | Commits | Number | リポジトリのコミット数 | `5` |
 | Merged | Number | リポジトリのマージ PR 数 | `2` |
 | Closed | Number | リポジトリのクローズ Issue 数 | `1` |
@@ -416,15 +416,12 @@ GitHub アイテムへのリンクは PR/Issue が `repo#xx: Title`、commit が
 | `feature` | 新機能追加に関する Commit / PR |
 | `bugfix` | バグ修正に関する Commit / PR / Issue |
 | `docs` | ドキュメント更新 |
-| `refactor` | リファクタリング |
+| `refactor` | リファクタリング、依存更新、設定整理を含む保守的変更 |
 | `ci` | CI/CD やビルド設定の変更 |
 | `review` | PR レビューが主な活動だった場合 |
-| `productive` | 複数の PR マージや Issue クローズがある |
-| `maintenance` | 依存関係更新、CI 修正など保守作業が中心 |
-| `blocked` | PR レビュー待ちや Issue の議論が中心 |
-| `light` | アクティビティが少ない日 |
+| `other` | 既存タグのいずれにも当てはまらない作業 |
 
-タグは Claude API の要約生成時に自動判定させる。
+タグは Claude API の要約生成時に自動判定させる。タグ定義（name と description）はコード側（`lambda/report/tags.py`）で管理する。
 
 ## 7. AWS Lambda の構成
 ### 7.1 実行方式

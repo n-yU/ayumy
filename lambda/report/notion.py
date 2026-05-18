@@ -150,32 +150,22 @@ class NotionClient:
         """Return the cached data source ID.
 
         Raises:
-            RuntimeError: If fetch_allowlists() has not been called yet
+            RuntimeError: If init_data_source() has not been called yet
         """
         if self._data_source_id is None:
             raise RuntimeError(
-                "data_source_id is not initialized; call fetch_allowlists() first"
+                "data_source_id is not initialized; call init_data_source() first"
             )
         return self._data_source_id
 
-    def fetch_allowlists(self) -> list[str]:
-        """Fetch allowed tags from the database schema.
+    def init_data_source(self) -> None:
+        """Resolve and cache the database's first data source ID.
 
-        Reads the Tags (multi-select) property options defined in the
-        Notion database via the data sources API.
-
-        Returns:
-            A list of allowed tag names
+        Subsequent calls that rely on `data_source_id` (e.g. query and
+        page creation) assume this has been invoked once per client.
         """
         db = self.client.databases.retrieve(database_id=self.database_id)
         self._data_source_id = db["data_sources"][0]["id"]
-        ds = self.client.data_sources.retrieve(data_source_id=self._data_source_id)
-        properties = ds["properties"]
-
-        return [
-            opt["name"]
-            for opt in properties["Tags"]["multi_select"]["options"]
-        ]
 
     def _build_properties(
         self,

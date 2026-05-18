@@ -484,9 +484,6 @@ class TestRun:
         github_client = MockGitHub.return_value
         github_client.fetch_activity.return_value = GitHubActivity({})
 
-        notion_client = MockNotion.return_value
-        notion_client.fetch_allowlists.return_value = []
-
         run(source=None)
 
         store.scan_backfill_dates.assert_called_once()
@@ -526,9 +523,6 @@ class TestRun:
         github_client = MockGitHub.return_value
         github_client.fetch_activity.return_value = GitHubActivity({})
 
-        notion_client = MockNotion.return_value
-        notion_client.fetch_allowlists.return_value = []
-
         slack_client = MockSlack.return_value
 
         run(source=None, memory_limit_mb=512)
@@ -565,9 +559,6 @@ class TestRun:
 
         github_client = MockGitHub.return_value
         github_client.fetch_activity.return_value = GitHubActivity({})
-
-        notion_client = MockNotion.return_value
-        notion_client.fetch_allowlists.return_value = []
 
         slack_client = MockSlack.return_value
 
@@ -608,9 +599,6 @@ class TestRun:
         github_client = MockGitHub.return_value
         github_client.fetch_activity.return_value = GitHubActivity({})
 
-        notion_client = MockNotion.return_value
-        notion_client.fetch_allowlists.return_value = []
-
         run(source=None)
 
         # 2 backfill dates + 1 primary = 3 calls
@@ -646,9 +634,6 @@ class TestRun:
         github_client = MockGitHub.return_value
         github_client.fetch_activity.return_value = GitHubActivity({})
 
-        notion_client = MockNotion.return_value
-        notion_client.fetch_allowlists.return_value = []
-
         run(source=None)
 
         # MAX_BACKFILL + 1 primary
@@ -678,9 +663,6 @@ class TestRun:
         session_client.delete_sessions.return_value = 0
 
         github_client = MockGitHub.return_value
-
-        notion_client = MockNotion.return_value
-        notion_client.fetch_allowlists.return_value = []
 
         slack_client = MockSlack.return_value
 
@@ -728,9 +710,6 @@ class TestRun:
         github_client = MockGitHub.return_value
         github_client.fetch_activity.return_value = GitHubActivity({})
 
-        notion_client = MockNotion.return_value
-        notion_client.fetch_allowlists.return_value = []
-
         slack_client = MockSlack.return_value
 
         run(source=None)
@@ -766,9 +745,6 @@ class TestRun:
         github_client = MockGitHub.return_value
         github_client.fetch_activity.return_value = GitHubActivity({})
 
-        notion_client = MockNotion.return_value
-        notion_client.fetch_allowlists.return_value = []
-
         slack_client = MockSlack.return_value
 
         run(source=None)
@@ -803,9 +779,6 @@ class TestRun:
         github_client = MockGitHub.return_value
         github_client.fetch_activity.return_value = GitHubActivity({})
 
-        notion_client = MockNotion.return_value
-        notion_client.fetch_allowlists.return_value = []
-
         run(source=None)
 
         store.mark_reported.assert_called_once_with("2026-03-28")
@@ -838,9 +811,6 @@ class TestRun:
         github_client = MockGitHub.return_value
         github_client.fetch_activity.return_value = GitHubActivity({})
 
-        notion_client = MockNotion.return_value
-        notion_client.fetch_allowlists.return_value = []
-
         run(source="manual", target_date="2026-03-25")
 
         mock_date_range.assert_called_once_with("manual", target_date="2026-03-25")
@@ -870,9 +840,6 @@ class TestRun:
 
         github_client = MockGitHub.return_value
         github_client.fetch_activity.return_value = GitHubActivity({})
-
-        notion_client = MockNotion.return_value
-        notion_client.fetch_allowlists.return_value = []
 
         run(source=None)
 
@@ -906,9 +873,6 @@ class TestRun:
 
         session_client = MockSession.return_value
         session_client.delete_sessions.return_value = 0
-
-        notion_client = MockNotion.return_value
-        notion_client.fetch_allowlists.return_value = []
 
         run(source="manual")
 
@@ -944,9 +908,6 @@ class TestRun:
         github_client = MockGitHub.return_value
         github_client.fetch_activity.return_value = GitHubActivity({})
 
-        notion_client = MockNotion.return_value
-        notion_client.fetch_allowlists.return_value = []
-
         run(source="manual", target_date="2026-03-25")
 
         store.scan_backfill_dates.assert_not_called()
@@ -978,9 +939,6 @@ class TestRun:
 
         github_client = MockGitHub.return_value
         github_client.fetch_activity.return_value = GitHubActivity({})
-
-        notion_client = MockNotion.return_value
-        notion_client.fetch_allowlists.return_value = []
 
         run(source="manual", target_date="2026-03-25..2026-03-28")
 
@@ -1019,9 +977,6 @@ class TestRun:
         github_client = MockGitHub.return_value
         github_client.fetch_activity.return_value = GitHubActivity({})
 
-        notion_client = MockNotion.return_value
-        notion_client.fetch_allowlists.return_value = []
-
         run(source="manual", target_date="2026-03-25")
 
         for call in github_client.fetch_activity.call_args_list:
@@ -1055,9 +1010,6 @@ class TestRun:
 
         github_client = MockGitHub.return_value
         github_client.fetch_activity.return_value = GitHubActivity({})
-
-        notion_client = MockNotion.return_value
-        notion_client.fetch_allowlists.return_value = []
 
         run(source=None)
 

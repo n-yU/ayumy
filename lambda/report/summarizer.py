@@ -6,12 +6,17 @@ from datetime import datetime
 import anthropic
 
 from . import JST, ReportSummary
+from .tags import ALLOWED_TAG_NAMES, TAG_DEFINITIONS
 
 logger = logging.getLogger(__name__)
 
 MODEL = "claude-sonnet-4-20250514"
 MAX_TOKENS = 2048
 TOOL_NAME = "submit_daily_report"
+
+_TAG_GUIDANCE = "\n".join(
+    f"- {t.name}: {t.description}" for t in TAG_DEFINITIONS
+)
 
 _SYSTEM_PROMPT = f"""\
 あなたは開発者の日次アクティビティを要約するアシスタントです。
@@ -29,6 +34,10 @@ PR/Issue の状態別一覧や時系列のイベントは別途プログラム�
 Claude Code セッションのプロジェクト名は GitHub リポジトリ名と対応させてください。
 プロジェクト名からリポジトリを特定できない場合は、name を "unknown ({{プロジェクト名}})" としてください。
 無理に推測して既存のリポジトリに紐づけないでください。
+
+tags にはその日の作業内容を表す値を以下から選んでください:
+{_TAG_GUIDANCE}
+GitHub の Issue/PR ラベル（enhancement など）に引きずられず、必ず上記のいずれかを使用してください。当てはまるものがない場合は other を使用してください。
 """
 
 
@@ -45,22 +54,19 @@ class ValidationResult:
 class SummaryClient:
     """Client for generating daily report summaries via Claude API."""
 
-    def __init__(self, api_key: str, allowed_tags: list[str]) -> None:
-        """Initialize the client with an Anthropic API key and tag allowlist.
+    def __init__(self, api_key: str) -> None:
+        """Initialize the client with an Anthropic API key.
 
         Args:
             api_key: Anthropic API key
-            allowed_tags: Allowed tag names from Notion DB. Held for the
-                lifetime of the client; not refreshed mid-run
         """
         self.client = anthropic.Anthropic(api_key=api_key)
-        self.allowed_tags = allowed_tags
 
     def _build_tool_schema(self) -> dict:
-        """Build the tool definition with allowed_tags enforced via enum.
+        """Build the tool definition with tag allowlist enforced via enum.
 
         The enum constraint on tags[] makes the model unable to emit values
-        outside the Notion allowlist.
+        outside the code-defined allowlist.
         """
         return {
             "name": TOOL_NAME,
@@ -82,9 +88,14 @@ class SummaryClient:
                                 },
                                 "tags": {
                                     "type": "array",
+                                    "description": (
+                                        "その日の作業内容を表す tag のリスト。"
+                                        "enum で指定された値のみ使用可:\n"
+                                        f"{_TAG_GUIDANCE}"
+                                    ),
                                     "items": {
                                         "type": "string",
-                                        "enum": self.allowed_tags,
+                                        "enum": list(ALLOWED_TAG_NAMES),
                                     },
                                 },
                             },
@@ -168,7 +179,7 @@ class SummaryClient:
             A ValidationResult with any invalid values found
         """
         result = ValidationResult()
-        tag_set = set(self.allowed_tags)
+        tag_set = set(ALLOWED_TAG_NAMES)
 
         for repo in report["repositories"]:
             name = repo["name"]
