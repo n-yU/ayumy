@@ -23,9 +23,7 @@
 | Sessions | Number | |
 | Version | Text | |
 
-Tags のオプション: `feature`, `bugfix`, `docs`, `refactor`, `ci`, `review`, `productive`, `maintenance`, `blocked`, `light`
-
-Tags のオプションは allowlist として機能する（Spec.md §6.3）。要約生成時にこれらのオプションが候補としてプロンプトに注入され、allowlist 外の値はバリデーションで除外される。オプションの追加・削除は Notion DB の UI から直接行う。
+Tags は作業内容を分類する multi-select。option 名と description はコード側（`lambda/report/tags.py`）で管理する。Notion 側のオプションはレポートが書き込まれる際に自動追加されるため、事前作成は不要だが、配色を制御したい場合は `feature`, `bugfix`, `docs`, `refactor`, `ci`, `review`, `other` を手動で追加する。
 
 4. AWS Secrets Manager（ap-northeast-1）に登録
    - シークレットのタイプ: その他のシークレットのタイプ
