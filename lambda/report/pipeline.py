@@ -42,8 +42,7 @@ def process_date(
         session_activity: Pre-fetched session data from DynamoDB
         github_client: GitHub API client
         notion_client: Notion API client
-        summary_client: Claude API summarizer client (already configured
-            with the tag allowlist)
+        summary_client: Claude API summarizer client
         slack_client: Slack notification client
         is_backfill: If True, use the Hybrid PR/Issue fetch path
     """
@@ -232,7 +231,7 @@ def run(
 
     except Exception as e:
         # Errors from process_date are already notified with the correct date
-        # Only notify here for errors outside the loop (scan, allowlists)
+        # Only notify here for errors outside the loop (scan, data source init)
         if not getattr(e, "_notified", False):
             slack_client.notify_error(since, e)
         raise
