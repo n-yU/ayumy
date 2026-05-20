@@ -7,8 +7,13 @@ import time
 from datetime import datetime
 
 from . import (
-    JST, SessionActivity, date_to_range, get_target_date_range, get_version,
-    parse_target_dates, require_env,
+    JST,
+    SessionActivity,
+    date_to_range,
+    get_target_date_range,
+    get_version,
+    parse_target_dates,
+    require_env,
 )
 from .github import GitHubClient
 from .notion import NotionClient
@@ -63,7 +68,9 @@ def process_date(
                 session_issues[repo_name] = sorted(issues)
 
     github_activity = github_client.fetch_activity(
-        since, until, list(session_activity.keys()),
+        since,
+        until,
+        list(session_activity.keys()),
         is_backfill=is_backfill,
         session_pulls=session_pulls,
         session_issues=session_issues,
@@ -79,14 +86,16 @@ def process_date(
                 if c["sha"] in seen_shas:
                     continue
                 seen_shas.add(c["sha"])
-                session_commits.append({
-                    "sha": c["sha"],
-                    "message": c["message"],
-                    "author": "",
-                    "date": c.get("timestamp") or s["start_time"],
-                    "url": f"https://github.com/{github_client.owner}/{repo_name}/commit/{c['sha']}",
-                    "pull_numbers": [],
-                })
+                session_commits.append(
+                    {
+                        "sha": c["sha"],
+                        "message": c["message"],
+                        "author": "",
+                        "date": c.get("timestamp") or s["start_time"],
+                        "url": f"https://github.com/{github_client.owner}/{repo_name}/commit/{c['sha']}",
+                        "pull_numbers": [],
+                    }
+                )
         if not session_commits:
             continue
         # Resolve PR association on commits we will actually inject so these
@@ -96,7 +105,8 @@ def process_date(
         if repo_data is not None:
             existing_shas = {c["sha"] for c in repo_data["commits"]}
             new_commits = [
-                sc for sc in session_commits
+                sc
+                for sc in session_commits
                 if not any(s.startswith(sc["sha"]) for s in existing_shas)
             ]
             if new_commits:
@@ -116,7 +126,9 @@ def process_date(
         return
 
     report = summary_client.generate_summary(
-        since, github_activity.format(), session_activity.format(),
+        since,
+        github_activity.format(),
+        session_activity.format(),
     )
 
     validation = summary_client.validate_report(report)
@@ -124,14 +136,18 @@ def process_date(
         slack_client.notify_validation_errors(since, validation)
 
     pages = notion_client.create_report_pages(
-        since, since, until, report, github_activity, session_activity,
+        since,
+        since,
+        until,
+        report,
+        github_activity,
+        session_activity,
     )
     for name, url in pages:
         logger.info("Created Notion page: %s -> %s", name, url)
 
     skipped_repos = [
-        r["name"] for r in report["repositories"]
-        if r["name"] not in github_activity
+        r["name"] for r in report["repositories"] if r["name"] not in github_activity
     ]
 
     slack_client.notify(since, report, pages, skipped_repos)
@@ -197,7 +213,8 @@ def run(
 
         github_client = GitHubClient(require_env("GITHUB_PAT"))
         notion_client = NotionClient(
-            require_env("NOTION_SECRET"), require_env("NOTION_DATABASE_ID"),
+            require_env("NOTION_SECRET"),
+            require_env("NOTION_DATABASE_ID"),
         )
         notion_client.init_data_source()
         summary_client = SummaryClient(require_env("ANTHROPIC_API_KEY"))
@@ -212,9 +229,13 @@ def run(
             try:
                 session_activity = store.fetch_sessions(date_str)
                 process_date(
-                    day_since, day_until, session_activity,
-                    github_client, notion_client,
-                    summary_client, slack_client,
+                    day_since,
+                    day_until,
+                    session_activity,
+                    github_client,
+                    notion_client,
+                    summary_client,
+                    slack_client,
                     is_backfill=date_str in backfill_set,
                 )
                 store.mark_reported(date_str)
@@ -244,10 +265,15 @@ def run(
         logger.info(
             "Execution metrics: elapsed=%.1fs, peak_memory=%.0fMB, "
             "memory_limit=%s, timeout=%s",
-            elapsed, peak_memory_mb, memory_limit_mb, timeout_seconds,
+            elapsed,
+            peak_memory_mb,
+            memory_limit_mb,
+            timeout_seconds,
         )
         slack_client.notify_metrics(
-            elapsed, peak_memory_mb, get_version(),
+            elapsed,
+            peak_memory_mb,
+            get_version(),
             memory_limit_mb=memory_limit_mb,
             timeout_seconds=timeout_seconds,
         )

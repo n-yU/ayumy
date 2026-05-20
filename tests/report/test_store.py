@@ -52,10 +52,7 @@ class TestExpandHome:
         )
 
     def test_expands_against_home_prefix(self):
-        assert (
-            _expand_home("~/work/x", "/home/bob/proj")
-            == "/home/bob/work/x"
-        )
+        assert _expand_home("~/work/x", "/home/bob/proj") == "/home/bob/work/x"
 
     def test_falls_back_when_project_cwd_unknown(self, monkeypatch):
         monkeypatch.setenv("HOME", "/tmp/fakehome")
@@ -131,7 +128,8 @@ class TestEffectiveCwd:
         # `~bob/work` cannot be resolved from the session log; should be
         # returned as absolute so _is_cross_repo flags it as outside project
         result = _effective_cwd(
-            "cd ~bob/work && git commit", "/Users/alice/proj",
+            "cd ~bob/work && git commit",
+            "/Users/alice/proj",
         )
         assert result is not None
         assert _is_cross_repo(result, "/Users/alice/proj") is True
@@ -199,38 +197,28 @@ class TestExtractPrIssueRefs:
         assert issues == set()
 
     def test_gh_api_issues_path(self):
-        pulls, issues = _extract_pr_issue_refs(
-            "gh api repos/n-yU/ayumy/issues/84"
-        )
+        pulls, issues = _extract_pr_issue_refs("gh api repos/n-yU/ayumy/issues/84")
         assert pulls == set()
         assert issues == {84}
 
     def test_git_hash_ref_ambiguous(self):
-        pulls, issues = _extract_pr_issue_refs(
-            'git commit -m "Fix #91"'
-        )
+        pulls, issues = _extract_pr_issue_refs('git commit -m "Fix #91"')
         assert pulls == {91}
         assert issues == {91}
 
     def test_chained_commands(self):
-        pulls, issues = _extract_pr_issue_refs(
-            "gh pr view 87 && gh issue close 84"
-        )
+        pulls, issues = _extract_pr_issue_refs("gh pr view 87 && gh issue close 84")
         assert pulls == {87}
         assert issues == {84}
 
     def test_gh_pr_with_flag_value_before_number(self):
-        pulls, issues = _extract_pr_issue_refs(
-            'gh pr edit --body "fix" 87'
-        )
+        pulls, issues = _extract_pr_issue_refs('gh pr edit --body "fix" 87')
         assert pulls == {87}
         assert issues == set()
 
     def test_gh_pr_skips_quoted_integer_in_flag_value(self):
         """Numbers inside quoted flag values must not be picked up."""
-        pulls, issues = _extract_pr_issue_refs(
-            'gh pr edit --body "fix 999" 87'
-        )
+        pulls, issues = _extract_pr_issue_refs('gh pr edit --body "fix 999" 87')
         assert pulls == {87}
         assert issues == set()
 
@@ -303,10 +291,12 @@ class TestBuildItems:
             {
                 "type": "assistant",
                 "timestamp": "2026-03-28T10:01:00+09:00",
-                "message": {"content": [
-                    {"type": "tool_use", "name": "Read"},
-                    {"type": "tool_use", "name": "Edit"},
-                ]},
+                "message": {
+                    "content": [
+                        {"type": "tool_use", "name": "Read"},
+                        {"type": "tool_use", "name": "Edit"},
+                    ]
+                },
             },
             {
                 "type": "user",
@@ -316,10 +306,12 @@ class TestBuildItems:
             {
                 "type": "assistant",
                 "timestamp": "2026-03-28T10:06:00+09:00",
-                "message": {"content": [
-                    {"type": "tool_use", "name": "Read"},
-                    {"type": "tool_use", "name": "Bash"},
-                ]},
+                "message": {
+                    "content": [
+                        {"type": "tool_use", "name": "Read"},
+                        {"type": "tool_use", "name": "Bash"},
+                    ]
+                },
             },
         )
         client.s3.get_object.return_value = _s3_body(lines)
@@ -350,26 +342,30 @@ class TestBuildItems:
             {
                 "type": "user",
                 "timestamp": "2026-03-28T10:05:00+09:00",
-                "message": {"content": [
-                    {
-                        "type": "tool_result",
-                        "tool_use_id": "toolu_123",
-                        "content": "[feat/login a1b2c3d] Implement login flow\n 2 files changed",
-                        "is_error": False,
-                    },
-                ]},
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "toolu_123",
+                            "content": "[feat/login a1b2c3d] Implement login flow\n 2 files changed",
+                            "is_error": False,
+                        },
+                    ]
+                },
             },
             {
                 "type": "user",
                 "timestamp": "2026-03-28T10:10:00+09:00",
-                "message": {"content": [
-                    {
-                        "type": "tool_result",
-                        "tool_use_id": "toolu_456",
-                        "content": "[feat/login e5f6a7b] Fix test failure\n 1 file changed",
-                        "is_error": False,
-                    },
-                ]},
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "toolu_456",
+                            "content": "[feat/login e5f6a7b] Fix test failure\n 1 file changed",
+                            "is_error": False,
+                        },
+                    ]
+                },
             },
         )
         client.s3.get_object.return_value = _s3_body(lines)
@@ -378,10 +374,16 @@ class TestBuildItems:
 
         assert len(items) == 1
         assert items[0]["session_commits"] == [
-            {"sha": "a1b2c3d", "message": "Implement login flow",
-             "timestamp": "2026-03-28T10:05:00+09:00"},
-            {"sha": "e5f6a7b", "message": "Fix test failure",
-             "timestamp": "2026-03-28T10:10:00+09:00"},
+            {
+                "sha": "a1b2c3d",
+                "message": "Implement login flow",
+                "timestamp": "2026-03-28T10:05:00+09:00",
+            },
+            {
+                "sha": "e5f6a7b",
+                "message": "Fix test failure",
+                "timestamp": "2026-03-28T10:10:00+09:00",
+            },
         ]
 
     def test_extracts_root_and_detached_head_commits(self):
@@ -401,26 +403,30 @@ class TestBuildItems:
             {
                 "type": "user",
                 "timestamp": "2026-03-28T10:05:00+09:00",
-                "message": {"content": [
-                    {
-                        "type": "tool_result",
-                        "tool_use_id": "toolu_root",
-                        "content": "[main (root-commit) a1b2c3d] Initial commit\n 1 file changed",
-                        "is_error": False,
-                    },
-                ]},
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "toolu_root",
+                            "content": "[main (root-commit) a1b2c3d] Initial commit\n 1 file changed",
+                            "is_error": False,
+                        },
+                    ]
+                },
             },
             {
                 "type": "user",
                 "timestamp": "2026-03-28T10:10:00+09:00",
-                "message": {"content": [
-                    {
-                        "type": "tool_result",
-                        "tool_use_id": "toolu_detach",
-                        "content": "[detached HEAD e5f6a7b] Hotfix\n 1 file changed",
-                        "is_error": False,
-                    },
-                ]},
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "toolu_detach",
+                            "content": "[detached HEAD e5f6a7b] Hotfix\n 1 file changed",
+                            "is_error": False,
+                        },
+                    ]
+                },
             },
         )
         client.s3.get_object.return_value = _s3_body(lines)
@@ -429,10 +435,16 @@ class TestBuildItems:
 
         assert len(items) == 1
         assert items[0]["session_commits"] == [
-            {"sha": "a1b2c3d", "message": "Initial commit",
-             "timestamp": "2026-03-28T10:05:00+09:00"},
-            {"sha": "e5f6a7b", "message": "Hotfix",
-             "timestamp": "2026-03-28T10:10:00+09:00"},
+            {
+                "sha": "a1b2c3d",
+                "message": "Initial commit",
+                "timestamp": "2026-03-28T10:05:00+09:00",
+            },
+            {
+                "sha": "e5f6a7b",
+                "message": "Hotfix",
+                "timestamp": "2026-03-28T10:10:00+09:00",
+            },
         ]
 
     def test_extracts_commit_after_hook_output(self):
@@ -452,14 +464,16 @@ class TestBuildItems:
             {
                 "type": "user",
                 "timestamp": "2026-03-28T10:05:00+09:00",
-                "message": {"content": [
-                    {
-                        "type": "tool_result",
-                        "tool_use_id": "toolu_hook",
-                        "content": "check formatting... ok\nrunning linter... passed\n[main a1b2c3d] Fix formatting\n 2 files changed",
-                        "is_error": False,
-                    },
-                ]},
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "toolu_hook",
+                            "content": "check formatting... ok\nrunning linter... passed\n[main a1b2c3d] Fix formatting\n 2 files changed",
+                            "is_error": False,
+                        },
+                    ]
+                },
             },
         )
         client.s3.get_object.return_value = _s3_body(lines)
@@ -468,8 +482,11 @@ class TestBuildItems:
 
         assert len(items) == 1
         assert items[0]["session_commits"] == [
-            {"sha": "a1b2c3d", "message": "Fix formatting",
-             "timestamp": "2026-03-28T10:05:00+09:00"},
+            {
+                "sha": "a1b2c3d",
+                "message": "Fix formatting",
+                "timestamp": "2026-03-28T10:05:00+09:00",
+            },
         ]
 
     def test_extracts_multiple_commits_from_single_tool_result(self):
@@ -489,14 +506,16 @@ class TestBuildItems:
             {
                 "type": "user",
                 "timestamp": "2026-03-28T10:05:00+09:00",
-                "message": {"content": [
-                    {
-                        "type": "tool_result",
-                        "tool_use_id": "toolu_multi",
-                        "content": "[main abc1234] First commit\n 1 file changed\n[main def5678] Second commit\n 2 files changed",
-                        "is_error": False,
-                    },
-                ]},
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "toolu_multi",
+                            "content": "[main abc1234] First commit\n 1 file changed\n[main def5678] Second commit\n 2 files changed",
+                            "is_error": False,
+                        },
+                    ]
+                },
             },
         )
         client.s3.get_object.return_value = _s3_body(lines)
@@ -505,10 +524,16 @@ class TestBuildItems:
 
         assert len(items) == 1
         assert items[0]["session_commits"] == [
-            {"sha": "abc1234", "message": "First commit",
-             "timestamp": "2026-03-28T10:05:00+09:00"},
-            {"sha": "def5678", "message": "Second commit",
-             "timestamp": "2026-03-28T10:05:00+09:00"},
+            {
+                "sha": "abc1234",
+                "message": "First commit",
+                "timestamp": "2026-03-28T10:05:00+09:00",
+            },
+            {
+                "sha": "def5678",
+                "message": "Second commit",
+                "timestamp": "2026-03-28T10:05:00+09:00",
+            },
         ]
 
     def test_ignores_error_tool_results(self):
@@ -528,14 +553,16 @@ class TestBuildItems:
             {
                 "type": "user",
                 "timestamp": "2026-03-28T10:05:00+09:00",
-                "message": {"content": [
-                    {
-                        "type": "tool_result",
-                        "tool_use_id": "toolu_err",
-                        "content": "[main abc1234] Some commit\n 1 file changed",
-                        "is_error": True,
-                    },
-                ]},
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "toolu_err",
+                            "content": "[main abc1234] Some commit\n 1 file changed",
+                            "is_error": True,
+                        },
+                    ]
+                },
             },
         )
         client.s3.get_object.return_value = _s3_body(lines)
@@ -563,14 +590,16 @@ class TestBuildItems:
             {
                 "type": "user",
                 "timestamp": "2026-03-29T00:05:00+09:00",
-                "message": {"content": [
-                    {
-                        "type": "tool_result",
-                        "tool_use_id": "toolu_abc",
-                        "content": "[main a1b2c3d] Apply fix\n 1 file changed",
-                        "is_error": False,
-                    },
-                ]},
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "toolu_abc",
+                            "content": "[main a1b2c3d] Apply fix\n 1 file changed",
+                            "is_error": False,
+                        },
+                    ]
+                },
             },
         )
         client.s3.get_object.return_value = _s3_body(lines)
@@ -585,8 +614,11 @@ class TestBuildItems:
         assert day1["session_commits"] == []
         assert day2["user_messages"] == []
         assert day2["session_commits"] == [
-            {"sha": "a1b2c3d", "message": "Apply fix",
-             "timestamp": "2026-03-29T00:05:00+09:00"},
+            {
+                "sha": "a1b2c3d",
+                "message": "Apply fix",
+                "timestamp": "2026-03-29T00:05:00+09:00",
+            },
         ]
         assert keys == ["claude-sessions/proj/s1.jsonl"]
 
@@ -621,50 +653,58 @@ class TestBuildItems:
             {
                 "type": "assistant",
                 "timestamp": "2026-03-28T10:01:00+09:00",
-                "message": {"content": [
-                    {
-                        "type": "tool_use",
-                        "name": "Bash",
-                        "input": {"command": "gh pr view 87 --json body"},
-                    },
-                ]},
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "name": "Bash",
+                            "input": {"command": "gh pr view 87 --json body"},
+                        },
+                    ]
+                },
             },
             {
                 "type": "assistant",
                 "timestamp": "2026-03-28T10:02:00+09:00",
-                "message": {"content": [
-                    {
-                        "type": "tool_use",
-                        "name": "Bash",
-                        "input": {"command": "gh issue close 84"},
-                    },
-                ]},
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "name": "Bash",
+                            "input": {"command": "gh issue close 84"},
+                        },
+                    ]
+                },
             },
             {
                 "type": "assistant",
                 "timestamp": "2026-03-28T10:03:00+09:00",
-                "message": {"content": [
-                    {
-                        "type": "tool_use",
-                        "name": "Bash",
-                        "input": {
-                            "command": "gh api repos/n-yU/ayumy/pulls/82/comments",
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "name": "Bash",
+                            "input": {
+                                "command": "gh api repos/n-yU/ayumy/pulls/82/comments",
+                            },
                         },
-                    },
-                ]},
+                    ]
+                },
             },
             {
                 "type": "assistant",
                 "timestamp": "2026-03-28T10:04:00+09:00",
-                "message": {"content": [
-                    {
-                        "type": "tool_use",
-                        "name": "Bash",
-                        "input": {
-                            "command": 'git commit -m "Fix #91 and close #92"',
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "name": "Bash",
+                            "input": {
+                                "command": 'git commit -m "Fix #91 and close #92"',
+                            },
                         },
-                    },
-                ]},
+                    ]
+                },
             },
         )
         client.s3.get_object.return_value = _s3_body(lines)
@@ -695,14 +735,19 @@ class TestBuildItems:
             {
                 "type": "assistant",
                 "timestamp": "2026-03-28T10:01:00+09:00",
-                "message": {"content": [
-                    {"type": "text", "text": "https://github.com/n-yU/ayumy/pull/87"},
-                    {
-                        "type": "tool_use",
-                        "name": "Read",
-                        "input": {"file_path": "/tmp/notes_42.md"},
-                    },
-                ]},
+                "message": {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "https://github.com/n-yU/ayumy/pull/87",
+                        },
+                        {
+                            "type": "tool_use",
+                            "name": "Read",
+                            "input": {"file_path": "/tmp/notes_42.md"},
+                        },
+                    ]
+                },
             },
         )
         client.s3.get_object.return_value = _s3_body(lines)
@@ -764,20 +809,31 @@ class TestBuildItemsCwdFilter:
                 "type": "assistant",
                 "cwd": "/Users/a/proj",
                 "timestamp": "2026-03-28T10:01:00+09:00",
-                "message": {"content": [{
-                    "type": "tool_use", "id": "tu_x", "name": "Bash",
-                    "input": {"command": "cd ~/other && git commit -m x"},
-                }]},
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": "tu_x",
+                            "name": "Bash",
+                            "input": {"command": "cd ~/other && git commit -m x"},
+                        }
+                    ]
+                },
             },
             {
                 "type": "user",
                 "cwd": "/Users/a/proj",
                 "timestamp": "2026-03-28T10:02:00+09:00",
-                "message": {"content": [{
-                    "type": "tool_result", "tool_use_id": "tu_x",
-                    "content": "[main abc1234] cross-repo commit\n 1 file",
-                    "is_error": False,
-                }]},
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "tu_x",
+                            "content": "[main abc1234] cross-repo commit\n 1 file",
+                            "is_error": False,
+                        }
+                    ]
+                },
             },
         )
         assert items[0]["session_commits"] == []
@@ -794,26 +850,40 @@ class TestBuildItemsCwdFilter:
                 "type": "assistant",
                 "cwd": "/Users/a/proj",
                 "timestamp": "2026-03-28T10:01:00+09:00",
-                "message": {"content": [{
-                    "type": "tool_use", "id": "tu_x", "name": "Bash",
-                    "input": {"command": "git commit -m x"},
-                }]},
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": "tu_x",
+                            "name": "Bash",
+                            "input": {"command": "git commit -m x"},
+                        }
+                    ]
+                },
             },
             {
                 "type": "user",
                 "cwd": "/Users/a/proj",
                 "timestamp": "2026-03-28T10:02:00+09:00",
-                "message": {"content": [{
-                    "type": "tool_result", "tool_use_id": "tu_x",
-                    "content": "[main abc1234] in-repo commit\n 1 file",
-                    "is_error": False,
-                }]},
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "tu_x",
+                            "content": "[main abc1234] in-repo commit\n 1 file",
+                            "is_error": False,
+                        }
+                    ]
+                },
             },
         )
-        assert items[0]["session_commits"] == [{
-            "sha": "abc1234", "message": "in-repo commit",
-            "timestamp": "2026-03-28T10:02:00+09:00",
-        }]
+        assert items[0]["session_commits"] == [
+            {
+                "sha": "abc1234",
+                "message": "in-repo commit",
+                "timestamp": "2026-03-28T10:02:00+09:00",
+            }
+        ]
 
     def test_drops_refs_after_cd_to_other_repo(self):
         items = self._run(
@@ -827,10 +897,16 @@ class TestBuildItemsCwdFilter:
                 "type": "assistant",
                 "cwd": "/Users/a/proj",
                 "timestamp": "2026-03-28T10:01:00+09:00",
-                "message": {"content": [{
-                    "type": "tool_use", "id": "tu_x", "name": "Bash",
-                    "input": {"command": "cd ~/other && gh pr view 99"},
-                }]},
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": "tu_x",
+                            "name": "Bash",
+                            "input": {"command": "cd ~/other && gh pr view 99"},
+                        }
+                    ]
+                },
             },
         )
         assert items[0]["session_pulls"] == []
@@ -847,11 +923,16 @@ class TestBuildItemsCwdFilter:
             {
                 "type": "user",
                 "timestamp": "2026-03-28T10:02:00+09:00",
-                "message": {"content": [{
-                    "type": "tool_result", "tool_use_id": "tu_x",
-                    "content": "[main abc1234] no cwd info\n 1 file",
-                    "is_error": False,
-                }]},
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "tu_x",
+                            "content": "[main abc1234] no cwd info\n 1 file",
+                            "is_error": False,
+                        }
+                    ]
+                },
             },
         )
         assert len(items[0]["session_commits"]) == 1
@@ -870,20 +951,31 @@ class TestBuildItemsCwdFilter:
                 "type": "assistant",
                 "cwd": "/Users/a/other",
                 "timestamp": "2026-03-28T10:01:00+09:00",
-                "message": {"content": [{
-                    "type": "tool_use", "id": "tu_x", "name": "Bash",
-                    "input": {"command": "git commit -m x"},
-                }]},
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": "tu_x",
+                            "name": "Bash",
+                            "input": {"command": "git commit -m x"},
+                        }
+                    ]
+                },
             },
             {
                 "type": "user",
                 "cwd": "/Users/a/other",
                 "timestamp": "2026-03-28T10:02:00+09:00",
-                "message": {"content": [{
-                    "type": "tool_result", "tool_use_id": "tu_x",
-                    "content": "[main abc1234] outside cwd\n 1 file",
-                    "is_error": False,
-                }]},
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "tu_x",
+                            "content": "[main abc1234] outside cwd\n 1 file",
+                            "is_error": False,
+                        }
+                    ]
+                },
             },
         )
         assert items[0]["session_commits"] == []
@@ -1056,8 +1148,11 @@ class TestFetchSessions:
                     "user_messages": ["Fix bug"],
                     "tools_used": ["Edit"],
                     "session_commits": [
-                        {"sha": "a1b2c3d", "message": "Fix the bug",
-                         "timestamp": "2026-03-28T10:30:00+09:00"},
+                        {
+                            "sha": "a1b2c3d",
+                            "message": "Fix the bug",
+                            "timestamp": "2026-03-28T10:30:00+09:00",
+                        },
                     ],
                 },
             ],
@@ -1067,8 +1162,11 @@ class TestFetchSessions:
 
         sessions = activity.get("repo")
         assert sessions[0]["session_commits"] == [
-            {"sha": "a1b2c3d", "message": "Fix the bug",
-             "timestamp": "2026-03-28T10:30:00+09:00"},
+            {
+                "sha": "a1b2c3d",
+                "message": "Fix the bug",
+                "timestamp": "2026-03-28T10:30:00+09:00",
+            },
         ]
 
     def test_includes_session_pulls_and_issues(self):

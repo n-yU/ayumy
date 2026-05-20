@@ -89,14 +89,16 @@ class GitHubClient:
             author_date = c.commit.author.date
             if author_date < since or author_date >= until:
                 continue
-            results.append({
-                "sha": c.sha,
-                "message": c.commit.message.split("\n")[0],
-                "author": c.commit.author.name,
-                "date": author_date.isoformat(),
-                "url": c.html_url,
-                "pull_numbers": self._fetch_pulls_for_commit(repo, c.sha),
-            })
+            results.append(
+                {
+                    "sha": c.sha,
+                    "message": c.commit.message.split("\n")[0],
+                    "author": c.commit.author.name,
+                    "date": author_date.isoformat(),
+                    "url": c.html_url,
+                    "pull_numbers": self._fetch_pulls_for_commit(repo, c.sha),
+                }
+            )
         return results
 
     def fetch_pulls(
@@ -131,7 +133,11 @@ class GitHubClient:
         """
         if is_backfill:
             return self._fetch_pulls_hybrid(
-                repo, since, until, commits or [], session_numbers or [],
+                repo,
+                since,
+                until,
+                commits or [],
+                session_numbers or [],
             )
 
         results: list[PullInfo] = []
@@ -172,7 +178,10 @@ class GitHubClient:
         """
         if is_backfill:
             return self._fetch_issues_hybrid(
-                repo, since, until, session_numbers or [],
+                repo,
+                since,
+                until,
+                session_numbers or [],
             )
 
         results: list[IssueInfo] = []
@@ -219,11 +228,18 @@ class GitHubClient:
             repo = user.get_repo(name)
             commits = self.fetch_commits(repo, since, until)
             pulls = self.fetch_pulls(
-                repo, since, until, is_backfill=is_backfill, commits=commits,
+                repo,
+                since,
+                until,
+                is_backfill=is_backfill,
+                commits=commits,
                 session_numbers=session_pulls.get(name),
             )
             issues = self.fetch_issues(
-                repo, since, until, is_backfill=is_backfill,
+                repo,
+                since,
+                until,
+                is_backfill=is_backfill,
                 session_numbers=session_issues.get(name),
             )
 
@@ -236,7 +252,11 @@ class GitHubClient:
         return GitHubActivity(data)
 
     def _search_pulls_by_event(
-        self, repo: Repository, since: datetime, until: datetime, event: str,
+        self,
+        repo: Repository,
+        since: datetime,
+        until: datetime,
+        event: str,
     ) -> list[Issue]:
         """Search PRs whose state-transition event lies in the date range.
 
@@ -256,7 +276,11 @@ class GitHubClient:
         return list(self.g.search_issues(query))
 
     def _search_issues_by_event(
-        self, repo: Repository, since: datetime, until: datetime, event: str,
+        self,
+        repo: Repository,
+        since: datetime,
+        until: datetime,
+        event: str,
     ) -> list[Issue]:
         """Search issues (excluding PRs) by state-transition event."""
         query = self._build_search_query(repo, since, until, "issue", event)
@@ -279,13 +303,12 @@ class GitHubClient:
         """
         since_str = (since - timedelta(days=1)).strftime("%Y-%m-%d")
         until_str = until.strftime("%Y-%m-%d")
-        return (
-            f"repo:{repo.full_name} is:{kind} "
-            f"{event}:{since_str}..{until_str}"
-        )
+        return f"repo:{repo.full_name} is:{kind} " f"{event}:{since_str}..{until_str}"
 
     def _fetch_pulls_for_commit(
-        self, repo: Repository, sha: str,
+        self,
+        repo: Repository,
+        sha: str,
     ) -> list[int]:
         """Resolve PR numbers associated with a commit SHA.
 
@@ -300,7 +323,9 @@ class GitHubClient:
             return []
 
     def populate_commit_pull_numbers(
-        self, repo_name: str, commits: list[CommitInfo],
+        self,
+        repo_name: str,
+        commits: list[CommitInfo],
     ) -> None:
         """Fill pull_numbers and normalize SHA for the given commits.
 
@@ -324,7 +349,8 @@ class GitHubClient:
                 logger.warning(
                     "Commit %s lookup failed (%s); keeping commit but "
                     "skipping PR association",
-                    c["sha"][:7], e.status,
+                    c["sha"][:7],
+                    e.status,
                 )
                 c["pull_numbers"] = []
                 continue
@@ -457,7 +483,9 @@ def _build_issue_info(issue: Issue) -> IssueInfo:
 
 
 def _pull_has_event_in_range(
-    info: PullInfo, since: datetime, until: datetime,
+    info: PullInfo,
+    since: datetime,
+    until: datetime,
 ) -> bool:
     """Return True if any of created/merged/closed falls within range."""
     for ts in (info["created_at"], info["merged_at"], info["closed_at"]):
@@ -467,7 +495,9 @@ def _pull_has_event_in_range(
 
 
 def _issue_has_event_in_range(
-    info: IssueInfo, since: datetime, until: datetime,
+    info: IssueInfo,
+    since: datetime,
+    until: datetime,
 ) -> bool:
     """Return True if either created or closed falls within range."""
     for ts in (info["created_at"], info["closed_at"]):

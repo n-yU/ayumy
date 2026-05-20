@@ -7,13 +7,15 @@ from unittest.mock import MagicMock
 from report import JST
 from report.notion import RICH_TEXT_LIMIT, NotionClient, _chunk_rich_text, _linked_text
 
-
 SINCE = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
 UNTIL = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
 
 
 def _commit(
-    sha: str, message: str, hour: int = 10, minute: int = 0,
+    sha: str,
+    message: str,
+    hour: int = 10,
+    minute: int = 0,
     pull_numbers: list[int] | None = None,
 ) -> dict:
     return {
@@ -104,16 +106,23 @@ class TestChunkRichText:
 class TestLinkedText:
     def test_short_content_single_chunk(self):
         result = _linked_text("repo#1: title", "https://example.com/1")
-        assert result == [{
-            "type": "text",
-            "text": {"content": "repo#1: title", "link": {"url": "https://example.com/1"}},
-        }]
+        assert result == [
+            {
+                "type": "text",
+                "text": {
+                    "content": "repo#1: title",
+                    "link": {"url": "https://example.com/1"},
+                },
+            }
+        ]
 
     def test_long_content_split_with_shared_link(self):
         long_label = "x" * (RICH_TEXT_LIMIT * 2 + 100)
         result = _linked_text(long_label, "https://example.com/long")
         assert len(result) == 3
-        assert all(item["text"]["link"]["url"] == "https://example.com/long" for item in result)
+        assert all(
+            item["text"]["link"]["url"] == "https://example.com/long" for item in result
+        )
         assert len(result[0]["text"]["content"]) == RICH_TEXT_LIMIT
         assert len(result[1]["text"]["content"]) == RICH_TEXT_LIMIT
         assert len(result[2]["text"]["content"]) == 100
@@ -133,12 +142,17 @@ class TestBuildProperties:
         assert props["Name"]["title"][0]["text"]["content"] == "26-03-28: my-repo"
         assert props["Date"]["date"]["start"] == "2026-03-28"
         assert props["Repository"]["select"]["name"] == "my-repo"
-        assert {t["name"] for t in props["Tags"]["multi_select"]} == {"CI/CD", "Testing"}
+        assert {t["name"] for t in props["Tags"]["multi_select"]} == {
+            "CI/CD",
+            "Testing",
+        }
         assert props["Commits"]["number"] == 5
         assert props["Merged"]["number"] == 2
         assert props["Closed"]["number"] == 1
         assert props["Sessions"]["number"] == 3
-        assert re.fullmatch(r"\d+\.\d+\.\d+", props["Version"]["rich_text"][0]["text"]["content"])
+        assert re.fullmatch(
+            r"\d+\.\d+\.\d+", props["Version"]["rich_text"][0]["text"]["content"]
+        )
 
 
 class TestStatusSections:
@@ -147,24 +161,40 @@ class TestStatusSections:
         repo_activity = {
             "commits": [],
             "pulls": [
-                _pr(1, "Merged PR", "merged",
+                _pr(
+                    1,
+                    "Merged PR",
+                    "merged",
                     merged_at="2026-03-28T10:00:00+09:00",
-                    closed_at="2026-03-28T10:00:00+09:00"),
-                _pr(2, "Rejected PR", "closed",
-                    closed_at="2026-03-28T11:00:00+09:00"),
+                    closed_at="2026-03-28T10:00:00+09:00",
+                ),
+                _pr(2, "Rejected PR", "closed", closed_at="2026-03-28T11:00:00+09:00"),
             ],
             "issues": [
-                _issue(10, "Completed issue", "closed",
-                       closed_at="2026-03-28T12:00:00+09:00",
-                       state_reason="completed"),
-                _issue(11, "Not planned", "closed",
-                       closed_at="2026-03-28T13:00:00+09:00",
-                       state_reason="not_planned"),
-                _issue(12, "Duplicate", "closed",
-                       closed_at="2026-03-28T14:00:00+09:00",
-                       state_reason="duplicate"),
-                _issue(13, "Legacy closed", "closed",
-                       closed_at="2026-03-28T15:00:00+09:00"),
+                _issue(
+                    10,
+                    "Completed issue",
+                    "closed",
+                    closed_at="2026-03-28T12:00:00+09:00",
+                    state_reason="completed",
+                ),
+                _issue(
+                    11,
+                    "Not planned",
+                    "closed",
+                    closed_at="2026-03-28T13:00:00+09:00",
+                    state_reason="not_planned",
+                ),
+                _issue(
+                    12,
+                    "Duplicate",
+                    "closed",
+                    closed_at="2026-03-28T14:00:00+09:00",
+                    state_reason="duplicate",
+                ),
+                _issue(
+                    13, "Legacy closed", "closed", closed_at="2026-03-28T15:00:00+09:00"
+                ),
             ],
         }
         blocks = client._build_status_sections("repo", repo_activity, SINCE, UNTIL)
@@ -173,8 +203,12 @@ class TestStatusSections:
 
         # Each bullet has [prefix_text, linked_text]; verify prefix and label
         bullets = blocks[1:]
-        prefixes = [b["bulleted_list_item"]["rich_text"][0]["text"]["content"] for b in bullets]
-        labels = [b["bulleted_list_item"]["rich_text"][1]["text"]["content"] for b in bullets]
+        prefixes = [
+            b["bulleted_list_item"]["rich_text"][0]["text"]["content"] for b in bullets
+        ]
+        labels = [
+            b["bulleted_list_item"]["rich_text"][1]["text"]["content"] for b in bullets
+        ]
         assert prefixes == [
             "✅ ",
             "⚠️ (closed) ",
@@ -191,7 +225,10 @@ class TestStatusSections:
             "repo#12: Duplicate",
             "repo#13: Legacy closed",
         ]
-        urls = [b["bulleted_list_item"]["rich_text"][1]["text"]["link"]["url"] for b in bullets]
+        urls = [
+            b["bulleted_list_item"]["rich_text"][1]["text"]["link"]["url"]
+            for b in bullets
+        ]
         assert urls == [
             "https://github.com/n-yU/repo/pull/1",
             "https://github.com/n-yU/repo/pull/2",
@@ -210,17 +247,25 @@ class TestStatusSections:
                 _pr(4, "Ready", "open", draft=False),
             ],
             "issues": [
-                _issue(20, "Old open issue", "open",
-                       created_at="2026-03-20T09:00:00+09:00"),
+                _issue(
+                    20, "Old open issue", "open", created_at="2026-03-20T09:00:00+09:00"
+                ),
             ],
         }
         blocks = client._build_status_sections("repo", repo_activity, SINCE, UNTIL)
-        assert blocks[0]["heading_2"]["rich_text"][0]["text"]["content"] == "In Progress"
+        assert (
+            blocks[0]["heading_2"]["rich_text"][0]["text"]["content"] == "In Progress"
+        )
         # No prefix on In Progress bullets
         bullets = blocks[1:]
-        labels = [b["bulleted_list_item"]["rich_text"][0]["text"]["content"] for b in bullets]
+        labels = [
+            b["bulleted_list_item"]["rich_text"][0]["text"]["content"] for b in bullets
+        ]
         assert labels == ["repo#3: WIP", "repo#4: Ready", "repo#20: Old open issue"]
-        urls = [b["bulleted_list_item"]["rich_text"][0]["text"]["link"]["url"] for b in bullets]
+        urls = [
+            b["bulleted_list_item"]["rich_text"][0]["text"]["link"]["url"]
+            for b in bullets
+        ]
         assert urls == [
             "https://github.com/n-yU/repo/pull/3",
             "https://github.com/n-yU/repo/pull/4",
@@ -233,22 +278,26 @@ class TestStatusSections:
             "commits": [],
             "pulls": [],
             "issues": [
-                _issue(30, "New issue", "open",
-                       created_at="2026-03-28T11:00:00+09:00"),
-                _issue(31, "Old open issue", "open",
-                       created_at="2026-03-20T09:00:00+09:00"),
+                _issue(30, "New issue", "open", created_at="2026-03-28T11:00:00+09:00"),
+                _issue(
+                    31, "Old open issue", "open", created_at="2026-03-20T09:00:00+09:00"
+                ),
             ],
         }
         blocks = client._build_status_sections("repo", repo_activity, SINCE, UNTIL)
         # In Progress (old) heading + bullet, Todo heading + bullet
         headings = [
             b["heading_2"]["rich_text"][0]["text"]["content"]
-            for b in blocks if b["type"] == "heading_2"
+            for b in blocks
+            if b["type"] == "heading_2"
         ]
         assert headings == ["In Progress", "Todo"]
         # Verify each bullet links to its issue URL
         bullets = [b for b in blocks if b["type"] == "bulleted_list_item"]
-        urls = [b["bulleted_list_item"]["rich_text"][0]["text"]["link"]["url"] for b in bullets]
+        urls = [
+            b["bulleted_list_item"]["rich_text"][0]["text"]["link"]["url"]
+            for b in bullets
+        ]
         assert urls == [
             "https://github.com/n-yU/repo/issues/31",  # In Progress (old)
             "https://github.com/n-yU/repo/issues/30",  # Todo (newly created)
@@ -264,8 +313,7 @@ class TestStatusSections:
 def _bullet_text(block: dict) -> str:
     """Concatenate rich_text content of a bulleted_list_item block."""
     return "".join(
-        rt["text"]["content"]
-        for rt in block["bulleted_list_item"]["rich_text"]
+        rt["text"]["content"] for rt in block["bulleted_list_item"]["rich_text"]
     )
 
 
@@ -280,25 +328,36 @@ class TestTimelineSection:
     def test_pr_block_nests_non_merge_commits(self):
         repo_activity = {
             "commits": [
-                _commit("aaa1111", "branch commit 1",
-                        hour=9, minute=30, pull_numbers=[1]),
-                _commit("bbb2222", "branch commit 2",
-                        hour=10, minute=0, pull_numbers=[1]),
-                _commit("ccc3333", "Squash merge",
-                        hour=11, minute=0, pull_numbers=[1]),
+                _commit(
+                    "aaa1111", "branch commit 1", hour=9, minute=30, pull_numbers=[1]
+                ),
+                _commit(
+                    "bbb2222", "branch commit 2", hour=10, minute=0, pull_numbers=[1]
+                ),
+                _commit("ccc3333", "Squash merge", hour=11, minute=0, pull_numbers=[1]),
             ],
-            "pulls": [_pr(1, "Add feature", "merged",
-                          created_at="2026-03-28T09:00:00+09:00",
-                          merged_at="2026-03-28T11:00:00+09:00",
-                          closed_at="2026-03-28T11:00:00+09:00",
-                          merge_commit_sha="ccc3333")],
+            "pulls": [
+                _pr(
+                    1,
+                    "Add feature",
+                    "merged",
+                    created_at="2026-03-28T09:00:00+09:00",
+                    merged_at="2026-03-28T11:00:00+09:00",
+                    closed_at="2026-03-28T11:00:00+09:00",
+                    merge_commit_sha="ccc3333",
+                )
+            ],
             "issues": [],
         }
-        blocks = self.client._build_timeline_section("repo", repo_activity, SINCE, UNTIL)
+        blocks = self.client._build_timeline_section(
+            "repo", repo_activity, SINCE, UNTIL
+        )
 
         # Heading + PR block + merge commit at top level
         assert [b["type"] for b in blocks] == [
-            "heading_2", "bulleted_list_item", "bulleted_list_item",
+            "heading_2",
+            "bulleted_list_item",
+            "bulleted_list_item",
         ]
         pr_block = blocks[1]
         assert _bullet_text(pr_block) == "🔀 repo#1: Add feature"
@@ -315,8 +374,9 @@ class TestTimelineSection:
         # ISO string sort would put +00:00 before +09:00, but actual
         # chronological order is the opposite: 10:00+09:00 (= 01:00 UTC)
         # comes before 09:00+00:00 (= 18:00 JST)
-        early = _commit("aaa1111", "earlier in time",
-                        hour=10, minute=0, pull_numbers=[1])
+        early = _commit(
+            "aaa1111", "earlier in time", hour=10, minute=0, pull_numbers=[1]
+        )
         late = {
             "sha": "bbb2222",
             "message": "later in time",
@@ -327,11 +387,12 @@ class TestTimelineSection:
         }
         repo_activity = {
             "commits": [late, early],
-            "pulls": [_pr(1, "feat", "open",
-                          created_at="2026-03-28T09:00:00+09:00")],
+            "pulls": [_pr(1, "feat", "open", created_at="2026-03-28T09:00:00+09:00")],
             "issues": [],
         }
-        blocks = self.client._build_timeline_section("repo", repo_activity, SINCE, UNTIL)
+        blocks = self.client._build_timeline_section(
+            "repo", repo_activity, SINCE, UNTIL
+        )
         children = _bullet_children(blocks[1])
         assert [_bullet_text(c) for c in children] == [
             "🔸 aaa1111: earlier in time",
@@ -342,17 +403,18 @@ class TestTimelineSection:
         # Cherry-picked commit appears in two PRs; nesting must not
         # depend on pull_numbers input order
         repo_activity = {
-            "commits": [_commit("aaa1111", "shared commit",
-                                hour=10, pull_numbers=[5, 2])],
+            "commits": [
+                _commit("aaa1111", "shared commit", hour=10, pull_numbers=[5, 2])
+            ],
             "pulls": [
-                _pr(2, "PR two", "open",
-                    created_at="2026-03-28T09:00:00+09:00"),
-                _pr(5, "PR five", "open",
-                    created_at="2026-03-28T09:00:00+09:00"),
+                _pr(2, "PR two", "open", created_at="2026-03-28T09:00:00+09:00"),
+                _pr(5, "PR five", "open", created_at="2026-03-28T09:00:00+09:00"),
             ],
             "issues": [],
         }
-        blocks = self.client._build_timeline_section("repo", repo_activity, SINCE, UNTIL)
+        blocks = self.client._build_timeline_section(
+            "repo", repo_activity, SINCE, UNTIL
+        )
         pr_blocks = {_bullet_text(b): _bullet_children(b) for b in blocks[1:]}
         assert [_bullet_text(c) for c in pr_blocks["🔀 repo#2: PR two"]] == [
             "🔸 aaa1111: shared commit",
@@ -363,17 +425,24 @@ class TestTimelineSection:
         # PR opened before window; only the squash merge commit lands in range
         repo_activity = {
             "commits": [
-                _commit("ccc3333", "Squash merge",
-                        hour=11, minute=0, pull_numbers=[2]),
+                _commit("ccc3333", "Squash merge", hour=11, minute=0, pull_numbers=[2]),
             ],
-            "pulls": [_pr(2, "Old PR finally merged", "merged",
-                          created_at="2026-03-20T09:00:00+09:00",
-                          merged_at="2026-03-28T11:00:00+09:00",
-                          closed_at="2026-03-28T11:00:00+09:00",
-                          merge_commit_sha="ccc3333")],
+            "pulls": [
+                _pr(
+                    2,
+                    "Old PR finally merged",
+                    "merged",
+                    created_at="2026-03-20T09:00:00+09:00",
+                    merged_at="2026-03-28T11:00:00+09:00",
+                    closed_at="2026-03-28T11:00:00+09:00",
+                    merge_commit_sha="ccc3333",
+                )
+            ],
             "issues": [],
         }
-        blocks = self.client._build_timeline_section("repo", repo_activity, SINCE, UNTIL)
+        blocks = self.client._build_timeline_section(
+            "repo", repo_activity, SINCE, UNTIL
+        )
         # PR header (no children) appears immediately before its merge commit
         assert _bullet_text(blocks[1]) == "🔀 repo#2: Old PR finally merged"
         assert _bullet_children(blocks[1]) == []
@@ -385,29 +454,42 @@ class TestTimelineSection:
             "pulls": [],
             "issues": [],
         }
-        blocks = self.client._build_timeline_section("repo", repo_activity, SINCE, UNTIL)
+        blocks = self.client._build_timeline_section(
+            "repo", repo_activity, SINCE, UNTIL
+        )
         assert _bullet_text(blocks[1]) == "🔸 ddd4444: Direct commit"
 
     def test_pr_with_no_in_range_activity_is_omitted(self):
         # Session-touched PR with no commits/state changes in range
         repo_activity = {
             "commits": [],
-            "pulls": [_pr(8, "Touched", "open",
-                          created_at="2026-03-20T09:00:00+09:00")],
+            "pulls": [
+                _pr(8, "Touched", "open", created_at="2026-03-20T09:00:00+09:00")
+            ],
             "issues": [],
         }
-        blocks = self.client._build_timeline_section("repo", repo_activity, SINCE, UNTIL)
+        blocks = self.client._build_timeline_section(
+            "repo", repo_activity, SINCE, UNTIL
+        )
         assert blocks == []
 
     def test_unmerged_pr_close_appears_at_top_level(self):
         repo_activity = {
             "commits": [],
-            "pulls": [_pr(7, "Rejected", "closed",
-                          created_at="2026-03-27T09:00:00+09:00",
-                          closed_at="2026-03-28T15:00:00+09:00")],
+            "pulls": [
+                _pr(
+                    7,
+                    "Rejected",
+                    "closed",
+                    created_at="2026-03-27T09:00:00+09:00",
+                    closed_at="2026-03-28T15:00:00+09:00",
+                )
+            ],
             "issues": [],
         }
-        blocks = self.client._build_timeline_section("repo", repo_activity, SINCE, UNTIL)
+        blocks = self.client._build_timeline_section(
+            "repo", repo_activity, SINCE, UNTIL
+        )
         # PR header (no commits) + top-level close line
         assert _bullet_text(blocks[1]) == "🔀 repo#7: Rejected"
         assert _bullet_text(blocks[2]) == "⚠️ close: repo#7: Rejected"
@@ -417,19 +499,28 @@ class TestTimelineSection:
             "commits": [],
             "pulls": [],
             "issues": [
-                _issue(5, "New bug", "open",
-                       created_at="2026-03-28T08:00:00+09:00"),
-                _issue(6, "Fixed", "closed",
-                       created_at="2026-03-20T09:00:00+09:00",
-                       closed_at="2026-03-28T13:00:00+09:00",
-                       state_reason="completed"),
-                _issue(7, "Won't fix", "closed",
-                       created_at="2026-03-20T09:00:00+09:00",
-                       closed_at="2026-03-28T14:00:00+09:00",
-                       state_reason="not_planned"),
+                _issue(5, "New bug", "open", created_at="2026-03-28T08:00:00+09:00"),
+                _issue(
+                    6,
+                    "Fixed",
+                    "closed",
+                    created_at="2026-03-20T09:00:00+09:00",
+                    closed_at="2026-03-28T13:00:00+09:00",
+                    state_reason="completed",
+                ),
+                _issue(
+                    7,
+                    "Won't fix",
+                    "closed",
+                    created_at="2026-03-20T09:00:00+09:00",
+                    closed_at="2026-03-28T14:00:00+09:00",
+                    state_reason="not_planned",
+                ),
             ],
         }
-        blocks = self.client._build_timeline_section("repo", repo_activity, SINCE, UNTIL)
+        blocks = self.client._build_timeline_section(
+            "repo", repo_activity, SINCE, UNTIL
+        )
         texts = [_bullet_text(b) for b in blocks[1:]]
         assert texts == [
             "🟢 open: repo#5: New bug",
@@ -440,23 +531,26 @@ class TestTimelineSection:
     def test_chronological_order_across_types(self):
         repo_activity = {
             "commits": [
-                _commit("aaa1111", "commit on PR#1",
-                        hour=10, minute=30, pull_numbers=[1]),
+                _commit(
+                    "aaa1111", "commit on PR#1", hour=10, minute=30, pull_numbers=[1]
+                ),
                 _commit("ddd4444", "Direct", hour=12),
             ],
-            "pulls": [_pr(1, "Feature", "open",
-                          created_at="2026-03-28T09:00:00+09:00")],
+            "pulls": [
+                _pr(1, "Feature", "open", created_at="2026-03-28T09:00:00+09:00")
+            ],
             "issues": [
-                _issue(5, "Bug", "open",
-                       created_at="2026-03-28T08:00:00+09:00"),
+                _issue(5, "Bug", "open", created_at="2026-03-28T08:00:00+09:00"),
             ],
         }
-        blocks = self.client._build_timeline_section("repo", repo_activity, SINCE, UNTIL)
+        blocks = self.client._build_timeline_section(
+            "repo", repo_activity, SINCE, UNTIL
+        )
         texts = [_bullet_text(b) for b in blocks[1:]]
         assert texts == [
-            "🟢 open: repo#5: Bug",            # 08:00
-            "🔀 repo#1: Feature",              # PR sort key 09:00 (open)
-            "🔸 ddd4444: Direct",              # 12:00
+            "🟢 open: repo#5: Bug",  # 08:00
+            "🔀 repo#1: Feature",  # PR sort key 09:00 (open)
+            "🔸 ddd4444: Direct",  # 12:00
         ]
         # PR block has its commit nested
         assert [_bullet_text(c) for c in _bullet_children(blocks[2])] == [
@@ -465,9 +559,10 @@ class TestTimelineSection:
 
     def test_omitted_when_no_entries(self):
         repo_activity = {"commits": [], "pulls": [], "issues": []}
-        blocks = self.client._build_timeline_section("repo", repo_activity, SINCE, UNTIL)
+        blocks = self.client._build_timeline_section(
+            "repo", repo_activity, SINCE, UNTIL
+        )
         assert blocks == []
-
 
 
 class TestBuildChildren:
@@ -481,13 +576,16 @@ class TestBuildChildren:
         repo_activity = {
             "commits": [_commit("deadbeef00", "Commit msg", hour=10, minute=0)],
             "pulls": [
-                _pr(1, "Merged", "merged",
+                _pr(
+                    1,
+                    "Merged",
+                    "merged",
                     merged_at="2026-03-28T11:00:00+09:00",
-                    closed_at="2026-03-28T11:00:00+09:00"),
+                    closed_at="2026-03-28T11:00:00+09:00",
+                ),
             ],
             "issues": [
-                _issue(5, "Open today", "open",
-                       created_at="2026-03-28T09:00:00+09:00"),
+                _issue(5, "Open today", "open", created_at="2026-03-28T09:00:00+09:00"),
             ],
         }
         children = client._build_children(repo_summary, repo_activity, SINCE, UNTIL)
@@ -496,16 +594,23 @@ class TestBuildChildren:
         # Done heading + 1 bullet, Todo heading + 1 bullet,
         # Timeline heading + bullets (Issue open, PR header, direct commit)
         assert types == [
-            "heading_2", "bulleted_list_item", "bulleted_list_item",
-            "heading_2", "bulleted_list_item",
-            "heading_2", "bulleted_list_item",
             "heading_2",
-            "bulleted_list_item", "bulleted_list_item", "bulleted_list_item",
+            "bulleted_list_item",
+            "bulleted_list_item",
+            "heading_2",
+            "bulleted_list_item",
+            "heading_2",
+            "bulleted_list_item",
+            "heading_2",
+            "bulleted_list_item",
+            "bulleted_list_item",
+            "bulleted_list_item",
         ]
 
         headings = [
             c["heading_2"]["rich_text"][0]["text"]["content"]
-            for c in children if c["type"] == "heading_2"
+            for c in children
+            if c["type"] == "heading_2"
         ]
         assert headings == ["Summary", "Done", "Todo", "Timeline"]
 
@@ -521,6 +626,7 @@ class TestBuildChildren:
 class TestCreateReportPagesWiring:
     def test_passes_since_until_to_create_page(self):
         from report import GitHubActivity, SessionActivity
+
         client = _make_client()
         client._archive_existing_pages = MagicMock(return_value=0)
         client.create_page = MagicMock(return_value="https://notion.so/page1")
@@ -530,7 +636,9 @@ class TestCreateReportPagesWiring:
         activity = GitHubActivity({"repo": {"commits": [], "pulls": [], "issues": []}})
         sessions = SessionActivity({})
 
-        client.create_report_pages(target_date, SINCE, UNTIL, report, activity, sessions)
+        client.create_report_pages(
+            target_date, SINCE, UNTIL, report, activity, sessions
+        )
 
         client.create_page.assert_called_once()
         args = client.create_page.call_args[0]

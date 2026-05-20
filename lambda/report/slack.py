@@ -80,23 +80,63 @@ class SlackClient:
                 link = f"<{url}|{date_str}: {name}>"
                 page_lines.append(f"{link} — {headline}" if headline else link)
 
-            self._blocks.extend([
-                {"type": "header", "text": {"type": "plain_text", "text": f"📝 Daily Report ({date_str})"}},
-                {"type": "section", "text": {"type": "mrkdwn", "text": "\n".join(page_lines)}},
-            ])
+            self._blocks.extend(
+                [
+                    {
+                        "type": "header",
+                        "text": {
+                            "type": "plain_text",
+                            "text": f"📝 Daily Report ({date_str})",
+                        },
+                    },
+                    {
+                        "type": "section",
+                        "text": {"type": "mrkdwn", "text": "\n".join(page_lines)},
+                    },
+                ]
+            )
             if skipped_repos:
                 skipped = ", ".join(skipped_repos)
-                self._blocks.append({"type": "context", "elements": [{"type": "mrkdwn", "text": f"⚠️ Skipped: {skipped}"}]})
-            self._fallback_parts.append(f"📝 Daily Report ({date_str}): {len(pages)} page(s) created")
+                self._blocks.append(
+                    {
+                        "type": "context",
+                        "elements": [
+                            {"type": "mrkdwn", "text": f"⚠️ Skipped: {skipped}"}
+                        ],
+                    }
+                )
+            self._fallback_parts.append(
+                f"📝 Daily Report ({date_str}): {len(pages)} page(s) created"
+            )
         else:
-            self._blocks.extend([
-                {"type": "header", "text": {"type": "plain_text", "text": f"✅ Daily Report ({date_str})"}},
-                {"type": "section", "text": {"type": "mrkdwn", "text": "No pages created"}},
-            ])
+            self._blocks.extend(
+                [
+                    {
+                        "type": "header",
+                        "text": {
+                            "type": "plain_text",
+                            "text": f"✅ Daily Report ({date_str})",
+                        },
+                    },
+                    {
+                        "type": "section",
+                        "text": {"type": "mrkdwn", "text": "No pages created"},
+                    },
+                ]
+            )
             if skipped_repos:
                 skipped = ", ".join(skipped_repos)
-                self._blocks.append({"type": "context", "elements": [{"type": "mrkdwn", "text": f"⚠️ Skipped: {skipped}"}]})
-            self._fallback_parts.append(f"✅ Daily Report ({date_str}): No pages created")
+                self._blocks.append(
+                    {
+                        "type": "context",
+                        "elements": [
+                            {"type": "mrkdwn", "text": f"⚠️ Skipped: {skipped}"}
+                        ],
+                    }
+                )
+            self._fallback_parts.append(
+                f"✅ Daily Report ({date_str}): No pages created"
+            )
 
     def notify_no_activity(self, target_date: datetime) -> None:
         """Buffer a no-activity notification.
@@ -109,14 +149,24 @@ class SlackClient:
         if self._blocks:
             self._blocks.append({"type": "divider"})
 
-        self._blocks.extend([
-            {"type": "header", "text": {"type": "plain_text", "text": f"💤 Daily Report ({date_str})"}},
-            {"type": "section", "text": {"type": "mrkdwn", "text": "No activity"}},
-        ])
+        self._blocks.extend(
+            [
+                {
+                    "type": "header",
+                    "text": {
+                        "type": "plain_text",
+                        "text": f"💤 Daily Report ({date_str})",
+                    },
+                },
+                {"type": "section", "text": {"type": "mrkdwn", "text": "No activity"}},
+            ]
+        )
         self._fallback_parts.append(f"💤 Daily Report ({date_str}): No activity")
 
     def notify_validation_errors(
-        self, target_date: datetime, result: ValidationResult,
+        self,
+        target_date: datetime,
+        result: ValidationResult,
     ) -> None:
         """Buffer a validation error notification.
 
@@ -132,11 +182,27 @@ class SlackClient:
         if self._blocks:
             self._blocks.append({"type": "divider"})
 
-        self._blocks.extend([
-            {"type": "header", "text": {"type": "plain_text", "text": f"⚠️ Daily Report ({date_str})"}},
-            {"type": "section", "text": {"type": "mrkdwn", "text": f"Invalid tags detected\n{'\n'.join(lines)}"}},
-        ])
-        self._fallback_parts.append(f"⚠️ Daily Report ({date_str}): Invalid tags detected")
+        self._blocks.extend(
+            [
+                {
+                    "type": "header",
+                    "text": {
+                        "type": "plain_text",
+                        "text": f"⚠️ Daily Report ({date_str})",
+                    },
+                },
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"Invalid tags detected\n{'\n'.join(lines)}",
+                    },
+                },
+            ]
+        )
+        self._fallback_parts.append(
+            f"⚠️ Daily Report ({date_str}): Invalid tags detected"
+        )
 
     def notify_error(self, target_date: datetime, error: Exception) -> None:
         """Buffer an error notification.
@@ -150,14 +216,24 @@ class SlackClient:
         if self._blocks:
             self._blocks.append({"type": "divider"})
 
-        self._blocks.extend([
-            {"type": "header", "text": {"type": "plain_text", "text": f"❌ Daily Report ({date_str})"}},
-            {"type": "section", "text": {"type": "mrkdwn", "text": str(error)}},
-        ])
+        self._blocks.extend(
+            [
+                {
+                    "type": "header",
+                    "text": {
+                        "type": "plain_text",
+                        "text": f"❌ Daily Report ({date_str})",
+                    },
+                },
+                {"type": "section", "text": {"type": "mrkdwn", "text": str(error)}},
+            ]
+        )
         self._fallback_parts.append(f"❌ Daily Report ({date_str}): {error}")
 
     def notify_metrics(
-        self, elapsed: float, peak_memory_mb: float,
+        self,
+        elapsed: float,
+        peak_memory_mb: float,
         version: str,
         memory_limit_mb: int | None = None,
         timeout_seconds: int | None = None,
@@ -186,13 +262,17 @@ class SlackClient:
         else:
             memory_text = f"{peak_memory_mb:.0f} MB"
 
-        self._blocks.append({
-            "type": "context",
-            "elements": [{
-                "type": "mrkdwn",
-                "text": f"🔖 v{version}  |  ⏱️ {elapsed_text}  |  💾 {memory_text}",
-            }],
-        })
+        self._blocks.append(
+            {
+                "type": "context",
+                "elements": [
+                    {
+                        "type": "mrkdwn",
+                        "text": f"🔖 v{version}  |  ⏱️ {elapsed_text}  |  💾 {memory_text}",
+                    }
+                ],
+            }
+        )
         self._fallback_parts.append(
             f"📊 Execution Metrics: v{version}, {elapsed_text}, {memory_text}"
         )
@@ -218,7 +298,8 @@ class SlackClient:
             if response.status_code != 200:
                 logger.error(
                     "Failed to send Slack notification: status=%d, body=%s",
-                    response.status_code, response.body,
+                    response.status_code,
+                    response.body,
                 )
         except Exception as e:
             logger.exception("Failed to send Slack notification: %r", e)

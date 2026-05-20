@@ -5,9 +5,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from github import GithubException, UnknownObjectException
-
 from report import JST
-from report.github import GitHubClient, _SEARCH_BATCH, _SEARCH_WINDOW
+from report.github import _SEARCH_BATCH, _SEARCH_WINDOW, GitHubClient
 
 # Default JST day window used across most tests
 SINCE = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
@@ -30,8 +29,17 @@ def _make_pr_issue(number):
     return item
 
 
-def _make_pull(number, *, created_at, merged_at=None, closed_at=None,
-               state=None, title="PR", labels=None, draft=False):
+def _make_pull(
+    number,
+    *,
+    created_at,
+    merged_at=None,
+    closed_at=None,
+    state=None,
+    title="PR",
+    labels=None,
+    draft=False,
+):
     """Create a PullRequest mock with the fields _build_pull_info reads."""
     pr = MagicMock()
     pr.number = number
@@ -50,9 +58,17 @@ def _make_pull(number, *, created_at, merged_at=None, closed_at=None,
     return pr
 
 
-def _make_issue(number, *, created_at, closed_at=None, state=None,
-                state_reason=None, title="Issue", labels=None,
-                pull_request=None):
+def _make_issue(
+    number,
+    *,
+    created_at,
+    closed_at=None,
+    state=None,
+    state_reason=None,
+    title="Issue",
+    labels=None,
+    pull_request=None,
+):
     """Create an Issue mock matching _build_issue_info."""
     issue = MagicMock()
     issue.number = number
@@ -111,8 +127,10 @@ class TestFetchCommits:
         client.g.search_commits.return_value = [mock_commit]
 
         commit_obj = MagicMock()
-        pr1 = MagicMock(); pr1.number = 5
-        pr2 = MagicMock(); pr2.number = 9
+        pr1 = MagicMock()
+        pr1.number = 5
+        pr2 = MagicMock()
+        pr2.number = 9
         commit_obj.get_pulls.return_value = [pr1, pr2]
         repo.get_commit.return_value = commit_obj
 
@@ -489,8 +507,12 @@ class TestPopulateCommitPullNumbers:
 
     def _commit(self, sha, pull_numbers):
         return {
-            "sha": sha, "message": "m", "author": "u", "date": "...",
-            "url": "...", "pull_numbers": pull_numbers,
+            "sha": sha,
+            "message": "m",
+            "author": "u",
+            "date": "...",
+            "url": "...",
+            "pull_numbers": pull_numbers,
         }
 
     def test_skips_commits_with_existing_pull_numbers(self):
@@ -505,7 +527,8 @@ class TestPopulateCommitPullNumbers:
         commit_obj = MagicMock()
         commit_obj.sha = "bbb"
         commit_obj.html_url = "https://github.com/n-yU/repo/commit/bbb"
-        pr = MagicMock(); pr.number = 11
+        pr = MagicMock()
+        pr.number = 11
         commit_obj.get_pulls.return_value = [pr]
         self.repo.get_commit.return_value = commit_obj
 
@@ -534,7 +557,9 @@ class TestPopulateCommitPullNumbers:
 
     def test_assigns_empty_list_on_404(self):
         self.repo.get_commit.side_effect = UnknownObjectException(
-            404, "Not Found", {},
+            404,
+            "Not Found",
+            {},
         )
 
         commits = [self._commit("aaa", [])]
@@ -546,7 +571,9 @@ class TestPopulateCommitPullNumbers:
         # Short SHA ambiguity / not-found is reported as 422 by
         # GET /commits/{sha}
         self.repo.get_commit.side_effect = GithubException(
-            422, {"message": "No commit found for SHA: aaa"}, {},
+            422,
+            {"message": "No commit found for SHA: aaa"},
+            {},
         )
 
         commits = [self._commit("aaa", [])]
@@ -556,7 +583,9 @@ class TestPopulateCommitPullNumbers:
 
     def test_propagates_other_github_errors(self):
         self.repo.get_commit.side_effect = GithubException(
-            500, {"message": "server error"}, {},
+            500,
+            {"message": "server error"},
+            {},
         )
 
         commits = [self._commit("aaa", [])]
@@ -586,15 +615,27 @@ class TestFetchPullsBackfill:
         # Each PR refetch returns a pull whose timestamps are in range
         in_range = datetime(2026, 3, 28, 12, 0, tzinfo=JST)
         repo.get_pull.side_effect = lambda n: _make_pull(
-            n, created_at=in_range,
+            n,
+            created_at=in_range,
         )
 
         # Commits already carry pull_numbers populated by fetch_commits
-        commits = [{"sha": "deadbee", "message": "", "author": "",
-                    "date": in_range.isoformat(), "url": "",
-                    "pull_numbers": [1, 4]}]
+        commits = [
+            {
+                "sha": "deadbee",
+                "message": "",
+                "author": "",
+                "date": in_range.isoformat(),
+                "url": "",
+                "pull_numbers": [1, 4],
+            }
+        ]
         result = client.fetch_pulls(
-            repo, SINCE, UNTIL, is_backfill=True, commits=commits,
+            repo,
+            SINCE,
+            UNTIL,
+            is_backfill=True,
+            commits=commits,
         )
 
         numbers = sorted(r["number"] for r in result)
@@ -610,15 +651,19 @@ class TestFetchPullsBackfill:
 
         client.g.search_issues.side_effect = [
             [_make_pr_issue(10)],  # created
-            [],                     # merged
-            [],                     # closed
+            [],  # merged
+            [],  # closed
         ]
         # PR #10 was created on a different day (search widens window by 1 day)
         out_of_range = datetime(2026, 3, 27, 23, 0, tzinfo=JST)
         repo.get_pull.return_value = _make_pull(10, created_at=out_of_range)
 
         result = client.fetch_pulls(
-            repo, SINCE, UNTIL, is_backfill=True, commits=[],
+            repo,
+            SINCE,
+            UNTIL,
+            is_backfill=True,
+            commits=[],
         )
         assert result == []
 
@@ -631,13 +676,26 @@ class TestFetchPullsBackfill:
         client.g.search_issues.side_effect = [[], [], []]
         # PR opened weeks ago, no merged/closed yet
         repo.get_pull.return_value = _make_pull(
-            99, created_at=datetime(2026, 3, 1, 0, 0, tzinfo=JST),
+            99,
+            created_at=datetime(2026, 3, 1, 0, 0, tzinfo=JST),
         )
 
-        commits = [{"sha": "abc", "message": "", "author": "",
-                    "date": "", "url": "", "pull_numbers": [99]}]
+        commits = [
+            {
+                "sha": "abc",
+                "message": "",
+                "author": "",
+                "date": "",
+                "url": "",
+                "pull_numbers": [99],
+            }
+        ]
         result = client.fetch_pulls(
-            repo, SINCE, UNTIL, is_backfill=True, commits=commits,
+            repo,
+            SINCE,
+            UNTIL,
+            is_backfill=True,
+            commits=commits,
         )
         assert [r["number"] for r in result] == [99]
 
@@ -647,12 +705,18 @@ class TestFetchPullsBackfill:
         repo.full_name = "n-yU/repo"
 
         client.g.search_issues.side_effect = [
-            [_make_pr_issue(50)], [], [],
+            [_make_pr_issue(50)],
+            [],
+            [],
         ]
         repo.get_pull.side_effect = UnknownObjectException(404, "Not Found", {})
 
         result = client.fetch_pulls(
-            repo, SINCE, UNTIL, is_backfill=True, commits=[],
+            repo,
+            SINCE,
+            UNTIL,
+            is_backfill=True,
+            commits=[],
         )
         assert result == []
 
@@ -662,13 +726,19 @@ class TestFetchPullsBackfill:
         repo.full_name = "n-yU/repo"
 
         client.g.search_issues.side_effect = [
-            [_make_pr_issue(50)], [], [],
+            [_make_pr_issue(50)],
+            [],
+            [],
         ]
         repo.get_pull.side_effect = RuntimeError("transient failure")
 
         with pytest.raises(RuntimeError):
             client.fetch_pulls(
-                repo, SINCE, UNTIL, is_backfill=True, commits=[],
+                repo,
+                SINCE,
+                UNTIL,
+                is_backfill=True,
+                commits=[],
             )
 
     def test_keeps_session_derived_pull_without_in_range_event(self):
@@ -679,11 +749,16 @@ class TestFetchPullsBackfill:
 
         client.g.search_issues.side_effect = [[], [], []]
         repo.get_pull.return_value = _make_pull(
-            77, created_at=datetime(2026, 2, 1, 0, 0, tzinfo=JST),
+            77,
+            created_at=datetime(2026, 2, 1, 0, 0, tzinfo=JST),
         )
 
         result = client.fetch_pulls(
-            repo, SINCE, UNTIL, is_backfill=True, commits=[],
+            repo,
+            SINCE,
+            UNTIL,
+            is_backfill=True,
+            commits=[],
             session_numbers=[77],
         )
         assert [r["number"] for r in result] == [77]
@@ -696,14 +771,21 @@ class TestFetchPullsBackfill:
         # Search→#10 (in range), session→#10, #20
         in_range = datetime(2026, 3, 28, 12, 0, tzinfo=JST)
         client.g.search_issues.side_effect = [
-            [_make_pr_issue(10)], [], [],
+            [_make_pr_issue(10)],
+            [],
+            [],
         ]
         repo.get_pull.side_effect = lambda n: _make_pull(
-            n, created_at=in_range,
+            n,
+            created_at=in_range,
         )
 
         result = client.fetch_pulls(
-            repo, SINCE, UNTIL, is_backfill=True, commits=[],
+            repo,
+            SINCE,
+            UNTIL,
+            is_backfill=True,
+            commits=[],
             session_numbers=[10, 20],
         )
         assert sorted(r["number"] for r in result) == [10, 20]
@@ -720,7 +802,11 @@ class TestFetchPullsBackfill:
         repo.get_pull.side_effect = UnknownObjectException(404, "Not Found", {})
 
         result = client.fetch_pulls(
-            repo, SINCE, UNTIL, is_backfill=True, commits=[],
+            repo,
+            SINCE,
+            UNTIL,
+            is_backfill=True,
+            commits=[],
             session_numbers=[999],
         )
         assert result == []
@@ -735,15 +821,21 @@ class TestFetchIssuesBackfill:
         in_range = datetime(2026, 3, 28, 12, 0, tzinfo=JST)
         i_created = _make_issue(1, created_at=in_range)
         i_closed = _make_issue(
-            2, created_at=datetime(2026, 3, 1, 0, 0, tzinfo=JST),
-            closed_at=in_range, state_reason="completed",
+            2,
+            created_at=datetime(2026, 3, 1, 0, 0, tzinfo=JST),
+            closed_at=in_range,
+            state_reason="completed",
         )
         client.g.search_issues.side_effect = [
-            [i_created], [i_closed],
+            [i_created],
+            [i_closed],
         ]
 
         result = client.fetch_issues(
-            repo, SINCE, UNTIL, is_backfill=True,
+            repo,
+            SINCE,
+            UNTIL,
+            is_backfill=True,
         )
         assert sorted(r["number"] for r in result) == [1, 2]
         assert result[1]["state_reason"] == "completed"
@@ -756,7 +848,8 @@ class TestFetchIssuesBackfill:
         # Returned by search but actually outside JST window
         out_of_range = datetime(2026, 3, 27, 22, 0, tzinfo=JST)
         client.g.search_issues.side_effect = [
-            [_make_issue(5, created_at=out_of_range)], [],
+            [_make_issue(5, created_at=out_of_range)],
+            [],
         ]
 
         result = client.fetch_issues(repo, SINCE, UNTIL, is_backfill=True)
@@ -770,11 +863,16 @@ class TestFetchIssuesBackfill:
 
         client.g.search_issues.side_effect = [[], []]
         repo.get_issue.return_value = _make_issue(
-            42, created_at=datetime(2026, 2, 1, 0, 0, tzinfo=JST),
+            42,
+            created_at=datetime(2026, 2, 1, 0, 0, tzinfo=JST),
         )
 
         result = client.fetch_issues(
-            repo, SINCE, UNTIL, is_backfill=True, session_numbers=[42],
+            repo,
+            SINCE,
+            UNTIL,
+            is_backfill=True,
+            session_numbers=[42],
         )
         assert [r["number"] for r in result] == [42]
 
@@ -786,12 +884,17 @@ class TestFetchIssuesBackfill:
 
         client.g.search_issues.side_effect = [[], []]
         repo.get_issue.return_value = _make_issue(
-            87, created_at=datetime(2026, 2, 1, 0, 0, tzinfo=JST),
+            87,
+            created_at=datetime(2026, 2, 1, 0, 0, tzinfo=JST),
             pull_request=MagicMock(),
         )
 
         result = client.fetch_issues(
-            repo, SINCE, UNTIL, is_backfill=True, session_numbers=[87],
+            repo,
+            SINCE,
+            UNTIL,
+            is_backfill=True,
+            session_numbers=[87],
         )
         assert result == []
 
@@ -804,7 +907,11 @@ class TestFetchIssuesBackfill:
         repo.get_issue.side_effect = UnknownObjectException(404, "Not Found", {})
 
         result = client.fetch_issues(
-            repo, SINCE, UNTIL, is_backfill=True, session_numbers=[999],
+            repo,
+            SINCE,
+            UNTIL,
+            is_backfill=True,
+            session_numbers=[999],
         )
         assert result == []
 
@@ -816,11 +923,16 @@ class TestFetchIssuesBackfill:
 
         in_range = datetime(2026, 3, 28, 12, 0, tzinfo=JST)
         client.g.search_issues.side_effect = [
-            [_make_issue(10, created_at=in_range)], [],
+            [_make_issue(10, created_at=in_range)],
+            [],
         ]
 
         result = client.fetch_issues(
-            repo, SINCE, UNTIL, is_backfill=True, session_numbers=[10],
+            repo,
+            SINCE,
+            UNTIL,
+            is_backfill=True,
+            session_numbers=[10],
         )
         assert [r["number"] for r in result] == [10]
         repo.get_issue.assert_not_called()

@@ -14,9 +14,7 @@ MODEL = "claude-sonnet-4-20250514"
 MAX_TOKENS = 2048
 TOOL_NAME = "submit_daily_report"
 
-_TAG_GUIDANCE = "\n".join(
-    f"- {t.name}: {t.description}" for t in TAG_DEFINITIONS
-)
+_TAG_GUIDANCE = "\n".join(f"- {t.name}: {t.description}" for t in TAG_DEFINITIONS)
 
 _SYSTEM_PROMPT = f"""\
 あなたは開発者の日次アクティビティを要約するアシスタントです。
@@ -162,9 +160,7 @@ class SummaryClient:
             if getattr(block, "type", None) == "tool_use" and block.name == TOOL_NAME:
                 return block.input  # type: ignore[return-value]
 
-        raise ValueError(
-            f"Claude API response missing tool_use block for {TOOL_NAME}."
-        )
+        raise ValueError(f"Claude API response missing tool_use block for {TOOL_NAME}.")
 
     def validate_report(self, report: ReportSummary) -> ValidationResult:
         """Validate and fix tags in a report against the allowlist.

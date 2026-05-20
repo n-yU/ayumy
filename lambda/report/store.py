@@ -233,7 +233,8 @@ class SessionStore:
                 continue
 
             resp = session_client.s3.get_object(
-                Bucket=session_client.bucket, Key=key,
+                Bucket=session_client.bucket,
+                Key=key,
             )
             body = resp["Body"].read().decode("utf-8")
 
@@ -278,20 +279,26 @@ class SessionStore:
                         group["user_messages"].append(content.strip())
                     elif isinstance(content, list):
                         for block in content:
-                            if block.get("type") != "tool_result" or block.get("is_error"):
+                            if block.get("type") != "tool_result" or block.get(
+                                "is_error"
+                            ):
                                 continue
                             tool_use_id = block.get("tool_use_id")
-                            cwd = tool_use_cwds.get(tool_use_id) if tool_use_id else None
+                            cwd = (
+                                tool_use_cwds.get(tool_use_id) if tool_use_id else None
+                            )
                             if _is_cross_repo(cwd, project_cwd):
                                 continue
                             text = block.get("content", "")
                             if isinstance(text, str):
                                 for sha, msg in commit_pattern.findall(text):
-                                    group["commits"].append({
-                                        "sha": sha,
-                                        "message": msg,
-                                        "timestamp": timestamp,
-                                    })
+                                    group["commits"].append(
+                                        {
+                                            "sha": sha,
+                                            "message": msg,
+                                            "timestamp": timestamp,
+                                        }
+                                    )
                 elif entry_type == "assistant":
                     for block in entry.get("message", {}).get("content", []):
                         if block.get("type") != "tool_use":
@@ -323,26 +330,30 @@ class SessionStore:
                 continue
 
             timestamps = sorted(group["timestamps"])
-            items.append({
-                "date": date_str,
-                "repo#session_id": f"{repo}#{session_id}",
-                "repo": repo,
-                "project": group["project"],
-                "start_time": timestamps[0],
-                "end_time": timestamps[-1],
-                "user_messages": group["user_messages"],
-                "tools_used": sorted(group["tools_used"]),
-                "session_commits": group["commits"],
-                "session_pulls": sorted(group["pulls"]),
-                "session_issues": sorted(group["issues"]),
-                "updated_at": now,
-            })
+            items.append(
+                {
+                    "date": date_str,
+                    "repo#session_id": f"{repo}#{session_id}",
+                    "repo": repo,
+                    "project": group["project"],
+                    "start_time": timestamps[0],
+                    "end_time": timestamps[-1],
+                    "user_messages": group["user_messages"],
+                    "tools_used": sorted(group["tools_used"]),
+                    "session_commits": group["commits"],
+                    "session_pulls": sorted(group["pulls"]),
+                    "session_issues": sorted(group["issues"]),
+                    "updated_at": now,
+                }
+            )
 
         # Only return keys that produced at least one DynamoDB item
-        written_groups = {(i["date"], i["repo"], i["repo#session_id"].split("#", 1)[1]) for i in items}
-        processed_keys = list(dict.fromkeys(
-            k for k, gs in key_groups.items() if gs & written_groups
-        ))
+        written_groups = {
+            (i["date"], i["repo"], i["repo#session_id"].split("#", 1)[1]) for i in items
+        }
+        processed_keys = list(
+            dict.fromkeys(k for k, gs in key_groups.items() if gs & written_groups)
+        )
 
         return items, processed_keys
 
@@ -361,9 +372,7 @@ class SessionStore:
                 "repo#session_id": item["repo#session_id"],
             }
             fields = {k: v for k, v in item.items() if k not in key}
-            update_expr = "SET " + ", ".join(
-                f"#f_{k} = :v_{k}" for k in fields
-            )
+            update_expr = "SET " + ", ".join(f"#f_{k} = :v_{k}" for k in fields)
             self.table.update_item(
                 Key=key,
                 UpdateExpression=update_expr,

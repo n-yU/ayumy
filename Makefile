@@ -1,4 +1,6 @@
-.PHONY: lambda-install lambda-invoke lambda-deploy test oidc-deploy scan-sessions aws-auth-check
+.PHONY: lambda-install lambda-invoke lambda-deploy test format format-check oidc-deploy scan-sessions aws-auth-check
+
+FORMAT_TARGETS := lambda tests
 
 # Verify AWS credentials are valid before running AWS commands
 aws-auth-check:
@@ -23,6 +25,16 @@ lambda-deploy: aws-auth-check
 # Run unit tests
 test: lambda-install
 	.venv/bin/python -m pytest tests/ -v
+
+# Apply Black and isort to Python sources
+format: lambda-install
+	.venv/bin/python -m isort $(FORMAT_TARGETS)
+	.venv/bin/python -m black $(FORMAT_TARGETS)
+
+# Check formatting without modifying files
+format-check: lambda-install
+	.venv/bin/python -m isort --check-only --diff $(FORMAT_TARGETS)
+	.venv/bin/python -m black --check --diff $(FORMAT_TARGETS)
 
 # Scan DynamoDB session items
 scan-sessions:
