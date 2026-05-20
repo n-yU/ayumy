@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from github import GithubException, UnknownObjectException
+
 from report import JST
 from report.github import _SEARCH_BATCH, _SEARCH_WINDOW, GitHubClient
 

@@ -3,6 +3,7 @@ import logging
 import os
 
 import boto3
+
 from report import require_env
 from report.pipeline import run
 

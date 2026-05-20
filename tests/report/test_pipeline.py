@@ -4,6 +4,7 @@ from datetime import date, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from report import JST, GitHubActivity, SessionActivity
 from report.pipeline import MAX_BACKFILL, process_date, run
 from report.summarizer import ValidationResult

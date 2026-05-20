@@ -5,6 +5,7 @@ from datetime import date, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
+
 from report import (
     JST,
     date_to_range,

@@ -4,6 +4,7 @@ from datetime import datetime
 from unittest.mock import MagicMock
 
 import pytest
+
 from report import JST
 from report.summarizer import _SYSTEM_PROMPT, TOOL_NAME, SummaryClient, ValidationResult
 from report.tags import ALLOWED_TAG_NAMES, TAG_DEFINITIONS
