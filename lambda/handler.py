@@ -32,7 +32,9 @@ def lambda_handler(event, context):
             logger.exception("Failed to retrieve secret %s: %s", secret_id, e)
             return {
                 "statusCode": 500,
-                "body": json.dumps({"error": f"Failed to retrieve secret: {secret_id}"}),
+                "body": json.dumps(
+                    {"error": f"Failed to retrieve secret: {secret_id}"}
+                ),
             }
 
     source = "manual" if event.get("source") == "manual" else None

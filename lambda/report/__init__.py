@@ -30,6 +30,7 @@ class SessionCommit(TypedDict):
     code falls back to the session's start_time and normalizes the
     entry to CommitInfo when injecting into GitHubActivity.
     """
+
     sha: str
     message: str
     timestamp: NotRequired[str]
@@ -110,13 +111,19 @@ class GitHubActivity:
                 lines.append("### Pull Requests")
                 for pr in data["pulls"]:
                     labels = f" ({', '.join(pr['labels'])})" if pr["labels"] else ""
-                    lines.append(f"- [{pr['state']}] #{pr['number']} {pr['title']}{labels}")
+                    lines.append(
+                        f"- [{pr['state']}] #{pr['number']} {pr['title']}{labels}"
+                    )
 
             if data["issues"]:
                 lines.append("### Issues")
                 for issue in data["issues"]:
-                    labels = f" ({', '.join(issue['labels'])})" if issue["labels"] else ""
-                    lines.append(f"- [{issue['state']}] #{issue['number']} {issue['title']}{labels}")
+                    labels = (
+                        f" ({', '.join(issue['labels'])})" if issue["labels"] else ""
+                    )
+                    lines.append(
+                        f"- [{issue['state']}] #{issue['number']} {issue['title']}{labels}"
+                    )
 
         return "\n".join(lines)
 
@@ -153,7 +160,9 @@ class SessionActivity:
     def __contains__(self, key: str) -> bool:
         return key in self._data
 
-    def get(self, key: str, default: list[SessionInfo] | None = None) -> list[SessionInfo] | None:
+    def get(
+        self, key: str, default: list[SessionInfo] | None = None
+    ) -> list[SessionInfo] | None:
         """Get sessions for a repo, with optional default."""
         return self._data.get(key, default)
 

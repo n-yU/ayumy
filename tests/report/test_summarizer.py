@@ -19,13 +19,17 @@ class TestBuildToolSchema:
     def test_enforces_allowed_tags_via_enum(self):
         client = _make_client()
         schema = client._build_tool_schema()
-        repo_props = schema["input_schema"]["properties"]["repositories"]["items"]["properties"]
+        repo_props = schema["input_schema"]["properties"]["repositories"]["items"][
+            "properties"
+        ]
         assert repo_props["tags"]["items"]["enum"] == list(ALLOWED_TAG_NAMES)
 
     def test_tags_field_carries_description_per_tag(self):
         client = _make_client()
         schema = client._build_tool_schema()
-        tags_field = schema["input_schema"]["properties"]["repositories"]["items"]["properties"]["tags"]
+        tags_field = schema["input_schema"]["properties"]["repositories"]["items"][
+            "properties"
+        ]["tags"]
         for tag in TAG_DEFINITIONS:
             assert tag.name in tags_field["description"]
             assert tag.description in tags_field["description"]
@@ -56,11 +60,13 @@ class TestValidateReport:
 
     def test_valid_report_unchanged(self):
         report = {
-            "repositories": [{
-                "name": "repo",
-                "summary": [],
-                "tags": [self.valid_tag],
-            }],
+            "repositories": [
+                {
+                    "name": "repo",
+                    "summary": [],
+                    "tags": [self.valid_tag],
+                }
+            ],
         }
         result = self.client.validate_report(report)
         assert not result
@@ -68,11 +74,13 @@ class TestValidateReport:
 
     def test_invalid_tags_removed(self):
         report = {
-            "repositories": [{
-                "name": "repo",
-                "summary": [],
-                "tags": [self.valid_tag, "InvalidTag"],
-            }],
+            "repositories": [
+                {
+                    "name": "repo",
+                    "summary": [],
+                    "tags": [self.valid_tag, "InvalidTag"],
+                }
+            ],
         }
         result = self.client.validate_report(report)
         assert result
@@ -90,9 +98,13 @@ class TestGenerateSummary:
         self.client.client.messages.create.return_value = MagicMock(content=blocks)
 
     def test_returns_input_from_tool_use_block(self):
-        report = {"repositories": [{"name": "r", "summary": ["s1", "s2"], "tags": ["CI/CD"]}]}
+        report = {
+            "repositories": [{"name": "r", "summary": ["s1", "s2"], "tags": ["CI/CD"]}]
+        }
         tool_use = MagicMock(type="tool_use", input=report)
-        tool_use.name = TOOL_NAME  # `name` kwarg on MagicMock sets the mock label, not attr
+        tool_use.name = (
+            TOOL_NAME  # `name` kwarg on MagicMock sets the mock label, not attr
+        )
         text_block = MagicMock(type="text")
         self._set_response([text_block, tool_use])
 

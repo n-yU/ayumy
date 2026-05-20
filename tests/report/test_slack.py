@@ -64,7 +64,9 @@ class TestNotify:
         blocks = kwargs["blocks"]
         text = _blocks_text(blocks)
         assert "2026-03-28" in text
-        assert "<https://notion.so/page1|2026-03-28: my-repo> — 主要な作業を実施" in text
+        assert (
+            "<https://notion.so/page1|2026-03-28: my-repo> — 主要な作業を実施" in text
+        )
         assert kwargs["text"]  # fallback text exists
 
     def test_sends_no_pages_message(self):
@@ -136,10 +138,12 @@ class TestNotify:
     def test_multiple_pages_listed_with_headlines(self):
         client = _make_client()
         target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
-        report = {"repositories": [
-            _repo("a", ["first headline"]),
-            _repo("b", ["second headline"]),
-        ]}
+        report = {
+            "repositories": [
+                _repo("a", ["first headline"]),
+                _repo("b", ["second headline"]),
+            ]
+        }
         pages = [
             ("a", "https://notion.so/a"),
             ("b", "https://notion.so/b"),
@@ -294,8 +298,11 @@ class TestNotifyMetrics:
         client = _make_client()
 
         client.notify_metrics(
-            45.0, 100.0, "0.2.1",
-            memory_limit_mb=512, timeout_seconds=300,
+            45.0,
+            100.0,
+            "0.2.1",
+            memory_limit_mb=512,
+            timeout_seconds=300,
         )
         client.flush()
 
@@ -319,8 +326,11 @@ class TestNotifyMetrics:
         client = _make_client()
 
         client.notify_metrics(
-            45.0, 128.0, "0.2.1",
-            memory_limit_mb=256, timeout_seconds=300,
+            45.0,
+            128.0,
+            "0.2.1",
+            memory_limit_mb=256,
+            timeout_seconds=300,
         )
         client.flush()
 
@@ -334,8 +344,11 @@ class TestNotifyMetrics:
         client = _make_client()
 
         client.notify_metrics(
-            45.0, 128.0, "0.2.1",
-            memory_limit_mb=256, timeout_seconds=300,
+            45.0,
+            128.0,
+            "0.2.1",
+            memory_limit_mb=256,
+            timeout_seconds=300,
         )
         client.flush()
 

@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from report import GitHubActivity, JST, SessionActivity
+from report import JST, GitHubActivity, SessionActivity
 from report.pipeline import MAX_BACKFILL, process_date, run
 from report.summarizer import ValidationResult
 
@@ -44,19 +44,38 @@ def _empty_activity():
 
 def _nonempty_activity(repo="my-repo"):
     """Create real activity objects with minimal valid data."""
-    session = SessionActivity({repo: [{
-        "session_id": "s1", "project": repo,
-        "start_time": "2026-03-28T10:00:00+09:00",
-        "end_time": "2026-03-28T11:00:00+09:00",
-        "user_messages": ["Fix bug"], "tools_used": ["Edit"],
-    }]})
-    github = GitHubActivity({repo: {
-        "commits": [{"message": "Fix bug", "sha": "abc", "author": "user",
-                      "date": "2026-03-28T10:00:00",
-                      "url": f"https://github.com/{OWNER}/{repo}/commit/abc",
-                      "pull_numbers": []}],
-        "pulls": [], "issues": [],
-    }})
+    session = SessionActivity(
+        {
+            repo: [
+                {
+                    "session_id": "s1",
+                    "project": repo,
+                    "start_time": "2026-03-28T10:00:00+09:00",
+                    "end_time": "2026-03-28T11:00:00+09:00",
+                    "user_messages": ["Fix bug"],
+                    "tools_used": ["Edit"],
+                }
+            ]
+        }
+    )
+    github = GitHubActivity(
+        {
+            repo: {
+                "commits": [
+                    {
+                        "message": "Fix bug",
+                        "sha": "abc",
+                        "author": "user",
+                        "date": "2026-03-28T10:00:00",
+                        "url": f"https://github.com/{OWNER}/{repo}/commit/abc",
+                        "pull_numbers": [],
+                    }
+                ],
+                "pulls": [],
+                "issues": [],
+            }
+        }
+    )
     return session, github
 
 
@@ -83,9 +102,15 @@ class TestProcessDate:
         session, github = _nonempty_activity("my-repo")
         self.clients["github_client"].fetch_activity.return_value = github
 
-        report = _make_report([{
-            "name": "my-repo", "summary": ["work"], "tags": [],
-        }])
+        report = _make_report(
+            [
+                {
+                    "name": "my-repo",
+                    "summary": ["work"],
+                    "tags": [],
+                }
+            ]
+        )
         self.clients["summary_client"].generate_summary.return_value = report
         self.clients["notion_client"].create_report_pages.return_value = [
             ("my-repo", "https://notion.so/page1"),
@@ -108,9 +133,15 @@ class TestProcessDate:
         session, github = _nonempty_activity("repo")
         self.clients["github_client"].fetch_activity.return_value = github
 
-        report = _make_report([{
-            "name": "repo", "summary": [], "tags": ["BadTag"],
-        }])
+        report = _make_report(
+            [
+                {
+                    "name": "repo",
+                    "summary": [],
+                    "tags": ["BadTag"],
+                }
+            ]
+        )
         self.clients["summary_client"].generate_summary.return_value = report
         invalid = ValidationResult()
         invalid.invalid_tags = {"repo": ["BadTag"]}
@@ -122,24 +153,44 @@ class TestProcessDate:
         self.clients["slack_client"].notify_validation_errors.assert_called_once()
 
     def test_supplements_session_commits_when_github_has_none(self):
-        session = SessionActivity({"my-repo": [{
-            "session_id": "s1", "project": "my-repo",
-            "start_time": "2026-03-28T10:00:00+09:00",
-            "end_time": "2026-03-28T11:00:00+09:00",
-            "user_messages": ["Fix bug"], "tools_used": ["Bash"],
-            "session_commits": [
-                {"sha": "a1b2c3d", "message": "Fix login bug"},
-            ],
-        }]})
+        session = SessionActivity(
+            {
+                "my-repo": [
+                    {
+                        "session_id": "s1",
+                        "project": "my-repo",
+                        "start_time": "2026-03-28T10:00:00+09:00",
+                        "end_time": "2026-03-28T11:00:00+09:00",
+                        "user_messages": ["Fix bug"],
+                        "tools_used": ["Bash"],
+                        "session_commits": [
+                            {"sha": "a1b2c3d", "message": "Fix login bug"},
+                        ],
+                    }
+                ]
+            }
+        )
         # GitHub API has the repo but no commits
-        github = GitHubActivity({"my-repo": {
-            "commits": [], "pulls": [], "issues": [],
-        }})
+        github = GitHubActivity(
+            {
+                "my-repo": {
+                    "commits": [],
+                    "pulls": [],
+                    "issues": [],
+                }
+            }
+        )
         self.clients["github_client"].fetch_activity.return_value = github
 
-        report = _make_report([{
-            "name": "my-repo", "summary": ["work"], "tags": [],
-        }])
+        report = _make_report(
+            [
+                {
+                    "name": "my-repo",
+                    "summary": ["work"],
+                    "tags": [],
+                }
+            ]
+        )
         self.clients["summary_client"].generate_summary.return_value = report
         self.clients["notion_client"].create_report_pages.return_value = []
 
@@ -163,25 +214,51 @@ class TestProcessDate:
         assert injected["author"] == ""
 
     def test_session_commit_uses_per_commit_timestamp_when_present(self):
-        session = SessionActivity({"my-repo": [{
-            "session_id": "s1", "project": "my-repo",
-            "start_time": "2026-03-28T10:00:00+09:00",
-            "end_time": "2026-03-28T12:00:00+09:00",
-            "user_messages": ["Work"], "tools_used": ["Bash"],
-            "session_commits": [
-                {"sha": "aaa1111", "message": "Mid commit",
-                 "timestamp": "2026-03-28T10:45:00+09:00"},
-                {"sha": "bbb2222", "message": "Late commit"},  # legacy: no timestamp
-            ],
-        }]})
-        github = GitHubActivity({"my-repo": {
-            "commits": [], "pulls": [], "issues": [],
-        }})
+        session = SessionActivity(
+            {
+                "my-repo": [
+                    {
+                        "session_id": "s1",
+                        "project": "my-repo",
+                        "start_time": "2026-03-28T10:00:00+09:00",
+                        "end_time": "2026-03-28T12:00:00+09:00",
+                        "user_messages": ["Work"],
+                        "tools_used": ["Bash"],
+                        "session_commits": [
+                            {
+                                "sha": "aaa1111",
+                                "message": "Mid commit",
+                                "timestamp": "2026-03-28T10:45:00+09:00",
+                            },
+                            {
+                                "sha": "bbb2222",
+                                "message": "Late commit",
+                            },  # legacy: no timestamp
+                        ],
+                    }
+                ]
+            }
+        )
+        github = GitHubActivity(
+            {
+                "my-repo": {
+                    "commits": [],
+                    "pulls": [],
+                    "issues": [],
+                }
+            }
+        )
         self.clients["github_client"].fetch_activity.return_value = github
 
-        report = _make_report([{
-            "name": "my-repo", "summary": ["work"], "tags": [],
-        }])
+        report = _make_report(
+            [
+                {
+                    "name": "my-repo",
+                    "summary": ["work"],
+                    "tags": [],
+                }
+            ]
+        )
         self.clients["summary_client"].generate_summary.return_value = report
         self.clients["notion_client"].create_report_pages.return_value = []
 
@@ -196,36 +273,62 @@ class TestProcessDate:
         assert second["date"] == "2026-03-28T10:00:00+09:00"
 
     def test_dedupes_session_commits_across_sessions(self):
-        session = SessionActivity({"my-repo": [
+        session = SessionActivity(
             {
-                "session_id": "s1", "project": "my-repo",
-                "start_time": "2026-03-28T10:00:00+09:00",
-                "end_time": "2026-03-28T11:00:00+09:00",
-                "user_messages": ["Work"], "tools_used": ["Bash"],
-                "session_commits": [
-                    {"sha": "aaa1111", "message": "Shared commit",
-                     "timestamp": "2026-03-28T10:30:00+09:00"},
-                ],
-            },
+                "my-repo": [
+                    {
+                        "session_id": "s1",
+                        "project": "my-repo",
+                        "start_time": "2026-03-28T10:00:00+09:00",
+                        "end_time": "2026-03-28T11:00:00+09:00",
+                        "user_messages": ["Work"],
+                        "tools_used": ["Bash"],
+                        "session_commits": [
+                            {
+                                "sha": "aaa1111",
+                                "message": "Shared commit",
+                                "timestamp": "2026-03-28T10:30:00+09:00",
+                            },
+                        ],
+                    },
+                    {
+                        "session_id": "s2",
+                        "project": "my-repo",
+                        "start_time": "2026-03-28T14:00:00+09:00",
+                        "end_time": "2026-03-28T15:00:00+09:00",
+                        "user_messages": ["More work"],
+                        "tools_used": ["Bash"],
+                        "session_commits": [
+                            {
+                                "sha": "aaa1111",
+                                "message": "Shared commit",
+                                "timestamp": "2026-03-28T14:30:00+09:00",
+                            },
+                        ],
+                    },
+                ]
+            }
+        )
+        github = GitHubActivity(
             {
-                "session_id": "s2", "project": "my-repo",
-                "start_time": "2026-03-28T14:00:00+09:00",
-                "end_time": "2026-03-28T15:00:00+09:00",
-                "user_messages": ["More work"], "tools_used": ["Bash"],
-                "session_commits": [
-                    {"sha": "aaa1111", "message": "Shared commit",
-                     "timestamp": "2026-03-28T14:30:00+09:00"},
-                ],
-            },
-        ]})
-        github = GitHubActivity({"my-repo": {
-            "commits": [], "pulls": [], "issues": [],
-        }})
+                "my-repo": {
+                    "commits": [],
+                    "pulls": [],
+                    "issues": [],
+                }
+            }
+        )
         self.clients["github_client"].fetch_activity.return_value = github
 
-        report = _make_report([{
-            "name": "my-repo", "summary": ["work"], "tags": [],
-        }])
+        report = _make_report(
+            [
+                {
+                    "name": "my-repo",
+                    "summary": ["work"],
+                    "tags": [],
+                }
+            ]
+        )
         self.clients["summary_client"].generate_summary.return_value = report
         self.clients["notion_client"].create_report_pages.return_value = []
 
@@ -240,22 +343,36 @@ class TestProcessDate:
         assert commits[0]["date"] == "2026-03-28T10:30:00+09:00"
 
     def test_supplements_session_commits_for_missing_repo(self):
-        session = SessionActivity({"my-repo": [{
-            "session_id": "s1", "project": "my-repo",
-            "start_time": "2026-03-28T10:00:00+09:00",
-            "end_time": "2026-03-28T11:00:00+09:00",
-            "user_messages": ["Fix bug"], "tools_used": ["Bash"],
-            "session_commits": [
-                {"sha": "a1b2c3d", "message": "Fix login bug"},
-            ],
-        }]})
+        session = SessionActivity(
+            {
+                "my-repo": [
+                    {
+                        "session_id": "s1",
+                        "project": "my-repo",
+                        "start_time": "2026-03-28T10:00:00+09:00",
+                        "end_time": "2026-03-28T11:00:00+09:00",
+                        "user_messages": ["Fix bug"],
+                        "tools_used": ["Bash"],
+                        "session_commits": [
+                            {"sha": "a1b2c3d", "message": "Fix login bug"},
+                        ],
+                    }
+                ]
+            }
+        )
         # GitHub API returned no data for this repo at all
         github = GitHubActivity({})
         self.clients["github_client"].fetch_activity.return_value = github
 
-        report = _make_report([{
-            "name": "my-repo", "summary": ["work"], "tags": [],
-        }])
+        report = _make_report(
+            [
+                {
+                    "name": "my-repo",
+                    "summary": ["work"],
+                    "tags": [],
+                }
+            ]
+        )
         self.clients["summary_client"].generate_summary.return_value = report
         self.clients["notion_client"].create_report_pages.return_value = []
 
@@ -275,32 +392,54 @@ class TestProcessDate:
         assert commits[0]["url"] == f"https://github.com/{OWNER}/my-repo/commit/a1b2c3d"
 
     def test_merges_and_deduplicates_session_commits(self):
-        session = SessionActivity({"my-repo": [{
-            "session_id": "s1", "project": "my-repo",
-            "start_time": "2026-03-28T10:00:00+09:00",
-            "end_time": "2026-03-28T11:00:00+09:00",
-            "user_messages": ["Work"], "tools_used": ["Bash"],
-            "session_commits": [
-                {"sha": "abc1234", "message": "Existing commit"},
-                {"sha": "def5678", "message": "Squash-lost commit"},
-            ],
-        }]})
+        session = SessionActivity(
+            {
+                "my-repo": [
+                    {
+                        "session_id": "s1",
+                        "project": "my-repo",
+                        "start_time": "2026-03-28T10:00:00+09:00",
+                        "end_time": "2026-03-28T11:00:00+09:00",
+                        "user_messages": ["Work"],
+                        "tools_used": ["Bash"],
+                        "session_commits": [
+                            {"sha": "abc1234", "message": "Existing commit"},
+                            {"sha": "def5678", "message": "Squash-lost commit"},
+                        ],
+                    }
+                ]
+            }
+        )
         # GitHub API found one commit with full SHA that overlaps with session
-        github = GitHubActivity({"my-repo": {
-            "commits": [{
-                "sha": "abc1234abcdef1234abcdef1234abcdef12345678",
-                "message": "Existing commit",
-                "author": "user", "date": "2026-03-28T10:00:00",
-                "url": f"https://github.com/{OWNER}/my-repo/commit/abc1234",
-                "pull_numbers": [],
-            }],
-            "pulls": [], "issues": [],
-        }})
+        github = GitHubActivity(
+            {
+                "my-repo": {
+                    "commits": [
+                        {
+                            "sha": "abc1234abcdef1234abcdef1234abcdef12345678",
+                            "message": "Existing commit",
+                            "author": "user",
+                            "date": "2026-03-28T10:00:00",
+                            "url": f"https://github.com/{OWNER}/my-repo/commit/abc1234",
+                            "pull_numbers": [],
+                        }
+                    ],
+                    "pulls": [],
+                    "issues": [],
+                }
+            }
+        )
         self.clients["github_client"].fetch_activity.return_value = github
 
-        report = _make_report([{
-            "name": "my-repo", "summary": ["work"], "tags": [],
-        }])
+        report = _make_report(
+            [
+                {
+                    "name": "my-repo",
+                    "summary": ["work"],
+                    "tags": [],
+                }
+            ]
+        )
         self.clients["summary_client"].generate_summary.return_value = report
         self.clients["notion_client"].create_report_pages.return_value = []
 
@@ -322,37 +461,55 @@ class TestProcessDate:
         session, github = _nonempty_activity("repo")
         self.clients["github_client"].fetch_activity.return_value = github
 
-        report = _make_report([{
-            "name": "unknown-repo", "summary": [], "tags": [],
-        }])
+        report = _make_report(
+            [
+                {
+                    "name": "unknown-repo",
+                    "summary": [],
+                    "tags": [],
+                }
+            ]
+        )
         self.clients["summary_client"].generate_summary.return_value = report
         self.clients["notion_client"].create_report_pages.return_value = []
 
         process_date(SINCE, UNTIL, session, **self.clients)
 
         call_args = self.clients["slack_client"].notify.call_args
-        skipped = call_args[0][3] if len(call_args[0]) > 3 else call_args[1].get("skipped_repos", [])
+        skipped = (
+            call_args[0][3]
+            if len(call_args[0]) > 3
+            else call_args[1].get("skipped_repos", [])
+        )
         assert "unknown-repo" in skipped
 
     def test_passes_session_refs_to_github_client_when_backfill(self):
-        session = SessionActivity({"repo-a": [
+        session = SessionActivity(
             {
-                "session_id": "s1", "project": "repo-a",
-                "start_time": "2026-03-28T10:00:00+09:00",
-                "end_time": "2026-03-28T11:00:00+09:00",
-                "user_messages": ["msg"], "tools_used": [],
-                "session_pulls": [10, 20],
-                "session_issues": [30],
-            },
-            {
-                "session_id": "s2", "project": "repo-a",
-                "start_time": "2026-03-28T12:00:00+09:00",
-                "end_time": "2026-03-28T13:00:00+09:00",
-                "user_messages": ["msg"], "tools_used": [],
-                "session_pulls": [20, 21],
-                "session_issues": [],
-            },
-        ]})
+                "repo-a": [
+                    {
+                        "session_id": "s1",
+                        "project": "repo-a",
+                        "start_time": "2026-03-28T10:00:00+09:00",
+                        "end_time": "2026-03-28T11:00:00+09:00",
+                        "user_messages": ["msg"],
+                        "tools_used": [],
+                        "session_pulls": [10, 20],
+                        "session_issues": [30],
+                    },
+                    {
+                        "session_id": "s2",
+                        "project": "repo-a",
+                        "start_time": "2026-03-28T12:00:00+09:00",
+                        "end_time": "2026-03-28T13:00:00+09:00",
+                        "user_messages": ["msg"],
+                        "tools_used": [],
+                        "session_pulls": [20, 21],
+                        "session_issues": [],
+                    },
+                ]
+            }
+        )
         self.clients["github_client"].fetch_activity.return_value = GitHubActivity({})
 
         process_date(SINCE, UNTIL, session, **self.clients, is_backfill=True)
@@ -363,14 +520,22 @@ class TestProcessDate:
         assert kwargs["session_issues"] == {"repo-a": [30]}
 
     def test_omits_session_refs_when_not_backfill(self):
-        session = SessionActivity({"repo-a": [{
-            "session_id": "s1", "project": "repo-a",
-            "start_time": "2026-03-28T10:00:00+09:00",
-            "end_time": "2026-03-28T11:00:00+09:00",
-            "user_messages": ["msg"], "tools_used": [],
-            "session_pulls": [10],
-            "session_issues": [20],
-        }]})
+        session = SessionActivity(
+            {
+                "repo-a": [
+                    {
+                        "session_id": "s1",
+                        "project": "repo-a",
+                        "start_time": "2026-03-28T10:00:00+09:00",
+                        "end_time": "2026-03-28T11:00:00+09:00",
+                        "user_messages": ["msg"],
+                        "tools_used": [],
+                        "session_pulls": [10],
+                        "session_issues": [20],
+                    }
+                ]
+            }
+        )
         self.clients["github_client"].fetch_activity.return_value = GitHubActivity({})
 
         process_date(SINCE, UNTIL, session, **self.clients)
@@ -383,36 +548,56 @@ class TestProcessDate:
 class TestSessionCommitPullNumbersPopulation:
     def setup_method(self):
         self.clients = _make_clients()
-        self.report = _make_report([
-            {"name": "my-repo", "summary": [], "tags": []},
-        ])
+        self.report = _make_report(
+            [
+                {"name": "my-repo", "summary": [], "tags": []},
+            ]
+        )
         self.clients["summary_client"].generate_summary.return_value = self.report
         self.clients["notion_client"].create_report_pages.return_value = []
 
     def _session(self, session_commits):
-        return SessionActivity({"my-repo": [{
-            "session_id": "s1", "project": "my-repo",
-            "start_time": "2026-03-28T10:00:00+09:00",
-            "end_time": "2026-03-28T11:00:00+09:00",
-            "user_messages": ["Work"], "tools_used": ["Bash"],
-            "session_commits": session_commits,
-        }]})
+        return SessionActivity(
+            {
+                "my-repo": [
+                    {
+                        "session_id": "s1",
+                        "project": "my-repo",
+                        "start_time": "2026-03-28T10:00:00+09:00",
+                        "end_time": "2026-03-28T11:00:00+09:00",
+                        "user_messages": ["Work"],
+                        "tools_used": ["Bash"],
+                        "session_commits": session_commits,
+                    }
+                ]
+            }
+        )
 
     def test_populates_for_new_session_commits_only(self):
-        session = self._session([
-            {"sha": "abc1234", "message": "Existing"},
-            {"sha": "def5678", "message": "Squash-lost"},
-        ])
-        github = GitHubActivity({"my-repo": {
-            "commits": [{
-                "sha": "abc1234abcdef1234abcdef1234abcdef12345678",
-                "message": "Existing", "author": "user",
-                "date": "2026-03-28T10:00:00",
-                "url": f"https://github.com/{OWNER}/my-repo/commit/abc1234",
-                "pull_numbers": [],
-            }],
-            "pulls": [], "issues": [],
-        }})
+        session = self._session(
+            [
+                {"sha": "abc1234", "message": "Existing"},
+                {"sha": "def5678", "message": "Squash-lost"},
+            ]
+        )
+        github = GitHubActivity(
+            {
+                "my-repo": {
+                    "commits": [
+                        {
+                            "sha": "abc1234abcdef1234abcdef1234abcdef12345678",
+                            "message": "Existing",
+                            "author": "user",
+                            "date": "2026-03-28T10:00:00",
+                            "url": f"https://github.com/{OWNER}/my-repo/commit/abc1234",
+                            "pull_numbers": [],
+                        }
+                    ],
+                    "pulls": [],
+                    "issues": [],
+                }
+            }
+        )
         self.clients["github_client"].fetch_activity.return_value = github
 
         process_date(SINCE, UNTIL, session, **self.clients)
@@ -424,10 +609,12 @@ class TestSessionCommitPullNumbersPopulation:
         assert [c["sha"] for c in args[1]] == ["def5678"]
 
     def test_populates_all_session_commits_when_repo_missing(self):
-        session = self._session([
-            {"sha": "aaa1111", "message": "C1"},
-            {"sha": "bbb2222", "message": "C2"},
-        ])
+        session = self._session(
+            [
+                {"sha": "aaa1111", "message": "C1"},
+                {"sha": "bbb2222", "message": "C2"},
+            ]
+        )
         self.clients["github_client"].fetch_activity.return_value = GitHubActivity({})
 
         process_date(SINCE, UNTIL, session, **self.clients)
@@ -440,16 +627,24 @@ class TestSessionCommitPullNumbersPopulation:
 
     def test_skips_populate_when_all_session_commits_overlap_with_search(self):
         session = self._session([{"sha": "abc1234", "message": "Existing"}])
-        github = GitHubActivity({"my-repo": {
-            "commits": [{
-                "sha": "abc1234abcdef1234abcdef1234abcdef12345678",
-                "message": "Existing", "author": "user",
-                "date": "2026-03-28T10:00:00",
-                "url": f"https://github.com/{OWNER}/my-repo/commit/abc1234",
-                "pull_numbers": [],
-            }],
-            "pulls": [], "issues": [],
-        }})
+        github = GitHubActivity(
+            {
+                "my-repo": {
+                    "commits": [
+                        {
+                            "sha": "abc1234abcdef1234abcdef1234abcdef12345678",
+                            "message": "Existing",
+                            "author": "user",
+                            "date": "2026-03-28T10:00:00",
+                            "url": f"https://github.com/{OWNER}/my-repo/commit/abc1234",
+                            "pull_numbers": [],
+                        }
+                    ],
+                    "pulls": [],
+                    "issues": [],
+                }
+            }
+        )
         self.clients["github_client"].fetch_activity.return_value = github
 
         process_date(SINCE, UNTIL, session, **self.clients)
@@ -467,8 +662,15 @@ class TestRun:
     @patch("report.pipeline.NotionClient")
     @patch("report.pipeline.SummaryClient")
     def test_processes_primary_date(
-        self, MockSummary, MockNotion, MockGitHub, MockSession,
-        MockStore, MockSlack, mock_require_env, mock_date_range,
+        self,
+        MockSummary,
+        MockNotion,
+        MockGitHub,
+        MockSession,
+        MockStore,
+        MockSlack,
+        mock_require_env,
+        mock_date_range,
     ):
         mock_date_range.return_value = (SINCE, UNTIL)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
@@ -506,8 +708,15 @@ class TestRun:
     @patch("report.pipeline.NotionClient")
     @patch("report.pipeline.SummaryClient")
     def test_passes_memory_limit_to_metrics(
-        self, MockSummary, MockNotion, MockGitHub, MockSession,
-        MockStore, MockSlack, mock_require_env, mock_date_range,
+        self,
+        MockSummary,
+        MockNotion,
+        MockGitHub,
+        MockSession,
+        MockStore,
+        MockSlack,
+        mock_require_env,
+        mock_date_range,
     ):
         mock_date_range.return_value = (SINCE, UNTIL)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
@@ -541,8 +750,15 @@ class TestRun:
     @patch("report.pipeline.NotionClient")
     @patch("report.pipeline.SummaryClient")
     def test_passes_version_and_timeout_to_metrics(
-        self, MockSummary, MockNotion, MockGitHub, MockSession,
-        MockStore, MockSlack, mock_require_env, mock_date_range,
+        self,
+        MockSummary,
+        MockNotion,
+        MockGitHub,
+        MockSession,
+        MockStore,
+        MockSlack,
+        mock_require_env,
+        mock_date_range,
         mock_get_version,
     ):
         mock_date_range.return_value = (SINCE, UNTIL)
@@ -580,8 +796,15 @@ class TestRun:
     @patch("report.pipeline.NotionClient")
     @patch("report.pipeline.SummaryClient")
     def test_backfills_past_dates(
-        self, MockSummary, MockNotion, MockGitHub, MockSession,
-        MockStore, MockSlack, mock_require_env, mock_date_range,
+        self,
+        MockSummary,
+        MockNotion,
+        MockGitHub,
+        MockSession,
+        MockStore,
+        MockSlack,
+        mock_require_env,
+        mock_date_range,
     ):
         mock_date_range.return_value = (SINCE, UNTIL)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
@@ -589,7 +812,8 @@ class TestRun:
         store = MockStore.return_value
         store.ingest.return_value = []
         store.scan_backfill_dates.return_value = [
-            date(2026, 3, 26), date(2026, 3, 27),
+            date(2026, 3, 26),
+            date(2026, 3, 27),
         ]
         store.fetch_sessions.return_value = SessionActivity({})
 
@@ -613,8 +837,15 @@ class TestRun:
     @patch("report.pipeline.NotionClient")
     @patch("report.pipeline.SummaryClient")
     def test_backfill_limited_to_max(
-        self, MockSummary, MockNotion, MockGitHub, MockSession,
-        MockStore, MockSlack, mock_require_env, mock_date_range,
+        self,
+        MockSummary,
+        MockNotion,
+        MockGitHub,
+        MockSession,
+        MockStore,
+        MockSlack,
+        mock_require_env,
+        mock_date_range,
     ):
         mock_date_range.return_value = (SINCE, UNTIL)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
@@ -623,8 +854,11 @@ class TestRun:
         store.ingest.return_value = []
         # 5 past dates, but only MAX_BACKFILL most recent should be processed
         store.scan_backfill_dates.return_value = [
-            date(2026, 3, 23), date(2026, 3, 24), date(2026, 3, 25),
-            date(2026, 3, 26), date(2026, 3, 27),
+            date(2026, 3, 23),
+            date(2026, 3, 24),
+            date(2026, 3, 25),
+            date(2026, 3, 26),
+            date(2026, 3, 27),
         ]
         store.fetch_sessions.return_value = SessionActivity({})
 
@@ -648,8 +882,15 @@ class TestRun:
     @patch("report.pipeline.NotionClient")
     @patch("report.pipeline.SummaryClient")
     def test_notify_on_primary_failure(
-        self, MockSummary, MockNotion, MockGitHub, MockSession,
-        MockStore, MockSlack, mock_require_env, mock_date_range,
+        self,
+        MockSummary,
+        MockNotion,
+        MockGitHub,
+        MockSession,
+        MockStore,
+        MockSlack,
+        mock_require_env,
+        mock_date_range,
     ):
         mock_date_range.return_value = (SINCE, UNTIL)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
@@ -683,8 +924,15 @@ class TestRun:
     @patch("report.pipeline.NotionClient")
     @patch("report.pipeline.SummaryClient")
     def test_backfill_failure_does_not_stop_primary(
-        self, MockSummary, MockNotion, MockGitHub, MockSession,
-        MockStore, MockSlack, mock_require_env, mock_date_range,
+        self,
+        MockSummary,
+        MockNotion,
+        MockGitHub,
+        MockSession,
+        MockStore,
+        MockSlack,
+        mock_require_env,
+        mock_date_range,
     ):
         mock_date_range.return_value = (SINCE, UNTIL)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
@@ -729,8 +977,15 @@ class TestRun:
     @patch("report.pipeline.NotionClient")
     @patch("report.pipeline.SummaryClient")
     def test_continues_when_ingestion_fails(
-        self, MockSummary, MockNotion, MockGitHub, MockSession,
-        MockStore, MockSlack, mock_require_env, mock_date_range,
+        self,
+        MockSummary,
+        MockNotion,
+        MockGitHub,
+        MockSession,
+        MockStore,
+        MockSlack,
+        mock_require_env,
+        mock_date_range,
     ):
         mock_date_range.return_value = (SINCE, UNTIL)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
@@ -762,8 +1017,15 @@ class TestRun:
     @patch("report.pipeline.NotionClient")
     @patch("report.pipeline.SummaryClient")
     def test_marks_reported_after_success(
-        self, MockSummary, MockNotion, MockGitHub, MockSession,
-        MockStore, MockSlack, mock_require_env, mock_date_range,
+        self,
+        MockSummary,
+        MockNotion,
+        MockGitHub,
+        MockSession,
+        MockStore,
+        MockSlack,
+        mock_require_env,
+        mock_date_range,
     ):
         mock_date_range.return_value = (SINCE, UNTIL)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
@@ -792,8 +1054,15 @@ class TestRun:
     @patch("report.pipeline.NotionClient")
     @patch("report.pipeline.SummaryClient")
     def test_passes_target_date_to_date_range(
-        self, MockSummary, MockNotion, MockGitHub, MockSession,
-        MockStore, MockSlack, mock_require_env, mock_date_range,
+        self,
+        MockSummary,
+        MockNotion,
+        MockGitHub,
+        MockSession,
+        MockStore,
+        MockSlack,
+        mock_require_env,
+        mock_date_range,
     ):
         target_since = datetime(2026, 3, 25, 0, 0, tzinfo=JST)
         target_until = datetime(2026, 3, 26, 0, 0, tzinfo=JST)
@@ -824,8 +1093,15 @@ class TestRun:
     @patch("report.pipeline.NotionClient")
     @patch("report.pipeline.SummaryClient")
     def test_deletes_s3_after_ingest(
-        self, MockSummary, MockNotion, MockGitHub, MockSession,
-        MockStore, MockSlack, mock_require_env, mock_date_range,
+        self,
+        MockSummary,
+        MockNotion,
+        MockGitHub,
+        MockSession,
+        MockStore,
+        MockSlack,
+        mock_require_env,
+        mock_date_range,
     ):
         mock_date_range.return_value = (SINCE, UNTIL)
         mock_require_env.side_effect = lambda k: f"fake-{k}"
@@ -857,8 +1133,15 @@ class TestRun:
     @patch("report.pipeline.NotionClient")
     @patch("report.pipeline.SummaryClient")
     def test_manual_run_uses_original_until(
-        self, MockSummary, MockNotion, MockGitHub, MockSession,
-        MockStore, MockSlack, mock_require_env, mock_date_range,
+        self,
+        MockSummary,
+        MockNotion,
+        MockGitHub,
+        MockSession,
+        MockStore,
+        MockSlack,
+        mock_require_env,
+        mock_date_range,
         mock_process_date,
     ):
         """Manual run without --date passes get_target_date_range's partial_until (not full-day)."""
@@ -890,8 +1173,15 @@ class TestRun:
     @patch("report.pipeline.NotionClient")
     @patch("report.pipeline.SummaryClient")
     def test_target_date_skips_backfill(
-        self, MockSummary, MockNotion, MockGitHub, MockSession,
-        MockStore, MockSlack, mock_require_env, mock_date_range,
+        self,
+        MockSummary,
+        MockNotion,
+        MockGitHub,
+        MockSession,
+        MockStore,
+        MockSlack,
+        mock_require_env,
+        mock_date_range,
     ):
         target_since = datetime(2026, 3, 25, 0, 0, tzinfo=JST)
         target_until = datetime(2026, 3, 26, 0, 0, tzinfo=JST)
@@ -922,8 +1212,15 @@ class TestRun:
     @patch("report.pipeline.NotionClient")
     @patch("report.pipeline.SummaryClient")
     def test_date_range_processes_all_dates(
-        self, MockSummary, MockNotion, MockGitHub, MockSession,
-        MockStore, MockSlack, mock_require_env, mock_date_range,
+        self,
+        MockSummary,
+        MockNotion,
+        MockGitHub,
+        MockSession,
+        MockStore,
+        MockSlack,
+        mock_require_env,
+        mock_date_range,
     ):
         target_since = datetime(2026, 3, 25, 0, 0, tzinfo=JST)
         target_until = datetime(2026, 3, 26, 0, 0, tzinfo=JST)
@@ -958,8 +1255,15 @@ class TestRun:
     @patch("report.pipeline.NotionClient")
     @patch("report.pipeline.SummaryClient")
     def test_target_date_uses_backfill_fetch(
-        self, MockSummary, MockNotion, MockGitHub, MockSession,
-        MockStore, MockSlack, mock_require_env, mock_date_range,
+        self,
+        MockSummary,
+        MockNotion,
+        MockGitHub,
+        MockSession,
+        MockStore,
+        MockSlack,
+        mock_require_env,
+        mock_date_range,
     ):
         """target_date 指定時は Hybrid 経路（is_backfill=True）になる"""
         target_since = datetime(2026, 3, 25, 0, 0, tzinfo=JST)
@@ -991,8 +1295,15 @@ class TestRun:
     @patch("report.pipeline.NotionClient")
     @patch("report.pipeline.SummaryClient")
     def test_scan_backfill_dates_use_hybrid_but_primary_does_not(
-        self, MockSummary, MockNotion, MockGitHub, MockSession,
-        MockStore, MockSlack, mock_require_env, mock_date_range,
+        self,
+        MockSummary,
+        MockNotion,
+        MockGitHub,
+        MockSession,
+        MockStore,
+        MockSlack,
+        mock_require_env,
+        mock_date_range,
     ):
         """scan_backfill_dates 由来の日付のみ is_backfill=True、primary は False"""
         mock_date_range.return_value = (SINCE, UNTIL)
@@ -1001,7 +1312,8 @@ class TestRun:
         store = MockStore.return_value
         store.ingest.return_value = []
         store.scan_backfill_dates.return_value = [
-            date(2026, 3, 26), date(2026, 3, 27),
+            date(2026, 3, 26),
+            date(2026, 3, 27),
         ]
         store.fetch_sessions.return_value = SessionActivity({})
 

@@ -1,2 +1,11 @@
 [tool.pytest.ini_options]
 pythonpath = ["lambda"]
+
+[tool.black]
+target-version = ["py312"]
+line-length = 88
+
+[tool.isort]
+profile = "black"
+py_version = 312
+known_first_party = ["report"]

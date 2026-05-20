@@ -50,7 +50,7 @@ ayumy/
 │   ├── handler.py            # Lambda ハンドラ
 │   ├── report/               # メインパッケージ: GitHub API + Claude API + Notion API
 │   ├── requirements.txt      # Lambda デプロイ用の依存パッケージ
-│   └── requirements-dev.txt  # ローカル開発用の依存パッケージ（boto3 を含む）
+│   └── requirements-dev.txt  # ローカル開発用の依存パッケージ
 ├── template.yaml             # AWS SAM テンプレート
 ├── docs/
 │   ├── Setup.md

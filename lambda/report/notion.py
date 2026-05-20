@@ -6,8 +6,16 @@ from datetime import datetime
 from notion_client import Client
 
 from . import (
-    JST, CommitInfo, GitHubActivity, IssueInfo, PullInfo, RepoActivity,
-    RepoSummary, ReportSummary, SessionActivity, get_version,
+    JST,
+    CommitInfo,
+    GitHubActivity,
+    IssueInfo,
+    PullInfo,
+    RepoActivity,
+    ReportSummary,
+    RepoSummary,
+    SessionActivity,
+    get_version,
 )
 
 logger = logging.getLogger(__name__)
@@ -27,7 +35,7 @@ def _chunk_rich_text(text: str) -> list[dict]:
         A list of rich_text objects, each within RICH_TEXT_LIMIT chars
     """
     return [
-        {"type": "text", "text": {"content": text[i:i + RICH_TEXT_LIMIT]}}
+        {"type": "text", "text": {"content": text[i : i + RICH_TEXT_LIMIT]}}
         for i in range(0, len(text), RICH_TEXT_LIMIT)
     ]
 
@@ -44,7 +52,10 @@ def _linked_text(content: str, url: str) -> list[dict]:
         sharing the same link
     """
     return [
-        {"type": "text", "text": {"content": content[i:i + RICH_TEXT_LIMIT], "link": {"url": url}}}
+        {
+            "type": "text",
+            "text": {"content": content[i : i + RICH_TEXT_LIMIT], "link": {"url": url}},
+        }
         for i in range(0, len(content), RICH_TEXT_LIMIT)
     ]
 
@@ -68,7 +79,10 @@ def _issue_label(repo_name: str, issue: IssueInfo) -> str:
 
 
 def _bulleted_link(
-    label: str, url: str, prefix: str = "", children: list[dict] | None = None,
+    label: str,
+    url: str,
+    prefix: str = "",
+    children: list[dict] | None = None,
 ) -> dict:
     """Build a bulleted_list_item block with an optional prefix and children.
 
@@ -201,7 +215,9 @@ class NotionClient:
             "Merged": {"number": prs_merged},
             "Closed": {"number": issues_closed},
             "Sessions": {"number": claude_sessions},
-            "Version": {"rich_text": [{"type": "text", "text": {"content": get_version()}}]},
+            "Version": {
+                "rich_text": [{"type": "text", "text": {"content": get_version()}}]
+            },
         }
 
     def _build_status_sections(
@@ -255,13 +271,15 @@ class NotionClient:
         ):
             if not items:
                 continue
-            blocks.append({
-                "object": "block",
-                "type": "heading_2",
-                "heading_2": {
-                    "rich_text": [{"type": "text", "text": {"content": heading}}],
-                },
-            })
+            blocks.append(
+                {
+                    "object": "block",
+                    "type": "heading_2",
+                    "heading_2": {
+                        "rich_text": [{"type": "text", "text": {"content": heading}}],
+                    },
+                }
+            )
             for label, url, prefix in items:
                 blocks.append(_bulleted_link(label, url, prefix))
 
@@ -292,14 +310,10 @@ class NotionClient:
         issues = repo_activity["issues"]
 
         merge_sha_to_pr: dict[str, PullInfo] = {
-            pr["merge_commit_sha"]: pr
-            for pr in pulls
-            if pr.get("merge_commit_sha")
+            pr["merge_commit_sha"]: pr for pr in pulls if pr.get("merge_commit_sha")
         }
         pr_by_number: dict[int, PullInfo] = {pr["number"]: pr for pr in pulls}
-        pr_nested_commits: dict[int, list[CommitInfo]] = {
-            n: [] for n in pr_by_number
-        }
+        pr_nested_commits: dict[int, list[CommitInfo]] = {n: [] for n in pr_by_number}
 
         # (timestamp, secondary_priority, block) — secondary 0 for PR
         # headers (sorted before adjacent merge commits at same time)
@@ -316,9 +330,7 @@ class NotionClient:
                 continue
             # Pick the smallest PR number to keep nesting deterministic
             # regardless of pull_numbers input order
-            attached_prs = [
-                n for n in c.get("pull_numbers", []) if n in pr_by_number
-            ]
+            attached_prs = [n for n in c.get("pull_numbers", []) if n in pr_by_number]
             attached_pr = min(attached_prs) if attached_prs else None
             if attached_pr is not None:
                 pr_nested_commits[attached_pr].append(c)
@@ -348,48 +360,56 @@ class NotionClient:
             if not candidates:
                 continue
             children = [
-                _bulleted_link(_commit_label(c), c["url"], prefix="🔸 ")
-                for c in nested
+                _bulleted_link(_commit_label(c), c["url"], prefix="🔸 ") for c in nested
             ]
-            entries.append((
-                min(candidates),
-                0,
-                _bulleted_link(
-                    _pr_label(repo_name, pr), pr["url"],
-                    prefix="🔀 ",
-                    children=children or None,
-                ),
-            ))
-            # Unmerged-closed PR also gets a top-level close line
-            if (
-                pr["state"] == "closed"
-                and _is_in_range(pr["closed_at"], since, until)
-            ):
-                entries.append((
-                    datetime.fromisoformat(pr["closed_at"]),
-                    1,
+            entries.append(
+                (
+                    min(candidates),
+                    0,
                     _bulleted_link(
-                        _pr_label(repo_name, pr), pr["url"],
-                        prefix="⚠️ close: ",
+                        _pr_label(repo_name, pr),
+                        pr["url"],
+                        prefix="🔀 ",
+                        children=children or None,
                     ),
-                ))
+                )
+            )
+            # Unmerged-closed PR also gets a top-level close line
+            if pr["state"] == "closed" and _is_in_range(pr["closed_at"], since, until):
+                entries.append(
+                    (
+                        datetime.fromisoformat(pr["closed_at"]),
+                        1,
+                        _bulleted_link(
+                            _pr_label(repo_name, pr),
+                            pr["url"],
+                            prefix="⚠️ close: ",
+                        ),
+                    )
+                )
 
         for issue in issues:
             label = _issue_label(repo_name, issue)
             if _is_in_range(issue["created_at"], since, until):
-                entries.append((
-                    datetime.fromisoformat(issue["created_at"]),
-                    1,
-                    _bulleted_link(label, issue["url"], prefix="🟢 open: "),
-                ))
+                entries.append(
+                    (
+                        datetime.fromisoformat(issue["created_at"]),
+                        1,
+                        _bulleted_link(label, issue["url"], prefix="🟢 open: "),
+                    )
+                )
             if _is_in_range(issue["closed_at"], since, until):
-                entries.append((
-                    datetime.fromisoformat(issue["closed_at"]),
-                    1,
-                    _bulleted_link(
-                        label, issue["url"], prefix=_issue_close_prefix(issue),
-                    ),
-                ))
+                entries.append(
+                    (
+                        datetime.fromisoformat(issue["closed_at"]),
+                        1,
+                        _bulleted_link(
+                            label,
+                            issue["url"],
+                            prefix=_issue_close_prefix(issue),
+                        ),
+                    )
+                )
 
         if not entries:
             return []
@@ -430,25 +450,33 @@ class NotionClient:
         """
         children: list[dict] = []
 
-        children.append({
-            "object": "block",
-            "type": "heading_2",
-            "heading_2": {
-                "rich_text": [{"type": "text", "text": {"content": "Summary"}}],
-            },
-        })
-        for item in repo_summary["summary"]:
-            children.append({
+        children.append(
+            {
                 "object": "block",
-                "type": "bulleted_list_item",
-                "bulleted_list_item": {
-                    "rich_text": _chunk_rich_text(item),
+                "type": "heading_2",
+                "heading_2": {
+                    "rich_text": [{"type": "text", "text": {"content": "Summary"}}],
                 },
-            })
+            }
+        )
+        for item in repo_summary["summary"]:
+            children.append(
+                {
+                    "object": "block",
+                    "type": "bulleted_list_item",
+                    "bulleted_list_item": {
+                        "rich_text": _chunk_rich_text(item),
+                    },
+                }
+            )
 
         repo_name = repo_summary["name"]
-        children.extend(self._build_status_sections(repo_name, repo_activity, since, until))
-        children.extend(self._build_timeline_section(repo_name, repo_activity, since, until))
+        children.extend(
+            self._build_status_sections(repo_name, repo_activity, since, until)
+        )
+        children.extend(
+            self._build_timeline_section(repo_name, repo_activity, since, until)
+        )
 
         return children
 
@@ -483,7 +511,12 @@ class NotionClient:
         page = self.client.pages.create(
             parent={"database_id": self.database_id},
             properties=self._build_properties(
-                target_date, repo_summary, commits, prs_merged, issues_closed, claude_sessions,
+                target_date,
+                repo_summary,
+                commits,
+                prs_merged,
+                issues_closed,
+                claude_sessions,
             ),
             children=self._build_children(repo_summary, repo_activity, since, until),
         )
@@ -563,7 +596,9 @@ class NotionClient:
                 1 for pr in repo_activity.get("pulls", []) if pr["state"] == "merged"
             )
             issues_closed = sum(
-                1 for issue in repo_activity.get("issues", []) if issue["state"] == "closed"
+                1
+                for issue in repo_activity.get("issues", [])
+                if issue["state"] == "closed"
             )
             claude_sessions = len(session_activity.get(repo_name, []))
 

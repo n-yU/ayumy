@@ -12,8 +12,22 @@ class TestGitHubActivityFormat:
         data = {
             "my-repo": {
                 "commits": [{"message": "Fix bug"}],
-                "pulls": [{"number": 1, "title": "Add feature", "state": "merged", "labels": ["enhancement"]}],
-                "issues": [{"number": 2, "title": "Bug report", "state": "closed", "labels": []}],
+                "pulls": [
+                    {
+                        "number": 1,
+                        "title": "Add feature",
+                        "state": "merged",
+                        "labels": ["enhancement"],
+                    }
+                ],
+                "issues": [
+                    {
+                        "number": 2,
+                        "title": "Bug report",
+                        "state": "closed",
+                        "labels": [],
+                    }
+                ],
             },
         }
         result = GitHubActivity(data).format()

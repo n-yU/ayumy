@@ -7,8 +7,12 @@ from unittest.mock import patch
 import pytest
 
 from report import (
-    JST, date_to_range, get_target_date_range, get_version,
-    parse_target_dates, require_env,
+    JST,
+    date_to_range,
+    get_target_date_range,
+    get_version,
+    parse_target_dates,
+    require_env,
 )
 
 
@@ -90,8 +94,10 @@ class TestParseTargetDates:
     def test_date_range(self):
         result = parse_target_dates("2026-03-25..2026-03-28")
         assert result == [
-            date(2026, 3, 25), date(2026, 3, 26),
-            date(2026, 3, 27), date(2026, 3, 28),
+            date(2026, 3, 25),
+            date(2026, 3, 26),
+            date(2026, 3, 27),
+            date(2026, 3, 28),
         ]
 
     def test_same_start_and_end(self):

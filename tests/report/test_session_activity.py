@@ -10,14 +10,16 @@ class TestSessionActivityFormat:
 
     def test_with_sessions(self):
         data = {
-            "my-repo": [{
-                "session_id": "abc",
-                "project": "my-repo",
-                "start_time": "2026-03-28T10:00:00+09:00",
-                "end_time": "2026-03-28T11:30:00+09:00",
-                "user_messages": ["Fix the bug"],
-                "tools_used": ["Read", "Edit"],
-            }],
+            "my-repo": [
+                {
+                    "session_id": "abc",
+                    "project": "my-repo",
+                    "start_time": "2026-03-28T10:00:00+09:00",
+                    "end_time": "2026-03-28T11:30:00+09:00",
+                    "user_messages": ["Fix the bug"],
+                    "tools_used": ["Read", "Edit"],
+                }
+            ],
         }
         result = SessionActivity(data).format()
         assert "## プロジェクト: my-repo" in result
