@@ -16,7 +16,10 @@ usage() {
 Usage: ayumy setup-hooks [options]
 
 Install the pre-push hook to Git repositories via symlink.
-Also removes any legacy post-commit symlink that points at ayumy/hooks/post-commit.
+Also removes legacy post-commit symlinks that this script previously created
+(symlinks whose readlink target matches the absolute ayumy/hooks/post-commit
+path); symlinks installed by hand with a different path representation are
+left untouched.
 
 Options:
   --all <dir>   Scan immediate children of <dir> for Git repositories and install hooks

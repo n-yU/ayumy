@@ -190,7 +190,7 @@ hook の配布方法（`ayumy setup-hooks` コマンドで設置）:
 - **一括設置**: `ayumy setup-hooks --all <dir>` で指定ディレクトリ直下のリポジトリに設置
 - **手動設置**: `ln -s {AYUMY_REPO}/hooks/pre-push {REPO}/.git/hooks/pre-push`
 
-`ayumy setup-hooks` は旧 `post-commit` symlink（ayumy の hook を指すもの）の除去も担当する。`--all` の対象は `.git` ディレクトリを持つ通常のリポジトリのみ。Git worktree やサブモジュール（`.git` がファイルのケース）は対象外。
+`ayumy setup-hooks` は過去に同コマンドが作成した旧 `post-commit` symlink（`readlink` の target が `ayumy/hooks/post-commit` の絶対パスと一致するもの）の除去も担当する。手動 `ln` で別パス表記により設置された legacy hook は対象外で、ユーザー側で削除する必要がある。`--all` の対象は `.git` ディレクトリを持つ通常のリポジトリのみ。Git worktree やサブモジュール（`.git` がファイルのケース）は対象外。
 
 ### 4.5 手動同期（`ayumy sync`）
 push せずに作業を中断する場合や、hook で転送されなかったセッションを補完する
