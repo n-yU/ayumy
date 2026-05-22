@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# Pre-push hook for ayumy.
+# Symlink this file to each repo's .git/hooks/pre-push:
+#   ln -s /path/to/ayumy/hooks/pre-push /path/to/repo/.git/hooks/pre-push
+#
+# Runs the session upload synchronously and aborts the push (non-zero exit)
+# on failure so issues such as expired AWS credentials surface immediately
+# rather than being silently swallowed in a background process.
+
+set -eu
+
+# Resolve the ayumy repository root from this symlink target.
+hook_path="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null)"
+if [[ -z "$hook_path" ]]; then
+  echo "[ayumy] could not resolve hook path from: $0" >&2
+  exit 1
+fi
+AYUMY_ROOT="$(cd "$(dirname "$hook_path")/.." && pwd)"
+
+sync_script="$AYUMY_ROOT/scripts/sync_session.sh"
+if [[ ! -x "$sync_script" ]]; then
+  echo "[ayumy] sync script not found: $sync_script" >&2
+  exit 1
+fi
+
+git_root="$(git rev-parse --show-toplevel 2>/dev/null)"
+if [[ -z "$git_root" ]]; then
+  echo "[ayumy] could not resolve git root" >&2
+  exit 1
+fi
+project_name="$(echo "$git_root" | sed 's|/|-|g')"
+
+# Skip when no Claude session exists for this repository.
+# Without this guard sync_session.sh would exit non-zero and block the push.
+project_dir="$HOME/.claude/projects/$project_name"
+if [[ ! -d "$project_dir" ]]; then
+  exit 0
+fi
+
+# Write repo name metadata for session-to-repo mapping.
+# Extracted from git remote URL (e.g. "github.com/n-yU/ayumy.git" -> "ayumy").
+# Support both HTTPS (github.com/owner/repo.git) and SSH (git@github.com:owner/repo.git)
+repo_name="$(git remote get-url origin 2>/dev/null | sed 's|.*[:/]||; s|\.git$||')"
+if [[ -n "$repo_name" ]]; then
+  echo "$repo_name" > "$project_dir/.ayumy_repo"
+fi
+
+if ! "$sync_script" --project "$project_name"; then
+  echo "[ayumy] session upload failed; aborting push" >&2
+  echo "[ayumy] re-run after resolving the error (e.g. 'aws login') to push" >&2
+  exit 1
+fi
