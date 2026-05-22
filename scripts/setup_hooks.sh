@@ -7,12 +7,16 @@ LEGACY_HOOK_SOURCE="$AYUMY_ROOT/hooks/post-commit"
 
 # readlink -f / realpath return empty on broken links, so resolve manually.
 resolve_symlink_target() {
-  local link="$1" target
+  local link="$1" target target_dir
   target="$(readlink "$link" 2>/dev/null)" || return 1
   if [[ "$target" != /* ]]; then
-    target="$(cd "$(dirname "$link")" 2>/dev/null && pwd -P)/$target"
+    target_dir="$(dirname "$link")"
+  else
+    target_dir="$(dirname "$target")"
+    target="$(basename "$target")"
   fi
-  echo "${target#/private}"
+  [[ -d "$target_dir" ]] || return 1
+  echo "$(cd "$target_dir" && pwd -P)/$target"
 }
 
 # Verify that the hook source exists (and is executable) before proceeding.
