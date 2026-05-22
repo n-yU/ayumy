@@ -1,9 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-AYUMY_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+AYUMY_ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 HOOK_SOURCE="$AYUMY_ROOT/hooks/pre-push"
 LEGACY_HOOK_SOURCE="$AYUMY_ROOT/hooks/post-commit"
+
+# readlink -f / realpath return empty on broken links, so resolve manually.
+resolve_symlink_target() {
+  local link="$1" target
+  target="$(readlink "$link" 2>/dev/null)" || return 1
+  if [[ "$target" != /* ]]; then
+    target="$(cd "$(dirname "$link")" 2>/dev/null && pwd -P)/$target"
+  fi
+  echo "${target#/private}"
+}
 
 # Verify that the hook source exists (and is executable) before proceeding.
 if [[ ! -f "$HOOK_SOURCE" || ! -x "$HOOK_SOURCE" ]]; then
@@ -26,16 +36,13 @@ USAGE
   exit "${1:-1}"
 }
 
-# Remove a legacy post-commit symlink that points at the old ayumy hook.
-# Returns 0 if a symlink was removed, 1 otherwise.
-# Only removes symlinks that match LEGACY_HOOK_SOURCE; foreign hooks are left untouched.
 remove_legacy_post_commit() {
   local hook_dir="$1"
   local legacy_path="$hook_dir/post-commit"
 
   [[ -L "$legacy_path" ]] || return 1
   local target
-  target="$(readlink "$legacy_path" 2>/dev/null)" || return 1
+  target="$(resolve_symlink_target "$legacy_path")" || return 1
   [[ "$target" == "$LEGACY_HOOK_SOURCE" ]] || return 1
 
   if ! rm "$legacy_path"; then
@@ -57,11 +64,10 @@ install_hook() {
 
   if [[ -L "$hook_path" ]]; then
     local target
-    if target="$(readlink "$hook_path" 2>/dev/null)"; then
-      if [[ "$target" == "$HOOK_SOURCE" ]]; then
-        echo "[ayumy] already installed: $hook_path"
-        return 0
-      fi
+    target="$(resolve_symlink_target "$hook_path")"
+    if [[ "$target" == "$HOOK_SOURCE" ]]; then
+      echo "[ayumy] already installed: $hook_path"
+      return 0
     fi
   fi
 
