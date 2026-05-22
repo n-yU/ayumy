@@ -10,7 +10,8 @@
 set -eu
 
 # Resolve the ayumy repository root from this symlink target.
-hook_path="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null)"
+# `|| true` keeps set -eu from aborting before the explicit empty-string check.
+hook_path="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || true)"
 if [[ -z "$hook_path" ]]; then
   echo "[ayumy] could not resolve hook path from: $0" >&2
   exit 1
@@ -23,7 +24,7 @@ if [[ ! -x "$sync_script" ]]; then
   exit 1
 fi
 
-git_root="$(git rev-parse --show-toplevel 2>/dev/null)"
+git_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 if [[ -z "$git_root" ]]; then
   echo "[ayumy] could not resolve git root" >&2
   exit 1
