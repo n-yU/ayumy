@@ -7,14 +7,14 @@
 ## アーキテクチャ
 2フェーズ構成（セッションログは S3 に保管、セッションメタデータは DynamoDB に集約、レポート生成は AWS Lambda で実行）:
 
-1. **フェーズ 1（post-commit hook / 手動同期）**: 各リポジトリでの commit を契機に、`~/.claude/projects/` から未同期の Claude Code セッションの JSONL を S3 バケットにアップロードする。`ayumy sync --report` で S3 転送後に Lambda を呼び出してレポート生成まで実行できる。
+1. **フェーズ 1（pre-push hook / 手動同期）**: 各リポジトリでの push を契機に、`~/.claude/projects/` から未同期の Claude Code セッションの JSONL を S3 バケットにアップロードする。アップロード失敗時は push を中止する。`ayumy sync --report` で S3 転送後に Lambda を呼び出してレポート生成まで実行できる。
 2. **フェーズ 2（AWS Lambda）**: S3 上のセッションログをパースして DynamoDB に書き込み、S3 から JSONL を削除する。DynamoDB からセッションメタデータを読み取り、GitHub API によるアクティビティ取得を行い、Claude API で要約を生成して Notion に書き込み、Slack に通知する。EventBridge Scheduler による日次の定期実行に加え、`ayumy sync --report` による手動実行にも対応する。
 
 ## リポジトリ構成
 ```
 scripts/sync_session.sh              # セッション転送スクリプト（hook・手動共用）
 scripts/setup_hooks.sh               # hook の設置スクリプト
-hooks/post-commit                    # Git hook（各リポジトリにシンボリックリンクで配置）
+hooks/pre-push                       # Git hook（各リポジトリにシンボリックリンクで配置）
 lambda/handler.py                    # Lambda ハンドラ（report パッケージを呼び出すエントリポイント）
 lambda/report/                       # メインパッケージ: GitHub API + Claude API + Notion API
 lambda/requirements.txt              # Lambda デプロイ用の依存パッケージ
@@ -29,7 +29,7 @@ template.yaml                        # AWS SAM テンプレート（Lambda, Even
 - **Claude モデル**: 要約生成に `claude-sonnet-4-20250514` を使用
 - **GitHub API**: REST、Fine-grained PAT、セッションログから特定したリポジトリのみ対象
 - **Notion API**: Internal Integration Token、データベースプロパティは [docs/Spec.md](docs/Spec.md) §6 に定義
-- **Hook 設計**: 必ず `exit 0` を返す（commit をブロックしない）、バックグラウンド実行、セッション ID 単位の上書きで冪等性を担保
+- **Hook 設計**: フォアグラウンド同期実行で、転送失敗時は非ゼロ終了で push を中止する（silent fail 防止）。セッション ID 単位の上書きで冪等性を担保
 
 ## 環境変数
 Lambda（環境変数 + Secrets Manager）:

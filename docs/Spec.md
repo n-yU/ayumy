@@ -14,7 +14,7 @@ GitHub 上の日次開発アクティビティ（Commit, Pull Request, Issue）�
 
 ```
 [クライアントマシン]
-  git commit → post-commit hook ─┐
+  git push → pre-push hook ──────┐
   ayumy sync（手動）─────────────┤
   ayumy sync --report ───────────┤── S3 転送後に Lambda も実行
                                   ▼
@@ -60,7 +60,7 @@ ayumy/
 │   ├── sync_session.sh              # セッション転送スクリプト（hook・手動共用）
 │   └── setup_hooks.sh               # hook の設置スクリプト
 ├── hooks/
-│   └── post-commit                  # 各リポジトリにシンボリックリンクで配置
+│   └── pre-push                     # 各リポジトリにシンボリックリンクで配置
 ├── lambda/
 │   ├── handler.py                   # Lambda ハンドラ（report パッケージを呼び出すエントリポイント）
 │   ├── report/                      # メインパッケージ: GitHub API + Claude API + Notion API
@@ -99,8 +99,8 @@ s3://{bucket}/
 ### 4.1 概要
 Claude Code セッションの JSONL を S3 バケットに転送する。
 
-- **自動転送（post-commit hook）**: commit を契機に、当該プロジェクトの未同期セッションをバックグラウンドで転送
-- **手動転送（`ayumy sync`）**: commit せずに作業を中断する場合など、任意のタイミングで実行
+- **自動転送（pre-push hook）**: push を契機に、当該プロジェクトの未同期セッションを同期転送。失敗時は push を中止する
+- **手動転送（`ayumy sync`）**: push せずに作業を中断する場合など、任意のタイミングで実行
 - **手動転送＋レポート生成（`ayumy sync --report`）**: S3 への転送後に Lambda を呼び出してレポート生成まで実行
 
 いずれも共通の転送スクリプト `scripts/sync_session.sh` を使用する。`--report` 指定時は転送完了後に `aws lambda invoke` で Lambda 関数を呼び出す。
@@ -159,14 +159,13 @@ Claude Code が生成するため、タイムスタンプのフォーマット�
 hook と手動実行の両方から呼ばれる共通スクリプト。
 
 ```
-sync_session.sh [--project <project-name>] [--all] [--background] [--report] [--date DATE]
+sync_session.sh [--project <project-name>] [--all] [--report] [--date DATE]
 ```
 
 | オプション | 動作 |
 |---|---|
 | `--project <name>` | 指定プロジェクトの差分セッションのみ転送。`<name>` は `~/.claude/projects/` 以下のディレクトリ名（例: `-Users-username-Documents-github-repo`） |
 | `--all` | 全プロジェクトから差分セッションを一括転送 |
-| `--background` | バックグラウンドで実行（hook 用） |
 | `--report` | S3 転送後に Lambda 関数を呼び出してレポート生成を実行 |
 | `--date DATE` | 指定日または日付範囲のレポートを生成・再生成（`--report` 必須）。`YYYY-MM-DD` または `YYYY-MM-DD..YYYY-MM-DD` 形式 |
 | 引数なし | カレントディレクトリに対応するプロジェクトを自動判定 |
@@ -177,24 +176,24 @@ sync_session.sh [--project <project-name>] [--all] [--background] [--report] [--
 - **AWS 認証情報**: AWS CLI が使用可能な状態であること（`~/.aws/credentials` または環境変数）
 - **冪等性**: `aws s3 cp` による上書きで同じ JSONL の複数回転送でも問題ない
 
-### 4.4 post-commit hook
-`ayumy/hooks/post-commit` として管理し、各リポジトリの `.git/hooks/post-commit` にシンボリックリンクで配置する。
+### 4.4 pre-push hook
+`ayumy/hooks/pre-push` として管理し、各リポジトリの `.git/hooks/pre-push` にシンボリックリンクで配置する。
 
-hook はリポジトリパスからプロジェクト名を解決し、`sync_session.sh --project {name} --background` を呼び出すラッパーである。
+hook はリポジトリパスからプロジェクト名を解決し、`sync_session.sh --project {name}` をフォアグラウンドで呼び出すラッパーである。
 
-- hook の失敗は commit に影響を与えない（exit 0 を保証）
-- エラーは stderr に出力するのみ
+- 転送に失敗した場合は非ゼロ終了で push を中止する。これにより AWS 認証切れなど upload 不能な状態を push 時点で顕在化させる
+- 当該リポジトリに対応する Claude session が存在しない（`~/.claude/projects/` 配下にディレクトリが無い）場合は何もせず exit 0 とし、push を通す
 
 hook の配布方法（`ayumy setup-hooks` コマンドで設置）:
 
 - **単体設置**: 対象リポジトリで `ayumy setup-hooks` を実行
 - **一括設置**: `ayumy setup-hooks --all <dir>` で指定ディレクトリ直下のリポジトリに設置
-- **手動設置**: `ln -s {AYUMY_REPO}/hooks/post-commit {REPO}/.git/hooks/post-commit`
+- **手動設置**: `ln -s {AYUMY_REPO}/hooks/pre-push {REPO}/.git/hooks/pre-push`
 
-`--all` の対象は `.git` ディレクトリを持つ通常のリポジトリのみ。Git worktree やサブモジュール（`.git` がファイルのケース）は対象外。
+`ayumy setup-hooks` は旧 `post-commit` symlink（ayumy の hook を指すもの）の除去も担当する。`--all` の対象は `.git` ディレクトリを持つ通常のリポジトリのみ。Git worktree やサブモジュール（`.git` がファイルのケース）は対象外。
 
 ### 4.5 手動同期（`ayumy sync`）
-commit せずに作業を中断する場合や、hook で転送されなかったセッションを補完する。
+push せずに作業を中断する場合や、hook で転送されなかったセッションを補完する
 
 ```bash
 ayumy sync                                                      # current directory のプロジェクトを同期
@@ -206,7 +205,7 @@ ayumy sync --report --date 2026-03-25                           # 指定日の�
 ayumy sync --report --date 2026-03-01..2026-03-05               # 日付範囲のレポートを一括生成
 ```
 
-`ayumy sync` は `bin/ayumy` CLI を通じて `sync_session.sh` を呼び出す。`bin/ayumy` はサブコマンドをディスパッチするエントリポイントであり、クライアントマシンのセットアップ時に PATH に追加する（例: `export PATH="$HOME/ayumy/bin:$PATH"`）。手動実行時はフォアグラウンドで実行し、転送結果を標準出力に表示する。`--report` 指定時は Lambda の実行結果も標準出力に表示する。
+`ayumy sync` は `bin/ayumy` CLI を通じて `sync_session.sh` を呼び出す。`bin/ayumy` はサブコマンドをディスパッチするエントリポイントであり、クライアントマシンのセットアップ時に PATH に追加する（例: `export PATH="$HOME/ayumy/bin:$PATH"`）。手動実行時はフォアグラウンドで実行し、転送結果を標準出力に表示する。`--report` 指定時は Lambda の実行結果も標準出力に表示する
 
 ### 4.6 セキュリティに関する注意
 - JSONL には会話の生データが含まれるため、会話中やツール実行時に機密情報（API キー、パスワード等）をログに残さないよう注意する
@@ -488,9 +487,9 @@ sam build && sam deploy
 ### 8.3 エラーハンドリング
 - API 呼び出し失敗時のリトライ処理
 - アクティビティが0件の日はスキップまたは「活動なし」と記録
-- post-commit hook は必ず exit 0（commit をブロックしない）
+- pre-push hook は転送失敗時に非ゼロ終了し push を中止する。AWS 認証切れなど upload 不能な状態は push 時点で顕在化させ、silent fail を防ぐ
 - S3 転送失敗時、JSONL はソース側に残るため次回転送時にリトライ可能
-- AWS 認証情報が無効な場合も hook は正常終了し、認証修正後に `ayumy sync --all` で補完可能
+- AWS 認証情報が無効な場合は push が中止されるため、`aws login` 等で認証を修復してから再度 push する
 
 ### 8.4 ランニングコスト見積もり
 課金が発生するのは Anthropic API と AWS。GitHub API と Notion API は無料枠内で収まる。
