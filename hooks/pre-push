@@ -38,9 +38,13 @@ if [[ ! -d "$project_dir" ]]; then
   exit 0
 fi
 
-# Git passes the remote name as $1 to pre-push; fall back to origin when invoked without args.
-remote_name="${1:-origin}"
-repo_name="$(git remote get-url "$remote_name" 2>/dev/null | sed 's|.*[:/]||; s|\.git$||')"
+# Git passes the remote name as $1 and the remote URL as $2 to pre-push.
+# Prefer $2 because `git push <url>` makes $1 an opaque URL that has no get-url.
+remote_url="${2:-}"
+if [[ -z "$remote_url" ]]; then
+  remote_url="$(git remote get-url "${1:-origin}" 2>/dev/null || true)"
+fi
+repo_name="$(echo "$remote_url" | sed 's|.*[:/]||; s|\.git$||')"
 if [[ -n "$repo_name" ]]; then
   echo "$repo_name" > "$project_dir/.ayumy_repo"
 fi
