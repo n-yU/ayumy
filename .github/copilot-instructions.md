@@ -50,7 +50,7 @@ ayumy リポジトリの PR レビューにおいて、過去の PR で繰り返
 ### プロジェクト前提
 - 個人利用のデイリーアクティビティレポーター。利用者はオーナー1名
 - 規模は小さい（1日あたりセッション数件・対象リポは1桁・コミットも数十件以下）
-- パイプライン: post-commit hook → S3（JSONL）→ DynamoDB → GitHub / Notion / Anthropic API → Notion DB + Slack
+- パイプライン: pre-push hook → S3（JSONL）→ DynamoDB → GitHub / Notion / Anthropic API → Notion DB + Slack
 - 実行環境は AWS Lambda（SAM デプロイ）、ローカル CLI は `python -m report`
 - 仕様の原典は docs/Spec.md（日本語）。コードと食い違う場合は Spec.md を正とする
 
@@ -59,7 +59,7 @@ ayumy リポジトリの PR レビューにおいて、過去の PR で繰り返
 - GitHub Search API の 1000 件上限、`search_commits` のページネーション（1日 100 コミット超は想定しない）
 - Notion `databases.query` のページネーション、`pages.create` の 100 ブロック上限（LLM の `max_tokens=2048` で十分小さく収まる）
 - DynamoDB `Scan` コスト（テーブル規模が小さい）
-- post-commit hook の同時実行レース
+- pre-push hook の同時実行レース
 - GitHub OIDC `ThumbprintList` の単一値固定（AWS は 2023 年以降この値を検証しない）
 
 ### 信頼境界の具体（共通方針「信頼済みデータ」に対する補足）

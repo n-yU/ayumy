@@ -8,7 +8,7 @@ S3 + DynamoDB + AWS Lambda を使用した2フェーズ構成
 
 ```
 [クライアントマシン]
-  git commit → post-commit hook ─┐
+  git push → pre-push hook ──────┐
   ayumy sync（手動）─────────────┤
   ayumy sync --report ───────────┤── S3 転送後に Lambda も実行
                                   ▼
@@ -45,7 +45,7 @@ ayumy/
 │   ├── sync_session.sh       # セッション転送スクリプト（hook・手動共用）
 │   └── setup_hooks.sh        # hook の設置スクリプト
 ├── hooks/
-│   └── post-commit           # 各リポジトリにシンボリックリンクで配置
+│   └── pre-push              # 各リポジトリにシンボリックリンクで配置
 ├── lambda/
 │   ├── handler.py            # Lambda ハンドラ
 │   ├── report/               # メインパッケージ: GitHub API + Claude API + Notion API

@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Pre-push hook for ayumy.
+# Symlink this file to each repo's .git/hooks/pre-push:
+#   ln -s /path/to/ayumy/hooks/pre-push /path/to/repo/.git/hooks/pre-push
+#
+# Runs the session upload synchronously and aborts the push (non-zero exit)
+# on failure so issues such as expired AWS credentials surface immediately
+# rather than being silently swallowed in a background process.
+
+set -eu
+
+# Resolve the ayumy repository root from this symlink target.
+# `|| true` keeps set -eu from aborting before the explicit empty-string check.
+hook_path="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || true)"
+if [[ -z "$hook_path" ]]; then
+  echo "[ayumy] could not resolve hook path from: $0" >&2
+  exit 1
+fi
+AYUMY_ROOT="$(cd "$(dirname "$hook_path")/.." && pwd)"
+
+sync_script="$AYUMY_ROOT/scripts/sync_session.sh"
+if [[ ! -x "$sync_script" ]]; then
+  echo "[ayumy] sync script not found: $sync_script" >&2
+  exit 1
+fi
+
+git_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [[ -z "$git_root" ]]; then
+  echo "[ayumy] could not resolve git root" >&2
+  exit 1
+fi
+project_name="$(echo "$git_root" | sed 's|/|-|g')"
+
+# Skip when no Claude session exists for this repository.
+# Without this guard sync_session.sh would exit non-zero and block the push.
+project_dir="$HOME/.claude/projects/$project_name"
+if [[ ! -d "$project_dir" ]]; then
+  exit 0
+fi
+
+# Git passes the remote name as $1 and the remote URL as $2 to pre-push.
+# Prefer $2 because `git push <url>` makes $1 an opaque URL that has no get-url.
+remote_url="${2:-}"
+if [[ -z "$remote_url" ]]; then
+  remote_url="$(git remote get-url "${1:-origin}" 2>/dev/null || true)"
+fi
+repo_name="$(echo "$remote_url" | sed 's|.*[:/]||; s|\.git$||')"
+if [[ -n "$repo_name" ]]; then
+  echo "$repo_name" > "$project_dir/.ayumy_repo"
+fi
+
+if ! "$sync_script" --project "$project_name"; then
+  echo "[ayumy] session upload failed; aborting push" >&2
+  echo "[ayumy] re-run after resolving the error (e.g. 'aws login') to push" >&2
+  exit 1
+fi

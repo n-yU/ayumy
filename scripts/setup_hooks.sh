@@ -2,7 +2,8 @@
 set -euo pipefail
 
 AYUMY_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-HOOK_SOURCE="$AYUMY_ROOT/hooks/post-commit"
+HOOK_SOURCE="$AYUMY_ROOT/hooks/pre-push"
+LEGACY_HOOK_SOURCE="$AYUMY_ROOT/hooks/post-commit"
 
 # Verify that the hook source exists (and is executable) before proceeding.
 if [[ ! -f "$HOOK_SOURCE" || ! -x "$HOOK_SOURCE" ]]; then
@@ -14,14 +15,35 @@ usage() {
   cat <<'USAGE'
 Usage: ayumy setup-hooks [options]
 
-Install the post-commit hook to Git repositories via symlink.
+Install the pre-push hook to Git repositories via symlink.
+Also removes legacy post-commit symlinks that this script previously created
+(symlinks whose readlink target matches the absolute ayumy/hooks/post-commit
+path); symlinks installed by hand with a different path representation are
+left untouched.
 
 Options:
   --all <dir>   Scan immediate children of <dir> for Git repositories and install hooks
-  --force       Overwrite an existing post-commit hook
+  --force       Overwrite an existing pre-push hook
   --help        Show this help message
 USAGE
   exit "${1:-1}"
+}
+
+remove_legacy_post_commit() {
+  local hook_dir="$1"
+  local legacy_path="$hook_dir/post-commit"
+
+  [[ -L "$legacy_path" ]] || return 1
+  local target
+  target="$(readlink "$legacy_path" 2>/dev/null)" || return 1
+  [[ "$target" == "$LEGACY_HOOK_SOURCE" ]] || return 1
+
+  if ! rm "$legacy_path"; then
+    echo "[ayumy] failed to remove legacy post-commit symlink: $legacy_path" >&2
+    return 1
+  fi
+  echo "[ayumy] removed legacy post-commit symlink: $legacy_path"
+  return 0
 }
 
 # Install the hook to a single repository.
@@ -29,15 +51,16 @@ USAGE
 install_hook() {
   local git_dir="$1"
   local hook_dir="$git_dir/hooks"
-  local hook_path="$hook_dir/post-commit"
+  local hook_path="$hook_dir/pre-push"
+
+  remove_legacy_post_commit "$hook_dir" || true
 
   if [[ -L "$hook_path" ]]; then
     local target
-    if target="$(readlink "$hook_path" 2>/dev/null)"; then
-      if [[ "$target" == "$HOOK_SOURCE" ]]; then
-        echo "[ayumy] already installed: $hook_path"
-        return 0
-      fi
+    target="$(readlink "$hook_path" 2>/dev/null)" || target=""
+    if [[ "$target" == "$HOOK_SOURCE" ]]; then
+      echo "[ayumy] already installed: $hook_path"
+      return 0
     fi
   fi
 

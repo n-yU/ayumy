@@ -9,12 +9,11 @@ MARKER_NAME=".ayumy_last_sync"
 
 usage() {
   cat <<'USAGE'
-Usage: sync_session.sh [--project <name>] [--all] [--background] [--report] [--date DATE]
+Usage: sync_session.sh [--project <name>] [--all] [--report] [--date DATE]
 
 Options:
   --project <name>    Sync a specific project
   --all               Sync all projects
-  --background        Run in the background (for hooks)
   --report            Invoke Lambda to generate report after sync
   --date DATE         Generate report for a specific date or range (requires --report)
                       Formats: YYYY-MM-DD or YYYY-MM-DD..YYYY-MM-DD
@@ -100,7 +99,6 @@ sync_project() {
 
 mode=""
 project_name=""
-background=false
 report=false
 target_date=""
 
@@ -116,10 +114,6 @@ while [[ $# -gt 0 ]]; do
     --all)
       [[ -n "$mode" && "$mode" != "all" ]] && { err "conflicting options: --project and --all"; usage; }
       mode="all"
-      shift
-      ;;
-    --background)
-      background=true
       shift
       ;;
     --report)
@@ -186,18 +180,6 @@ fi
 if [[ ! -d "$CLAUDE_PROJECTS_DIR" ]]; then
   err "$CLAUDE_PROJECTS_DIR does not exist"
   exit 1
-fi
-
-# --- background mode: re-exec detached ---
-
-if [[ "$background" == true ]]; then
-  args=()
-  [[ "$mode" == "project" ]] && args+=(--project "$project_name")
-  [[ "$mode" == "all" ]] && args+=(--all)
-  [[ "$report" == true ]] && args+=(--report)
-  [[ -n "$target_date" ]] && args+=(--date "$target_date")
-  nohup "$0" "${args[@]}" >/dev/null 2>&1 &
-  exit 0
 fi
 
 # --- main ---
