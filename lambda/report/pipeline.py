@@ -39,17 +39,10 @@ def process_date(
     *,
     is_backfill: bool = False,
 ) -> None:
-    """Generate and publish a daily report for a single date range.
+    """Generate and publish the daily report for the `[since, until)` JST window.
 
-    Args:
-        since: Start of the target period (inclusive)
-        until: End of the target period (exclusive)
-        session_activity: Pre-fetched session data from DynamoDB
-        github_client: GitHub API client
-        notion_client: Notion API client
-        summary_client: Claude API summarizer client
-        slack_client: Slack notification client
-        is_backfill: If True, use the Hybrid PR/Issue fetch path
+    `is_backfill=True` switches to the Hybrid PR/Issue fetch path (Spec.md §5.1.1),
+    so dates whose PR/Issue state has since drifted out of the `updated_at` window are still recoverable.
     """
     logger.info("Processing: %s ~ %s", since.isoformat(), until.isoformat())
 
@@ -159,15 +152,12 @@ def run(
     memory_limit_mb: int | None = None,
     timeout_seconds: int | None = None,
 ) -> None:
-    """Run the report generation pipeline.
+    """Run the report generation pipeline for one or more target dates.
 
-    Args:
-        source: Invocation source. "manual" for manual execution,
-            None for scheduled execution
-        target_date: Explicit target date (YYYY-MM-DD or YYYY-MM-DD..YYYY-MM-DD)
-            for report generation
-        memory_limit_mb: Lambda memory limit in MB, or None for CLI
-        timeout_seconds: Lambda timeout in seconds, or None for CLI
+    `target_date` (`YYYY-MM-DD` or `YYYY-MM-DD..YYYY-MM-DD`) takes precedence and disables backfill;
+    otherwise the prior day's full window (scheduled) or today's partial window (`source="manual"`) is processed alongside any unreported backfill dates.
+    `memory_limit_mb` / `timeout_seconds` are reported to Slack as execution metrics,
+    and are None when invoked from the CLI.
     """
     start = time.monotonic()
     since, until = get_target_date_range(source, target_date=target_date)

@@ -26,13 +26,7 @@ SHA_PREFIX_LEN = 7
 
 
 def _chunk_rich_text(text: str) -> list[dict]:
-    """Split text into rich_text objects respecting Notion's per-item limit.
-
-    Args:
-        text: Text content to split
-
-    Returns:
-        A list of rich_text objects, each within RICH_TEXT_LIMIT chars
+    """Split `text` into rich_text objects each within Notion's per-item character limit.
     """
     return [
         {"type": "text", "text": {"content": text[i : i + RICH_TEXT_LIMIT]}}
@@ -41,15 +35,7 @@ def _chunk_rich_text(text: str) -> list[dict]:
 
 
 def _linked_text(content: str, url: str) -> list[dict]:
-    """Build rich_text objects with a hyperlink, split at Notion's per-item limit.
-
-    Args:
-        content: Display text
-        url: Target URL
-
-    Returns:
-        A list of rich_text dicts each within RICH_TEXT_LIMIT chars and
-        sharing the same link
+    """Build hyperlinked rich_text objects, each within Notion's per-item character limit and sharing the same link.
     """
     return [
         {
@@ -61,7 +47,8 @@ def _linked_text(content: str, url: str) -> list[dict]:
 
 
 def _is_in_range(iso_timestamp: str | None, since: datetime, until: datetime) -> bool:
-    """Check whether an ISO timestamp falls within [since, until)."""
+    """Check whether an ISO timestamp falls within [since, until).
+    """
     if not iso_timestamp:
         return False
     dt = datetime.fromisoformat(iso_timestamp)
@@ -69,12 +56,14 @@ def _is_in_range(iso_timestamp: str | None, since: datetime, until: datetime) ->
 
 
 def _pr_label(repo_name: str, pr: PullInfo) -> str:
-    """Render `repo#N: title` for a PR."""
+    """Render `repo#N: title` for a PR.
+    """
     return f"{repo_name}#{pr['number']}: {pr['title']}"
 
 
 def _issue_label(repo_name: str, issue: IssueInfo) -> str:
-    """Render `repo#N: title` for an Issue."""
+    """Render `repo#N: title` for an Issue.
+    """
     return f"{repo_name}#{issue['number']}: {issue['title']}"
 
 
@@ -84,14 +73,7 @@ def _bulleted_link(
     prefix: str = "",
     children: list[dict] | None = None,
 ) -> dict:
-    """Build a bulleted_list_item block with an optional prefix and children.
-
-    Args:
-        label: Linked display text (e.g. `repo#12: Title`)
-        url: Target URL
-        prefix: Plain-text content rendered before the link (e.g. `⚠️ (closed) `)
-        children: Sub-blocks nested under this bullet (Notion API supports
-            children at creation time)
+    """Build a `bulleted_list_item` block with an optional plain-text `prefix` rendered before the linked label and optional nested `children`.
     """
     rich_text: list[dict] = []
     if prefix:
@@ -108,9 +90,7 @@ def _bulleted_link(
 
 
 def _done_prefix_pr(pr: PullInfo) -> str:
-    """Return the Done-section prefix for a PR.
-
-    `merged` PRs are regular Done; `closed` (unmerged) PRs are flagged.
+    """Return the Done-section prefix for a PR; `closed` (unmerged) PRs are flagged as irregular.
     """
     if pr["state"] == "merged":
         return "✅ "
@@ -121,10 +101,7 @@ _IRREGULAR_ISSUE_REASONS = {"not_planned": "not planned", "duplicate": "duplicat
 
 
 def _done_prefix_issue(issue: IssueInfo) -> str:
-    """Return the Done-section prefix for a closed Issue.
-
-    `not_planned` and `duplicate` reasons are flagged. `completed` and
-    legacy issues (state_reason is None) are treated as regular Done.
+    """Return the Done-section prefix for a closed Issue; `not_planned` / `duplicate` are flagged, others (including legacy `state_reason=None`) are regular Done.
     """
     label = _IRREGULAR_ISSUE_REASONS.get(issue.get("state_reason") or "")
     if label is None:
@@ -133,12 +110,14 @@ def _done_prefix_issue(issue: IssueInfo) -> str:
 
 
 def _commit_label(c: CommitInfo) -> str:
-    """Render `sha7: message` for a commit."""
+    """Render `sha7: message` for a commit.
+    """
     return f"{c['sha'][:SHA_PREFIX_LEN]}: {c['message']}"
 
 
 def _issue_close_prefix(issue: IssueInfo) -> str:
-    """Return the timeline close-line prefix for a closed Issue."""
+    """Return the timeline close-line prefix for a closed Issue.
+    """
     label = _IRREGULAR_ISSUE_REASONS.get(issue.get("state_reason") or "")
     if label is None:
         return "✅ close: "
@@ -146,15 +125,10 @@ def _issue_close_prefix(issue: IssueInfo) -> str:
 
 
 class NotionClient:
-    """Client for writing daily report pages to a Notion database."""
+    """Client for writing daily report pages to a Notion database.
+    """
 
     def __init__(self, token: str, database_id: str) -> None:
-        """Initialize the client with Notion credentials.
-
-        Args:
-            token: Notion Internal Integration token
-            database_id: Target Notion database ID
-        """
         self.client = Client(auth=token)
         self.database_id = database_id
         self._data_source_id: str | None = None
@@ -164,7 +138,7 @@ class NotionClient:
         """Return the cached data source ID.
 
         Raises:
-            RuntimeError: If init_data_source() has not been called yet
+            RuntimeError: If `init_data_source()` has not been called yet.
         """
         if self._data_source_id is None:
             raise RuntimeError(
@@ -173,10 +147,7 @@ class NotionClient:
         return self._data_source_id
 
     def init_data_source(self) -> None:
-        """Resolve and cache the database's first data source ID.
-
-        Subsequent calls that rely on `data_source_id` (e.g. query and
-        page creation) assume this has been invoked once per client.
+        """Resolve and cache the database's first data source ID for later query and page-creation calls.
         """
         db = self.client.databases.retrieve(database_id=self.database_id)
         self._data_source_id = db["data_sources"][0]["id"]
@@ -190,18 +161,7 @@ class NotionClient:
         issues_closed: int,
         claude_sessions: int,
     ) -> dict:
-        """Build Notion page properties from report data.
-
-        Args:
-            target_date: The target date for the report
-            repo_summary: Per-repository summary from Claude API
-            commits: Number of commits in this repo
-            prs_merged: Number of merged PRs in this repo
-            issues_closed: Number of closed issues in this repo
-            claude_sessions: Number of Claude Code sessions for this repo
-
-        Returns:
-            A dict of Notion page properties
+        """Build the Notion page property payload (Spec.md §6.1) from report and per-repo activity counts.
         """
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
         title_str = f"{target_date.astimezone(JST).strftime('%y-%m-%d')}: {repo_summary['name']}"
@@ -227,21 +187,12 @@ class NotionClient:
         since: datetime,
         until: datetime,
     ) -> list[dict]:
-        """Build Done / In Progress / Todo sections from activity data.
+        """Build the Done / In Progress / Todo sections for one repository (Spec.md §6.2).
 
-        Status assignment (see Spec.md 6.2 for prefix conventions):
-            - Done: merged / closed PRs and closed Issues
-            - Todo: Issues created within [since, until) that are still open
-            - In Progress: open PRs (including drafts) and other open Issues
-
-        Args:
-            repo_name: Repository name (for link labels)
-            repo_activity: Activity for this repository
-            since: Start of the target period (inclusive)
-            until: End of the target period (exclusive)
-
-        Returns:
-            A list of Notion blocks for status sections (omitted when empty)
+        Done collects merged or closed PRs and closed Issues.
+        Todo collects Issues created within `[since, until)` that are still open.
+        In Progress collects open PRs (including drafts) and any remaining open Issues.
+        Sections with no entries are omitted from the output.
         """
         done: list[tuple[str, str, str]] = []
         in_progress: list[tuple[str, str, str]] = []
@@ -292,19 +243,12 @@ class NotionClient:
         since: datetime,
         until: datetime,
     ) -> list[dict]:
-        """Build Timeline as a nested bullet list grouped by parent PR.
+        """Build the Timeline as a nested bullet list grouped by parent PR (Spec.md §6.2).
 
-        Layout:
-            - PR block: header `🔀 repo#N: title` with non-merge PR-linked
-              commits nested via `children`
-            - Top-level: merge commits (`🔸 sha: msg`), direct commits,
-              Issue open/close, unmerged PR close lines
-            - Sort key: time of first activity in [since, until). Ties
-              between a PR header and its merge commit place the header
-              first (priority 0 vs 1)
-
-        Returns:
-            A list of Notion blocks (empty when no entries fall in range)
+        Non-merge PR-linked commits nest under their PR block via `children`.
+        Merge commits, direct commits, Issue open / close lines, and unmerged-closed PR lines sit at the top level.
+        Entries are ordered by their earliest activity in `[since, until)`;
+        when a PR header and its merge commit share a timestamp, the header is placed first.
         """
         pulls = repo_activity["pulls"]
         issues = repo_activity["issues"]
@@ -434,19 +378,7 @@ class NotionClient:
         since: datetime,
         until: datetime,
     ) -> list[dict]:
-        """Build Notion page body blocks from summary and activity data.
-
-        Layout: Summary -> Done -> In Progress -> Todo -> Timeline.
-        Status sections and Timeline are omitted when empty.
-
-        Args:
-            repo_summary: Per-repository summary from Claude API
-            repo_activity: Activity for this repository
-            since: Start of the target period (inclusive)
-            until: End of the target period (exclusive)
-
-        Returns:
-            A list of Notion block objects
+        """Build the Notion page body blocks in Summary → status sections → Timeline order, omitting empty sections.
         """
         children: list[dict] = []
 
@@ -492,21 +424,7 @@ class NotionClient:
         issues_closed: int,
         claude_sessions: int,
     ) -> str:
-        """Create a Notion page for a single repository's daily report.
-
-        Args:
-            target_date: The target date for the report
-            repo_summary: Per-repository summary from Claude API
-            repo_activity: Activity for this repository
-            since: Start of the target period (inclusive)
-            until: End of the target period (exclusive)
-            commits: Number of commits in this repo
-            prs_merged: Number of merged PRs in this repo
-            issues_closed: Number of closed issues in this repo
-            claude_sessions: Number of Claude Code sessions for this repo
-
-        Returns:
-            The URL of the created Notion page
+        """Create a Notion page for one repository's daily report and return its URL.
         """
         page = self.client.pages.create(
             parent={"database_id": self.database_id},
@@ -524,16 +442,7 @@ class NotionClient:
         return page["url"]
 
     def _archive_existing_pages(self, target_date: datetime) -> int:
-        """Archive existing pages for the target date.
-
-        Queries the database for pages matching the target date and
-        archives them to prevent duplicates on re-runs.
-
-        Args:
-            target_date: The target date to match
-
-        Returns:
-            The number of pages archived
+        """Archive existing pages for the target date so re-runs stay idempotent, returning the count archived.
         """
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
         # No pagination: daily page count won't exceed Notion's default page size (100)
@@ -558,21 +467,7 @@ class NotionClient:
         activity: GitHubActivity,
         session_activity: SessionActivity,
     ) -> list[tuple[str, str]]:
-        """Create Notion pages for all repositories in the report.
-
-        Archives (soft-deletes) existing pages for the target date before
-        creating new ones to ensure idempotent re-runs.
-
-        Args:
-            target_date: The target date for the report
-            since: Start of the target period (inclusive)
-            until: End of the target period (exclusive)
-            report: Full report summary from Claude API
-            activity: GitHub activity data keyed by repo name
-            session_activity: Claude Code session data keyed by repo name
-
-        Returns:
-            A list of (repo_name, page_url) tuples for created pages
+        """Create Notion pages for every repository in `report`, archiving any same-date pages first for idempotent re-runs.
         """
         archived = self._archive_existing_pages(target_date)
         if archived:

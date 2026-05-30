@@ -35,7 +35,8 @@ _SHELL_STOPS = ("\n", "&&", "||", ";", "|")
 
 
 def _command_segment(command: str, start: int) -> str:
-    """Return the portion of `command` from `start` up to the next shell stop."""
+    """Return the portion of `command` from `start` up to the next shell stop.
+    """
     end = len(command)
     for stop in _SHELL_STOPS:
         i = command.find(stop, start)
@@ -47,10 +48,9 @@ def _command_segment(command: str, start: int) -> str:
 def _first_positional_int(segment: str) -> int | None:
     """Return the first positional integer token in `segment`.
 
-    Tokenizes via shlex so that quoted flag values count as a single
-    token; this prevents matching integers that live inside strings
-    like `--body "fix 999"`. Tokens beginning with `-` are treated as
-    flags and skipped
+    Tokenizes via shlex so quoted flag values count as one token,
+    preventing matches against integers that live inside strings like `--body "fix 999"`.
+    Flags (tokens starting with `-`) are skipped.
     """
     try:
         tokens = shlex.split(segment, posix=True)
@@ -65,10 +65,10 @@ def _first_positional_int(segment: str) -> int | None:
 
 
 def _expand_home(path: str, project_cwd: str | None) -> str:
-    """Expand a leading `~` using project_cwd's home as the anchor.
+    """Expand a leading `~` using `project_cwd`'s home as the anchor.
 
-    Lambda's runtime user differs from the session author, so
-    Path.expanduser would resolve to the wrong home.
+    Lambda's runtime user differs from the session author,
+    so `Path.expanduser` would resolve to the wrong home.
     """
     if path != "~" and not path.startswith("~/"):
         return path
@@ -81,7 +81,8 @@ def _expand_home(path: str, project_cwd: str | None) -> str:
 
 
 def _effective_cwd(command: str, project_cwd: str | None) -> str | None:
-    """Return the inferred cwd of a Bash command, or None if not inferable."""
+    """Return the inferred cwd of a Bash command, or None if not inferable.
+    """
     try:
         # shlex does not treat `&&` as an operator, so normalize spacing
         # to recognize forms like `cd /path&&git ...`.
@@ -107,7 +108,8 @@ def _effective_cwd(command: str, project_cwd: str | None) -> str | None:
 
 
 def _is_cross_repo(effective_cwd: str | None, project_cwd: str | None) -> bool:
-    """Return True when the command runs outside the project working directory."""
+    """Return True when the command runs outside the project working directory.
+    """
     if not project_cwd or effective_cwd is None:
         return False
     cwd = PurePosixPath(effective_cwd)
@@ -116,15 +118,10 @@ def _is_cross_repo(effective_cwd: str | None, project_cwd: str | None) -> bool:
 
 
 def _extract_pr_issue_refs(command: str) -> tuple[set[int], set[int]]:
-    """Extract PR and Issue numbers from a Bash command string.
+    """Extract referenced PR and Issue numbers from a Bash command string.
 
-    Recognizes `gh pr|issue {sub} {N}`, `gh api .../pulls|issues/{N}`,
-    and `#N` inside `git` arguments. `#N` is ambiguous, so it is
-    placed in both sets and the fetcher reconciles via 404 / the
-    `pull_request` attribute
-
-    Returns:
-        A tuple of (pull numbers, issue numbers)
+    `#N` inside `git` arguments is ambiguous between PR and Issue,
+    so it is placed in both sets and the fetcher reconciles each via 404 or the `pull_request` attribute.
     """
     pulls: set[int] = set()
     issues: set[int] = set()
@@ -157,46 +154,25 @@ def _extract_pr_issue_refs(command: str) -> tuple[set[int], set[int]]:
 
 
 class SessionStore:
-    """Client for reading and writing session metadata in DynamoDB."""
+    """Client for reading and writing session metadata in DynamoDB.
+    """
 
     def __init__(self, table_name: str) -> None:
-        """Initialize the store with a DynamoDB table name.
-
-        Args:
-            table_name: DynamoDB table name for session metadata
-        """
         self.table = boto3.resource("dynamodb").Table(table_name)
 
     def ingest(self, session_client) -> list[str]:
-        """Parse all JSONL files and write session items to DynamoDB.
+        """Parse all unarchived JSONL from S3 into DynamoDB items and return the processed S3 keys.
 
-        Downloads every unarchived JSONL from S3, groups entries by
-        (JST date, repo, session_id), and writes the resulting items
-        to DynamoDB. Specified fields are updated while preserving
-        existing attributes such as reported_at.
-
-        Args:
-            session_client: SessionClient instance for S3 access
-
-        Returns:
-            S3 keys that were processed
+        Existing attributes such as `reported_at` are preserved on re-ingestion.
         """
         items, keys = self._build_items(session_client)
         self._write_items(items)
         return keys
 
     def _build_items(self, session_client) -> tuple[list[dict], list[str]]:
-        """Parse JSONL files and build DynamoDB items.
+        """Parse every JSONL fetched via `session_client` into DynamoDB items grouped by (JST date, repo, session_id).
 
-        Groups all entries by (JST date, repo, session_id) without
-        date filtering. Skips entries without timestamps and projects
-        without a .ayumy_repo metadata file.
-
-        Args:
-            session_client: SessionClient instance for S3 access
-
-        Returns:
-            A tuple of (DynamoDB items, S3 keys processed)
+        Entries without timestamps and projects without a `.ayumy_repo` metadata file are skipped.
         """
         # Pattern: [... short-sha] commit message
         # Handles normal, root-commit, and detached HEAD forms
@@ -358,13 +334,7 @@ class SessionStore:
         return items, processed_keys
 
     def _write_items(self, items: list[dict]) -> None:
-        """Write items to DynamoDB using update_item.
-
-        Uses SET with attribute assignments so that existing
-        reported_at values are preserved across re-ingestion.
-
-        Args:
-            items: List of DynamoDB item dicts
+        """Write `items` to DynamoDB via `update_item` so existing `reported_at` values are preserved across re-ingestion.
         """
         for item in items:
             key = {
@@ -381,13 +351,7 @@ class SessionStore:
             )
 
     def fetch_sessions(self, date_str: str) -> SessionActivity:
-        """Query sessions for a specific date from DynamoDB.
-
-        Args:
-            date_str: JST date string (YYYY-MM-DD)
-
-        Returns:
-            A SessionActivity instance keyed by repository name
+        """Query the JST date `date_str` (`YYYY-MM-DD`) and return sessions grouped by repository.
         """
         items = []
         response = self.table.query(
@@ -425,16 +389,7 @@ class SessionStore:
         return SessionActivity(data)
 
     def scan_backfill_dates(self, primary_date: date) -> list[date]:
-        """Scan DynamoDB for past dates needing report generation.
-
-        Finds dates where reported_at is not set (new sessions) or
-        updated_at > reported_at (updated sessions after reporting).
-
-        Args:
-            primary_date: The current primary date to exclude
-
-        Returns:
-            Sorted list of past dates needing (re-)generation
+        """Return past dates whose sessions are new (no `reported_at`) or have been updated since the last report (`updated_at > reported_at`), excluding `primary_date`.
         """
         # Attr-to-attr comparison requires raw expression string
         scan_kwargs = {
@@ -459,10 +414,7 @@ class SessionStore:
         return sorted(d for d in dates if d < primary_date)
 
     def mark_reported(self, date_str: str) -> None:
-        """Set reported_at on all items for the given date.
-
-        Args:
-            date_str: JST date string (YYYY-MM-DD)
+        """Stamp `reported_at` on every item under the JST date `date_str`.
         """
         now = datetime.now(timezone.utc).isoformat()
 

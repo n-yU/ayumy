@@ -1,8 +1,4 @@
-"""Ayumy daily report generator.
-
-Fetches GitHub activity and Claude Code session logs for the target
-date range and formats them for downstream processing.
-"""
+"""Ayumy daily report generator."""
 
 import os
 from collections.abc import KeysView
@@ -24,11 +20,7 @@ class CommitInfo(TypedDict):
 
 
 class SessionCommit(TypedDict):
-    """A commit recovered from Claude Code session logs.
-
-    `timestamp` may be missing on legacy DynamoDB entries; pipeline
-    code falls back to the session's start_time and normalizes the
-    entry to CommitInfo when injecting into GitHubActivity.
+    """Commit recovered from session logs; `timestamp` may be absent on legacy DynamoDB entries.
     """
 
     sha: str
@@ -69,17 +61,16 @@ class RepoActivity(TypedDict):
 
 
 class GitHubActivity:
-    """GitHub activity data keyed by repository name."""
+    """GitHub activity data keyed by repository name.
+    """
 
     def __init__(self, data: dict[str, RepoActivity]) -> None:
         self._data = data
 
     def repos(self) -> dict[str, RepoActivity]:
-        """Return the underlying repo-keyed dict."""
         return self._data
 
     def keys(self) -> KeysView[str]:
-        """Return repository names."""
         return self._data.keys()
 
     def __bool__(self) -> bool:
@@ -89,11 +80,7 @@ class GitHubActivity:
         return key in self._data
 
     def format(self) -> str:
-        """Format GitHub activity into Markdown for Claude API input.
-
-        Returns:
-            A Markdown-formatted string for the "# GitHub アクティビティ"
-            section, suitable for inclusion in the Spec.md §5.3 input format
+        """Format GitHub activity as the Markdown block consumed by the Claude API prompt (Spec.md §5.4).
         """
         if not self._data:
             return "# GitHub アクティビティ\nアクティビティなし"
@@ -141,17 +128,16 @@ class SessionInfo(TypedDict):
 
 
 class SessionActivity:
-    """Claude Code session activity data keyed by repository name."""
+    """Claude Code session activity data keyed by repository name.
+    """
 
     def __init__(self, data: dict[str, list[SessionInfo]]) -> None:
         self._data = data
 
     def repos(self) -> dict[str, list[SessionInfo]]:
-        """Return the underlying repo-keyed dict."""
         return self._data
 
     def keys(self) -> KeysView[str]:
-        """Return repository/project names."""
         return self._data.keys()
 
     def __bool__(self) -> bool:
@@ -163,15 +149,10 @@ class SessionActivity:
     def get(
         self, key: str, default: list[SessionInfo] | None = None
     ) -> list[SessionInfo] | None:
-        """Get sessions for a repo, with optional default."""
         return self._data.get(key, default)
 
     def format(self) -> str:
-        """Format session logs into Markdown for Claude API input.
-
-        Returns:
-            A Markdown-formatted string for the "# Claude Code セッション"
-            section, suitable for inclusion in the Spec.md §5.3 input format
+        """Format session logs as the Markdown block consumed by the Claude API prompt.
         """
         if not self._data:
             return "# Claude Code セッション\nセッションなし"
@@ -196,13 +177,7 @@ class SessionActivity:
 
     @staticmethod
     def _format_time(iso_timestamp: str) -> str:
-        """Convert an ISO timestamp to JST HH:MM format.
-
-        Args:
-            iso_timestamp: ISO 8601 timestamp string
-
-        Returns:
-            Time string in "HH:MM" format (JST)
+        """Return JST HH:MM from an ISO 8601 timestamp; falls back to "??:??" on empty input.
         """
         if not iso_timestamp:
             return "??:??"
@@ -221,16 +196,10 @@ class ReportSummary(TypedDict):
 
 
 def require_env(name: str) -> str:
-    """Get a required environment variable or raise an error.
-
-    Args:
-        name: Environment variable name
-
-    Returns:
-        The environment variable value
+    """Return the environment variable value.
 
     Raises:
-        ValueError: If the environment variable is not set
+        ValueError: If the variable is unset or empty.
     """
     value = os.environ.get(name)
     if not value:
@@ -240,23 +209,14 @@ def require_env(name: str) -> str:
 
 @lru_cache
 def get_version() -> str:
-    """Read the ayumy version from the VERSION file.
-
-    Returns:
-        The version string (e.g. "0.1.0")
+    """Return the ayumy version recorded in the VERSION file.
     """
     version_path = Path(__file__).resolve().parent.parent / "VERSION"
     return version_path.read_text().strip()
 
 
 def date_to_range(target: date) -> tuple[datetime, datetime]:
-    """Convert a date to a full JST day range.
-
-    Args:
-        target: The target date
-
-    Returns:
-        A tuple of (since, until) covering 00:00 JST to next day 00:00 JST
+    """Return the JST [00:00, next-day 00:00) window for the target date.
     """
     since = datetime(target.year, target.month, target.day, tzinfo=JST)
     until = since + timedelta(days=1)
@@ -264,19 +224,12 @@ def date_to_range(target: date) -> tuple[datetime, datetime]:
 
 
 def parse_target_dates(target_date: str) -> list[date]:
-    """Parse a target date string into a list of dates.
+    """Parse a single `YYYY-MM-DD` or a `YYYY-MM-DD..YYYY-MM-DD` range into an inclusive date list.
 
-    Supports single date (YYYY-MM-DD) and range (YYYY-MM-DD..YYYY-MM-DD).
-
-    Args:
-        target_date: Date string in YYYY-MM-DD or YYYY-MM-DD..YYYY-MM-DD format
-
-    Returns:
-        A list of date objects (inclusive on both ends)
+    The range is capped at 31 days to bound activity fetch volume.
 
     Raises:
-        ValueError: If the start date is after the end date, or range exceeds
-            31 days
+        ValueError: If the start date is after the end date, or the range exceeds 31 days.
     """
     MAX_RANGE_DAYS = 31
 
@@ -303,20 +256,10 @@ def get_target_date_range(
     source: str | None = None,
     target_date: str | None = None,
 ) -> tuple[datetime, datetime]:
-    """Return the target date range for activity fetching.
+    """Return the (since, until) window for activity fetching.
 
-    Args:
-        source: Invocation source. "manual" for manual execution,
-            None or other values for scheduled execution
-        target_date: Explicit target date (YYYY-MM-DD or YYYY-MM-DD..YYYY-MM-DD).
-            When specified, returns JST 00:00 ~ next day JST 00:00 for the
-            first date in the string
-
-    Returns:
-        A tuple of (since, until) as timezone-aware datetime objects.
-        target_date specified: first date JST 00:00 ~ next day JST 00:00.
-        Scheduled: previous day JST 00:00 ~ today JST 00:00.
-        Manual: today JST 00:00 ~ now
+    `target_date` takes precedence and uses the first date's JST [00:00, next-day 00:00) window.
+    Otherwise `source="manual"` returns today 00:00 ~ now, and any other value returns the prior day's JST window.
     """
     if target_date:
         first = target_date.split("..")[0]

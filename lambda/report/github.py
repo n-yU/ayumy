@@ -23,29 +23,26 @@ _ISSUE_EVENTS = ("created", "closed")
 
 
 class GitHubClient:
-    """Client for fetching and formatting GitHub activity via PyGithub."""
+    """Client for fetching and formatting GitHub activity via PyGithub.
+    """
 
     def __init__(self, pat: str) -> None:
-        """Initialize the client with a GitHub Personal Access Token.
-
-        Args:
-            pat: GitHub Fine-grained PAT with read access to owner repos
-        """
         self.g = Github(pat, per_page=100)
         self._search_count = 0
         self._window_start = 0.0
 
     @cached_property
     def owner(self) -> str:
-        """Login name of the authenticated user (owner of accessible repos)."""
+        """Login name of the authenticated user (owner of accessible repos).
+        """
         return self.g.get_user().login
 
     def _search_throttle(self) -> None:
-        """Throttle Search API calls within the secondary rate limit.
+        """Throttle Search API calls to stay within the secondary rate limit.
 
-        Each call increments the per-window counter. When the counter
-        reaches the batch size, sleep until the window elapses before
-        resetting. Call once before each Search API request
+        Call this once before each Search API request;
+        once the per-window counter reaches the batch size,
+        sleep until the window elapses and then reset the counter.
         """
         if self._search_count >= _SEARCH_BATCH:
             elapsed = time.time() - self._window_start
@@ -61,20 +58,10 @@ class GitHubClient:
     def fetch_commits(
         self, repo: Repository, since: datetime, until: datetime
     ) -> list[CommitInfo]:
-        """Fetch commits for a repo within the target date range.
+        """Fetch commits for `repo` within `[since, until)` and annotate each with associated PR numbers.
 
-        - Uses Search Commits API (author-date range) to cover all branches
-        - Search API is date-granular; re-filter against exact since/until
-        - Annotates each commit with PR numbers via GET /repos/.../commits/{sha}/pulls
-
-        Args:
-            repo: Target repository
-            since: Start of the target period (inclusive)
-            until: End of the target period (exclusive)
-
-        Returns:
-            A list of dicts with keys: sha, message, author, date, url,
-            pull_numbers
+        Uses the Search Commits API (author-date range) to cover all branches;
+        the API is date-granular, so results are re-filtered against the exact `since` / `until` timestamps.
         """
         # Widen by 1 day on each side to absorb GitHub Search's UTC date
         # semantics (a JST day spans two UTC dates); precise filtering
@@ -111,25 +98,11 @@ class GitHubClient:
         commits: list[CommitInfo] | None = None,
         session_numbers: list[int] | None = None,
     ) -> list[PullInfo]:
-        """Fetch pull requests within the target date range.
+        """Fetch pull requests for `repo` within `[since, until)`.
 
-        Default path filters by `updated_at`. Backfill path unions
-        Search by created/merged/closed event with PRs derived from
-        commits in range and from session-extracted PR references
-
-        Args:
-            repo: Target repository
-            since: Start of the target period (inclusive)
-            until: End of the target period (exclusive)
-            is_backfill: If True, use the Hybrid fetch path
-            commits: Commits in range, used by the Hybrid path
-            session_numbers: PR numbers extracted from session tool
-                operations, unioned by the Hybrid path
-
-        Returns:
-            A list of dicts with keys: number, title, state, author, labels,
-            draft, url, created_at, merged_at, closed_at. State is one of
-            "merged", "closed", "open"
+        The default path filters by `updated_at`.
+        The backfill path (`is_backfill=True`) unions Search-by-event results with PRs derived from `commits` in range and from `session_numbers`,
+        which recovers PRs whose `updated_at` has since drifted out of the window (Spec.md §5.1.1).
         """
         if is_backfill:
             return self._fetch_pulls_hybrid(
@@ -158,23 +131,10 @@ class GitHubClient:
         is_backfill: bool = False,
         session_numbers: list[int] | None = None,
     ) -> list[IssueInfo]:
-        """Fetch issues (excluding PRs) within the target date range.
+        """Fetch issues (excluding PRs) for `repo` within `[since, until)`.
 
-        Default path filters by `updated_at`. Backfill path unions
-        Search by created/closed event with issues from
-        session-extracted references
-
-        Args:
-            repo: Target repository
-            since: Start of the target period (inclusive)
-            until: End of the target period (exclusive)
-            is_backfill: If True, use the Hybrid fetch path
-            session_numbers: Issue numbers extracted from session tool
-                operations, unioned by the Hybrid path
-
-        Returns:
-            A list of dicts with keys: number, title, state, author, labels,
-            url, created_at, closed_at, state_reason
+        The default path filters by `updated_at`.
+        The backfill path (`is_backfill=True`) unions Search-by-event results with `session_numbers` to recover issues whose `updated_at` has drifted out of the window (Spec.md §5.1.1).
         """
         if is_backfill:
             return self._fetch_issues_hybrid(
@@ -203,21 +163,7 @@ class GitHubClient:
         session_pulls: dict[str, list[int]] | None = None,
         session_issues: dict[str, list[int]] | None = None,
     ) -> GitHubActivity:
-        """Fetch GitHub activity for the specified repositories.
-
-        Args:
-            since: Start of the target period (inclusive)
-            until: End of the target period (exclusive)
-            repo_names: Repository names to fetch activity for
-            is_backfill: If True, use the Hybrid fetch path for PRs
-                and Issues
-            session_pulls: Per-repo PR numbers from session tool
-                operations, unioned by the Hybrid path
-            session_issues: Per-repo Issue numbers from session tool
-                operations, unioned by the Hybrid path
-
-        Returns:
-            A GitHubActivity instance. Repos with no activity are omitted
+        """Fetch commits, PRs, and issues for each repo in `repo_names`, omitting repos that produced no activity.
         """
         user = self.g.get_user()
         data: dict[str, RepoActivity] = {}
@@ -258,18 +204,10 @@ class GitHubClient:
         until: datetime,
         event: str,
     ) -> list[Issue]:
-        """Search PRs whose state-transition event lies in the date range.
+        """Search PRs whose `event` (created / merged / closed) timestamp lies within `[since, until)`.
 
-        Args:
-            repo: Target repository
-            since: Start of the target period (inclusive)
-            until: End of the target period (exclusive)
-            event: One of "created", "merged", "closed"
-
-        Returns:
-            A list of Issue objects (search_issues returns Issues even
-            for PR queries; convert via repo.get_pull(number) when full
-            PR fields are needed)
+        `search_issues` returns Issue objects even for PR queries;
+        callers fetch the full PR fields via `repo.get_pull(number)` when needed.
         """
         query = self._build_search_query(repo, since, until, "pr", event)
         self._search_throttle()
@@ -282,7 +220,8 @@ class GitHubClient:
         until: datetime,
         event: str,
     ) -> list[Issue]:
-        """Search issues (excluding PRs) by state-transition event."""
+        """Search issues (excluding PRs) by state-transition event.
+        """
         query = self._build_search_query(repo, since, until, "issue", event)
         self._search_throttle()
         return list(self.g.search_issues(query))
@@ -443,7 +382,8 @@ class GitHubClient:
 
 
 def _build_pull_info(pr: PullRequest) -> PullInfo:
-    """Construct a PullInfo dict from a PyGithub PullRequest."""
+    """Construct a PullInfo dict from a PyGithub PullRequest.
+    """
     if pr.merged_at:
         state = "merged"
     elif pr.state == "closed":
@@ -468,7 +408,8 @@ def _build_pull_info(pr: PullRequest) -> PullInfo:
 
 
 def _build_issue_info(issue: Issue) -> IssueInfo:
-    """Construct an IssueInfo dict from a PyGithub Issue."""
+    """Construct an IssueInfo dict from a PyGithub Issue.
+    """
     return {
         "number": issue.number,
         "title": issue.title,
@@ -487,7 +428,8 @@ def _pull_has_event_in_range(
     since: datetime,
     until: datetime,
 ) -> bool:
-    """Return True if any of created/merged/closed falls within range."""
+    """Return True if any of created/merged/closed falls within range.
+    """
     for ts in (info["created_at"], info["merged_at"], info["closed_at"]):
         if ts and since <= datetime.fromisoformat(ts) < until:
             return True
@@ -499,7 +441,8 @@ def _issue_has_event_in_range(
     since: datetime,
     until: datetime,
 ) -> bool:
-    """Return True if either created or closed falls within range."""
+    """Return True if either created or closed falls within range.
+    """
     for ts in (info["created_at"], info["closed_at"]):
         if ts and since <= datetime.fromisoformat(ts) < until:
             return True

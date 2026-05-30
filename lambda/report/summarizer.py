@@ -40,7 +40,8 @@ GitHub の Issue/PR ラベル（enhancement など）に引きずられず、必
 
 
 class ValidationResult:
-    """Result of validating a report against allowlists."""
+    """Result of validating a report against allowlists.
+    """
 
     def __init__(self) -> None:
         self.invalid_tags: dict[str, list[str]] = {}
@@ -50,21 +51,14 @@ class ValidationResult:
 
 
 class SummaryClient:
-    """Client for generating daily report summaries via Claude API."""
+    """Client for generating daily report summaries via Claude API.
+    """
 
     def __init__(self, api_key: str) -> None:
-        """Initialize the client with an Anthropic API key.
-
-        Args:
-            api_key: Anthropic API key
-        """
         self.client = anthropic.Anthropic(api_key=api_key)
 
     def _build_tool_schema(self) -> dict:
-        """Build the tool definition with tag allowlist enforced via enum.
-
-        The enum constraint on tags[] makes the model unable to emit values
-        outside the code-defined allowlist.
+        """Build the tool definition; the `tags` enum bars the model from emitting values outside the code-defined allowlist.
         """
         return {
             "name": TOOL_NAME,
@@ -111,15 +105,7 @@ class SummaryClient:
         formatted_github: str,
         formatted_sessions: str,
     ) -> str:
-        """Build the user prompt from formatted activity data.
-
-        Args:
-            target_date: The target date for the report
-            formatted_github: Formatted GitHub activity text
-            formatted_sessions: Formatted Claude Code session text
-
-        Returns:
-            A prompt string following Spec.md §5.3 input format
+        """Build the user prompt that combines formatted GitHub and session activity for the target date.
         """
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
         return (
@@ -136,13 +122,10 @@ class SummaryClient:
         formatted_github: str,
         formatted_sessions: str,
     ) -> ReportSummary:
-        """Generate a structured summary using Claude API tool use.
-
-        Returns:
-            A ReportSummary dict with summary and per-repository details
+        """Generate the structured summary via Claude API tool use.
 
         Raises:
-            ValueError: If the response contains no tool_use block
+            ValueError: If the response contains no tool_use block for the expected tool.
         """
         prompt = self.build_prompt(target_date, formatted_github, formatted_sessions)
         tool = self._build_tool_schema()
@@ -163,16 +146,7 @@ class SummaryClient:
         raise ValueError(f"Claude API response missing tool_use block for {TOOL_NAME}.")
 
     def validate_report(self, report: ReportSummary) -> ValidationResult:
-        """Validate and fix tags in a report against the allowlist.
-
-        Removes invalid tags from each repository. Mutates the report
-        in place.
-
-        Args:
-            report: Report to validate (mutated in place)
-
-        Returns:
-            A ValidationResult with any invalid values found
+        """Validate tags against the allowlist and strip violations from `report` in place.
         """
         result = ValidationResult()
         tag_set = set(ALLOWED_TAG_NAMES)

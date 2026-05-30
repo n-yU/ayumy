@@ -13,8 +13,6 @@ logger = logging.getLogger(__name__)
 
 def lambda_handler(event, context):
     """Entry point for the Lambda function.
-
-    Retrieves secrets from Secrets Manager and generates daily reports.
     """
     secrets_client = boto3.client("secretsmanager")
     secret_names = {
