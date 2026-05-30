@@ -32,9 +32,8 @@ class SessionClient:
     def read_repo_name(self, project: str) -> str | None:
         """Read the repo name from the `.ayumy_repo` metadata file in S3.
 
-        Returns None when the metadata file is missing or empty,
-        or when the value is not a bare repo name;
-        URL fragments and path separators are rejected to guard against accidental copy-paste of full URLs.
+        Returns None when the metadata file is missing, empty, or contains `/` or `:`,
+        which would indicate an accidentally pasted URL rather than a bare repo name.
         """
         key = f"claude-sessions/{project}/.ayumy_repo"
         try:
