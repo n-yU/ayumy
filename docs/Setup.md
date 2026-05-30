@@ -9,21 +9,7 @@
    - 機能: コンテンツの読み取り・挿入・更新を有効化
 2. Notion にデータベースを作成し、Integration を接続
    - データベースページの URL から ID を取得: `https://www.notion.so/{database-id}?v=...`
-3. データベースに以下のプロパティを作成する（Spec.md §6.1 参照）
-
-| プロパティ名 | 型 | 備考 |
-|---|---|---|
-| Name | Title | デフォルトで存在。`YY-MM-DD: repo` 形式で自動設定 |
-| Date | Date | |
-| Repository | Select | オプションは自動追加される |
-| Tags | Multi-select | 下記のオプションを事前登録 |
-| Commits | Number | |
-| Merged | Number | |
-| Closed | Number | |
-| Sessions | Number | |
-| Version | Text | |
-
-Tags は作業内容を分類する multi-select。option 名と description はコード側（`lambda/report/tags.py`）で管理する。Notion 側のオプションはレポートが書き込まれる際に自動追加されるため、事前作成は不要だが、配色を制御したい場合は `feature`, `bugfix`, `docs`, `refactor`, `ci`, `review`, `other` を手動で追加する。
+3. データベースに [Spec.md §6.1](Spec.md#61-データベースプロパティ) のプロパティを作成する。Repository / Tags の select オプションはレポート書き込み時に自動追加されるため事前作成は不要だが、配色を制御したい場合は手動で追加する（Tags の option 名はコード側 [lambda/report/tags.py](../lambda/report/tags.py) を参照）
 
 4. AWS Secrets Manager（ap-northeast-1）に登録
    - シークレットのタイプ: その他のシークレットのタイプ
