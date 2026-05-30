@@ -61,9 +61,9 @@ class GitHubClient:
         Uses the Search Commits API (author-date range) to cover all branches;
         the API is date-granular, so results are re-filtered against the exact `since` / `until` timestamps.
         """
-        # Widen by 1 day on each side to absorb GitHub Search's UTC date
-        # semantics (a JST day spans two UTC dates); precise filtering
-        # happens below via the timezone-aware datetime compare
+        # Widen by 1 day on each side to absorb GitHub Search's UTC date semantics,
+        # since a JST day spans two UTC dates;
+        # precise filtering happens below via the timezone-aware datetime compare
         since_str = (since - timedelta(days=1)).strftime("%Y-%m-%d")
         until_str = until.strftime("%Y-%m-%d")
         query = f"repo:{repo.full_name} author-date:{since_str}..{until_str}"
@@ -396,8 +396,8 @@ def _build_pull_info(pr: PullRequest) -> PullInfo:
         "created_at": pr.created_at.isoformat(),
         "merged_at": pr.merged_at.isoformat() if pr.merged_at else None,
         "closed_at": pr.closed_at.isoformat() if pr.closed_at else None,
-        # GitHub returns a "test merge" SHA for unmerged PRs; only meaningful
-        # when the PR is actually merged
+        # GitHub returns a "test merge" SHA for unmerged PRs,
+        # meaningful only when the PR is actually merged
         "merge_commit_sha": pr.merge_commit_sha if pr.merged_at else None,
     }
 

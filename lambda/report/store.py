@@ -16,21 +16,18 @@ from . import JST, SessionActivity, SessionInfo
 
 logger = logging.getLogger(__name__)
 
-# `gh pr|issue` invocation. `gh pr create`, `gh pr list`, `gh pr status`
-# (and the issue equivalents) do not take a number positional argument
+# `gh pr|issue` invocation;
+# `gh pr create` / `gh pr list` / `gh pr status` (and the issue equivalents) do not take a positional integer
 _GH_CLI_RE = re.compile(r"\bgh\s+(pr|issue)\s+(\w[\w-]*)")
 _GH_CLI_NO_NUMBER_SUBS = {"create", "list", "status"}
 # `gh api` invocation anchor; the path is scanned in the segment that follows
 _GH_API_RE = re.compile(r"\bgh\s+api\b")
-# PR/Issue number embedded in a `gh api` REST path
 _API_PATH_PR_RE = re.compile(r"\b(?:pulls|pull)/(\d+)\b")
 _API_PATH_ISSUE_RE = re.compile(r"\bissues/(\d+)\b")
-# `#N` reference inside `git` command arguments. Treated as ambiguous
-# between PR and Issue
+# `#N` reference inside `git` command arguments;
+# treated as ambiguous between PR and Issue
 _HASH_REF_RE = re.compile(r"(?<![A-Za-z0-9])#(\d+)\b")
-# `git` invocation anchor
 _GIT_CLI_RE = re.compile(r"\bgit\s+\w[\w-]*")
-# Stop characters that delimit a single shell command within a Bash line
 _SHELL_STOPS = ("\n", "&&", "||", ";", "|")
 
 
@@ -82,8 +79,8 @@ def _expand_home(path: str, project_cwd: str | None) -> str:
 def _effective_cwd(command: str, project_cwd: str | None) -> str | None:
     """Return the inferred cwd of a Bash command, or None if not inferable."""
     try:
-        # shlex does not treat `&&` as an operator, so normalize spacing
-        # to recognize forms like `cd /path&&git ...`.
+        # shlex does not treat `&&` as an operator,
+        # so normalize spacing to recognize forms like `cd /path&&git ...`
         tokens = shlex.split(command.replace("&&", " && "), posix=True)
     except ValueError:
         return None
@@ -96,8 +93,8 @@ def _effective_cwd(command: str, project_cwd: str | None) -> str | None:
     p = PurePosixPath(target)
     if not p.is_absolute():
         if raw.startswith("~") or "$" in raw or "`" in raw:
-            # `~user/...` and shell expansions cannot be resolved from the
-            # session log; classify as cross-repo instead of joining under project_cwd.
+            # `~user/...` and shell expansions cannot be resolved from the session log;
+            # classify as cross-repo instead of joining under project_cwd
             return normpath("/" + raw)
         if project_cwd:
             p = PurePosixPath(project_cwd) / p
@@ -170,12 +167,10 @@ class SessionStore:
 
         Entries without timestamps and projects without a `.ayumy_repo` metadata file are skipped.
         """
-        # Pattern: [... short-sha] commit message
-        # Handles normal, root-commit, and detached HEAD forms
+        # Handles normal, root-commit, and detached HEAD forms;
         # MULTILINE allows matching after hook output preceding the summary line
         commit_pattern = re.compile(r"^\[.+\s+([0-9a-f]+)\]\s+(.+)", re.MULTILINE)
 
-        # (date, repo, session_id) -> accumulated entry data
         groups: dict[tuple[str, str, str], dict] = defaultdict(
             lambda: {
                 "project": "",
@@ -189,7 +184,6 @@ class SessionStore:
         )
 
         repo_cache: dict[str, str | None] = {}
-        # Track which S3 keys contributed to each group
         key_groups: dict[str, set[tuple[str, str, str]]] = defaultdict(set)
 
         for obj in session_client.list_session_objects():
@@ -283,8 +277,8 @@ class SessionStore:
                             continue
                         cwd = _effective_cwd(command, entry_cwd or project_cwd)
                         if cwd is None:
-                            # No leading `cd`; the command runs in the entry's
-                            # recorded cwd, which may itself be outside project.
+                            # No leading `cd`;
+                            # the command runs in the entry's recorded cwd, which may itself be outside project
                             cwd = entry_cwd
                         tool_use_id = block.get("id")
                         if tool_use_id:
@@ -319,7 +313,6 @@ class SessionStore:
                 }
             )
 
-        # Only return keys that produced at least one DynamoDB item
         written_groups = {
             (i["date"], i["repo"], i["repo#session_id"].split("#", 1)[1]) for i in items
         }

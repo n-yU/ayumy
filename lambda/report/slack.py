@@ -10,9 +10,8 @@ from .summarizer import ValidationResult
 
 logger = logging.getLogger(__name__)
 
-# Per-headline max length (truncated with ellipsis beyond this) to keep the
-# aggregated section text comfortably within Slack's 3000-char limit for a
-# realistic number of repos per day
+# Per-headline max length (truncated with ellipsis beyond this);
+# keeps the aggregated section text within Slack's 3000-char limit for a realistic number of repos per day
 HEADLINE_MAX = 200
 
 
@@ -62,8 +61,7 @@ class SlackClient:
             for name, url in pages:
                 repo = repo_map.get(name)
                 raw_headline = repo["summary"][0] if repo and repo["summary"] else ""
-                # Collapse newlines so a multi-line headline cannot break
-                # the one-line-per-repo layout of the Slack section.
+                # Collapse newlines so a multi-line headline cannot break the one-line-per-repo layout of the Slack section.
                 raw_headline = raw_headline.replace("\n", " ").replace("\r", " ")
                 headline = _escape_mrkdwn(_truncate_headline(raw_headline))
                 link = f"<{url}|{date_str}: {name}>"

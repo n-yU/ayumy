@@ -246,8 +246,8 @@ class NotionClient:
         pr_by_number: dict[int, PullInfo] = {pr["number"]: pr for pr in pulls}
         pr_nested_commits: dict[int, list[CommitInfo]] = {n: [] for n in pr_by_number}
 
-        # (timestamp, secondary_priority, block) — secondary 0 for PR
-        # headers (sorted before adjacent merge commits at same time)
+        # (timestamp, secondary_priority, block);
+        # secondary 0 for PR headers, sorted before adjacent merge commits at the same time
         entries: list[tuple[datetime, int, dict]] = []
 
         for c in repo_activity["commits"]:
@@ -259,7 +259,7 @@ class NotionClient:
                     (ts, 1, _bulleted_link(_commit_label(c), c["url"], prefix="🔸 "))
                 )
                 continue
-            # Pick the smallest PR number to keep nesting deterministic
+            # Pick the smallest PR number to keep nesting deterministic,
             # regardless of pull_numbers input order
             attached_prs = [n for n in c.get("pull_numbers", []) if n in pr_by_number]
             attached_pr = min(attached_prs) if attached_prs else None
@@ -462,7 +462,6 @@ class NotionClient:
         for repo_summary in report["repositories"]:
             repo_name = repo_summary["name"]
 
-            # Skip repos not found in activity (no matching GitHub repo)
             if repo_name not in activity:
                 logger.warning("Skipping unknown repo: %s", repo_name)
                 continue

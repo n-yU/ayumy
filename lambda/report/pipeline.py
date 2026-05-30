@@ -24,7 +24,6 @@ from .summarizer import SummaryClient
 
 logger = logging.getLogger(__name__)
 
-# Maximum number of past dates to backfill per invocation
 MAX_BACKFILL = 3
 
 
@@ -69,8 +68,6 @@ def process_date(
         session_issues=session_issues,
     )
 
-    # Recover squash-merged commits from session logs, normalizing to
-    # the full CommitInfo shape and deduplicating by SHA prefix.
     for repo_name, sessions in session_activity.repos().items():
         seen_shas: set[str] = set()
         session_commits: list[dict] = []
@@ -91,9 +88,9 @@ def process_date(
                 )
         if not session_commits:
             continue
-        # Resolve PR association on commits we will actually inject so these
-        # nest under their parent PR in the Notion timeline rather than
-        # render as direct commits. Skip ones already covered by search.
+        # Resolve PR association on commits we will actually inject,
+        # so these nest under their parent PR in the Notion timeline rather than render as direct commits.
+        # Skip ones already covered by search.
         repo_data = github_activity.repos().get(repo_name)
         if repo_data is not None:
             existing_shas = {c["sha"] for c in repo_data["commits"]}
@@ -169,7 +166,6 @@ def run(
         session_client = SessionClient(require_env("AYUMY_S3_BUCKET"))
         store = SessionStore(require_env("AYUMY_DYNAMO_TABLE"))
 
-        # Ingest JSONL to DynamoDB and delete from S3
         ingested_keys: list[str] = []
         try:
             ingested_keys = store.ingest(session_client)
@@ -186,14 +182,11 @@ def run(
                 logger.exception("S3 deletion failed")
                 slack_client.notify_error(since, e)
 
-        # Build target date list and mark which ones use the Hybrid fetch path
         backfill_set: set[str] = set()
         if target_date:
-            # Explicit date(s): process only specified dates, skip backfill
             process_dates = parse_target_dates(target_date)
             backfill_set = {d.isoformat() for d in process_dates}
         else:
-            # Scheduled/manual without --date: backfill + primary
             backfill_dates = store.scan_backfill_dates(primary_date)
             backfill_dates = backfill_dates[-MAX_BACKFILL:]
             process_dates = backfill_dates + [primary_date]
@@ -241,8 +234,8 @@ def run(
             raise errors[0]
 
     except Exception as e:
-        # Errors from process_date are already notified with the correct date
-        # Only notify here for errors outside the loop (scan, data source init)
+        # Errors from process_date are already notified with the correct date,
+        # so only notify here for errors outside the loop (scan, data source init)
         if not getattr(e, "_notified", False):
             slack_client.notify_error(since, e)
         raise
