@@ -20,8 +20,7 @@ class CommitInfo(TypedDict):
 
 
 class SessionCommit(TypedDict):
-    """Commit recovered from session logs; `timestamp` may be absent on legacy DynamoDB entries.
-    """
+    """Commit recovered from session logs; `timestamp` may be absent on legacy DynamoDB entries."""
 
     sha: str
     message: str
@@ -61,8 +60,7 @@ class RepoActivity(TypedDict):
 
 
 class GitHubActivity:
-    """GitHub activity data keyed by repository name.
-    """
+    """GitHub activity data keyed by repository name."""
 
     def __init__(self, data: dict[str, RepoActivity]) -> None:
         self._data = data
@@ -80,8 +78,7 @@ class GitHubActivity:
         return key in self._data
 
     def format(self) -> str:
-        """Format GitHub activity as the Markdown block consumed by the Claude API prompt (Spec.md §5.4).
-        """
+        """Format GitHub activity as the Markdown block consumed by the Claude API prompt (Spec.md §5.4)."""
         if not self._data:
             return "# GitHub アクティビティ\nアクティビティなし"
 
@@ -128,8 +125,7 @@ class SessionInfo(TypedDict):
 
 
 class SessionActivity:
-    """Claude Code session activity data keyed by repository name.
-    """
+    """Claude Code session activity data keyed by repository name."""
 
     def __init__(self, data: dict[str, list[SessionInfo]]) -> None:
         self._data = data
@@ -152,8 +148,7 @@ class SessionActivity:
         return self._data.get(key, default)
 
     def format(self) -> str:
-        """Format session logs as the Markdown block consumed by the Claude API prompt.
-        """
+        """Format session logs as the Markdown block consumed by the Claude API prompt."""
         if not self._data:
             return "# Claude Code セッション\nセッションなし"
 
@@ -177,8 +172,7 @@ class SessionActivity:
 
     @staticmethod
     def _format_time(iso_timestamp: str) -> str:
-        """Return JST HH:MM from an ISO 8601 timestamp; falls back to "??:??" on empty input.
-        """
+        """Return JST HH:MM from an ISO 8601 timestamp; falls back to "??:??" on empty input."""
         if not iso_timestamp:
             return "??:??"
         dt = datetime.fromisoformat(iso_timestamp).astimezone(JST)
@@ -209,15 +203,13 @@ def require_env(name: str) -> str:
 
 @lru_cache
 def get_version() -> str:
-    """Return the ayumy version recorded in the VERSION file.
-    """
+    """Return the ayumy version recorded in the VERSION file."""
     version_path = Path(__file__).resolve().parent.parent / "VERSION"
     return version_path.read_text().strip()
 
 
 def date_to_range(target: date) -> tuple[datetime, datetime]:
-    """Return the JST [00:00, next-day 00:00) window for the target date.
-    """
+    """Return the JST [00:00, next-day 00:00) window for the target date."""
     since = datetime(target.year, target.month, target.day, tzinfo=JST)
     until = since + timedelta(days=1)
     return since, until

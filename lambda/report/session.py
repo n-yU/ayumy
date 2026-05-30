@@ -9,16 +9,14 @@ logger = logging.getLogger(__name__)
 
 
 class SessionClient:
-    """Client for managing Claude Code session JSONL files on S3.
-    """
+    """Client for managing Claude Code session JSONL files on S3."""
 
     def __init__(self, bucket: str) -> None:
         self.s3 = boto3.client("s3")
         self.bucket = bucket
 
     def list_session_objects(self) -> list[dict[str, Any]]:
-        """List all unarchived JSONL objects in `claude-sessions/`.
-        """
+        """List all unarchived JSONL objects in `claude-sessions/`."""
         prefix = "claude-sessions/"
         objects: list[dict[str, Any]] = []
         paginator = self.s3.get_paginator("list_objects_v2")

@@ -23,8 +23,7 @@ _ISSUE_EVENTS = ("created", "closed")
 
 
 class GitHubClient:
-    """Client for fetching and formatting GitHub activity via PyGithub.
-    """
+    """Client for fetching and formatting GitHub activity via PyGithub."""
 
     def __init__(self, pat: str) -> None:
         self.g = Github(pat, per_page=100)
@@ -33,8 +32,7 @@ class GitHubClient:
 
     @cached_property
     def owner(self) -> str:
-        """Login name of the authenticated user (owner of accessible repos).
-        """
+        """Login name of the authenticated user (owner of accessible repos)."""
         return self.g.get_user().login
 
     def _search_throttle(self) -> None:
@@ -163,8 +161,7 @@ class GitHubClient:
         session_pulls: dict[str, list[int]] | None = None,
         session_issues: dict[str, list[int]] | None = None,
     ) -> GitHubActivity:
-        """Fetch commits, PRs, and issues for each repo in `repo_names`, omitting repos that produced no activity.
-        """
+        """Fetch commits, PRs, and issues for each repo in `repo_names`, omitting repos that produced no activity."""
         user = self.g.get_user()
         data: dict[str, RepoActivity] = {}
         session_pulls = session_pulls or {}
@@ -220,8 +217,7 @@ class GitHubClient:
         until: datetime,
         event: str,
     ) -> list[Issue]:
-        """Search issues (excluding PRs) by state-transition event.
-        """
+        """Search issues (excluding PRs) by state-transition event."""
         query = self._build_search_query(repo, since, until, "issue", event)
         self._search_throttle()
         return list(self.g.search_issues(query))
@@ -382,8 +378,7 @@ class GitHubClient:
 
 
 def _build_pull_info(pr: PullRequest) -> PullInfo:
-    """Construct a PullInfo dict from a PyGithub PullRequest.
-    """
+    """Construct a PullInfo dict from a PyGithub PullRequest."""
     if pr.merged_at:
         state = "merged"
     elif pr.state == "closed":
@@ -408,8 +403,7 @@ def _build_pull_info(pr: PullRequest) -> PullInfo:
 
 
 def _build_issue_info(issue: Issue) -> IssueInfo:
-    """Construct an IssueInfo dict from a PyGithub Issue.
-    """
+    """Construct an IssueInfo dict from a PyGithub Issue."""
     return {
         "number": issue.number,
         "title": issue.title,
@@ -428,8 +422,7 @@ def _pull_has_event_in_range(
     since: datetime,
     until: datetime,
 ) -> bool:
-    """Return True if any of created/merged/closed falls within range.
-    """
+    """Return True if any of created/merged/closed falls within range."""
     for ts in (info["created_at"], info["merged_at"], info["closed_at"]):
         if ts and since <= datetime.fromisoformat(ts) < until:
             return True
@@ -441,8 +434,7 @@ def _issue_has_event_in_range(
     since: datetime,
     until: datetime,
 ) -> bool:
-    """Return True if either created or closed falls within range.
-    """
+    """Return True if either created or closed falls within range."""
     for ts in (info["created_at"], info["closed_at"]):
         if ts and since <= datetime.fromisoformat(ts) < until:
             return True

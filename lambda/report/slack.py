@@ -1,5 +1,4 @@
-"""Slack notification client.
-"""
+"""Slack notification client."""
 
 import logging
 from datetime import datetime
@@ -18,8 +17,7 @@ HEADLINE_MAX = 200
 
 
 def _truncate_headline(headline: str, limit: int = HEADLINE_MAX) -> str:
-    """Truncate `headline` with an ellipsis when it exceeds `limit`.
-    """
+    """Truncate `headline` with an ellipsis when it exceeds `limit`."""
     if len(headline) <= limit:
         return headline
     return headline[: limit - 1] + "…"
@@ -35,8 +33,7 @@ def _escape_mrkdwn(text: str) -> str:
 
 
 class SlackClient:
-    """Client for sending daily report notifications via Slack Incoming Webhook.
-    """
+    """Client for sending daily report notifications via Slack Incoming Webhook."""
 
     def __init__(self, webhook_url: str) -> None:
         self.client = WebhookClient(webhook_url)
@@ -131,8 +128,7 @@ class SlackClient:
             )
 
     def notify_no_activity(self, target_date: datetime) -> None:
-        """Buffer a no-activity notification for `target_date`.
-        """
+        """Buffer a no-activity notification for `target_date`."""
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
 
         if self._blocks:
@@ -157,8 +153,7 @@ class SlackClient:
         target_date: datetime,
         result: ValidationResult,
     ) -> None:
-        """Buffer a notification listing the invalid tag values detected during summary validation.
-        """
+        """Buffer a notification listing the invalid tag values detected during summary validation."""
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
         lines = []
         for name, tags in result.invalid_tags.items():
@@ -190,8 +185,7 @@ class SlackClient:
         )
 
     def notify_error(self, target_date: datetime, error: Exception) -> None:
-        """Buffer an error notification carrying `error`'s message for `target_date`.
-        """
+        """Buffer an error notification carrying `error`'s message for `target_date`."""
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
 
         if self._blocks:
@@ -255,8 +249,7 @@ class SlackClient:
         )
 
     def flush(self) -> None:
-        """Send all buffered blocks as a single Slack message.
-        """
+        """Send all buffered blocks as a single Slack message."""
         if not self._blocks:
             return
         fallback = " | ".join(self._fallback_parts)

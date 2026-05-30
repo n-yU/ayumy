@@ -40,8 +40,7 @@ GitHub の Issue/PR ラベル（enhancement など）に引きずられず、必
 
 
 class ValidationResult:
-    """Result of validating a report against allowlists.
-    """
+    """Result of validating a report against allowlists."""
 
     def __init__(self) -> None:
         self.invalid_tags: dict[str, list[str]] = {}
@@ -51,15 +50,13 @@ class ValidationResult:
 
 
 class SummaryClient:
-    """Client for generating daily report summaries via Claude API.
-    """
+    """Client for generating daily report summaries via Claude API."""
 
     def __init__(self, api_key: str) -> None:
         self.client = anthropic.Anthropic(api_key=api_key)
 
     def _build_tool_schema(self) -> dict:
-        """Build the tool definition; the `tags` enum bars the model from emitting values outside the code-defined allowlist.
-        """
+        """Build the tool definition; the `tags` enum bars the model from emitting values outside the code-defined allowlist."""
         return {
             "name": TOOL_NAME,
             "description": "日次の開発アクティビティ要約を構造化された形で提出する",
@@ -105,8 +102,7 @@ class SummaryClient:
         formatted_github: str,
         formatted_sessions: str,
     ) -> str:
-        """Build the user prompt that combines formatted GitHub and session activity for the target date.
-        """
+        """Build the user prompt that combines formatted GitHub and session activity for the target date."""
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
         return (
             f"以下は {date_str} の GitHub アクティビティおよび"
@@ -146,8 +142,7 @@ class SummaryClient:
         raise ValueError(f"Claude API response missing tool_use block for {TOOL_NAME}.")
 
     def validate_report(self, report: ReportSummary) -> ValidationResult:
-        """Validate tags against the allowlist and strip violations from `report` in place.
-        """
+        """Validate tags against the allowlist and strip violations from `report` in place."""
         result = ValidationResult()
         tag_set = set(ALLOWED_TAG_NAMES)
 

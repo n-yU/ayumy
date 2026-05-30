@@ -12,8 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 def lambda_handler(event, context):
-    """Entry point for the Lambda function.
-    """
+    """Entry point for the Lambda function."""
     secrets_client = boto3.client("secretsmanager")
     secret_names = {
         "GITHUB_PAT": "ayumy/github-pat",

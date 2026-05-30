@@ -35,8 +35,7 @@ _SHELL_STOPS = ("\n", "&&", "||", ";", "|")
 
 
 def _command_segment(command: str, start: int) -> str:
-    """Return the portion of `command` from `start` up to the next shell stop.
-    """
+    """Return the portion of `command` from `start` up to the next shell stop."""
     end = len(command)
     for stop in _SHELL_STOPS:
         i = command.find(stop, start)
@@ -81,8 +80,7 @@ def _expand_home(path: str, project_cwd: str | None) -> str:
 
 
 def _effective_cwd(command: str, project_cwd: str | None) -> str | None:
-    """Return the inferred cwd of a Bash command, or None if not inferable.
-    """
+    """Return the inferred cwd of a Bash command, or None if not inferable."""
     try:
         # shlex does not treat `&&` as an operator, so normalize spacing
         # to recognize forms like `cd /path&&git ...`.
@@ -108,8 +106,7 @@ def _effective_cwd(command: str, project_cwd: str | None) -> str | None:
 
 
 def _is_cross_repo(effective_cwd: str | None, project_cwd: str | None) -> bool:
-    """Return True when the command runs outside the project working directory.
-    """
+    """Return True when the command runs outside the project working directory."""
     if not project_cwd or effective_cwd is None:
         return False
     cwd = PurePosixPath(effective_cwd)
@@ -154,8 +151,7 @@ def _extract_pr_issue_refs(command: str) -> tuple[set[int], set[int]]:
 
 
 class SessionStore:
-    """Client for reading and writing session metadata in DynamoDB.
-    """
+    """Client for reading and writing session metadata in DynamoDB."""
 
     def __init__(self, table_name: str) -> None:
         self.table = boto3.resource("dynamodb").Table(table_name)
@@ -334,8 +330,7 @@ class SessionStore:
         return items, processed_keys
 
     def _write_items(self, items: list[dict]) -> None:
-        """Write `items` to DynamoDB via `update_item` so existing `reported_at` values are preserved across re-ingestion.
-        """
+        """Write `items` to DynamoDB via `update_item` so existing `reported_at` values are preserved across re-ingestion."""
         for item in items:
             key = {
                 "date": item["date"],
@@ -351,8 +346,7 @@ class SessionStore:
             )
 
     def fetch_sessions(self, date_str: str) -> SessionActivity:
-        """Query the JST date `date_str` (`YYYY-MM-DD`) and return sessions grouped by repository.
-        """
+        """Query the JST date `date_str` (`YYYY-MM-DD`) and return sessions grouped by repository."""
         items = []
         response = self.table.query(
             KeyConditionExpression=Key("date").eq(date_str),
@@ -389,8 +383,7 @@ class SessionStore:
         return SessionActivity(data)
 
     def scan_backfill_dates(self, primary_date: date) -> list[date]:
-        """Return past dates whose sessions are new (no `reported_at`) or have been updated since the last report (`updated_at > reported_at`), excluding `primary_date`.
-        """
+        """Return past dates whose sessions are new (no `reported_at`) or have been updated since the last report (`updated_at > reported_at`), excluding `primary_date`."""
         # Attr-to-attr comparison requires raw expression string
         scan_kwargs = {
             "FilterExpression": "attribute_not_exists(reported_at) OR updated_at > reported_at",
@@ -414,8 +407,7 @@ class SessionStore:
         return sorted(d for d in dates if d < primary_date)
 
     def mark_reported(self, date_str: str) -> None:
-        """Stamp `reported_at` on every item under the JST date `date_str`.
-        """
+        """Stamp `reported_at` on every item under the JST date `date_str`."""
         now = datetime.now(timezone.utc).isoformat()
 
         response = self.table.query(
