@@ -16,21 +16,18 @@ from . import JST, SessionActivity, SessionInfo
 
 logger = logging.getLogger(__name__)
 
-# `gh pr|issue` invocation. `gh pr create`, `gh pr list`, `gh pr status`
-# (and the issue equivalents) do not take a number positional argument
+# `gh pr|issue` invocation;
+# `gh pr create` / `gh pr list` / `gh pr status` (and the issue equivalents) do not take a positional integer
 _GH_CLI_RE = re.compile(r"\bgh\s+(pr|issue)\s+(\w[\w-]*)")
 _GH_CLI_NO_NUMBER_SUBS = {"create", "list", "status"}
 # `gh api` invocation anchor; the path is scanned in the segment that follows
 _GH_API_RE = re.compile(r"\bgh\s+api\b")
-# PR/Issue number embedded in a `gh api` REST path
 _API_PATH_PR_RE = re.compile(r"\b(?:pulls|pull)/(\d+)\b")
 _API_PATH_ISSUE_RE = re.compile(r"\bissues/(\d+)\b")
-# `#N` reference inside `git` command arguments. Treated as ambiguous
-# between PR and Issue
+# `#N` reference inside `git` command arguments;
+# treated as ambiguous between PR and Issue
 _HASH_REF_RE = re.compile(r"(?<![A-Za-z0-9])#(\d+)\b")
-# `git` invocation anchor
 _GIT_CLI_RE = re.compile(r"\bgit\s+\w[\w-]*")
-# Stop characters that delimit a single shell command within a Bash line
 _SHELL_STOPS = ("\n", "&&", "||", ";", "|")
 
 
@@ -47,10 +44,9 @@ def _command_segment(command: str, start: int) -> str:
 def _first_positional_int(segment: str) -> int | None:
     """Return the first positional integer token in `segment`.
 
-    Tokenizes via shlex so that quoted flag values count as a single
-    token; this prevents matching integers that live inside strings
-    like `--body "fix 999"`. Tokens beginning with `-` are treated as
-    flags and skipped
+    Tokenizes via shlex so quoted flag values count as one token,
+    preventing matches against integers that live inside strings like `--body "fix 999"`.
+    Flags (tokens starting with `-`) are skipped.
     """
     try:
         tokens = shlex.split(segment, posix=True)
@@ -65,10 +61,10 @@ def _first_positional_int(segment: str) -> int | None:
 
 
 def _expand_home(path: str, project_cwd: str | None) -> str:
-    """Expand a leading `~` using project_cwd's home as the anchor.
+    """Expand a leading `~` using `project_cwd`'s home as the anchor.
 
-    Lambda's runtime user differs from the session author, so
-    Path.expanduser would resolve to the wrong home.
+    Lambda's runtime user differs from the session author,
+    so `Path.expanduser` would resolve to the wrong home.
     """
     if path != "~" and not path.startswith("~/"):
         return path
@@ -83,8 +79,8 @@ def _expand_home(path: str, project_cwd: str | None) -> str:
 def _effective_cwd(command: str, project_cwd: str | None) -> str | None:
     """Return the inferred cwd of a Bash command, or None if not inferable."""
     try:
-        # shlex does not treat `&&` as an operator, so normalize spacing
-        # to recognize forms like `cd /path&&git ...`.
+        # shlex does not treat `&&` as an operator,
+        # so normalize spacing to recognize forms like `cd /path&&git ...`
         tokens = shlex.split(command.replace("&&", " && "), posix=True)
     except ValueError:
         return None
@@ -97,8 +93,8 @@ def _effective_cwd(command: str, project_cwd: str | None) -> str | None:
     p = PurePosixPath(target)
     if not p.is_absolute():
         if raw.startswith("~") or "$" in raw or "`" in raw:
-            # `~user/...` and shell expansions cannot be resolved from the
-            # session log; classify as cross-repo instead of joining under project_cwd.
+            # `~user/...` and shell expansions cannot be resolved from the session log;
+            # classify as cross-repo instead of joining under project_cwd
             return normpath("/" + raw)
         if project_cwd:
             p = PurePosixPath(project_cwd) / p
@@ -116,15 +112,10 @@ def _is_cross_repo(effective_cwd: str | None, project_cwd: str | None) -> bool:
 
 
 def _extract_pr_issue_refs(command: str) -> tuple[set[int], set[int]]:
-    """Extract PR and Issue numbers from a Bash command string.
+    """Extract referenced PR and Issue numbers from a Bash command string.
 
-    Recognizes `gh pr|issue {sub} {N}`, `gh api .../pulls|issues/{N}`,
-    and `#N` inside `git` arguments. `#N` is ambiguous, so it is
-    placed in both sets and the fetcher reconciles via 404 / the
-    `pull_request` attribute
-
-    Returns:
-        A tuple of (pull numbers, issue numbers)
+    `#N` inside `git` arguments is ambiguous between PR and Issue,
+    so it is placed in both sets and the fetcher reconciles each via 404 or the `pull_request` attribute.
     """
     pulls: set[int] = set()
     issues: set[int] = set()
@@ -160,50 +151,26 @@ class SessionStore:
     """Client for reading and writing session metadata in DynamoDB."""
 
     def __init__(self, table_name: str) -> None:
-        """Initialize the store with a DynamoDB table name.
-
-        Args:
-            table_name: DynamoDB table name for session metadata
-        """
         self.table = boto3.resource("dynamodb").Table(table_name)
 
     def ingest(self, session_client) -> list[str]:
-        """Parse all JSONL files and write session items to DynamoDB.
+        """Parse all unarchived JSONL from S3 into DynamoDB items and return the processed S3 keys.
 
-        Downloads every unarchived JSONL from S3, groups entries by
-        (JST date, repo, session_id), and writes the resulting items
-        to DynamoDB. Specified fields are updated while preserving
-        existing attributes such as reported_at.
-
-        Args:
-            session_client: SessionClient instance for S3 access
-
-        Returns:
-            S3 keys that were processed
+        Existing attributes such as `reported_at` are preserved on re-ingestion.
         """
         items, keys = self._build_items(session_client)
         self._write_items(items)
         return keys
 
     def _build_items(self, session_client) -> tuple[list[dict], list[str]]:
-        """Parse JSONL files and build DynamoDB items.
+        """Parse every JSONL fetched via `session_client` into DynamoDB items grouped by (JST date, repo, session_id).
 
-        Groups all entries by (JST date, repo, session_id) without
-        date filtering. Skips entries without timestamps and projects
-        without a .ayumy_repo metadata file.
-
-        Args:
-            session_client: SessionClient instance for S3 access
-
-        Returns:
-            A tuple of (DynamoDB items, S3 keys processed)
+        Entries without timestamps and projects without a `.ayumy_repo` metadata file are skipped.
         """
-        # Pattern: [... short-sha] commit message
-        # Handles normal, root-commit, and detached HEAD forms
+        # Handles normal, root-commit, and detached HEAD forms;
         # MULTILINE allows matching after hook output preceding the summary line
         commit_pattern = re.compile(r"^\[.+\s+([0-9a-f]+)\]\s+(.+)", re.MULTILINE)
 
-        # (date, repo, session_id) -> accumulated entry data
         groups: dict[tuple[str, str, str], dict] = defaultdict(
             lambda: {
                 "project": "",
@@ -217,7 +184,6 @@ class SessionStore:
         )
 
         repo_cache: dict[str, str | None] = {}
-        # Track which S3 keys contributed to each group
         key_groups: dict[str, set[tuple[str, str, str]]] = defaultdict(set)
 
         for obj in session_client.list_session_objects():
@@ -311,8 +277,8 @@ class SessionStore:
                             continue
                         cwd = _effective_cwd(command, entry_cwd or project_cwd)
                         if cwd is None:
-                            # No leading `cd`; the command runs in the entry's
-                            # recorded cwd, which may itself be outside project.
+                            # No leading `cd`;
+                            # the command runs in the entry's recorded cwd, which may itself be outside project
                             cwd = entry_cwd
                         tool_use_id = block.get("id")
                         if tool_use_id:
@@ -347,7 +313,6 @@ class SessionStore:
                 }
             )
 
-        # Only return keys that produced at least one DynamoDB item
         written_groups = {
             (i["date"], i["repo"], i["repo#session_id"].split("#", 1)[1]) for i in items
         }
@@ -358,14 +323,7 @@ class SessionStore:
         return items, processed_keys
 
     def _write_items(self, items: list[dict]) -> None:
-        """Write items to DynamoDB using update_item.
-
-        Uses SET with attribute assignments so that existing
-        reported_at values are preserved across re-ingestion.
-
-        Args:
-            items: List of DynamoDB item dicts
-        """
+        """Write `items` to DynamoDB via `update_item` so existing `reported_at` values are preserved across re-ingestion."""
         for item in items:
             key = {
                 "date": item["date"],
@@ -381,14 +339,7 @@ class SessionStore:
             )
 
     def fetch_sessions(self, date_str: str) -> SessionActivity:
-        """Query sessions for a specific date from DynamoDB.
-
-        Args:
-            date_str: JST date string (YYYY-MM-DD)
-
-        Returns:
-            A SessionActivity instance keyed by repository name
-        """
+        """Query the JST date `date_str` (`YYYY-MM-DD`) and return sessions grouped by repository."""
         items = []
         response = self.table.query(
             KeyConditionExpression=Key("date").eq(date_str),
@@ -425,17 +376,7 @@ class SessionStore:
         return SessionActivity(data)
 
     def scan_backfill_dates(self, primary_date: date) -> list[date]:
-        """Scan DynamoDB for past dates needing report generation.
-
-        Finds dates where reported_at is not set (new sessions) or
-        updated_at > reported_at (updated sessions after reporting).
-
-        Args:
-            primary_date: The current primary date to exclude
-
-        Returns:
-            Sorted list of past dates needing (re-)generation
-        """
+        """Return past dates whose sessions are new (no `reported_at`) or have been updated since the last report (`updated_at > reported_at`), excluding `primary_date`."""
         # Attr-to-attr comparison requires raw expression string
         scan_kwargs = {
             "FilterExpression": "attribute_not_exists(reported_at) OR updated_at > reported_at",
@@ -459,11 +400,7 @@ class SessionStore:
         return sorted(d for d in dates if d < primary_date)
 
     def mark_reported(self, date_str: str) -> None:
-        """Set reported_at on all items for the given date.
-
-        Args:
-            date_str: JST date string (YYYY-MM-DD)
-        """
+        """Stamp `reported_at` on every item under the JST date `date_str`."""
         now = datetime.now(timezone.utc).isoformat()
 
         response = self.table.query(

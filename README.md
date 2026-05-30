@@ -39,25 +39,12 @@ S3 + DynamoDB + AWS Lambda を使用した2フェーズ構成
 ## Directory Structure
 ```
 ayumy/
-├── bin/
-│   └── ayumy                 # CLI エントリポイント（サブコマンドのディスパッチ）
-├── scripts/
-│   ├── sync_session.sh       # セッション転送スクリプト（hook・手動共用）
-│   └── setup_hooks.sh        # hook の設置スクリプト
-├── hooks/
-│   └── pre-push              # 各リポジトリにシンボリックリンクで配置
-├── lambda/
-│   ├── handler.py            # Lambda ハンドラ
-│   ├── report/               # メインパッケージ: GitHub API + Claude API + Notion API
-│   ├── requirements.txt      # Lambda デプロイ用の依存パッケージ
-│   └── requirements-dev.txt  # ローカル開発用の依存パッケージ
-├── template.yaml             # AWS SAM テンプレート
-├── docs/
-│   ├── Setup.md
-│   ├── Spec.md
-│   └── Initial-Development.md
-├── CLAUDE.md
-└── README.md
+├── bin/ayumy           # CLI エントリポイント
+├── scripts/            # セッション転送・hook 設置スクリプト
+├── hooks/pre-push      # 各リポジトリにシンボリックリンクで配置
+├── lambda/             # Lambda ハンドラとメインパッケージ
+├── template.yaml       # AWS SAM テンプレート
+└── docs/               # 仕様・初期開発・セットアップ
 ```
 
 ## Setup

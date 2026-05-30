@@ -54,32 +54,14 @@ GitHub 上の日次開発アクティビティ（Commit, Pull Request, Issue）�
 
 ```
 ayumy/
-├── bin/
-│   └── ayumy                        # CLI エントリポイント（サブコマンドのディスパッチ）
-├── scripts/
-│   ├── sync_session.sh              # セッション転送スクリプト（hook・手動共用）
-│   └── setup_hooks.sh               # hook の設置スクリプト
-├── hooks/
-│   └── pre-push                     # 各リポジトリにシンボリックリンクで配置
+├── bin/ayumy           # CLI エントリポイント
+├── scripts/            # セッション転送・hook 設置スクリプト
+├── hooks/pre-push      # 各リポジトリにシンボリックリンクで配置
 ├── lambda/
-│   ├── handler.py                   # Lambda ハンドラ（report パッケージを呼び出すエントリポイント）
-│   ├── report/                      # メインパッケージ: GitHub API + Claude API + Notion API
-│   │   ├── __init__.py              # 型定義（Activity クラス）、共通ユーティリティ
-│   │   ├── __main__.py              # エントリポイント（python -m report）
-│   │   ├── github.py                # GitHub アクティビティ取得
-│   │   ├── notion.py                # Notion API 書き込み
-│   │   ├── session.py               # Claude Code セッションログ読み取り
-│   │   ├── slack.py                 # Slack 通知
-│   │   ├── store.py                 # DynamoDB セッション書き込み
-│   │   └── summarizer.py            # Claude API 要約生成
-│   ├── requirements.txt             # Lambda デプロイ用の依存パッケージ
-│   └── requirements-dev.txt         # ローカル開発用の依存パッケージ（boto3 を含む）
-├── template.yaml                    # AWS SAM テンプレート（Lambda, EventBridge, IAM ロール, S3 バケット）
+│   ├── handler.py      # Lambda ハンドラ
+│   └── report/         # メインパッケージ
+├── template.yaml       # AWS SAM テンプレート
 ├── docs/
-│   ├── Setup.md
-│   ├── Spec.md
-│   └── Initial-Development.md
-├── CLAUDE.md
 └── README.md
 ```
 
@@ -103,7 +85,7 @@ Claude Code セッションの JSONL を S3 バケットに転送する。
 - **手動転送（`ayumy sync`）**: push せずに作業を中断する場合など、任意のタイミングで実行
 - **手動転送＋レポート生成（`ayumy sync --report`）**: S3 への転送後に Lambda を呼び出してレポート生成まで実行
 
-いずれも共通の転送スクリプト `scripts/sync_session.sh` を使用する。`--report` 指定時は転送完了後に `aws lambda invoke` で Lambda 関数を呼び出す。
+いずれも共通の転送スクリプト [scripts/sync_session.sh](../scripts/sync_session.sh) を使用する。`--report` 指定時は転送完了後に `aws lambda invoke` で Lambda 関数を呼び出す。
 
 ### 4.2 データソース
 Claude Code は会話を `~/.claude/projects/` 以下にローカル保存している。
@@ -205,7 +187,7 @@ ayumy sync --report --date 2026-03-25                           # 指定日の�
 ayumy sync --report --date 2026-03-01..2026-03-05               # 日付範囲のレポートを一括生成
 ```
 
-`ayumy sync` は `bin/ayumy` CLI を通じて `sync_session.sh` を呼び出す。`bin/ayumy` はサブコマンドをディスパッチするエントリポイントであり、クライアントマシンのセットアップ時に PATH に追加する（例: `export PATH="$HOME/ayumy/bin:$PATH"`）。手動実行時はフォアグラウンドで実行し、転送結果を標準出力に表示する。`--report` 指定時は Lambda の実行結果も標準出力に表示する
+`ayumy sync` は [bin/ayumy](../bin/ayumy) CLI を通じて [scripts/sync_session.sh](../scripts/sync_session.sh) を呼び出す。CLI はサブコマンドをディスパッチするエントリポイントであり、クライアントマシンのセットアップ時に PATH に追加する（例: `export PATH="$HOME/ayumy/bin:$PATH"`）。手動実行時はフォアグラウンドで実行し、転送結果を標準出力に表示する。`--report` 指定時は Lambda の実行結果も標準出力に表示する
 
 ### 4.6 セキュリティに関する注意
 - JSONL には会話の生データが含まれるため、会話中やツール実行時に機密情報（API キー、パスワード等）をログに残さないよう注意する
@@ -236,13 +218,11 @@ ayumy sync --report --date 2026-03-01..2026-03-05               # 日付範囲�
 | Pull Requests | `GET /repos/{owner}/{repo}/pulls` | `state=all`, `sort=updated`, 前日以降 |
 | Issues | `GET /repos/{owner}/{repo}/issues` | `since`, `state=all`, PR を除外 |
 
-各アクティビティの取得項目は `lambda/report/__init__.py` の `CommitInfo` / `PullInfo` / `IssueInfo` を参照する
+Commits は Search Commits API を使用する。GitHub Search の date 比較は UTC 解釈であり JST 1 日分が連続する 2 つの UTC 日付にまたがるため、検索範囲を JST 境界より広く取り、取得後にタイムゾーン対応の `since <= author_date < until` で絞り込む。これにより手動実行時の部分日（当日 00:00 〜 現在時刻）にも対応する。squash merge で `author-date` が書き換えられた commit は検出できないため、セッション JSONL の `tool_result` から抽出した commit 情報で補完する（§5.3 参照）
 
-Commits の取得には Search Commits API を使用し、`author-date` の range 構文（`YYYY-MM-DD..YYYY-MM-DD`）で期間を指定する。GitHub Search の date 比較は UTC 解釈であり、JST 1 日分は連続する 2 つの UTC 日付にまたがるため、検索範囲を `since - 1day` 〜 `until` に広げて取りこぼしを防ぐ。取得後にタイムゾーン対応の `since <= author_date < until` で精密に絞り込み、手動実行時の部分日（当日 00:00 〜 現在時刻）にも対応する。これによりブランチの存在有無にかかわらず対象期間のコミットを取得できる。ただし squash merge によって `author-date` が書き換えられたコミットは検出できないため、セッション JSONL の `tool_result` から抽出したコミット情報で補完する（§5.3 参照）
+各 commit には紐づく PR 番号も付与する。Notion Timeline で commit を親 PR ブロック配下にネストする際の参照キーとして利用するほか、Hybrid 経路の PR 取得（§5.1.1）でも再利用する
 
-各コミットには `GET /repos/{owner}/{repo}/commits/{sha}/pulls` を追加で呼び出し、紐づく PR 番号も付与する。これは Notion Timeline で commit を親 PR ブロック配下にネストする際の参照キーとして利用するほか、Hybrid 経路の PR 取得（§5.1.1）でも再利用する
-
-Search API には 30 リクエスト/分の secondary rate limit がある。10 リクエストごとに経過時間をチェックし、20 秒のウィンドウ内であれば残り時間だけ sleep してからカウンタをリセットする
+Search API の secondary rate limit に対応するため、一定時間ウィンドウ内でのリクエスト数を制御する throttle 処理を行う
 
 #### 5.1.1 Backfill 時の Hybrid 取得経路
 PR/Issue の `updated_at` 経路は対象日以降に状態が更新されると `updated_at` がウィンドウから外れて取得対象から漏れる。例えば T 日に open された PR が T+1 日に merge された場合、T 日の再生成では PR が取得できず Timeline に PR ブロックが現れない
@@ -254,9 +234,9 @@ PR/Issue の `updated_at` 経路は対象日以降に状態が更新されると
 | Pull Requests | `GET /search/issues` を `is:pr` + `created:`/`merged:`/`closed:` のレンジクエリで3回呼び出し、状態遷移した PR を取得する。さらに `fetch_commits` で各コミットに付与済みの関連 PR 番号を再利用し、対象日にコミットだけがあった PR も補足する。これに DynamoDB の `session_pulls`（§5.3）を加えて PR 番号で union し、各番号を `GET /repos/{owner}/{repo}/pulls/{N}` で個別取得する |
 | Issues | `GET /search/issues` を `is:issue` + `created:`/`closed:` のレンジクエリで2回呼び出し、状態遷移した Issue を取得する。これに DynamoDB の `session_issues`（§5.3）を加えて Issue 番号で union する。session 由来の番号のみで Search に含まれないものは `GET /repos/{owner}/{repo}/issues/{N}` で個別取得し、PR を返した場合（`pull_request` 属性が設定）は除外する |
 
-Search クエリの日付範囲は UTC/JST の境界ずれを吸収するため `since - 1day` 〜 `until` まで広げる。Search 経路で得た PR は `created_at` / `merged_at` / `closed_at`、Issue は `created_at` / `closed_at` のいずれかが `[since, until)` に入るものに絞り込む。commit 由来 PR は対象日にコミットが存在する事実、session 由来 PR/Issue は session で対象日に touch された事実をもって採用するため、いずれもこの絞り込みの対象外とする。削除済み PR/Issue は 404 となるためスキップする
+Search クエリの日付範囲は UTC/JST の境界ずれを吸収するため広めに取り、取得後に `created_at` / `merged_at` / `closed_at` のいずれかが `[since, until)` に入るものへ絞り込む。commit 由来 PR は対象日にコミットが存在する事実、session 由来 PR/Issue は session で対象日に touch された事実をもって採用するため、いずれもこの絞り込みの対象外とする。削除済み PR/Issue は 404 となるためスキップする
 
-Search 呼び出しはリポジトリあたり最大 5 回（PR 3 + Issue 2）増えるため、`fetch_commits` の Search 呼び出しと共通の throttle カウンタで管理する
+Hybrid 経路の Search 呼び出しは commit 取得の Search 呼び出しと共通の throttle で管理する
 
 ### 5.2 Claude Code セッションログの読み取り
 DynamoDB の `ayumy-sessions` テーブルから対象日付をパーティションキーとして Query し、セッションメタデータを取得する。結果をリポジトリ別にグルーピングし、各リポジトリ内のセッションを `start_time` 順にソートする。
@@ -289,12 +269,9 @@ DynamoDB の `ayumy-sessions` テーブルから対象日付をパーティシ�
 - 同一キー（PK + SK）のアイテムは上書きされる（冪等性を担保）
 - ユーザーメッセージも `session_commits` もないグループはスキップする
 - リポジトリ名は `.ayumy_repo` メタデータファイルから解決する。メタデータがないプロジェクトはスキップする
-- assistant の Bash tool_use のコマンドから PR/Issue 番号を抽出する。対象は `gh pr|issue {sub} {N}` の位置引数、`gh api` の `pulls|issues/{N}` パス、`git` コマンドの引数中の `#番号`。本文中で言及されただけの URL や `#番号` はノイズとなるため対象外とする。`git` 由来の `#番号` は PR/Issue の種別を判別できないため、PR と Issue の両方の候補として保持し fetch 側で振り分ける（§5.1.1）
-- 抽出は project の作業ディレクトリ内で実行されたコマンドのみを対象とする。Bash tool の冒頭で `cd <他 repo path>` 等により別ディレクトリへ移動した場合、そのコマンド由来の commit / PR / Issue 番号は除外する
-  - 認識する形式は先頭の `cd <path> && ...` 連結のみ。それ以外の形式は当該 entry の `cwd` を effective cwd として判定する
-  - `cd` のパス指定が解決できない形式（別ユーザーの `~user/...` 等）は project 外として扱う
-- 書き込み成功後、処理した JSONL を S3 から削除する。書き込み失敗時は S3 を削除せず、次回実行時に再試行する
-- 書き込み失敗時も DynamoDB に前回成功分のデータが残っているため、レポート生成フローは継続する
+- assistant の Bash tool_use のコマンドから PR/Issue 番号を抽出する。`gh` / `git` の引数として PR/Issue を明示的に操作した箇所のみが対象で、本文中で言及されただけの URL や `#番号` はノイズとなるため対象外とする。`git` 由来の番号は PR/Issue の種別を判別できないため両方の候補として保持し fetch 側で振り分ける（§5.1.1）
+- 抽出は project の作業ディレクトリ内で実行されたコマンドのみを対象とする。Bash tool の冒頭で `cd <他 repo path> && ...` により別ディレクトリへ移動した場合、そのコマンド由来の commit / PR / Issue 番号は除外する。`cd` のパス指定が解決できない形式（別ユーザーの `~user/...` 等）も project 外として扱う
+- 書き込み成功後、処理した JSONL を S3 から削除する。書き込み失敗時は S3 を削除せず、次回実行時に再試行する。書き込み失敗時も DynamoDB に前回成功分のデータが残っているため、レポート生成フローは継続する
 
 レポート生成後の動作:
 
@@ -410,17 +387,7 @@ Timeline は `bulleted_list_item` のネスト構造で表現する。PR 親エ�
 GitHub アイテムへのリンクは PR/Issue が `repo#xx: Title`、commit が `{sha-prefix}: {commit message}` の形式とし、それぞれ GitHub URL でリンク化する。
 
 ### 6.3 タグの分類基準
-| タグ | 基準 |
-|---|---|
-| `feature` | 新機能追加に関する Commit / PR |
-| `bugfix` | バグ修正に関する Commit / PR / Issue |
-| `docs` | ドキュメント更新 |
-| `refactor` | リファクタリング、依存更新、設定整理を含む保守的変更 |
-| `ci` | CI/CD やビルド設定の変更 |
-| `review` | PR レビューが主な活動だった場合 |
-| `other` | 既存タグのいずれにも当てはまらない作業 |
-
-タグは Claude API の要約生成時に自動判定させる。タグ定義（name と description）はコード側（`lambda/report/tags.py`）で管理する。
+タグは Claude API の要約生成時に自動判定させる。タグ名と判定基準（description）はコード側（[lambda/report/tags.py](../lambda/report/tags.py)）で single source of truth として管理する。Notion DB の multi-select オプションには description フィールドがないため、コード側に置いたうえで Claude API のシステムプロンプトに注入する。
 
 ## 7. AWS Lambda の構成
 ### 7.1 実行方式
@@ -461,14 +428,13 @@ Lambda 関数の環境変数として設定する。機密情報は AWS Secrets 
 
 ### 7.3 Lambda 関数の構成
 - **ランタイム**: Python 3.12
-- **ハンドラ**: `lambda/handler.py`（`lambda/report` パッケージを呼び出すエントリポイント）
-- **タイムアウト**: 300秒（5分）
-- **メモリ**: 512MB
-- **依存パッケージ**: デプロイ: `requests`, `anthropic`, `PyGithub`（`boto3` は Lambda ランタイム同梱版を利用）、開発: 左記 + `boto3`
+- **ハンドラ**: [lambda/handler.py](../lambda/handler.py)（[lambda/report](../lambda/report) パッケージを呼び出すエントリポイント）
+- **タイムアウト / メモリ**: [template.yaml](../template.yaml) で定義（タイムアウトは SAM パラメータ化、メモリは固定値）
+- **依存パッケージ**: [lambda/requirements.txt](../lambda/requirements.txt)（デプロイ）と [lambda/requirements-dev.txt](../lambda/requirements-dev.txt)（ローカル開発、`boto3` 等を追加）に定義。`boto3` は Lambda ランタイム同梱版を利用するためデプロイ側には含めない
 - **IAM ロール**: S3 バケットへの読み書き、DynamoDB テーブルへの読み書き、Secrets Manager の読み取り、CloudWatch Logs への書き込み
 
 ### 7.4 デプロイ
-AWS SAM（`template.yaml`）で Lambda 関数、EventBridge Scheduler、IAM ロール、S3 バケット、DynamoDB テーブルを管理する。
+AWS SAM（[template.yaml](../template.yaml)）で Lambda 関数、EventBridge Scheduler、IAM ロール、S3 バケット、DynamoDB テーブルを管理する。
 
 ```bash
 sam build && sam deploy

@@ -24,7 +24,6 @@ from .summarizer import SummaryClient
 
 logger = logging.getLogger(__name__)
 
-# Maximum number of past dates to backfill per invocation
 MAX_BACKFILL = 3
 
 
@@ -39,17 +38,10 @@ def process_date(
     *,
     is_backfill: bool = False,
 ) -> None:
-    """Generate and publish a daily report for a single date range.
+    """Generate and publish the daily report for the `[since, until)` JST window.
 
-    Args:
-        since: Start of the target period (inclusive)
-        until: End of the target period (exclusive)
-        session_activity: Pre-fetched session data from DynamoDB
-        github_client: GitHub API client
-        notion_client: Notion API client
-        summary_client: Claude API summarizer client
-        slack_client: Slack notification client
-        is_backfill: If True, use the Hybrid PR/Issue fetch path
+    `is_backfill=True` switches to the Hybrid PR/Issue fetch path (Spec.md §5.1.1),
+    so dates whose PR/Issue state has since drifted out of the `updated_at` window are still recoverable.
     """
     logger.info("Processing: %s ~ %s", since.isoformat(), until.isoformat())
 
@@ -76,8 +68,6 @@ def process_date(
         session_issues=session_issues,
     )
 
-    # Recover squash-merged commits from session logs, normalizing to
-    # the full CommitInfo shape and deduplicating by SHA prefix.
     for repo_name, sessions in session_activity.repos().items():
         seen_shas: set[str] = set()
         session_commits: list[dict] = []
@@ -98,9 +88,9 @@ def process_date(
                 )
         if not session_commits:
             continue
-        # Resolve PR association on commits we will actually inject so these
-        # nest under their parent PR in the Notion timeline rather than
-        # render as direct commits. Skip ones already covered by search.
+        # Resolve PR association on commits we will actually inject,
+        # so these nest under their parent PR in the Notion timeline rather than render as direct commits.
+        # Skip ones already covered by search.
         repo_data = github_activity.repos().get(repo_name)
         if repo_data is not None:
             existing_shas = {c["sha"] for c in repo_data["commits"]}
@@ -159,15 +149,12 @@ def run(
     memory_limit_mb: int | None = None,
     timeout_seconds: int | None = None,
 ) -> None:
-    """Run the report generation pipeline.
+    """Run the report generation pipeline for one or more target dates.
 
-    Args:
-        source: Invocation source. "manual" for manual execution,
-            None for scheduled execution
-        target_date: Explicit target date (YYYY-MM-DD or YYYY-MM-DD..YYYY-MM-DD)
-            for report generation
-        memory_limit_mb: Lambda memory limit in MB, or None for CLI
-        timeout_seconds: Lambda timeout in seconds, or None for CLI
+    `target_date` (`YYYY-MM-DD` or `YYYY-MM-DD..YYYY-MM-DD`) takes precedence and disables backfill;
+    otherwise the prior day's full window (scheduled) or today's partial window (`source="manual"`) is processed alongside any unreported backfill dates.
+    `memory_limit_mb` / `timeout_seconds` are reported to Slack as execution metrics,
+    and are None when invoked from the CLI.
     """
     start = time.monotonic()
     since, until = get_target_date_range(source, target_date=target_date)
@@ -179,7 +166,6 @@ def run(
         session_client = SessionClient(require_env("AYUMY_S3_BUCKET"))
         store = SessionStore(require_env("AYUMY_DYNAMO_TABLE"))
 
-        # Ingest JSONL to DynamoDB and delete from S3
         ingested_keys: list[str] = []
         try:
             ingested_keys = store.ingest(session_client)
@@ -196,14 +182,11 @@ def run(
                 logger.exception("S3 deletion failed")
                 slack_client.notify_error(since, e)
 
-        # Build target date list and mark which ones use the Hybrid fetch path
         backfill_set: set[str] = set()
         if target_date:
-            # Explicit date(s): process only specified dates, skip backfill
             process_dates = parse_target_dates(target_date)
             backfill_set = {d.isoformat() for d in process_dates}
         else:
-            # Scheduled/manual without --date: backfill + primary
             backfill_dates = store.scan_backfill_dates(primary_date)
             backfill_dates = backfill_dates[-MAX_BACKFILL:]
             process_dates = backfill_dates + [primary_date]
@@ -251,8 +234,8 @@ def run(
             raise errors[0]
 
     except Exception as e:
-        # Errors from process_date are already notified with the correct date
-        # Only notify here for errors outside the loop (scan, data source init)
+        # Errors from process_date are already notified with the correct date,
+        # so only notify here for errors outside the loop (scan, data source init)
         if not getattr(e, "_notified", False):
             slack_client.notify_error(since, e)
         raise

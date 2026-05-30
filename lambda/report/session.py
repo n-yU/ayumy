@@ -12,20 +12,11 @@ class SessionClient:
     """Client for managing Claude Code session JSONL files on S3."""
 
     def __init__(self, bucket: str) -> None:
-        """Initialize the client with an S3 bucket name.
-
-        Args:
-            bucket: S3 bucket name containing session JSONL files
-        """
         self.s3 = boto3.client("s3")
         self.bucket = bucket
 
     def list_session_objects(self) -> list[dict[str, Any]]:
-        """List all unarchived JSONL objects in claude-sessions/.
-
-        Returns:
-            A list of S3 object metadata dicts with Key and LastModified
-        """
+        """List all unarchived JSONL objects in `claude-sessions/`."""
         prefix = "claude-sessions/"
         objects: list[dict[str, Any]] = []
         paginator = self.s3.get_paginator("list_objects_v2")
@@ -39,19 +30,15 @@ class SessionClient:
         return objects
 
     def read_repo_name(self, project: str) -> str | None:
-        """Read the repo name from .ayumy_repo metadata file in S3.
+        """Read the repo name from the `.ayumy_repo` metadata file in S3.
 
-        Args:
-            project: Project directory name from S3 path
-
-        Returns:
-            The repo name, or None if metadata is missing or invalid
+        Returns None when the metadata file is missing, empty, or contains `/` or `:`,
+        which would indicate an accidentally pasted URL rather than a bare repo name.
         """
         key = f"claude-sessions/{project}/.ayumy_repo"
         try:
             resp = self.s3.get_object(Bucket=self.bucket, Key=key)
             name = resp["Body"].read().decode("utf-8").strip()
-            # Validate: must be a plain repo name (no URL fragments)
             if name and "/" not in name and ":" not in name:
                 return name
             return None
@@ -59,17 +46,9 @@ class SessionClient:
             return None
 
     def delete_sessions(self, keys: list[str]) -> int:
-        """Delete JSONL files from S3.
+        """Delete the given JSONL objects from S3 and return the number actually removed.
 
-        Called after successful DynamoDB ingestion to remove
-        processed files. If ingestion fails, files are preserved
-        for retry on the next execution.
-
-        Args:
-            keys: S3 object keys to delete
-
-        Returns:
-            The number of files deleted
+        Errors per key are logged but do not raise; the caller (pipeline) decides whether to retry on the next run.
         """
         if not keys:
             return 0

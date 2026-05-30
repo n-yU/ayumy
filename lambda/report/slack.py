@@ -10,14 +10,13 @@ from .summarizer import ValidationResult
 
 logger = logging.getLogger(__name__)
 
-# Per-headline max length (truncated with ellipsis beyond this) to keep the
-# aggregated section text comfortably within Slack's 3000-char limit for a
-# realistic number of repos per day
+# Per-headline max length (truncated with ellipsis beyond this);
+# keeps the aggregated section text within Slack's 3000-char limit for a realistic number of repos per day
 HEADLINE_MAX = 200
 
 
 def _truncate_headline(headline: str, limit: int = HEADLINE_MAX) -> str:
-    """Truncate a headline string with an ellipsis if it exceeds the limit."""
+    """Truncate `headline` with an ellipsis when it exceeds `limit`."""
     if len(headline) <= limit:
         return headline
     return headline[: limit - 1] + "…"
@@ -26,9 +25,8 @@ def _truncate_headline(headline: str, limit: int = HEADLINE_MAX) -> str:
 def _escape_mrkdwn(text: str) -> str:
     """Escape Slack mrkdwn special characters to neutralize mentions and markup.
 
-    Per Slack's formatting spec, replacing `&`, `<`, `>` with entities is
-    sufficient: all special sequences (`<!channel>`, `<@U...>`, `<url|text>`)
-    start with `<`, so escaping it disables them entirely.
+    All special sequences (`<!channel>`, `<@U...>`, `<url|text>`) start with `<`,
+    so replacing `&`, `<`, `>` with HTML entities is sufficient to disable them entirely.
     """
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
@@ -37,11 +35,6 @@ class SlackClient:
     """Client for sending daily report notifications via Slack Incoming Webhook."""
 
     def __init__(self, webhook_url: str) -> None:
-        """Initialize the client with a Slack webhook URL.
-
-        Args:
-            webhook_url: Slack Incoming Webhook URL
-        """
         self.client = WebhookClient(webhook_url)
         self._blocks: list[dict] = []
         self._fallback_parts: list[str] = []
@@ -53,14 +46,9 @@ class SlackClient:
         pages: list[tuple[str, str]],
         skipped_repos: list[str] | None = None,
     ) -> None:
-        """Buffer a daily report notification.
+        """Buffer a daily-report notification for `target_date` listing the created Notion pages.
 
-        Args:
-            target_date: The target date for the report
-            report: Full report summary from Claude API
-            pages: List of (repo_name, page_url) tuples
-            skipped_repos: Repo names that were in the summary but skipped
-                during Notion page creation
+        `skipped_repos` covers repos that appeared in `report` but were dropped during Notion page creation.
         """
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
 
@@ -73,8 +61,7 @@ class SlackClient:
             for name, url in pages:
                 repo = repo_map.get(name)
                 raw_headline = repo["summary"][0] if repo and repo["summary"] else ""
-                # Collapse newlines so a multi-line headline cannot break
-                # the one-line-per-repo layout of the Slack section.
+                # Collapse newlines so a multi-line headline cannot break the one-line-per-repo layout of the Slack section.
                 raw_headline = raw_headline.replace("\n", " ").replace("\r", " ")
                 headline = _escape_mrkdwn(_truncate_headline(raw_headline))
                 link = f"<{url}|{date_str}: {name}>"
@@ -139,11 +126,7 @@ class SlackClient:
             )
 
     def notify_no_activity(self, target_date: datetime) -> None:
-        """Buffer a no-activity notification.
-
-        Args:
-            target_date: The target date with no activity
-        """
+        """Buffer a no-activity notification for `target_date`."""
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
 
         if self._blocks:
@@ -168,12 +151,7 @@ class SlackClient:
         target_date: datetime,
         result: ValidationResult,
     ) -> None:
-        """Buffer a validation error notification.
-
-        Args:
-            target_date: The target date for the report
-            result: Validation result containing invalid values
-        """
+        """Buffer a notification listing the invalid tag values detected during summary validation."""
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
         lines = []
         for name, tags in result.invalid_tags.items():
@@ -205,12 +183,7 @@ class SlackClient:
         )
 
     def notify_error(self, target_date: datetime, error: Exception) -> None:
-        """Buffer an error notification.
-
-        Args:
-            target_date: The target date for the report
-            error: The exception that occurred
-        """
+        """Buffer an error notification carrying `error`'s message for `target_date`."""
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
 
         if self._blocks:
@@ -238,14 +211,10 @@ class SlackClient:
         memory_limit_mb: int | None = None,
         timeout_seconds: int | None = None,
     ) -> None:
-        """Buffer execution metrics.
+        """Buffer an execution-metrics context block.
 
-        Args:
-            elapsed: Elapsed wall-clock time in seconds
-            peak_memory_mb: Peak RSS memory usage in MB
-            version: ayumy version string (e.g. "0.2.1")
-            memory_limit_mb: Lambda memory limit in MB, or None for CLI
-            timeout_seconds: Lambda timeout in seconds, or None for CLI
+        `memory_limit_mb` / `timeout_seconds` are None when invoked from the CLI,
+        in which case ratios against the limits are omitted from the rendered text.
         """
         if self._blocks:
             self._blocks.append({"type": "divider"})
@@ -287,11 +256,8 @@ class SlackClient:
         self._fallback_parts = []
 
     def _send(self, text: str, blocks: list[dict] | None = None) -> None:
-        """Send a message via Slack webhook (best-effort).
-
-        Args:
-            text: Fallback text for notifications and accessibility
-            blocks: Block Kit blocks for rich formatting
+        """Send a message via Slack webhook on a best-effort basis;
+        failures are logged but do not raise so notification errors never abort report generation.
         """
         try:
             response = self.client.send(text=text, blocks=blocks)
