@@ -1,4 +1,4 @@
-.PHONY: lambda-install lambda-invoke lambda-deploy test format format-check oidc-deploy scan-sessions aws-auth-check
+.PHONY: lambda-install lambda-invoke lambda-deploy test format format-check lint lint-fix oidc-deploy scan-sessions aws-auth-check
 
 FORMAT_TARGETS := lambda tests
 
@@ -26,15 +26,23 @@ lambda-deploy: aws-auth-check
 test: lambda-install
 	.venv/bin/python -m pytest tests/ -v
 
-# Apply Black and isort to Python sources
+# Apply Ruff formatter and isort-equivalent import sort
 format: lambda-install
-	.venv/bin/python -m isort $(FORMAT_TARGETS)
-	.venv/bin/python -m black $(FORMAT_TARGETS)
+	.venv/bin/python -m ruff format $(FORMAT_TARGETS)
+	.venv/bin/python -m ruff check --fix --select I $(FORMAT_TARGETS)
 
-# Check formatting without modifying files
+# Check formatting and lint violations without modifying files
 format-check: lambda-install
-	.venv/bin/python -m isort --check-only --diff $(FORMAT_TARGETS)
-	.venv/bin/python -m black --check --diff $(FORMAT_TARGETS)
+	.venv/bin/python -m ruff format --check --diff $(FORMAT_TARGETS)
+	.venv/bin/python -m ruff check $(FORMAT_TARGETS)
+
+# Run Ruff lint checks
+lint: lambda-install
+	.venv/bin/python -m ruff check $(FORMAT_TARGETS)
+
+# Apply auto-fixable Ruff lint fixes
+lint-fix: lambda-install
+	.venv/bin/python -m ruff check --fix $(FORMAT_TARGETS)
 
 # Scan DynamoDB session items
 scan-sessions:
