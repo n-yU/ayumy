@@ -238,7 +238,7 @@ class GitHubClient:
         """
         since_str = (since - timedelta(days=1)).strftime("%Y-%m-%d")
         until_str = until.strftime("%Y-%m-%d")
-        return f"repo:{repo.full_name} is:{kind} " f"{event}:{since_str}..{until_str}"
+        return f"repo:{repo.full_name} is:{kind} {event}:{since_str}..{until_str}"
 
     def _fetch_pulls_for_commit(
         self,
@@ -390,7 +390,7 @@ def _build_pull_info(pr: PullRequest) -> PullInfo:
         "title": pr.title,
         "state": state,
         "author": pr.user.login,
-        "labels": [l.name for l in pr.labels],
+        "labels": [label.name for label in pr.labels],
         "draft": bool(pr.draft),
         "url": pr.html_url,
         "created_at": pr.created_at.isoformat(),
@@ -409,7 +409,7 @@ def _build_issue_info(issue: Issue) -> IssueInfo:
         "title": issue.title,
         "state": issue.state,
         "author": issue.user.login,
-        "labels": [l.name for l in issue.labels],
+        "labels": [label.name for label in issue.labels],
         "url": issue.html_url,
         "created_at": issue.created_at.isoformat(),
         "closed_at": issue.closed_at.isoformat() if issue.closed_at else None,
