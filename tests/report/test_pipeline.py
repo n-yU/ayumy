@@ -903,8 +903,6 @@ class TestRun:
         session_client = MockSession.return_value
         session_client.delete_sessions.return_value = 0
 
-        github_client = MockGitHub.return_value
-
         slack_client = MockSlack.return_value
 
         with pytest.raises(RuntimeError, match="DynamoDB error"):
@@ -994,8 +992,6 @@ class TestRun:
         store.ingest.side_effect = RuntimeError("DynamoDB error")
         store.scan_backfill_dates.return_value = []
         store.fetch_sessions.return_value = SessionActivity({})
-
-        session_client = MockSession.return_value
 
         github_client = MockGitHub.return_value
         github_client.fetch_activity.return_value = GitHubActivity({})

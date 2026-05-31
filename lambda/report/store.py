@@ -5,7 +5,7 @@ import logging
 import re
 import shlex
 from collections import defaultdict
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from os.path import normpath
 from pathlib import Path, PurePosixPath
 
@@ -289,7 +289,7 @@ class SessionStore:
                         group["pulls"].update(pulls)
                         group["issues"].update(issues)
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         items = []
         for (date_str, repo, session_id), group in groups.items():
             if not group["user_messages"] and not group["commits"]:
@@ -401,7 +401,7 @@ class SessionStore:
 
     def mark_reported(self, date_str: str) -> None:
         """Stamp `reported_at` on every item under the JST date `date_str`."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         response = self.table.query(
             KeyConditionExpression=Key("date").eq(date_str),
