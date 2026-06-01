@@ -76,3 +76,20 @@ def make_github(repo="my-repo", *, commits=(), pulls=(), issues=()):
             }
         }
     )
+
+
+def assert_published(clients):
+    """Assert the publish path (report → Notion → Slack) was fully exercised once."""
+    clients["summary_client"].generate_summary.assert_called_once()
+    clients["notion_client"].create_report_pages.assert_called_once()
+    clients["slack_client"].notify.assert_called_once()
+    clients["slack_client"].notify_validation_errors.assert_not_called()
+
+
+def assert_skipped(clients, since):
+    """Assert the no-activity path skipped all generation and only notified Slack."""
+    clients["summary_client"].generate_summary.assert_not_called()
+    clients["notion_client"].create_report_pages.assert_not_called()
+    clients["slack_client"].notify.assert_not_called()
+    clients["slack_client"].notify_validation_errors.assert_not_called()
+    clients["slack_client"].notify_no_activity.assert_called_once_with(since)
