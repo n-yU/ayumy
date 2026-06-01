@@ -6,7 +6,7 @@ import pytest
 
 from report.summarizer import ValidationResult
 
-OWNER = "n-yU"
+from ._builders import OWNER
 
 
 @pytest.fixture
