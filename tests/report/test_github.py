@@ -30,10 +30,30 @@ def _make_pr_issue(number):
     return item
 
 
+def _make_commit_mock(
+    sha,
+    *,
+    message,
+    date,
+    author="user",
+    repo_full_name="n-yU/my-repo",
+    url=None,
+):
+    """Create a search_commits result mock with the fields fetch_commits reads."""
+    commit = MagicMock()
+    commit.sha = sha
+    commit.commit.message = message
+    commit.commit.author.name = author
+    commit.commit.author.date = date
+    commit.html_url = url or f"https://github.com/{repo_full_name}/commit/{sha}"
+    return commit
+
+
 def _make_pull(
     number,
     *,
     created_at,
+    updated_at=None,
     merged_at=None,
     closed_at=None,
     state=None,
@@ -46,6 +66,7 @@ def _make_pull(
     pr.number = number
     pr.title = title
     pr.created_at = created_at
+    pr.updated_at = updated_at if updated_at is not None else created_at
     pr.merged_at = merged_at
     pr.closed_at = closed_at
     if state is None:
@@ -63,6 +84,7 @@ def _make_issue(
     number,
     *,
     created_at,
+    updated_at=None,
     closed_at=None,
     state=None,
     state_reason=None,
@@ -75,6 +97,7 @@ def _make_issue(
     issue.number = number
     issue.title = title
     issue.created_at = created_at
+    issue.updated_at = updated_at if updated_at is not None else created_at
     issue.closed_at = closed_at
     issue.state = state or ("closed" if closed_at else "open")
     issue.state_reason = state_reason
@@ -83,6 +106,17 @@ def _make_issue(
     issue.labels = labels or []
     issue.pull_request = pull_request
     return issue
+
+
+def _make_activity_repo(client, *, name="repo", full_name="n-yU/repo"):
+    """Wire client.g.get_user().get_repo() to return a repo mock and return it."""
+    mock_user = MagicMock()
+    client.g.get_user.return_value = mock_user
+    mock_repo = MagicMock()
+    mock_repo.name = name
+    mock_repo.full_name = full_name
+    mock_user.get_repo.return_value = mock_repo
+    return mock_repo
 
 
 class TestFetchCommits:
