@@ -165,92 +165,104 @@ class TestEffectiveCwd:
 
 
 class TestIsCrossRepo:
-    def test_false_when_project_cwd_unknown(self):
-        assert _is_cross_repo("/anywhere", None) is False
-
-    def test_false_when_effective_cwd_is_none(self):
-        assert _is_cross_repo(None, "/Users/a/proj") is False
-
-    def test_false_when_within_project(self):
-        assert _is_cross_repo("/Users/a/proj", "/Users/a/proj") is False
-        assert _is_cross_repo("/Users/a/proj/sub", "/Users/a/proj") is False
-
-    def test_true_when_outside_project(self):
-        assert _is_cross_repo("/Users/a/other", "/Users/a/proj") is True
-        # Same parent path prefix but not a descendant
-        assert _is_cross_repo("/Users/a/project2", "/Users/a/project") is True
+    @pytest.mark.parametrize(
+        ("effective_cwd", "project_cwd", "expected"),
+        [
+            pytest.param("/anywhere", None, False, id="project_cwd_unknown"),
+            pytest.param(None, "/Users/a/proj", False, id="effective_cwd_none"),
+            pytest.param(
+                "/Users/a/proj", "/Users/a/proj", False, id="within_project_exact"
+            ),
+            pytest.param(
+                "/Users/a/proj/sub",
+                "/Users/a/proj",
+                False,
+                id="within_project_descendant",
+            ),
+            pytest.param(
+                "/Users/a/other", "/Users/a/proj", True, id="outside_project_sibling"
+            ),
+            # Same parent path prefix but not a descendant
+            pytest.param(
+                "/Users/a/project2",
+                "/Users/a/project",
+                True,
+                id="outside_project_prefix_collision",
+            ),
+        ],
+    )
+    def test_classifies(self, effective_cwd, project_cwd, expected):
+        assert _is_cross_repo(effective_cwd, project_cwd) is expected
 
 
 class TestExtractPrIssueRefs:
-    def test_gh_pr_view(self):
-        pulls, issues = _extract_pr_issue_refs("gh pr view 87 --json body")
-        assert pulls == {87}
-        assert issues == set()
-
-    def test_gh_issue_close(self):
-        pulls, issues = _extract_pr_issue_refs("gh issue close 84")
-        assert pulls == set()
-        assert issues == {84}
-
-    def test_gh_pr_create_skipped(self):
-        pulls, issues = _extract_pr_issue_refs(
-            'gh pr create --title "PR 999" --body "..."'
-        )
-        assert pulls == set()
-        assert issues == set()
-
-    def test_gh_issue_list_skipped(self):
-        pulls, issues = _extract_pr_issue_refs("gh issue list --limit 30")
-        assert pulls == set()
-        assert issues == set()
-
-    def test_gh_api_pulls_path(self):
-        pulls, issues = _extract_pr_issue_refs(
-            "gh api repos/n-yU/ayumy/pulls/82/comments"
-        )
-        assert pulls == {82}
-        assert issues == set()
-
-    def test_gh_api_issues_path(self):
-        pulls, issues = _extract_pr_issue_refs("gh api repos/n-yU/ayumy/issues/84")
-        assert pulls == set()
-        assert issues == {84}
-
-    def test_git_hash_ref_ambiguous(self):
-        pulls, issues = _extract_pr_issue_refs('git commit -m "Fix #91"')
-        assert pulls == {91}
-        assert issues == {91}
-
-    def test_chained_commands(self):
-        pulls, issues = _extract_pr_issue_refs("gh pr view 87 && gh issue close 84")
-        assert pulls == {87}
-        assert issues == {84}
-
-    def test_gh_pr_with_flag_value_before_number(self):
-        pulls, issues = _extract_pr_issue_refs('gh pr edit --body "fix" 87')
-        assert pulls == {87}
-        assert issues == set()
-
-    def test_gh_pr_skips_quoted_integer_in_flag_value(self):
-        """Numbers inside quoted flag values must not be picked up."""
-        pulls, issues = _extract_pr_issue_refs('gh pr edit --body "fix 999" 87')
-        assert pulls == {87}
-        assert issues == set()
-
-    def test_ignores_unrelated_commands(self):
-        pulls, issues = _extract_pr_issue_refs(
-            "ls /tmp/file_42.txt && python build.py 7"
-        )
-        assert pulls == set()
-        assert issues == set()
-
-    def test_does_not_match_path_outside_gh_api(self):
-        """`pulls/N` / `issues/N` outside of `gh api` are ignored."""
-        pulls, issues = _extract_pr_issue_refs(
-            "curl https://example.com/repo/pulls/123 && cat ./issues/456.txt"
-        )
-        assert pulls == set()
-        assert issues == set()
+    @pytest.mark.parametrize(
+        ("command", "expected_pulls", "expected_issues"),
+        [
+            pytest.param("gh pr view 87 --json body", {87}, set(), id="gh_pr_view"),
+            pytest.param("gh issue close 84", set(), {84}, id="gh_issue_close"),
+            pytest.param(
+                'gh pr create --title "PR 999" --body "..."',
+                set(),
+                set(),
+                id="gh_pr_create_skipped",
+            ),
+            pytest.param(
+                "gh issue list --limit 30", set(), set(), id="gh_issue_list_skipped"
+            ),
+            pytest.param(
+                "gh api repos/n-yU/ayumy/pulls/82/comments",
+                {82},
+                set(),
+                id="gh_api_pulls_path",
+            ),
+            pytest.param(
+                "gh api repos/n-yU/ayumy/issues/84",
+                set(),
+                {84},
+                id="gh_api_issues_path",
+            ),
+            pytest.param(
+                'git commit -m "Fix #91"', {91}, {91}, id="git_hash_ref_ambiguous"
+            ),
+            pytest.param(
+                "gh pr view 87 && gh issue close 84",
+                {87},
+                {84},
+                id="chained_commands",
+            ),
+            pytest.param(
+                'gh pr edit --body "fix" 87',
+                {87},
+                set(),
+                id="gh_pr_with_flag_value_before_number",
+            ),
+            # Numbers inside quoted flag values must not be picked up
+            pytest.param(
+                'gh pr edit --body "fix 999" 87',
+                {87},
+                set(),
+                id="gh_pr_skips_quoted_integer_in_flag_value",
+            ),
+            pytest.param(
+                "ls /tmp/file_42.txt && python build.py 7",
+                set(),
+                set(),
+                id="ignores_unrelated_commands",
+            ),
+            # `pulls/N` / `issues/N` outside of `gh api` are ignored
+            pytest.param(
+                "curl https://example.com/repo/pulls/123 && cat ./issues/456.txt",
+                set(),
+                set(),
+                id="does_not_match_path_outside_gh_api",
+            ),
+        ],
+    )
+    def test_extracts(self, command, expected_pulls, expected_issues):
+        pulls, issues = _extract_pr_issue_refs(command)
+        assert pulls == expected_pulls
+        assert issues == expected_issues
 
 
 class TestBuildItems:
