@@ -61,7 +61,7 @@ def _make_pull(
     labels=None,
     draft=False,
 ):
-    """Create a PullRequest mock with the fields _build_pull_info reads."""
+    """Create a PullRequest mock with the fields fetch_pulls reads."""
     pr = MagicMock()
     pr.number = number
     pr.title = title
@@ -92,7 +92,7 @@ def _make_issue(
     labels=None,
     pull_request=None,
 ):
-    """Create an Issue mock matching _build_issue_info."""
+    """Create an Issue mock with the fields fetch_issues reads."""
     issue = MagicMock()
     issue.number = number
     issue.title = title
