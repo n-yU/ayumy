@@ -291,20 +291,13 @@ class TestFetchPulls:
 class TestFetchIssues:
     def test_excludes_pull_requests(self):
         client = _make_client()
-
-        issue = MagicMock()
-        issue.pull_request = None
-        issue.updated_at = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
-        issue.created_at = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
-        issue.closed_at = None
-        issue.state_reason = None
-        issue.html_url = "https://github.com/n-yU/repo/issues/5"
-        issue.number = 5
-        issue.title = "Bug report"
-        issue.state = "open"
-        issue.user.login = "user"
-        issue.labels = []
-
+        issue = _make_issue(
+            5,
+            title="Bug report",
+            created_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
+            updated_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
+            state="open",
+        )
         pr_as_issue = MagicMock()
         pr_as_issue.pull_request = MagicMock()
 
@@ -320,21 +313,17 @@ class TestFetchIssues:
 
     def test_extracts_labels(self):
         client = _make_client()
-
         label = MagicMock()
         label.name = "bug"
-        issue = MagicMock()
-        issue.pull_request = None
-        issue.updated_at = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
-        issue.created_at = datetime(2026, 3, 28, 9, 0, tzinfo=JST)
-        issue.closed_at = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
-        issue.state_reason = "completed"
-        issue.html_url = "https://github.com/n-yU/repo/issues/6"
-        issue.number = 6
-        issue.title = "Issue"
-        issue.state = "closed"
-        issue.user.login = "user"
-        issue.labels = [label]
+        issue = _make_issue(
+            6,
+            title="Issue",
+            created_at=datetime(2026, 3, 28, 9, 0, tzinfo=JST),
+            updated_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
+            closed_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
+            state_reason="completed",
+            labels=[label],
+        )
 
         repo = MagicMock()
         repo.get_issues.return_value = [issue]
@@ -357,21 +346,12 @@ class TestFetchActivity:
         # Current time: t=105 → elapsed=5, sleep=15
         mock_time.return_value = 105
 
-        repo_names = ["repo-0"]
-
-        mock_user = MagicMock()
-        client.g.get_user.return_value = mock_user
-
-        mock_repo = MagicMock()
-        mock_repo.name = "repo"
-        mock_repo.full_name = "n-yU/repo"
-        mock_user.get_repo.return_value = mock_repo
-
+        mock_repo = _make_activity_repo(client)
         client.g.search_commits.return_value = []
         mock_repo.get_pulls.return_value = []
         mock_repo.get_issues.return_value = []
 
-        client.fetch_activity(SINCE, UNTIL, repo_names)
+        client.fetch_activity(SINCE, UNTIL, ["repo-0"])
 
         mock_sleep.assert_called_once_with(_SEARCH_WINDOW - 5)
         assert client._search_count == 1
@@ -387,21 +367,12 @@ class TestFetchActivity:
         # Current time: t=125 → elapsed=25 > 20s window
         mock_time.return_value = 125
 
-        repo_names = ["repo-0"]
-
-        mock_user = MagicMock()
-        client.g.get_user.return_value = mock_user
-
-        mock_repo = MagicMock()
-        mock_repo.name = "repo"
-        mock_repo.full_name = "n-yU/repo"
-        mock_user.get_repo.return_value = mock_repo
-
+        mock_repo = _make_activity_repo(client)
         client.g.search_commits.return_value = []
         mock_repo.get_pulls.return_value = []
         mock_repo.get_issues.return_value = []
 
-        client.fetch_activity(SINCE, UNTIL, repo_names)
+        client.fetch_activity(SINCE, UNTIL, ["repo-0"])
 
         mock_sleep.assert_not_called()
         assert client._search_count == 1
@@ -415,14 +386,7 @@ class TestFetchActivity:
         client._window_start = 0.0
         mock_time.return_value = 500
 
-        mock_user = MagicMock()
-        client.g.get_user.return_value = mock_user
-
-        mock_repo = MagicMock()
-        mock_repo.name = "repo"
-        mock_repo.full_name = "n-yU/repo"
-        mock_user.get_repo.return_value = mock_repo
-
+        mock_repo = _make_activity_repo(client)
         client.g.search_commits.return_value = []
         mock_repo.get_pulls.return_value = []
         mock_repo.get_issues.return_value = []
