@@ -4,6 +4,8 @@ import json
 from datetime import date
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from report.store import (
     SessionStore,
     _effective_cwd,
@@ -41,18 +43,40 @@ def _jsonl_lines(*entries):
 
 
 class TestExpandHome:
-    def test_returns_path_unchanged_when_no_tilde(self):
-        assert _expand_home("/abs/path", "/Users/foo/proj") == "/abs/path"
-        assert _expand_home("relative", "/Users/foo/proj") == "relative"
-
-    def test_expands_against_users_prefix(self):
-        assert (
-            _expand_home("~/Documents/x", "/Users/alice/proj")
-            == "/Users/alice/Documents/x"
-        )
-
-    def test_expands_against_home_prefix(self):
-        assert _expand_home("~/work/x", "/home/bob/proj") == "/home/bob/work/x"
+    @pytest.mark.parametrize(
+        ("path", "project_cwd", "expected"),
+        [
+            pytest.param(
+                "/abs/path", "/Users/foo/proj", "/abs/path", id="absolute_no_tilde"
+            ),
+            pytest.param(
+                "relative", "/Users/foo/proj", "relative", id="relative_no_tilde"
+            ),
+            pytest.param(
+                "~/Documents/x",
+                "/Users/alice/proj",
+                "/Users/alice/Documents/x",
+                id="expands_users_prefix",
+            ),
+            pytest.param(
+                "~/work/x",
+                "/home/bob/proj",
+                "/home/bob/work/x",
+                id="expands_home_prefix",
+            ),
+            pytest.param(
+                "~bob/work",
+                "/Users/alice/proj",
+                "~bob/work",
+                id="does_not_expand_named_user_tilde",
+            ),
+            pytest.param(
+                "~", "/Users/alice/proj", "/Users/alice", id="expands_bare_tilde"
+            ),
+        ],
+    )
+    def test_expands(self, path, project_cwd, expected):
+        assert _expand_home(path, project_cwd) == expected
 
     def test_falls_back_when_project_cwd_unknown(self, monkeypatch):
         monkeypatch.setenv("HOME", "/tmp/fakehome")
@@ -62,180 +86,183 @@ class TestExpandHome:
         monkeypatch.setenv("HOME", "/tmp/fakehome")
         assert _expand_home("~/foo", "/srv/app") == "/tmp/fakehome/foo"
 
-    def test_does_not_expand_named_user_tilde(self):
-        assert _expand_home("~bob/work", "/Users/alice/proj") == "~bob/work"
-
-    def test_expands_bare_tilde(self):
-        assert _expand_home("~", "/Users/alice/proj") == "/Users/alice"
-
 
 class TestEffectiveCwd:
-    def test_returns_none_when_no_cd(self):
-        assert _effective_cwd("git commit -m x", "/proj") is None
+    @pytest.mark.parametrize(
+        ("command", "project_cwd", "expected"),
+        [
+            pytest.param("git commit -m x", "/proj", None, id="no_cd"),
+            pytest.param('echo "unterminated', "/proj", None, id="unparseable_command"),
+            pytest.param(
+                "cd /Users/a/other && git commit",
+                "/Users/a/proj",
+                "/Users/a/other",
+                id="absolute_cd",
+            ),
+            pytest.param(
+                "cd ../other && git commit",
+                "/Users/a/proj",
+                "/Users/a/other",
+                id="relative_cd_against_project_cwd",
+            ),
+            pytest.param(
+                "cd ~/work && git commit",
+                "/Users/a/proj",
+                "/Users/a/work",
+                id="tilde_cd_against_inferred_home",
+            ),
+            # Only the leading `cd` is recognized; subshells / chained-then-cd are out of scope
+            pytest.param(
+                "ls && cd /other && git commit", "/proj", None, id="cd_not_leading"
+            ),
+            pytest.param(
+                "( cd /other && git commit )", "/proj", None, id="cd_in_subshell"
+            ),
+            # `cd <path>` alone has no `&&` chain; treat as project cwd to avoid mis-tagging
+            pytest.param("cd /other", "/proj", None, id="cd_without_chain"),
+            # `cd -` points to the previous directory which is not derivable from the session log
+            pytest.param("cd - && git commit", "/proj", None, id="cd_dash"),
+            # `;` and `|` chains are out of recognized scope
+            pytest.param(
+                "cd /other; git commit", "/proj", None, id="cd_with_semicolon"
+            ),
+            pytest.param("cd /other | tee log", "/proj", None, id="cd_with_pipe"),
+            # Bash allows `&&` without surrounding whitespace; the implementation normalizes spacing
+            pytest.param(
+                "cd /other&&git commit", "/proj", "/other", id="amp_amp_unspaced"
+            ),
+            pytest.param(
+                "cd /other &&git commit", "/proj", "/other", id="amp_amp_left_spaced"
+            ),
+            pytest.param(
+                "cd /other&& git commit", "/proj", "/other", id="amp_amp_right_spaced"
+            ),
+        ],
+    )
+    def test_resolves(self, command, project_cwd, expected):
+        assert _effective_cwd(command, project_cwd) == expected
 
-    def test_returns_none_for_unparseable_command(self):
-        assert _effective_cwd('echo "unterminated', "/proj") is None
-
-    def test_resolves_absolute_cd(self):
-        assert (
-            _effective_cwd("cd /Users/a/other && git commit", "/Users/a/proj")
-            == "/Users/a/other"
-        )
-
-    def test_resolves_relative_cd_against_project_cwd(self):
-        assert (
-            _effective_cwd("cd ../other && git commit", "/Users/a/proj")
-            == "/Users/a/other"
-        )
-
-    def test_resolves_tilde_cd_against_inferred_home(self):
-        assert (
-            _effective_cwd("cd ~/work && git commit", "/Users/a/proj")
-            == "/Users/a/work"
-        )
-
-    def test_returns_none_when_cd_is_not_leading(self):
-        # Only the leading `cd` is recognized; subshells / chained-then-cd
-        # are intentionally out of scope
-        assert _effective_cwd("ls && cd /other && git commit", "/proj") is None
-
-    def test_returns_none_for_quoted_cd_in_subshell(self):
-        assert _effective_cwd("( cd /other && git commit )", "/proj") is None
-
-    def test_returns_none_for_cd_without_chain(self):
-        # `cd <path>` alone is not followed by an `&&` chained command;
-        # treat as project cwd to avoid mis-tagging unrelated tool uses
-        assert _effective_cwd("cd /other", "/proj") is None
-
-    def test_returns_none_for_cd_dash(self):
-        # `cd -` points to the previous directory which is not derivable
-        # from the session log
-        assert _effective_cwd("cd - && git commit", "/proj") is None
-
-    def test_returns_none_when_separator_is_not_amp_amp(self):
-        # `cd <path>; ...` and `cd <path> | ...` are out of recognized scope
-        assert _effective_cwd("cd /other; git commit", "/proj") is None
-        assert _effective_cwd("cd /other | tee log", "/proj") is None
-
-    def test_resolves_cd_with_unspaced_amp_amp(self):
-        # Bash allows `&&` without surrounding whitespace; shlex does not
-        # split on it, so the implementation normalizes spacing first
-        assert _effective_cwd("cd /other&&git commit", "/proj") == "/other"
-        assert _effective_cwd("cd /other &&git commit", "/proj") == "/other"
-        assert _effective_cwd("cd /other&& git commit", "/proj") == "/other"
-
-    def test_named_user_tilde_classified_as_cross_repo(self):
-        # `~bob/work` cannot be resolved from the session log; should be
-        # returned as absolute so _is_cross_repo flags it as outside project
-        result = _effective_cwd(
-            "cd ~bob/work && git commit",
-            "/Users/alice/proj",
-        )
+    @pytest.mark.parametrize(
+        "command",
+        [
+            # `~bob/work` cannot be resolved from the session log; returned as absolute
+            # so _is_cross_repo flags it as outside project
+            pytest.param("cd ~bob/work && git commit", id="named_user_tilde"),
+            # Variable expansions and command substitutions cannot be resolved from the
+            # session log; treat as cross-repo rather than joining under project_cwd
+            pytest.param("cd $OTHER_REPO && git commit", id="dollar_var"),
+            pytest.param(
+                "cd ${OTHER_REPO}/sub && git commit", id="dollar_braces_with_sub"
+            ),
+            pytest.param("cd $(pwd)/.. && git commit", id="command_substitution"),
+        ],
+    )
+    def test_unresolvable_cd_classified_as_cross_repo(self, command):
+        project_cwd = "/Users/alice/proj"
+        result = _effective_cwd(command, project_cwd)
         assert result is not None
-        assert _is_cross_repo(result, "/Users/alice/proj") is True
-
-    def test_shell_expansion_classified_as_cross_repo(self):
-        # Variable expansions and command substitutions cannot be resolved
-        # from the session log; treat as cross-repo rather than joining
-        # under project_cwd
-        proj = "/Users/alice/proj"
-        for cmd in (
-            "cd $OTHER_REPO && git commit",
-            "cd ${OTHER_REPO}/sub && git commit",
-            "cd $(pwd)/.. && git commit",
-        ):
-            result = _effective_cwd(cmd, proj)
-            assert result is not None, cmd
-            assert _is_cross_repo(result, proj) is True, cmd
+        assert _is_cross_repo(result, project_cwd) is True
 
 
 class TestIsCrossRepo:
-    def test_false_when_project_cwd_unknown(self):
-        assert _is_cross_repo("/anywhere", None) is False
-
-    def test_false_when_effective_cwd_is_none(self):
-        assert _is_cross_repo(None, "/Users/a/proj") is False
-
-    def test_false_when_within_project(self):
-        assert _is_cross_repo("/Users/a/proj", "/Users/a/proj") is False
-        assert _is_cross_repo("/Users/a/proj/sub", "/Users/a/proj") is False
-
-    def test_true_when_outside_project(self):
-        assert _is_cross_repo("/Users/a/other", "/Users/a/proj") is True
-        # Same parent path prefix but not a descendant
-        assert _is_cross_repo("/Users/a/project2", "/Users/a/project") is True
+    @pytest.mark.parametrize(
+        ("effective_cwd", "project_cwd", "expected"),
+        [
+            pytest.param("/anywhere", None, False, id="project_cwd_unknown"),
+            pytest.param(None, "/Users/a/proj", False, id="effective_cwd_none"),
+            pytest.param(
+                "/Users/a/proj", "/Users/a/proj", False, id="within_project_exact"
+            ),
+            pytest.param(
+                "/Users/a/proj/sub",
+                "/Users/a/proj",
+                False,
+                id="within_project_descendant",
+            ),
+            pytest.param(
+                "/Users/a/other", "/Users/a/proj", True, id="outside_project_sibling"
+            ),
+            # Same parent path prefix but not a descendant
+            pytest.param(
+                "/Users/a/project2",
+                "/Users/a/project",
+                True,
+                id="outside_project_prefix_collision",
+            ),
+        ],
+    )
+    def test_classifies(self, effective_cwd, project_cwd, expected):
+        assert _is_cross_repo(effective_cwd, project_cwd) is expected
 
 
 class TestExtractPrIssueRefs:
-    def test_gh_pr_view(self):
-        pulls, issues = _extract_pr_issue_refs("gh pr view 87 --json body")
-        assert pulls == {87}
-        assert issues == set()
-
-    def test_gh_issue_close(self):
-        pulls, issues = _extract_pr_issue_refs("gh issue close 84")
-        assert pulls == set()
-        assert issues == {84}
-
-    def test_gh_pr_create_skipped(self):
-        pulls, issues = _extract_pr_issue_refs(
-            'gh pr create --title "PR 999" --body "..."'
-        )
-        assert pulls == set()
-        assert issues == set()
-
-    def test_gh_issue_list_skipped(self):
-        pulls, issues = _extract_pr_issue_refs("gh issue list --limit 30")
-        assert pulls == set()
-        assert issues == set()
-
-    def test_gh_api_pulls_path(self):
-        pulls, issues = _extract_pr_issue_refs(
-            "gh api repos/n-yU/ayumy/pulls/82/comments"
-        )
-        assert pulls == {82}
-        assert issues == set()
-
-    def test_gh_api_issues_path(self):
-        pulls, issues = _extract_pr_issue_refs("gh api repos/n-yU/ayumy/issues/84")
-        assert pulls == set()
-        assert issues == {84}
-
-    def test_git_hash_ref_ambiguous(self):
-        pulls, issues = _extract_pr_issue_refs('git commit -m "Fix #91"')
-        assert pulls == {91}
-        assert issues == {91}
-
-    def test_chained_commands(self):
-        pulls, issues = _extract_pr_issue_refs("gh pr view 87 && gh issue close 84")
-        assert pulls == {87}
-        assert issues == {84}
-
-    def test_gh_pr_with_flag_value_before_number(self):
-        pulls, issues = _extract_pr_issue_refs('gh pr edit --body "fix" 87')
-        assert pulls == {87}
-        assert issues == set()
-
-    def test_gh_pr_skips_quoted_integer_in_flag_value(self):
-        """Numbers inside quoted flag values must not be picked up."""
-        pulls, issues = _extract_pr_issue_refs('gh pr edit --body "fix 999" 87')
-        assert pulls == {87}
-        assert issues == set()
-
-    def test_ignores_unrelated_commands(self):
-        pulls, issues = _extract_pr_issue_refs(
-            "ls /tmp/file_42.txt && python build.py 7"
-        )
-        assert pulls == set()
-        assert issues == set()
-
-    def test_does_not_match_path_outside_gh_api(self):
-        """`pulls/N` / `issues/N` outside of `gh api` are ignored."""
-        pulls, issues = _extract_pr_issue_refs(
-            "curl https://example.com/repo/pulls/123 && cat ./issues/456.txt"
-        )
-        assert pulls == set()
-        assert issues == set()
+    @pytest.mark.parametrize(
+        ("command", "expected_pulls", "expected_issues"),
+        [
+            pytest.param("gh pr view 87 --json body", {87}, set(), id="gh_pr_view"),
+            pytest.param("gh issue close 84", set(), {84}, id="gh_issue_close"),
+            pytest.param(
+                'gh pr create --title "PR 999" --body "..."',
+                set(),
+                set(),
+                id="gh_pr_create_skipped",
+            ),
+            pytest.param(
+                "gh issue list --limit 30", set(), set(), id="gh_issue_list_skipped"
+            ),
+            pytest.param(
+                "gh api repos/n-yU/ayumy/pulls/82/comments",
+                {82},
+                set(),
+                id="gh_api_pulls_path",
+            ),
+            pytest.param(
+                "gh api repos/n-yU/ayumy/issues/84",
+                set(),
+                {84},
+                id="gh_api_issues_path",
+            ),
+            pytest.param(
+                'git commit -m "Fix #91"', {91}, {91}, id="git_hash_ref_ambiguous"
+            ),
+            pytest.param(
+                "gh pr view 87 && gh issue close 84",
+                {87},
+                {84},
+                id="chained_commands",
+            ),
+            pytest.param(
+                'gh pr edit --body "fix" 87',
+                {87},
+                set(),
+                id="gh_pr_with_flag_value_before_number",
+            ),
+            # Numbers inside quoted flag values must not be picked up
+            pytest.param(
+                'gh pr edit --body "fix 999" 87',
+                {87},
+                set(),
+                id="gh_pr_skips_quoted_integer_in_flag_value",
+            ),
+            pytest.param(
+                "ls /tmp/file_42.txt && python build.py 7",
+                set(),
+                set(),
+                id="ignores_unrelated_commands",
+            ),
+            # `pulls/N` / `issues/N` outside of `gh api` are ignored
+            pytest.param(
+                "curl https://example.com/repo/pulls/123 && cat ./issues/456.txt",
+                set(),
+                set(),
+                id="does_not_match_path_outside_gh_api",
+            ),
+        ],
+    )
+    def test_extracts(self, command, expected_pulls, expected_issues):
+        pulls, issues = _extract_pr_issue_refs(command)
+        assert pulls == expected_pulls
+        assert issues == expected_issues
 
 
 class TestBuildItems:
