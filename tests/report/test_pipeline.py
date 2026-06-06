@@ -498,8 +498,7 @@ class TestSessionCommitPullNumbersPopulation:
 class TestRun:
     @pytest.fixture(autouse=True)
     def run_patches(self):
-        # Common patch stack shared by every TestRun test, with defaults set so
-        # each test only overrides the slice it needs.
+        """Patched collaborators of run() with overridable defaults each test can adjust."""
         targets = {
             "SummaryClient": "report.pipeline.SummaryClient",
             "NotionClient": "report.pipeline.NotionClient",
