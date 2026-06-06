@@ -1,5 +1,6 @@
 """Tests for report generation pipeline."""
 
+from contextlib import ExitStack
 from datetime import date, datetime
 from unittest.mock import patch
 
@@ -495,6 +496,37 @@ class TestSessionCommitPullNumbersPopulation:
 
 
 class TestRun:
+    @pytest.fixture(autouse=True)
+    def run_patches(self):
+        # Common patch stack shared by every TestRun test, with defaults set so
+        # each test only overrides the slice it needs.
+        targets = {
+            "SummaryClient": "report.pipeline.SummaryClient",
+            "NotionClient": "report.pipeline.NotionClient",
+            "GitHubClient": "report.pipeline.GitHubClient",
+            "SessionClient": "report.pipeline.SessionClient",
+            "SessionStore": "report.pipeline.SessionStore",
+            "SlackClient": "report.pipeline.SlackClient",
+            "require_env": "report.pipeline.require_env",
+            "get_target_date_range": "report.pipeline.get_target_date_range",
+        }
+        with ExitStack() as stack:
+            mocks = {
+                name: stack.enter_context(patch(target))
+                for name, target in targets.items()
+            }
+            mocks["require_env"].side_effect = lambda k: f"fake-{k}"
+            mocks["get_target_date_range"].return_value = (SINCE, UNTIL)
+            store = mocks["SessionStore"].return_value
+            store.ingest.return_value = []
+            store.scan_backfill_dates.return_value = []
+            store.fetch_sessions.return_value = SessionActivity({})
+            mocks["SessionClient"].return_value.delete_sessions.return_value = 0
+            mocks[
+                "GitHubClient"
+            ].return_value.fetch_activity.return_value = GitHubActivity({})
+            yield mocks
+
     @patch("report.pipeline.get_target_date_range")
     @patch("report.pipeline.require_env")
     @patch("report.pipeline.SlackClient")
