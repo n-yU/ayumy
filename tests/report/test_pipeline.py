@@ -527,44 +527,13 @@ class TestRun:
             ].return_value.fetch_activity.return_value = GitHubActivity({})
             yield mocks
 
-    @patch("report.pipeline.get_target_date_range")
-    @patch("report.pipeline.require_env")
-    @patch("report.pipeline.SlackClient")
-    @patch("report.pipeline.SessionStore")
-    @patch("report.pipeline.SessionClient")
-    @patch("report.pipeline.GitHubClient")
-    @patch("report.pipeline.NotionClient")
-    @patch("report.pipeline.SummaryClient")
-    def test_processes_primary_date(
-        self,
-        MockSummary,
-        MockNotion,
-        MockGitHub,
-        MockSession,
-        MockStore,
-        MockSlack,
-        mock_require_env,
-        mock_date_range,
-    ):
-        mock_date_range.return_value = (SINCE, UNTIL)
-        mock_require_env.side_effect = lambda k: f"fake-{k}"
-
-        store = MockStore.return_value
-        store.ingest.return_value = []
-        store.scan_backfill_dates.return_value = []
-        store.fetch_sessions.return_value = SessionActivity({})
-
-        session_client = MockSession.return_value
-        session_client.delete_sessions.return_value = 0
-
-        github_client = MockGitHub.return_value
-        github_client.fetch_activity.return_value = GitHubActivity({})
-
+    def test_processes_primary_date(self, run_patches):
         run(source=None)
 
+        store = run_patches["SessionStore"].return_value
         store.scan_backfill_dates.assert_called_once()
         store.fetch_sessions.assert_called_once_with("2026-03-28")
-        slack_client = MockSlack.return_value
+        slack_client = run_patches["SlackClient"].return_value
         slack_client.notify_metrics.assert_called_once()
         args = slack_client.notify_metrics.call_args
         elapsed, peak_mb, _version = args.args
@@ -573,40 +542,8 @@ class TestRun:
         assert args.kwargs.get("memory_limit_mb") is None
         slack_client.flush.assert_called_once()
 
-    @patch("report.pipeline.get_target_date_range")
-    @patch("report.pipeline.require_env")
-    @patch("report.pipeline.SlackClient")
-    @patch("report.pipeline.SessionStore")
-    @patch("report.pipeline.SessionClient")
-    @patch("report.pipeline.GitHubClient")
-    @patch("report.pipeline.NotionClient")
-    @patch("report.pipeline.SummaryClient")
-    def test_passes_memory_limit_to_metrics(
-        self,
-        MockSummary,
-        MockNotion,
-        MockGitHub,
-        MockSession,
-        MockStore,
-        MockSlack,
-        mock_require_env,
-        mock_date_range,
-    ):
-        mock_date_range.return_value = (SINCE, UNTIL)
-        mock_require_env.side_effect = lambda k: f"fake-{k}"
-
-        store = MockStore.return_value
-        store.ingest.return_value = []
-        store.scan_backfill_dates.return_value = []
-        store.fetch_sessions.return_value = SessionActivity({})
-
-        session_client = MockSession.return_value
-        session_client.delete_sessions.return_value = 0
-
-        github_client = MockGitHub.return_value
-        github_client.fetch_activity.return_value = GitHubActivity({})
-
-        slack_client = MockSlack.return_value
+    def test_passes_memory_limit_to_metrics(self, run_patches):
+        slack_client = run_patches["SlackClient"].return_value
 
         run(source=None, memory_limit_mb=512)
 
@@ -615,42 +552,9 @@ class TestRun:
         slack_client.flush.assert_called_once()
 
     @patch("report.pipeline.get_version")
-    @patch("report.pipeline.get_target_date_range")
-    @patch("report.pipeline.require_env")
-    @patch("report.pipeline.SlackClient")
-    @patch("report.pipeline.SessionStore")
-    @patch("report.pipeline.SessionClient")
-    @patch("report.pipeline.GitHubClient")
-    @patch("report.pipeline.NotionClient")
-    @patch("report.pipeline.SummaryClient")
-    def test_passes_version_and_timeout_to_metrics(
-        self,
-        MockSummary,
-        MockNotion,
-        MockGitHub,
-        MockSession,
-        MockStore,
-        MockSlack,
-        mock_require_env,
-        mock_date_range,
-        mock_get_version,
-    ):
-        mock_date_range.return_value = (SINCE, UNTIL)
-        mock_require_env.side_effect = lambda k: f"fake-{k}"
+    def test_passes_version_and_timeout_to_metrics(self, mock_get_version, run_patches):
         mock_get_version.return_value = "0.2.1"
-
-        store = MockStore.return_value
-        store.ingest.return_value = []
-        store.scan_backfill_dates.return_value = []
-        store.fetch_sessions.return_value = SessionActivity({})
-
-        session_client = MockSession.return_value
-        session_client.delete_sessions.return_value = 0
-
-        github_client = MockGitHub.return_value
-        github_client.fetch_activity.return_value = GitHubActivity({})
-
-        slack_client = MockSlack.return_value
+        slack_client = run_patches["SlackClient"].return_value
 
         run(source=None, memory_limit_mb=512, timeout_seconds=300)
 
@@ -661,71 +565,20 @@ class TestRun:
         assert call.kwargs["timeout_seconds"] == 300
         slack_client.flush.assert_called_once()
 
-    @patch("report.pipeline.get_target_date_range")
-    @patch("report.pipeline.require_env")
-    @patch("report.pipeline.SlackClient")
-    @patch("report.pipeline.SessionStore")
-    @patch("report.pipeline.SessionClient")
-    @patch("report.pipeline.GitHubClient")
-    @patch("report.pipeline.NotionClient")
-    @patch("report.pipeline.SummaryClient")
-    def test_backfills_past_dates(
-        self,
-        MockSummary,
-        MockNotion,
-        MockGitHub,
-        MockSession,
-        MockStore,
-        MockSlack,
-        mock_require_env,
-        mock_date_range,
-    ):
-        mock_date_range.return_value = (SINCE, UNTIL)
-        mock_require_env.side_effect = lambda k: f"fake-{k}"
-
-        store = MockStore.return_value
-        store.ingest.return_value = []
+    def test_backfills_past_dates(self, run_patches):
+        store = run_patches["SessionStore"].return_value
         store.scan_backfill_dates.return_value = [
             date(2026, 3, 26),
             date(2026, 3, 27),
         ]
-        store.fetch_sessions.return_value = SessionActivity({})
-
-        session_client = MockSession.return_value
-        session_client.delete_sessions.return_value = 0
-
-        github_client = MockGitHub.return_value
-        github_client.fetch_activity.return_value = GitHubActivity({})
 
         run(source=None)
 
         # 2 backfill dates + 1 primary = 3 calls
         assert store.fetch_sessions.call_count == 3
 
-    @patch("report.pipeline.get_target_date_range")
-    @patch("report.pipeline.require_env")
-    @patch("report.pipeline.SlackClient")
-    @patch("report.pipeline.SessionStore")
-    @patch("report.pipeline.SessionClient")
-    @patch("report.pipeline.GitHubClient")
-    @patch("report.pipeline.NotionClient")
-    @patch("report.pipeline.SummaryClient")
-    def test_backfill_limited_to_max(
-        self,
-        MockSummary,
-        MockNotion,
-        MockGitHub,
-        MockSession,
-        MockStore,
-        MockSlack,
-        mock_require_env,
-        mock_date_range,
-    ):
-        mock_date_range.return_value = (SINCE, UNTIL)
-        mock_require_env.side_effect = lambda k: f"fake-{k}"
-
-        store = MockStore.return_value
-        store.ingest.return_value = []
+    def test_backfill_limited_to_max(self, run_patches):
+        store = run_patches["SessionStore"].return_value
         # 5 past dates, but only MAX_BACKFILL most recent should be processed
         store.scan_backfill_dates.return_value = [
             date(2026, 3, 23),
@@ -734,50 +587,16 @@ class TestRun:
             date(2026, 3, 26),
             date(2026, 3, 27),
         ]
-        store.fetch_sessions.return_value = SessionActivity({})
-
-        session_client = MockSession.return_value
-        session_client.delete_sessions.return_value = 0
-
-        github_client = MockGitHub.return_value
-        github_client.fetch_activity.return_value = GitHubActivity({})
 
         run(source=None)
 
         # MAX_BACKFILL + 1 primary
         assert store.fetch_sessions.call_count == MAX_BACKFILL + 1
 
-    @patch("report.pipeline.get_target_date_range")
-    @patch("report.pipeline.require_env")
-    @patch("report.pipeline.SlackClient")
-    @patch("report.pipeline.SessionStore")
-    @patch("report.pipeline.SessionClient")
-    @patch("report.pipeline.GitHubClient")
-    @patch("report.pipeline.NotionClient")
-    @patch("report.pipeline.SummaryClient")
-    def test_notify_on_primary_failure(
-        self,
-        MockSummary,
-        MockNotion,
-        MockGitHub,
-        MockSession,
-        MockStore,
-        MockSlack,
-        mock_require_env,
-        mock_date_range,
-    ):
-        mock_date_range.return_value = (SINCE, UNTIL)
-        mock_require_env.side_effect = lambda k: f"fake-{k}"
-
-        store = MockStore.return_value
-        store.ingest.return_value = []
-        store.scan_backfill_dates.return_value = []
+    def test_notify_on_primary_failure(self, run_patches):
+        store = run_patches["SessionStore"].return_value
         store.fetch_sessions.side_effect = RuntimeError("DynamoDB error")
-
-        session_client = MockSession.return_value
-        session_client.delete_sessions.return_value = 0
-
-        slack_client = MockSlack.return_value
+        slack_client = run_patches["SlackClient"].return_value
 
         with pytest.raises(RuntimeError, match="DynamoDB error"):
             run(source=None)
@@ -787,30 +606,8 @@ class TestRun:
         slack_client.notify_metrics.assert_called_once()
         slack_client.flush.assert_called_once()
 
-    @patch("report.pipeline.get_target_date_range")
-    @patch("report.pipeline.require_env")
-    @patch("report.pipeline.SlackClient")
-    @patch("report.pipeline.SessionStore")
-    @patch("report.pipeline.SessionClient")
-    @patch("report.pipeline.GitHubClient")
-    @patch("report.pipeline.NotionClient")
-    @patch("report.pipeline.SummaryClient")
-    def test_backfill_failure_does_not_stop_primary(
-        self,
-        MockSummary,
-        MockNotion,
-        MockGitHub,
-        MockSession,
-        MockStore,
-        MockSlack,
-        mock_require_env,
-        mock_date_range,
-    ):
-        mock_date_range.return_value = (SINCE, UNTIL)
-        mock_require_env.side_effect = lambda k: f"fake-{k}"
-
-        store = MockStore.return_value
-        store.ingest.return_value = []
+    def test_backfill_failure_does_not_stop_primary(self, run_patches):
+        store = run_patches["SessionStore"].return_value
         store.scan_backfill_dates.return_value = [date(2026, 3, 27)]
 
         call_count = 0
@@ -823,14 +620,7 @@ class TestRun:
             return SessionActivity({})
 
         store.fetch_sessions.side_effect = fetch_sessions_side_effect
-
-        session_client = MockSession.return_value
-        session_client.delete_sessions.return_value = 0
-
-        github_client = MockGitHub.return_value
-        github_client.fetch_activity.return_value = GitHubActivity({})
-
-        slack_client = MockSlack.return_value
+        slack_client = run_patches["SlackClient"].return_value
 
         run(source=None)
 
@@ -840,37 +630,10 @@ class TestRun:
         backfill_since = slack_client.notify_error.call_args[0][0]
         assert backfill_since.date() == date(2026, 3, 27)
 
-    @patch("report.pipeline.get_target_date_range")
-    @patch("report.pipeline.require_env")
-    @patch("report.pipeline.SlackClient")
-    @patch("report.pipeline.SessionStore")
-    @patch("report.pipeline.SessionClient")
-    @patch("report.pipeline.GitHubClient")
-    @patch("report.pipeline.NotionClient")
-    @patch("report.pipeline.SummaryClient")
-    def test_continues_when_ingestion_fails(
-        self,
-        MockSummary,
-        MockNotion,
-        MockGitHub,
-        MockSession,
-        MockStore,
-        MockSlack,
-        mock_require_env,
-        mock_date_range,
-    ):
-        mock_date_range.return_value = (SINCE, UNTIL)
-        mock_require_env.side_effect = lambda k: f"fake-{k}"
-
-        store = MockStore.return_value
+    def test_continues_when_ingestion_fails(self, run_patches):
+        store = run_patches["SessionStore"].return_value
         store.ingest.side_effect = RuntimeError("DynamoDB error")
-        store.scan_backfill_dates.return_value = []
-        store.fetch_sessions.return_value = SessionActivity({})
-
-        github_client = MockGitHub.return_value
-        github_client.fetch_activity.return_value = GitHubActivity({})
-
-        slack_client = MockSlack.return_value
+        slack_client = run_patches["SlackClient"].return_value
 
         run(source=None)
 
@@ -878,114 +641,29 @@ class TestRun:
         slack_client.notify_error.assert_called_once()
         store.scan_backfill_dates.assert_called_once()
 
-    @patch("report.pipeline.get_target_date_range")
-    @patch("report.pipeline.require_env")
-    @patch("report.pipeline.SlackClient")
-    @patch("report.pipeline.SessionStore")
-    @patch("report.pipeline.SessionClient")
-    @patch("report.pipeline.GitHubClient")
-    @patch("report.pipeline.NotionClient")
-    @patch("report.pipeline.SummaryClient")
-    def test_marks_reported_after_success(
-        self,
-        MockSummary,
-        MockNotion,
-        MockGitHub,
-        MockSession,
-        MockStore,
-        MockSlack,
-        mock_require_env,
-        mock_date_range,
-    ):
-        mock_date_range.return_value = (SINCE, UNTIL)
-        mock_require_env.side_effect = lambda k: f"fake-{k}"
-
-        store = MockStore.return_value
-        store.ingest.return_value = []
-        store.scan_backfill_dates.return_value = []
-        store.fetch_sessions.return_value = SessionActivity({})
-
-        session_client = MockSession.return_value
-        session_client.delete_sessions.return_value = 0
-
-        github_client = MockGitHub.return_value
-        github_client.fetch_activity.return_value = GitHubActivity({})
+    def test_marks_reported_after_success(self, run_patches):
+        store = run_patches["SessionStore"].return_value
 
         run(source=None)
 
         store.mark_reported.assert_called_once_with("2026-03-28")
 
-    @patch("report.pipeline.get_target_date_range")
-    @patch("report.pipeline.require_env")
-    @patch("report.pipeline.SlackClient")
-    @patch("report.pipeline.SessionStore")
-    @patch("report.pipeline.SessionClient")
-    @patch("report.pipeline.GitHubClient")
-    @patch("report.pipeline.NotionClient")
-    @patch("report.pipeline.SummaryClient")
-    def test_passes_target_date_to_date_range(
-        self,
-        MockSummary,
-        MockNotion,
-        MockGitHub,
-        MockSession,
-        MockStore,
-        MockSlack,
-        mock_require_env,
-        mock_date_range,
-    ):
+    def test_passes_target_date_to_date_range(self, run_patches):
         target_since = datetime(2026, 3, 25, 0, 0, tzinfo=JST)
         target_until = datetime(2026, 3, 26, 0, 0, tzinfo=JST)
-        mock_date_range.return_value = (target_since, target_until)
-        mock_require_env.side_effect = lambda k: f"fake-{k}"
-
-        store = MockStore.return_value
-        store.ingest.return_value = []
-        store.scan_backfill_dates.return_value = []
-        store.fetch_sessions.return_value = SessionActivity({})
-
-        session_client = MockSession.return_value
-        session_client.delete_sessions.return_value = 0
-
-        github_client = MockGitHub.return_value
-        github_client.fetch_activity.return_value = GitHubActivity({})
+        run_patches["get_target_date_range"].return_value = (target_since, target_until)
 
         run(source="manual", target_date="2026-03-25")
 
-        mock_date_range.assert_called_once_with("manual", target_date="2026-03-25")
+        run_patches["get_target_date_range"].assert_called_once_with(
+            "manual", target_date="2026-03-25"
+        )
 
-    @patch("report.pipeline.get_target_date_range")
-    @patch("report.pipeline.require_env")
-    @patch("report.pipeline.SlackClient")
-    @patch("report.pipeline.SessionStore")
-    @patch("report.pipeline.SessionClient")
-    @patch("report.pipeline.GitHubClient")
-    @patch("report.pipeline.NotionClient")
-    @patch("report.pipeline.SummaryClient")
-    def test_deletes_s3_after_ingest(
-        self,
-        MockSummary,
-        MockNotion,
-        MockGitHub,
-        MockSession,
-        MockStore,
-        MockSlack,
-        mock_require_env,
-        mock_date_range,
-    ):
-        mock_date_range.return_value = (SINCE, UNTIL)
-        mock_require_env.side_effect = lambda k: f"fake-{k}"
-
-        store = MockStore.return_value
+    def test_deletes_s3_after_ingest(self, run_patches):
+        store = run_patches["SessionStore"].return_value
         store.ingest.return_value = ["claude-sessions/proj/s1.jsonl"]
-        store.scan_backfill_dates.return_value = []
-        store.fetch_sessions.return_value = SessionActivity({})
-
-        session_client = MockSession.return_value
+        session_client = run_patches["SessionClient"].return_value
         session_client.delete_sessions.return_value = 1
-
-        github_client = MockGitHub.return_value
-        github_client.fetch_activity.return_value = GitHubActivity({})
 
         run(source=None)
 
@@ -994,38 +672,10 @@ class TestRun:
         )
 
     @patch("report.pipeline.process_date")
-    @patch("report.pipeline.get_target_date_range")
-    @patch("report.pipeline.require_env")
-    @patch("report.pipeline.SlackClient")
-    @patch("report.pipeline.SessionStore")
-    @patch("report.pipeline.SessionClient")
-    @patch("report.pipeline.GitHubClient")
-    @patch("report.pipeline.NotionClient")
-    @patch("report.pipeline.SummaryClient")
-    def test_manual_run_uses_original_until(
-        self,
-        MockSummary,
-        MockNotion,
-        MockGitHub,
-        MockSession,
-        MockStore,
-        MockSlack,
-        mock_require_env,
-        mock_date_range,
-        mock_process_date,
-    ):
+    def test_manual_run_uses_original_until(self, mock_process_date, run_patches):
         """Manual run without --date passes get_target_date_range's partial_until (not full-day)."""
         partial_until = datetime(2026, 3, 28, 15, 30, tzinfo=JST)
-        mock_date_range.return_value = (SINCE, partial_until)
-        mock_require_env.side_effect = lambda k: f"fake-{k}"
-
-        store = MockStore.return_value
-        store.ingest.return_value = []
-        store.scan_backfill_dates.return_value = []
-        store.fetch_sessions.return_value = SessionActivity({})
-
-        session_client = MockSession.return_value
-        session_client.delete_sessions.return_value = 0
+        run_patches["get_target_date_range"].return_value = (SINCE, partial_until)
 
         run(source="manual")
 
@@ -1034,78 +684,22 @@ class TestRun:
         assert call_args[0][0] == SINCE
         assert call_args[0][1] == partial_until
 
-    @patch("report.pipeline.get_target_date_range")
-    @patch("report.pipeline.require_env")
-    @patch("report.pipeline.SlackClient")
-    @patch("report.pipeline.SessionStore")
-    @patch("report.pipeline.SessionClient")
-    @patch("report.pipeline.GitHubClient")
-    @patch("report.pipeline.NotionClient")
-    @patch("report.pipeline.SummaryClient")
-    def test_target_date_skips_backfill(
-        self,
-        MockSummary,
-        MockNotion,
-        MockGitHub,
-        MockSession,
-        MockStore,
-        MockSlack,
-        mock_require_env,
-        mock_date_range,
-    ):
+    def test_target_date_skips_backfill(self, run_patches):
         target_since = datetime(2026, 3, 25, 0, 0, tzinfo=JST)
         target_until = datetime(2026, 3, 26, 0, 0, tzinfo=JST)
-        mock_date_range.return_value = (target_since, target_until)
-        mock_require_env.side_effect = lambda k: f"fake-{k}"
-
-        store = MockStore.return_value
-        store.ingest.return_value = []
-        store.fetch_sessions.return_value = SessionActivity({})
-
-        session_client = MockSession.return_value
-        session_client.delete_sessions.return_value = 0
-
-        github_client = MockGitHub.return_value
-        github_client.fetch_activity.return_value = GitHubActivity({})
+        run_patches["get_target_date_range"].return_value = (target_since, target_until)
+        store = run_patches["SessionStore"].return_value
 
         run(source="manual", target_date="2026-03-25")
 
         store.scan_backfill_dates.assert_not_called()
         store.fetch_sessions.assert_called_once_with("2026-03-25")
 
-    @patch("report.pipeline.get_target_date_range")
-    @patch("report.pipeline.require_env")
-    @patch("report.pipeline.SlackClient")
-    @patch("report.pipeline.SessionStore")
-    @patch("report.pipeline.SessionClient")
-    @patch("report.pipeline.GitHubClient")
-    @patch("report.pipeline.NotionClient")
-    @patch("report.pipeline.SummaryClient")
-    def test_date_range_processes_all_dates(
-        self,
-        MockSummary,
-        MockNotion,
-        MockGitHub,
-        MockSession,
-        MockStore,
-        MockSlack,
-        mock_require_env,
-        mock_date_range,
-    ):
+    def test_date_range_processes_all_dates(self, run_patches):
         target_since = datetime(2026, 3, 25, 0, 0, tzinfo=JST)
         target_until = datetime(2026, 3, 26, 0, 0, tzinfo=JST)
-        mock_date_range.return_value = (target_since, target_until)
-        mock_require_env.side_effect = lambda k: f"fake-{k}"
-
-        store = MockStore.return_value
-        store.ingest.return_value = []
-        store.fetch_sessions.return_value = SessionActivity({})
-
-        session_client = MockSession.return_value
-        session_client.delete_sessions.return_value = 0
-
-        github_client = MockGitHub.return_value
-        github_client.fetch_activity.return_value = GitHubActivity({})
+        run_patches["get_target_date_range"].return_value = (target_since, target_until)
+        store = run_patches["SessionStore"].return_value
 
         run(source="manual", target_date="2026-03-25..2026-03-28")
 
@@ -1116,82 +710,26 @@ class TestRun:
         store.fetch_sessions.assert_any_call("2026-03-27")
         store.fetch_sessions.assert_any_call("2026-03-28")
 
-    @patch("report.pipeline.get_target_date_range")
-    @patch("report.pipeline.require_env")
-    @patch("report.pipeline.SlackClient")
-    @patch("report.pipeline.SessionStore")
-    @patch("report.pipeline.SessionClient")
-    @patch("report.pipeline.GitHubClient")
-    @patch("report.pipeline.NotionClient")
-    @patch("report.pipeline.SummaryClient")
-    def test_target_date_uses_backfill_fetch(
-        self,
-        MockSummary,
-        MockNotion,
-        MockGitHub,
-        MockSession,
-        MockStore,
-        MockSlack,
-        mock_require_env,
-        mock_date_range,
-    ):
+    def test_target_date_uses_backfill_fetch(self, run_patches):
         """target_date 指定時は Hybrid 経路（is_backfill=True）になる"""
         target_since = datetime(2026, 3, 25, 0, 0, tzinfo=JST)
         target_until = datetime(2026, 3, 26, 0, 0, tzinfo=JST)
-        mock_date_range.return_value = (target_since, target_until)
-        mock_require_env.side_effect = lambda k: f"fake-{k}"
-
-        store = MockStore.return_value
-        store.ingest.return_value = []
-        store.fetch_sessions.return_value = SessionActivity({})
-
-        session_client = MockSession.return_value
-        session_client.delete_sessions.return_value = 0
-
-        github_client = MockGitHub.return_value
-        github_client.fetch_activity.return_value = GitHubActivity({})
+        run_patches["get_target_date_range"].return_value = (target_since, target_until)
+        github_client = run_patches["GitHubClient"].return_value
 
         run(source="manual", target_date="2026-03-25")
 
         for call in github_client.fetch_activity.call_args_list:
             assert call.kwargs.get("is_backfill") is True
 
-    @patch("report.pipeline.get_target_date_range")
-    @patch("report.pipeline.require_env")
-    @patch("report.pipeline.SlackClient")
-    @patch("report.pipeline.SessionStore")
-    @patch("report.pipeline.SessionClient")
-    @patch("report.pipeline.GitHubClient")
-    @patch("report.pipeline.NotionClient")
-    @patch("report.pipeline.SummaryClient")
-    def test_scan_backfill_dates_use_hybrid_but_primary_does_not(
-        self,
-        MockSummary,
-        MockNotion,
-        MockGitHub,
-        MockSession,
-        MockStore,
-        MockSlack,
-        mock_require_env,
-        mock_date_range,
-    ):
+    def test_scan_backfill_dates_use_hybrid_but_primary_does_not(self, run_patches):
         """scan_backfill_dates 由来の日付のみ is_backfill=True、primary は False"""
-        mock_date_range.return_value = (SINCE, UNTIL)
-        mock_require_env.side_effect = lambda k: f"fake-{k}"
-
-        store = MockStore.return_value
-        store.ingest.return_value = []
+        store = run_patches["SessionStore"].return_value
         store.scan_backfill_dates.return_value = [
             date(2026, 3, 26),
             date(2026, 3, 27),
         ]
-        store.fetch_sessions.return_value = SessionActivity({})
-
-        session_client = MockSession.return_value
-        session_client.delete_sessions.return_value = 0
-
-        github_client = MockGitHub.return_value
-        github_client.fetch_activity.return_value = GitHubActivity({})
+        github_client = run_patches["GitHubClient"].return_value
 
         run(source=None)
 
