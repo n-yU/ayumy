@@ -30,10 +30,30 @@ def _make_pr_issue(number):
     return item
 
 
+def _make_commit_mock(
+    sha,
+    *,
+    message,
+    date,
+    author="user",
+    repo_full_name="n-yU/my-repo",
+    url=None,
+):
+    """Create a search_commits result mock with the fields fetch_commits reads."""
+    commit = MagicMock()
+    commit.sha = sha
+    commit.commit.message = message
+    commit.commit.author.name = author
+    commit.commit.author.date = date
+    commit.html_url = url or f"https://github.com/{repo_full_name}/commit/{sha}"
+    return commit
+
+
 def _make_pull(
     number,
     *,
     created_at,
+    updated_at=None,
     merged_at=None,
     closed_at=None,
     state=None,
@@ -41,11 +61,12 @@ def _make_pull(
     labels=None,
     draft=False,
 ):
-    """Create a PullRequest mock with the fields _build_pull_info reads."""
+    """Create a PullRequest mock with the fields fetch_pulls reads."""
     pr = MagicMock()
     pr.number = number
     pr.title = title
     pr.created_at = created_at
+    pr.updated_at = updated_at if updated_at is not None else created_at
     pr.merged_at = merged_at
     pr.closed_at = closed_at
     if state is None:
@@ -63,6 +84,7 @@ def _make_issue(
     number,
     *,
     created_at,
+    updated_at=None,
     closed_at=None,
     state=None,
     state_reason=None,
@@ -70,11 +92,12 @@ def _make_issue(
     labels=None,
     pull_request=None,
 ):
-    """Create an Issue mock matching _build_issue_info."""
+    """Create an Issue mock with the fields fetch_issues reads."""
     issue = MagicMock()
     issue.number = number
     issue.title = title
     issue.created_at = created_at
+    issue.updated_at = updated_at if updated_at is not None else created_at
     issue.closed_at = closed_at
     issue.state = state or ("closed" if closed_at else "open")
     issue.state_reason = state_reason
@@ -85,25 +108,30 @@ def _make_issue(
     return issue
 
 
+def _make_activity_repo(client, *, name="repo", full_name="n-yU/repo"):
+    """Wire client.g.get_user().get_repo() to return a repo mock and return it."""
+    mock_user = MagicMock()
+    client.g.get_user.return_value = mock_user
+    mock_repo = MagicMock()
+    mock_repo.name = name
+    mock_repo.full_name = full_name
+    mock_user.get_repo.return_value = mock_repo
+    return mock_repo
+
+
 class TestFetchCommits:
     def test_extracts_commit_info(self):
         client = _make_client()
-
-        mock_commit = MagicMock()
-        mock_commit.sha = "abc123"
-        mock_commit.commit.message = "Fix bug\n\nDetailed description"
-        mock_commit.commit.author.name = "user"
-        mock_commit.commit.author.date = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
-        mock_commit.html_url = "https://github.com/n-yU/my-repo/commit/abc123"
+        mock_commit = _make_commit_mock(
+            sha="abc123",
+            message="Fix bug\n\nDetailed description",
+            date=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
+        )
 
         repo = MagicMock()
         repo.full_name = "n-yU/my-repo"
         client.g.search_commits.return_value = [mock_commit]
-
-        # Commit has no associated PR
-        commit_obj = MagicMock()
-        commit_obj.get_pulls.return_value = []
-        repo.get_commit.return_value = commit_obj
+        repo.get_commit.return_value.get_pulls.return_value = []
 
         result = client.fetch_commits(repo, SINCE, UNTIL)
         assert len(result) == 1
@@ -115,25 +143,19 @@ class TestFetchCommits:
 
     def test_populates_pull_numbers_from_associated_prs(self):
         client = _make_client()
-
-        mock_commit = MagicMock()
-        mock_commit.sha = "abc123"
-        mock_commit.commit.message = "Squash merge"
-        mock_commit.commit.author.name = "user"
-        mock_commit.commit.author.date = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
-        mock_commit.html_url = "https://github.com/n-yU/my-repo/commit/abc123"
+        mock_commit = _make_commit_mock(
+            sha="abc123",
+            message="Squash merge",
+            date=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
+        )
 
         repo = MagicMock()
         repo.full_name = "n-yU/my-repo"
         client.g.search_commits.return_value = [mock_commit]
-
-        commit_obj = MagicMock()
-        pr1 = MagicMock()
-        pr1.number = 5
-        pr2 = MagicMock()
-        pr2.number = 9
-        commit_obj.get_pulls.return_value = [pr1, pr2]
-        repo.get_commit.return_value = commit_obj
+        repo.get_commit.return_value.get_pulls.return_value = [
+            _make_pr_issue(5),
+            _make_pr_issue(9),
+        ]
 
         result = client.fetch_commits(repo, SINCE, UNTIL)
         assert result[0]["pull_numbers"] == [5, 9]
@@ -168,18 +190,16 @@ class TestFetchCommits:
     def test_filters_commits_outside_time_range(self):
         client = _make_client()
         partial_until = datetime(2026, 3, 28, 15, 0, tzinfo=JST)
-
-        in_range = MagicMock()
-        in_range.sha = "aaa"
-        in_range.commit.message = "Morning commit"
-        in_range.commit.author.name = "user"
-        in_range.commit.author.date = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
-
-        out_of_range = MagicMock()
-        out_of_range.sha = "bbb"
-        out_of_range.commit.message = "Evening commit"
-        out_of_range.commit.author.name = "user"
-        out_of_range.commit.author.date = datetime(2026, 3, 28, 18, 0, tzinfo=JST)
+        in_range = _make_commit_mock(
+            sha="aaa",
+            message="Morning commit",
+            date=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
+        )
+        out_of_range = _make_commit_mock(
+            sha="bbb",
+            message="Evening commit",
+            date=datetime(2026, 3, 28, 18, 0, tzinfo=JST),
+        )
 
         repo = MagicMock()
         repo.full_name = "n-yU/my-repo"
@@ -194,18 +214,14 @@ class TestFetchCommits:
 class TestFetchPulls:
     def test_determines_merged_state(self):
         client = _make_client()
-
-        pr = MagicMock()
-        pr.updated_at = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
-        pr.merged_at = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
-        pr.closed_at = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
-        pr.created_at = datetime(2026, 3, 27, 9, 0, tzinfo=JST)
-        pr.draft = False
-        pr.html_url = "https://github.com/n-yU/repo/pull/1"
-        pr.number = 1
-        pr.title = "Add feature"
-        pr.user.login = "user"
-        pr.labels = []
+        pr = _make_pull(
+            1,
+            title="Add feature",
+            created_at=datetime(2026, 3, 27, 9, 0, tzinfo=JST),
+            updated_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
+            merged_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
+            closed_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
+        )
 
         repo = MagicMock()
         repo.get_pulls.return_value = [pr]
@@ -221,19 +237,14 @@ class TestFetchPulls:
 
     def test_determines_closed_state(self):
         client = _make_client()
-
-        pr = MagicMock()
-        pr.updated_at = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
-        pr.merged_at = None
-        pr.closed_at = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
-        pr.created_at = datetime(2026, 3, 27, 9, 0, tzinfo=JST)
-        pr.draft = False
-        pr.html_url = "https://github.com/n-yU/repo/pull/2"
-        pr.state = "closed"
-        pr.number = 2
-        pr.title = "Rejected PR"
-        pr.user.login = "user"
-        pr.labels = []
+        pr = _make_pull(
+            2,
+            title="Rejected PR",
+            created_at=datetime(2026, 3, 27, 9, 0, tzinfo=JST),
+            updated_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
+            closed_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
+            state="closed",
+        )
 
         repo = MagicMock()
         repo.get_pulls.return_value = [pr]
@@ -245,19 +256,14 @@ class TestFetchPulls:
 
     def test_determines_open_state(self):
         client = _make_client()
-
-        pr = MagicMock()
-        pr.updated_at = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
-        pr.merged_at = None
-        pr.closed_at = None
-        pr.created_at = datetime(2026, 3, 28, 9, 0, tzinfo=JST)
-        pr.draft = True
-        pr.html_url = "https://github.com/n-yU/repo/pull/3"
-        pr.state = "open"
-        pr.number = 3
-        pr.title = "WIP"
-        pr.user.login = "user"
-        pr.labels = []
+        pr = _make_pull(
+            3,
+            title="WIP",
+            created_at=datetime(2026, 3, 28, 9, 0, tzinfo=JST),
+            updated_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
+            state="open",
+            draft=True,
+        )
 
         repo = MagicMock()
         repo.get_pulls.return_value = [pr]
@@ -269,9 +275,11 @@ class TestFetchPulls:
 
     def test_breaks_on_old_prs(self):
         client = _make_client()
-
-        old_pr = MagicMock()
-        old_pr.updated_at = datetime(2026, 3, 27, 0, 0, tzinfo=JST)
+        old_pr = _make_pull(
+            99,
+            created_at=datetime(2026, 3, 26, 0, 0, tzinfo=JST),
+            updated_at=datetime(2026, 3, 27, 0, 0, tzinfo=JST),
+        )
 
         repo = MagicMock()
         repo.get_pulls.return_value = [old_pr]
@@ -283,20 +291,13 @@ class TestFetchPulls:
 class TestFetchIssues:
     def test_excludes_pull_requests(self):
         client = _make_client()
-
-        issue = MagicMock()
-        issue.pull_request = None
-        issue.updated_at = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
-        issue.created_at = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
-        issue.closed_at = None
-        issue.state_reason = None
-        issue.html_url = "https://github.com/n-yU/repo/issues/5"
-        issue.number = 5
-        issue.title = "Bug report"
-        issue.state = "open"
-        issue.user.login = "user"
-        issue.labels = []
-
+        issue = _make_issue(
+            5,
+            title="Bug report",
+            created_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
+            updated_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
+            state="open",
+        )
         pr_as_issue = MagicMock()
         pr_as_issue.pull_request = MagicMock()
 
@@ -312,21 +313,17 @@ class TestFetchIssues:
 
     def test_extracts_labels(self):
         client = _make_client()
-
         label = MagicMock()
         label.name = "bug"
-        issue = MagicMock()
-        issue.pull_request = None
-        issue.updated_at = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
-        issue.created_at = datetime(2026, 3, 28, 9, 0, tzinfo=JST)
-        issue.closed_at = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
-        issue.state_reason = "completed"
-        issue.html_url = "https://github.com/n-yU/repo/issues/6"
-        issue.number = 6
-        issue.title = "Issue"
-        issue.state = "closed"
-        issue.user.login = "user"
-        issue.labels = [label]
+        issue = _make_issue(
+            6,
+            title="Issue",
+            created_at=datetime(2026, 3, 28, 9, 0, tzinfo=JST),
+            updated_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
+            closed_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
+            state_reason="completed",
+            labels=[label],
+        )
 
         repo = MagicMock()
         repo.get_issues.return_value = [issue]
@@ -349,21 +346,12 @@ class TestFetchActivity:
         # Current time: t=105 → elapsed=5, sleep=15
         mock_time.return_value = 105
 
-        repo_names = ["repo-0"]
-
-        mock_user = MagicMock()
-        client.g.get_user.return_value = mock_user
-
-        mock_repo = MagicMock()
-        mock_repo.name = "repo"
-        mock_repo.full_name = "n-yU/repo"
-        mock_user.get_repo.return_value = mock_repo
-
+        mock_repo = _make_activity_repo(client)
         client.g.search_commits.return_value = []
         mock_repo.get_pulls.return_value = []
         mock_repo.get_issues.return_value = []
 
-        client.fetch_activity(SINCE, UNTIL, repo_names)
+        client.fetch_activity(SINCE, UNTIL, ["repo-0"])
 
         mock_sleep.assert_called_once_with(_SEARCH_WINDOW - 5)
         assert client._search_count == 1
@@ -379,21 +367,12 @@ class TestFetchActivity:
         # Current time: t=125 → elapsed=25 > 20s window
         mock_time.return_value = 125
 
-        repo_names = ["repo-0"]
-
-        mock_user = MagicMock()
-        client.g.get_user.return_value = mock_user
-
-        mock_repo = MagicMock()
-        mock_repo.name = "repo"
-        mock_repo.full_name = "n-yU/repo"
-        mock_user.get_repo.return_value = mock_repo
-
+        mock_repo = _make_activity_repo(client)
         client.g.search_commits.return_value = []
         mock_repo.get_pulls.return_value = []
         mock_repo.get_issues.return_value = []
 
-        client.fetch_activity(SINCE, UNTIL, repo_names)
+        client.fetch_activity(SINCE, UNTIL, ["repo-0"])
 
         mock_sleep.assert_not_called()
         assert client._search_count == 1
@@ -407,14 +386,7 @@ class TestFetchActivity:
         client._window_start = 0.0
         mock_time.return_value = 500
 
-        mock_user = MagicMock()
-        client.g.get_user.return_value = mock_user
-
-        mock_repo = MagicMock()
-        mock_repo.name = "repo"
-        mock_repo.full_name = "n-yU/repo"
-        mock_user.get_repo.return_value = mock_repo
-
+        mock_repo = _make_activity_repo(client)
         client.g.search_commits.return_value = []
         mock_repo.get_pulls.return_value = []
         mock_repo.get_issues.return_value = []
