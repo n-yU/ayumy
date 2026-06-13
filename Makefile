@@ -23,8 +23,10 @@ lambda-deploy: aws-auth-check
 	sam build && sam deploy --no-confirm-changeset
 
 # Run unit tests
+# Override the target path via TARGET, e.g. `make test TARGET=tests/report/test_notion.py`
+TARGET ?= tests/
 test: lambda-install
-	.venv/bin/python -m pytest tests/ -v
+	.venv/bin/python -m pytest $(TARGET) -v
 
 # Apply Ruff formatter and isort-equivalent import sort
 format: lambda-install
