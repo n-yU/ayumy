@@ -10,8 +10,8 @@ from github import Github, GithubException, UnknownObjectException
 from github.Issue import Issue
 from github.Repository import Repository
 
-from . import GitHubActivity, RepoActivity
-from .domain import CommitInfo, IssueInfo, PullInfo
+from ..domain import CommitInfo, IssueInfo, PullInfo
+from .activity import GitHubActivity, RepoActivity
 
 logger = logging.getLogger(__name__)
 

@@ -7,7 +7,8 @@ import pytest
 from github import GithubException, UnknownObjectException
 
 from report import JST
-from report.github import _SEARCH_BATCH, _SEARCH_WINDOW, GitHubClient
+from report.github import GitHubClient
+from report.github.client import _SEARCH_BATCH, _SEARCH_WINDOW
 
 from ._builders import make_commit
 
@@ -337,8 +338,8 @@ class TestFetchIssues:
 
 
 class TestFetchActivity:
-    @patch("report.github.time.sleep")
-    @patch("report.github.time.time")
+    @patch("report.github.client.time.sleep")
+    @patch("report.github.client.time.time")
     def test_sleeps_remaining_window_time(self, mock_time, mock_sleep):
         """Sleeps only the remaining window time when batch limit is hit."""
         client = _make_client()
@@ -358,8 +359,8 @@ class TestFetchActivity:
         mock_sleep.assert_called_once_with(_SEARCH_WINDOW - 5)
         assert client._search_count == 1
 
-    @patch("report.github.time.sleep")
-    @patch("report.github.time.time")
+    @patch("report.github.client.time.sleep")
+    @patch("report.github.client.time.time")
     def test_skips_sleep_when_window_elapsed(self, mock_time, mock_sleep):
         """Skips sleep when enough time has passed since window start."""
         client = _make_client()
@@ -379,8 +380,8 @@ class TestFetchActivity:
         mock_sleep.assert_not_called()
         assert client._search_count == 1
 
-    @patch("report.github.time.sleep")
-    @patch("report.github.time.time")
+    @patch("report.github.client.time.sleep")
+    @patch("report.github.client.time.time")
     def test_window_starts_on_first_request(self, mock_time, mock_sleep):
         """Window starts when first search request is made, not at init."""
         client = _make_client()

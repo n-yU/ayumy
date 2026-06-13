@@ -1,7 +1,8 @@
 """Builders and assert helpers for tests/report/."""
 
-from report import GitHubActivity, SessionActivity
+from report import SessionActivity
 from report.domain import CommitInfo, IssueInfo, PullInfo
+from report.github import GitHubActivity
 
 OWNER = "n-yU"
 

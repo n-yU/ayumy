@@ -6,7 +6,8 @@ from unittest.mock import patch
 
 import pytest
 
-from report import JST, GitHubActivity, SessionActivity
+from report import JST, SessionActivity
+from report.github import GitHubActivity
 from report.pipeline import MAX_BACKFILL, process_date, run
 from report.summarizer import ValidationResult
 

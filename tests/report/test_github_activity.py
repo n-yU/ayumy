@@ -1,7 +1,7 @@
 """Tests for GitHubActivity formatting."""
 
-from report import GitHubActivity
 from report.domain import CommitInfo, IssueInfo, PullInfo
+from report.github import GitHubActivity
 
 
 def _commit(message, sha="abc1234"):
