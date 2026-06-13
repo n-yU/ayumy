@@ -206,7 +206,7 @@ class NotionClient:
         entries: list[tuple[datetime, int, dict]] = []
 
         for c in repo_activity["commits"]:
-            if not _is_in_range(c.date, since, until):
+            if not c.is_in_range(since, until):
                 continue
             ts = datetime.fromisoformat(c.date)
             if c.sha in merge_sha_to_pr:
