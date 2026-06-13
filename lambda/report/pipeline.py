@@ -17,9 +17,8 @@ from . import (
 )
 from .github import GitHubClient
 from .notion import NotionClient
-from .session import SessionClient
+from .session import SessionClient, SessionStore
 from .slack import SlackClient
-from .store import SessionStore
 from .summarizer import SummaryClient
 
 logger = logging.getLogger(__name__)

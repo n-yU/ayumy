@@ -10,7 +10,7 @@ from report import JST
 from report.github import GitHubClient
 from report.github.client import _SEARCH_BATCH, _SEARCH_WINDOW
 
-from ._builders import make_commit
+from .._builders import make_commit
 
 # Default JST day window used across most tests
 SINCE = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
