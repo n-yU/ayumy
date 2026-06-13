@@ -1,6 +1,5 @@
 """DynamoDB session store for session metadata."""
 
-import logging
 from datetime import UTC, date, datetime
 
 import boto3
@@ -8,8 +7,6 @@ from boto3.dynamodb.conditions import Key
 
 from .. import SessionActivity, SessionInfo
 from .parser import SessionLogParser
-
-logger = logging.getLogger(__name__)
 
 
 class SessionStore:
