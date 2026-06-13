@@ -71,6 +71,23 @@ class SlackClient:
             self._blocks.append(_divider())
         self._blocks.extend(blocks)
 
+    def _append_report_section(
+        self,
+        emoji: str,
+        date_str: str,
+        body_text: str,
+        fallback_suffix: str,
+        skipped_repos: list[str] | None = None,
+    ) -> None:
+        """Append a header + section pair (and optional skipped-repos context block) and record the fallback string."""
+        blocks = [_header_block(emoji, date_str), _section_block(body_text)]
+        if skipped_repos:
+            blocks.append(_context_block(f"⚠️ Skipped: {', '.join(skipped_repos)}"))
+        self._append_with_divider(*blocks)
+        self._fallback_parts.append(
+            f"{emoji} Daily Report ({date_str}): {fallback_suffix}"
+        )
+
     def notify(
         self,
         target_date: datetime,
@@ -84,9 +101,6 @@ class SlackClient:
         """
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
 
-        if self._blocks:
-            self._blocks.append({"type": "divider"})
-
         if pages:
             repo_map = {r["name"]: r for r in report["repositories"]}
             page_lines = []
@@ -99,84 +113,26 @@ class SlackClient:
                 link = f"<{url}|{date_str}: {name}>"
                 page_lines.append(f"{link} — {headline}" if headline else link)
 
-            self._blocks.extend(
-                [
-                    {
-                        "type": "header",
-                        "text": {
-                            "type": "plain_text",
-                            "text": f"📝 Daily Report ({date_str})",
-                        },
-                    },
-                    {
-                        "type": "section",
-                        "text": {"type": "mrkdwn", "text": "\n".join(page_lines)},
-                    },
-                ]
-            )
-            if skipped_repos:
-                skipped = ", ".join(skipped_repos)
-                self._blocks.append(
-                    {
-                        "type": "context",
-                        "elements": [
-                            {"type": "mrkdwn", "text": f"⚠️ Skipped: {skipped}"}
-                        ],
-                    }
-                )
-            self._fallback_parts.append(
-                f"📝 Daily Report ({date_str}): {len(pages)} page(s) created"
+            self._append_report_section(
+                "📝",
+                date_str,
+                "\n".join(page_lines),
+                f"{len(pages)} page(s) created",
+                skipped_repos=skipped_repos,
             )
         else:
-            self._blocks.extend(
-                [
-                    {
-                        "type": "header",
-                        "text": {
-                            "type": "plain_text",
-                            "text": f"✅ Daily Report ({date_str})",
-                        },
-                    },
-                    {
-                        "type": "section",
-                        "text": {"type": "mrkdwn", "text": "No pages created"},
-                    },
-                ]
-            )
-            if skipped_repos:
-                skipped = ", ".join(skipped_repos)
-                self._blocks.append(
-                    {
-                        "type": "context",
-                        "elements": [
-                            {"type": "mrkdwn", "text": f"⚠️ Skipped: {skipped}"}
-                        ],
-                    }
-                )
-            self._fallback_parts.append(
-                f"✅ Daily Report ({date_str}): No pages created"
+            self._append_report_section(
+                "✅",
+                date_str,
+                "No pages created",
+                "No pages created",
+                skipped_repos=skipped_repos,
             )
 
     def notify_no_activity(self, target_date: datetime) -> None:
         """Buffer a no-activity notification for `target_date`."""
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
-
-        if self._blocks:
-            self._blocks.append({"type": "divider"})
-
-        self._blocks.extend(
-            [
-                {
-                    "type": "header",
-                    "text": {
-                        "type": "plain_text",
-                        "text": f"💤 Daily Report ({date_str})",
-                    },
-                },
-                {"type": "section", "text": {"type": "mrkdwn", "text": "No activity"}},
-            ]
-        )
-        self._fallback_parts.append(f"💤 Daily Report ({date_str}): No activity")
+        self._append_report_section("💤", date_str, "No activity", "No activity")
 
     def notify_validation_errors(
         self,
@@ -185,55 +141,14 @@ class SlackClient:
     ) -> None:
         """Buffer a notification listing the invalid tag values detected during summary validation."""
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
-        lines = []
-        for name, tags in result.invalid_tags.items():
-            lines.append(f"• {name}: tags={tags}")
-
-        if self._blocks:
-            self._blocks.append({"type": "divider"})
-
-        self._blocks.extend(
-            [
-                {
-                    "type": "header",
-                    "text": {
-                        "type": "plain_text",
-                        "text": f"⚠️ Daily Report ({date_str})",
-                    },
-                },
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": f"Invalid tags detected\n{'\n'.join(lines)}",
-                    },
-                },
-            ]
-        )
-        self._fallback_parts.append(
-            f"⚠️ Daily Report ({date_str}): Invalid tags detected"
-        )
+        lines = [f"• {name}: tags={tags}" for name, tags in result.invalid_tags.items()]
+        body = f"Invalid tags detected\n{'\n'.join(lines)}"
+        self._append_report_section("⚠️", date_str, body, "Invalid tags detected")
 
     def notify_error(self, target_date: datetime, error: Exception) -> None:
         """Buffer an error notification carrying `error`'s message for `target_date`."""
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
-
-        if self._blocks:
-            self._blocks.append({"type": "divider"})
-
-        self._blocks.extend(
-            [
-                {
-                    "type": "header",
-                    "text": {
-                        "type": "plain_text",
-                        "text": f"❌ Daily Report ({date_str})",
-                    },
-                },
-                {"type": "section", "text": {"type": "mrkdwn", "text": str(error)}},
-            ]
-        )
-        self._fallback_parts.append(f"❌ Daily Report ({date_str}): {error}")
+        self._append_report_section("❌", date_str, str(error), str(error))
 
     def notify_metrics(
         self,
@@ -248,9 +163,6 @@ class SlackClient:
         `memory_limit_mb` / `timeout_seconds` are None when invoked from the CLI,
         in which case ratios against the limits are omitted from the rendered text.
         """
-        if self._blocks:
-            self._blocks.append({"type": "divider"})
-
         if timeout_seconds is not None:
             elapsed_pct = elapsed / timeout_seconds * 100
             elapsed_text = f"{elapsed:.1f} / {timeout_seconds}s ({elapsed_pct:.0f}%)"
@@ -263,16 +175,8 @@ class SlackClient:
         else:
             memory_text = f"{peak_memory_mb:.0f} MB"
 
-        self._blocks.append(
-            {
-                "type": "context",
-                "elements": [
-                    {
-                        "type": "mrkdwn",
-                        "text": f"🔖 v{version}  |  ⏱️ {elapsed_text}  |  💾 {memory_text}",
-                    }
-                ],
-            }
+        self._append_with_divider(
+            _context_block(f"🔖 v{version}  |  ⏱️ {elapsed_text}  |  💾 {memory_text}")
         )
         self._fallback_parts.append(
             f"📊 Execution Metrics: v{version}, {elapsed_text}, {memory_text}"
