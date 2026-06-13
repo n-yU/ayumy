@@ -87,7 +87,7 @@ flowchart TB
 S3 上のオブジェクトキー構造は [Directory Structure](#directory-structure)、DynamoDB テーブル設計は [Session Write to DynamoDB](#session-write-to-dynamodb) を参照
 
 ### External Services and APIs
-| サービス | 用途 | 認証方式 |
+| Service | Purpose | Authentication |
 |---|---|---|
 | GitHub API (REST) | アクティビティデータの取得 | Fine-grained PAT |
 | Anthropic API | 自然言語による要約生成 | API Key |
@@ -146,7 +146,7 @@ Claude Code は会話を `~/.claude/projects/` 以下にローカル保存して
 
 JSONL の各エントリは以下の構造を持つ（Claude Code が生成するデータの観測に基づく。公式仕様は存在しない）
 
-| フィールド | 型 | 説明 |
+| Field | Type | Description |
 |---|---|---|
 | `type` | String | エントリ種別（`"user"`, `"assistant"`, `"summary"` 等） |
 | `timestamp` | String | ISO 8601 形式のタイムスタンプ（例: `"2026-03-28T10:00:00+09:00"`）。常に存在するが、不正な値は観測されていない |
@@ -155,7 +155,7 @@ JSONL の各エントリは以下の構造を持つ（Claude Code が生成す�
 
 `type=assistant` の `message.content` リスト内のブロック
 
-| フィールド | 型 | 説明 |
+| Field | Type | Description |
 |---|---|---|
 | `type` | String | ブロック種別（`"text"`, `"tool_use"` 等） |
 | `name` | String | `type=tool_use` の場合のツール名 |
@@ -164,7 +164,7 @@ JSONL の各エントリは以下の構造を持つ（Claude Code が生成す�
 
 `type=user` の `message.content` がリストの場合のブロック
 
-| フィールド | 型 | 説明 |
+| Field | Type | Description |
 |---|---|---|
 | `type` | String | ブロック種別（`"tool_result"` 等） |
 | `tool_use_id` | String | 対応する assistant の `tool_use.id`。cross-repo 判定で対応する tool_use の effective cwd を引くために使う（[Session Write to DynamoDB](#session-write-to-dynamodb)） |
@@ -193,7 +193,7 @@ hook と手動実行の両方から呼ばれる共通スクリプト
 sync_session.sh [--project <project-name>] [--all] [--report] [--date DATE]
 ```
 
-| オプション | 動作 |
+| Option | Behavior |
 |---|---|
 | `--project <name>` | 指定プロジェクトの差分セッションのみ転送。`<name>` は `~/.claude/projects/` 以下のディレクトリ名（例: `-Users-username-Documents-github-repo`） |
 | `--all` | 全プロジェクトから差分セッションを一括転送 |
@@ -248,7 +248,7 @@ ayumy sync --report --date 2026-03-01..2026-03-05               # 日付範囲�
 ### GitHub Activity Fetch
 対象期間は実行方式によって異なる
 
-| 実行方式 | 対象期間 |
+| Execution Mode | Range |
 |---|---|
 | 定期実行（EventBridge） | 前日 JST 00:00:00 〜 当日 JST 00:00:00 |
 | 手動実行（`ayumy sync --report`） | 当日 JST 00:00:00 〜 現在時刻 |
@@ -261,7 +261,7 @@ ayumy sync --report --date 2026-03-01..2026-03-05               # 日付範囲�
 
 対象リポジトリは S3 上のセッションログから特定する。各プロジェクトディレクトリの `.ayumy_repo` メタデータファイルからリポジトリ名を読み取り、そのリポジトリのみ `GET /repos/{owner}/{repo}` で取得する
 
-| アクティビティ | エンドポイント | フィルタ |
+| Activity | Endpoint | Filter |
 |---|---|---|
 | Commits | `GET /search/commits` | `repo:{full_name} author-date:{since_date}..{until_date}` |
 | Pull Requests | `GET /repos/{owner}/{repo}/pulls` | `state=all`, `sort=updated`, 前日以降 |
@@ -278,7 +278,7 @@ PR/Issue の `updated_at` 経路は対象日以降に状態が更新されると
 
 通常運用（前日定期実行・手動当日実行）では影響軽微なため `updated_at` 経路を維持する。`target_date` 指定時、または `scan_backfill_dates` で検出された未レポート日に対しては Hybrid 経路に切り替える
 
-| アクティビティ | 取得経路 |
+| Activity | Fetch Path |
 |---|---|
 | Pull Requests | `GET /search/issues` を `is:pr` + `created:`/`merged:`/`closed:` のレンジクエリで3回呼び出し、状態遷移した PR を取得する。さらに `fetch_commits` で各コミットに付与済みの関連 PR 番号を再利用し、対象日にコミットだけがあった PR も補足する。これに DynamoDB の `session_pulls`（[Session Write to DynamoDB](#session-write-to-dynamodb)）を加えて PR 番号で union し、各番号を `GET /repos/{owner}/{repo}/pulls/{N}` で個別取得する |
 | Issues | `GET /search/issues` を `is:issue` + `created:`/`closed:` のレンジクエリで2回呼び出し、状態遷移した Issue を取得する。これに DynamoDB の `session_issues`（[Session Write to DynamoDB](#session-write-to-dynamodb)）を加えて Issue 番号で union する。session 由来の番号のみで Search に含まれないものは `GET /repos/{owner}/{repo}/issues/{N}` で個別取得し、PR を返した場合（`pull_request` 属性が設定）は除外する |
@@ -297,7 +297,7 @@ DynamoDB の `ayumy-sessions` テーブルから対象日付をパーティシ�
 
 **テーブル設計**（テーブル名: `ayumy-sessions`、オンデマンドモード、PITR 有効）
 
-| Key | Attribute | Type | 説明 |
+| Key | Attribute | Type | Description |
 |---|---|---|---|
 | PK | `date` | String | JST 日付（`YYYY-MM-DD`） |
 | SK | `repo#session_id` | String | リポジトリ名 + セッション ID |
@@ -380,7 +380,7 @@ DynamoDB への書き込みが正常に完了した後、処理した JSONL フ�
 ### Database Properties
 Date × Repository 単位でページを作成する。1日に複数ページが生成される。再実行時は対象日の既存ページをアーカイブ（soft-delete）してから再作成し、冪等性を担保する。GitHub activity に存在しないリポジトリは Notion ページを作成しない
 
-| プロパティ名 | 型 | 説明 | 例 |
+| Property | Type | Description | Example |
 |---|---|---|---|
 | Name | Title | 日付とリポジトリ名 | `26-03-01: ayumy` |
 | Date | Date | 対象日 | `2025-03-01` |
@@ -460,7 +460,7 @@ ayumy sync --report --date 2026-03-01..2026-03-05  # 日付範囲のレポート
 Lambda 関数の環境変数として設定する。機密情報は AWS Secrets Manager に保管し、Lambda から参照する
 
 **Lambda 環境変数**
-| 環境変数 | 説明 |
+| Variable | Description |
 |---|---|
 | `AYUMY_S3_BUCKET` | セッションログの保管先 S3 バケット名 |
 | `AYUMY_DYNAMO_TABLE` | セッションメタデータの DynamoDB テーブル名 |
@@ -468,7 +468,7 @@ Lambda 関数の環境変数として設定する。機密情報は AWS Secrets 
 | `NOTION_DATABASE_ID` | 書き込み先の Notion データベース ID |
 
 **Secrets Manager に保管**
-| シークレット | 説明 |
+| Secret | Description |
 |---|---|
 | `GITHUB_PAT` | GitHub Fine-grained PAT（全 owner リポジトリへの read 権限） |
 | `ANTHROPIC_API_KEY` | Anthropic API キー |
@@ -513,13 +513,13 @@ sam build && sam deploy
 - 入力: $3 / 1M tokens、出力: $15 / 1M tokens
 
 **1日あたりのトークン使用量（目安）**
-| 項目 | トークン数 |
+| Item | Tokens |
 |---|---|
 | 入力（プロンプト + GitHub アクティビティ + JSONL 抽出データ） | ~10,000 |
 | 出力（構造化された日本語要約） | ~1,500 |
 
 **コスト概算**
-| 期間 | コスト |
+| Period | Cost |
 |---|---|
 | 1日 | ~$0.05（入力 $0.03 + 出力 $0.02） |
 | 1ヶ月 | ~$1.5 |
@@ -528,7 +528,7 @@ sam build && sam deploy
 ※ セッションログが大量にある日はトークン数が増加する。上記は平均的な開発日の見積もり
 
 **AWS**
-| サービス | 概算 |
+| Service | Estimate |
 |---|---|
 | Lambda | 無料枠内（月100万リクエスト、1日1〜数回の実行） |
 | S3 | 月数円（年間 1〜2 GB 程度） |
