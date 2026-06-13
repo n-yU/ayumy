@@ -7,16 +7,9 @@ from functools import lru_cache
 from pathlib import Path
 from typing import NotRequired, TypedDict
 
+from .domain import CommitInfo, IssueInfo, PullInfo
+
 JST = timezone(timedelta(hours=9))
-
-
-class CommitInfo(TypedDict):
-    sha: str
-    message: str
-    author: str
-    date: str
-    url: str
-    pull_numbers: list[int]
 
 
 class SessionCommit(TypedDict):
@@ -25,32 +18,6 @@ class SessionCommit(TypedDict):
     sha: str
     message: str
     timestamp: NotRequired[str]
-
-
-class PullInfo(TypedDict):
-    number: int
-    title: str
-    state: str
-    author: str
-    labels: list[str]
-    draft: bool
-    url: str
-    created_at: str
-    merged_at: str | None
-    closed_at: str | None
-    merge_commit_sha: str | None
-
-
-class IssueInfo(TypedDict):
-    number: int
-    title: str
-    state: str
-    author: str
-    labels: list[str]
-    url: str
-    created_at: str
-    closed_at: str | None
-    state_reason: str | None
 
 
 class RepoActivity(TypedDict):
@@ -89,24 +56,20 @@ class GitHubActivity:
             if data["commits"]:
                 lines.append("### Commits")
                 for c in data["commits"]:
-                    lines.append(f"- {c['message']}")
+                    lines.append(f"- {c.message}")
 
             if data["pulls"]:
                 lines.append("### Pull Requests")
                 for pr in data["pulls"]:
-                    labels = f" ({', '.join(pr['labels'])})" if pr["labels"] else ""
-                    lines.append(
-                        f"- [{pr['state']}] #{pr['number']} {pr['title']}{labels}"
-                    )
+                    labels = f" ({', '.join(pr.labels)})" if pr.labels else ""
+                    lines.append(f"- [{pr.state}] #{pr.number} {pr.title}{labels}")
 
             if data["issues"]:
                 lines.append("### Issues")
                 for issue in data["issues"]:
-                    labels = (
-                        f" ({', '.join(issue['labels'])})" if issue["labels"] else ""
-                    )
+                    labels = f" ({', '.join(issue.labels)})" if issue.labels else ""
                     lines.append(
-                        f"- [{issue['state']}] #{issue['number']} {issue['title']}{labels}"
+                        f"- [{issue.state}] #{issue.number} {issue.title}{labels}"
                     )
 
         return "\n".join(lines)

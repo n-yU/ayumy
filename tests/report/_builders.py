@@ -1,6 +1,7 @@
 """Builders and assert helpers for tests/report/."""
 
 from report import GitHubActivity, SessionActivity
+from report.domain import CommitInfo, IssueInfo, PullInfo
 
 OWNER = "n-yU"
 
@@ -15,17 +16,79 @@ def make_commit(
     url=None,
     pull_numbers=(),
 ):
-    """Build a GitHub-style commit dict matching CommitInfo."""
-    return {
-        "message": message,
-        "sha": sha,
-        "author": author,
-        "date": date,
-        "url": url
+    """Build a CommitInfo dataclass for use in tests."""
+    return CommitInfo(
+        sha=sha,
+        message=message,
+        author=author,
+        date=date,
+        url=url
         if url is not None
         else f"https://github.com/{OWNER}/{repo}/commit/{sha}",
-        "pull_numbers": list(pull_numbers),
-    }
+        pull_numbers=tuple(pull_numbers),
+    )
+
+
+def make_pull(
+    number=1,
+    title="PR title",
+    state="merged",
+    *,
+    author="user",
+    labels=(),
+    draft=False,
+    url=None,
+    repo="my-repo",
+    created_at="2026-03-28T09:00:00+09:00",
+    merged_at="2026-03-28T10:00:00+09:00",
+    closed_at="2026-03-28T10:00:00+09:00",
+    merge_commit_sha="deadbeef",
+):
+    """Build a PullInfo dataclass for use in tests."""
+    return PullInfo(
+        number=number,
+        title=title,
+        state=state,
+        author=author,
+        labels=tuple(labels),
+        draft=draft,
+        url=url
+        if url is not None
+        else f"https://github.com/{OWNER}/{repo}/pull/{number}",
+        created_at=created_at,
+        merged_at=merged_at,
+        closed_at=closed_at,
+        merge_commit_sha=merge_commit_sha,
+    )
+
+
+def make_issue(
+    number=1,
+    title="Issue title",
+    state="open",
+    *,
+    author="user",
+    labels=(),
+    url=None,
+    repo="my-repo",
+    created_at="2026-03-28T09:00:00+09:00",
+    closed_at=None,
+    state_reason=None,
+):
+    """Build an IssueInfo dataclass for use in tests."""
+    return IssueInfo(
+        number=number,
+        title=title,
+        state=state,
+        author=author,
+        labels=tuple(labels),
+        url=url
+        if url is not None
+        else f"https://github.com/{OWNER}/{repo}/issues/{number}",
+        created_at=created_at,
+        closed_at=closed_at,
+        state_reason=state_reason,
+    )
 
 
 def make_session_entry(
