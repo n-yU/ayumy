@@ -235,7 +235,7 @@ class TestBlockPrimitives:
         assert _divider() == {"type": "divider"}
 
     def test_header_block(self):
-        assert _header_block("📝", "2026-03-28") == {
+        assert _header_block("📝 Daily Report (2026-03-28)") == {
             "type": "header",
             "text": {
                 "type": "plain_text",
@@ -278,7 +278,7 @@ class TestAppendWithDivider:
     def test_appends_multiple_blocks_after_divider(self):
         client = _make_client()
         client._blocks.append(_section_block("existing"))
-        header = _header_block("📝", "2026-03-28")
+        header = _header_block("📝 Daily Report (2026-03-28)")
         section = _section_block("body")
 
         client._append_with_divider(header, section)

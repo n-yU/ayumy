@@ -36,14 +36,11 @@ def _divider() -> dict:
     return {"type": "divider"}
 
 
-def _header_block(emoji: str, date_str: str) -> dict:
-    """Build a Slack header block with a `{emoji} Daily Report ({date_str})` title."""
+def _header_block(text: str) -> dict:
+    """Build a Slack plain-text header block."""
     return {
         "type": "header",
-        "text": {
-            "type": "plain_text",
-            "text": f"{emoji} Daily Report ({date_str})",
-        },
+        "text": {"type": "plain_text", "text": text},
     }
 
 
@@ -80,13 +77,12 @@ class SlackClient:
         skipped_repos: list[str] | None = None,
     ) -> None:
         """Append a header + section pair (and optional skipped-repos context block) and record the fallback string."""
-        blocks = [_header_block(emoji, date_str), _section_block(body_text)]
+        title = f"{emoji} Daily Report ({date_str})"
+        blocks = [_header_block(title), _section_block(body_text)]
         if skipped_repos:
             blocks.append(_context_block(f"⚠️ Skipped: {', '.join(skipped_repos)}"))
         self._append_with_divider(*blocks)
-        self._fallback_parts.append(
-            f"{emoji} Daily Report ({date_str}): {fallback_suffix}"
-        )
+        self._fallback_parts.append(f"{title}: {fallback_suffix}")
 
     def notify(
         self,
