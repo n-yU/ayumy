@@ -120,6 +120,12 @@ class TestProcessDate:
         merged = notion_args[4].repos()["my-repo"]["commits"]
         assert [c.sha for c in merged] == ["a1b2c3d"]
         assert merged[0].url == f"https://github.com/{OWNER}/my-repo/commit/a1b2c3d"
+        # Pipeline must wire github_client.populate_commit_pull_numbers as the resolver
+        populate = pipeline_clients["github_client"].populate_commit_pull_numbers
+        populate.assert_called_once()
+        args = populate.call_args.args
+        assert args[0] == "my-repo"
+        assert [c.sha for c in args[1]] == ["a1b2c3d"]
 
     def test_detects_skipped_repos(self, pipeline_clients):
         session = make_session("repo")
