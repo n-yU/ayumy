@@ -12,30 +12,40 @@ GitHub 上の日次開発アクティビティ（Commit, Pull Request, Issue）�
 ### 3.1 アーキテクチャ
 本システムは2フェーズで構成される。セッションログは S3 バケットに保管し、レポート生成は AWS Lambda で実行する。セッションメタデータは DynamoDB に集約する。
 
-```
-[クライアントマシン]
-  git push → pre-push hook ──────┐
-  ayumy sync（手動）─────────────┤
-  ayumy sync --report ───────────┤── S3 転送後に Lambda も実行
-                                  ▼
-                         S3 バケット (ayumy-data)
-                                  │
-[AWS Lambda]                      ▼
-  EventBridge (毎日 JST 00:00) → Lambda (report)
-  ayumy sync --report ──────────→ Lambda (report)
-    ├─→ JSONL パース → DynamoDB にセッション書き込み → S3 から JSONL 削除
-    ├─→ DynamoDB + GitHub API → Claude API で要約生成
-    ├─→ Notion API で記録
-    └─→ Slack Webhook で通知
+```mermaid
+flowchart TB
+    subgraph Client[Client Machine]
+        Hook[git push → pre-push hook]
+        Sync[ayumy sync]
+        Report[ayumy sync --report]
+    end
 
-[S3]
-  s3://{bucket}/
-  └── claude-sessions/ に JSONL 蓄積
+    S3[(S3 Bucket<br/>session logs)]
+    Schedule[EventBridge<br/>daily at JST 00:00]
+    Lambda[AWS Lambda<br/>report]
+    DDB[(DynamoDB<br/>session metadata)]
 
-[DynamoDB]
-  ayumy-sessions テーブル
-  └── セッションメタデータ（日付 × リポジトリ × セッション ID）
+    subgraph External[External APIs]
+        GH[GitHub API]
+        Claude[Claude API]
+        Notion[Notion]
+        Slack[Slack Webhook]
+    end
+
+    Hook --> S3
+    Sync --> S3
+    Report --> S3
+    Report -.->|invoke| Lambda
+    Schedule --> Lambda
+    Lambda <--> S3
+    Lambda <--> DDB
+    Lambda --> GH
+    Lambda --> Claude
+    Lambda --> Notion
+    Lambda --> Slack
 ```
+
+S3 上のオブジェクトキー構造は §3.3、DynamoDB テーブル設計は §5.3 を参照
 
 ### 3.2 使用する外部サービス・API
 | サービス | 用途 | 認証方式 |

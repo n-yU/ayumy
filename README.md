@@ -1,26 +1,44 @@
 # Ayumy
-Traces of daily craft, woven by AI
+*Traces of daily craft, woven by AI*
 
 GitHub 上の日次開発アクティビティ（Commit, PR, Issue）と Claude Code のセッションログを自動収集し、Claude API で自然言語の要約を生成して Notion データベースに記録するシステム
+
+セットアップ方法は [Setup.md](./docs/Setup.md)、基本的な使い方は [Manual.md](./docs/Manual.md) を参照
 
 ## Architecture
 S3 + DynamoDB + AWS Lambda を使用した2フェーズ構成
 
-```
-[クライアントマシン]
-  git push → pre-push hook ──────┐
-  ayumy sync（手動）─────────────┤
-  ayumy sync --report ───────────┤── S3 転送後に Lambda も実行
-                                  ▼
-                         S3 バケット (ayumy-data)
-                                  │
-[AWS Lambda]                      ▼
-  EventBridge (毎日 JST 00:00) → Lambda (report)
-  ayumy sync --report ──────────→ Lambda (report)
-    ├─→ JSONL パース → DynamoDB にセッション書き込み → S3 から JSONL 削除
-    ├─→ DynamoDB + GitHub API → Claude API で要約生成
-    ├─→ Notion API で記録
-    └─→ Slack Webhook で通知
+```mermaid
+flowchart TB
+    subgraph Client[Client Machine]
+        Hook[git push → pre-push hook]
+        Sync[ayumy sync]
+        Report[ayumy sync --report]
+    end
+
+    S3[(S3 Bucket<br/>session logs)]
+    Schedule[EventBridge<br/>daily at JST 00:00]
+    Lambda[AWS Lambda<br/>report]
+    DDB[(DynamoDB<br/>session metadata)]
+
+    subgraph External[External APIs]
+        GH[GitHub API]
+        Claude[Claude API]
+        Notion[Notion]
+        Slack[Slack Webhook]
+    end
+
+    Hook --> S3
+    Sync --> S3
+    Report --> S3
+    Report -.->|invoke| Lambda
+    Schedule --> Lambda
+    Lambda <--> S3
+    Lambda <--> DDB
+    Lambda --> GH
+    Lambda --> Claude
+    Lambda --> Notion
+    Lambda --> Slack
 ```
 
 ## Tech Stack
@@ -44,11 +62,8 @@ ayumy/
 ├── hooks/pre-push      # 各リポジトリにシンボリックリンクで配置
 ├── lambda/             # Lambda ハンドラとメインパッケージ
 ├── template.yaml       # AWS SAM テンプレート
-└── docs/               # 仕様・初期開発・セットアップ
+└── docs/               # 仕様・セットアップ・運用ガイド
 ```
-
-## Setup
-[docs/Setup.md](./docs/Setup.md) を参照
 
 ## Running Cost
 Anthropic API と AWS の費用が発生する（GitHub API・Notion API は無料枠内）
