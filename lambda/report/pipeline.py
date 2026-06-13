@@ -15,7 +15,6 @@ from . import (
     parse_target_dates,
     require_env,
 )
-from .domain import CommitInfo
 from .github import GitHubClient
 from .notion import NotionClient
 from .session import SessionClient
@@ -70,43 +69,12 @@ def process_date(
     )
 
     for repo_name, sessions in session_activity.repos().items():
-        seen_shas: set[str] = set()
-        session_commits: list[CommitInfo] = []
-        for s in sessions:
-            for c in s.get("session_commits", []):
-                if c["sha"] in seen_shas:
-                    continue
-                seen_shas.add(c["sha"])
-                session_commits.append(
-                    CommitInfo(
-                        sha=c["sha"],
-                        message=c["message"],
-                        author="",
-                        date=c.get("timestamp") or s["start_time"],
-                        url=f"https://github.com/{github_client.owner}/{repo_name}/commit/{c['sha']}",
-                    )
-                )
-        if not session_commits:
-            continue
-        # Resolve PR association so injected commits nest under their parent PR in the Notion timeline
-        repo_data = github_activity.repos().get(repo_name)
-        if repo_data is not None:
-            existing_shas = {c.sha for c in repo_data["commits"]}
-            new_commits = [
-                sc
-                for sc in session_commits
-                if not any(s.startswith(sc.sha) for s in existing_shas)
-            ]
-            if new_commits:
-                github_client.populate_commit_pull_numbers(repo_name, new_commits)
-                repo_data["commits"].extend(new_commits)
-        else:
-            github_client.populate_commit_pull_numbers(repo_name, session_commits)
-            github_activity.repos()[repo_name] = {
-                "commits": session_commits,
-                "pulls": [],
-                "issues": [],
-            }
+        github_activity.merge_session_commits(
+            repo_name,
+            sessions,
+            owner=github_client.owner,
+            populate_pull_numbers=github_client.populate_commit_pull_numbers,
+        )
 
     if not session_activity and not github_activity:
         logger.info("No activity, skipping")

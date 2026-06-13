@@ -4,8 +4,9 @@ import re
 from datetime import datetime
 from unittest.mock import MagicMock
 
-from report import JST
+from report import JST, SessionActivity
 from report.domain import CommitInfo, IssueInfo, PullInfo
+from report.github import GitHubActivity
 from report.notion import RICH_TEXT_LIMIT, NotionClient, _chunk_rich_text, _linked_text
 
 SINCE = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
@@ -626,8 +627,6 @@ class TestBuildChildren:
 
 class TestCreateReportPagesWiring:
     def test_passes_since_until_to_create_page(self):
-        from report import GitHubActivity, SessionActivity
-
         client = _make_client()
         client._archive_existing_pages = MagicMock(return_value=0)
         client.create_page = MagicMock(return_value="https://notion.so/page1")
