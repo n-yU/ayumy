@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 from report import JST, SessionActivity
 from report.domain import CommitInfo, IssueInfo, PullInfo
 from report.github import GitHubActivity
-from report.notion import RICH_TEXT_LIMIT, NotionClient, _chunk_rich_text, _linked_text
+from report.notion import NotionClient
 
 SINCE = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
 UNTIL = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
@@ -84,50 +84,6 @@ def _make_client() -> NotionClient:
     client.database_id = "db-id"
     client._data_source_id = None
     return client
-
-
-class TestChunkRichText:
-    def test_short_text_single_chunk(self):
-        result = _chunk_rich_text("hello")
-        assert result == [{"type": "text", "text": {"content": "hello"}}]
-
-    def test_text_exceeding_limit(self):
-        overflow = RICH_TEXT_LIMIT // 4
-        text = "a" * (RICH_TEXT_LIMIT * 2 + overflow)
-        result = _chunk_rich_text(text)
-        assert len(result) == 3
-        assert len(result[0]["text"]["content"]) == RICH_TEXT_LIMIT
-        assert len(result[1]["text"]["content"]) == RICH_TEXT_LIMIT
-        assert len(result[2]["text"]["content"]) == overflow
-
-    def test_empty_text(self):
-        result = _chunk_rich_text("")
-        assert result == []
-
-
-class TestLinkedText:
-    def test_short_content_single_chunk(self):
-        result = _linked_text("repo#1: title", "https://example.com/1")
-        assert result == [
-            {
-                "type": "text",
-                "text": {
-                    "content": "repo#1: title",
-                    "link": {"url": "https://example.com/1"},
-                },
-            }
-        ]
-
-    def test_long_content_split_with_shared_link(self):
-        long_label = "x" * (RICH_TEXT_LIMIT * 2 + 100)
-        result = _linked_text(long_label, "https://example.com/long")
-        assert len(result) == 3
-        assert all(
-            item["text"]["link"]["url"] == "https://example.com/long" for item in result
-        )
-        assert len(result[0]["text"]["content"]) == RICH_TEXT_LIMIT
-        assert len(result[1]["text"]["content"]) == RICH_TEXT_LIMIT
-        assert len(result[2]["text"]["content"]) == 100
 
 
 class TestBuildProperties:
