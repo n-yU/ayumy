@@ -7,7 +7,8 @@ from unittest.mock import MagicMock
 from report import JST, SessionActivity
 from report.domain import CommitInfo, IssueInfo, PullInfo
 from report.github import GitHubActivity
-from report.notion import RICH_TEXT_LIMIT, NotionClient, _chunk_rich_text, _linked_text
+from report.notion import NotionClient
+from report.notion.client import RICH_TEXT_LIMIT, _chunk_rich_text, _linked_text
 
 SINCE = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
 UNTIL = datetime(2026, 3, 29, 0, 0, tzinfo=JST)

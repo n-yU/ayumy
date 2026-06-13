@@ -5,15 +5,15 @@ from datetime import datetime
 
 from notion_client import Client
 
-from . import (
+from .. import (
     JST,
     ReportSummary,
     RepoSummary,
     SessionActivity,
     get_version,
 )
-from .domain import CommitInfo, PullInfo
-from .github import GitHubActivity, RepoActivity
+from ..domain import CommitInfo, PullInfo
+from ..github import GitHubActivity, RepoActivity
 
 logger = logging.getLogger(__name__)
 
