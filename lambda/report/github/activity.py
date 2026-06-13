@@ -73,7 +73,9 @@ class GitHubActivity:
             new_commits = [
                 sc
                 for sc in session_commits
-                if not any(s.startswith(sc.sha) for s in existing_shas)
+                if not any(
+                    existing_sha.startswith(sc.sha) for existing_sha in existing_shas
+                )
             ]
             if new_commits:
                 populate_pull_numbers(repo_name, new_commits)
