@@ -14,7 +14,7 @@ from .. import (
 )
 from ..domain import CommitInfo, PullInfo
 from ..github import GitHubActivity, RepoActivity
-from .blocks import bulleted_link, chunk_rich_text
+from .blocks import bulleted_link, bulleted_text, heading_2
 
 logger = logging.getLogger(__name__)
 
@@ -122,15 +122,7 @@ class NotionClient:
         ):
             if not items:
                 continue
-            blocks.append(
-                {
-                    "object": "block",
-                    "type": "heading_2",
-                    "heading_2": {
-                        "rich_text": [{"type": "text", "text": {"content": heading}}],
-                    },
-                }
-            )
+            blocks.append(heading_2(heading))
             for label, url, prefix in items:
                 blocks.append(bulleted_link(label, url, prefix))
 
@@ -252,16 +244,7 @@ class NotionClient:
 
         entries.sort(key=lambda e: (e[0], e[1]))
 
-        return [
-            {
-                "object": "block",
-                "type": "heading_2",
-                "heading_2": {
-                    "rich_text": [{"type": "text", "text": {"content": "Timeline"}}],
-                },
-            },
-            *(e[2] for e in entries),
-        ]
+        return [heading_2("Timeline"), *(e[2] for e in entries)]
 
     def _build_children(
         self,
@@ -273,25 +256,9 @@ class NotionClient:
         """Build the Notion page body blocks in Summary → status sections → Timeline order, omitting empty sections."""
         children: list[dict] = []
 
-        children.append(
-            {
-                "object": "block",
-                "type": "heading_2",
-                "heading_2": {
-                    "rich_text": [{"type": "text", "text": {"content": "Summary"}}],
-                },
-            }
-        )
+        children.append(heading_2("Summary"))
         for item in repo_summary["summary"]:
-            children.append(
-                {
-                    "object": "block",
-                    "type": "bulleted_list_item",
-                    "bulleted_list_item": {
-                        "rich_text": chunk_rich_text(item),
-                    },
-                }
-            )
+            children.append(bulleted_text(item))
 
         repo_name = repo_summary["name"]
         children.extend(

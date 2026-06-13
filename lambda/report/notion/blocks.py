@@ -41,3 +41,23 @@ def bulleted_link(
         "type": "bulleted_list_item",
         "bulleted_list_item": body,
     }
+
+
+def bulleted_text(text: str) -> dict:
+    """Build a `bulleted_list_item` block carrying chunked plain `text` (no link)."""
+    return {
+        "object": "block",
+        "type": "bulleted_list_item",
+        "bulleted_list_item": {"rich_text": chunk_rich_text(text)},
+    }
+
+
+def heading_2(text: str) -> dict:
+    """Build a `heading_2` block with plain-text content."""
+    return {
+        "object": "block",
+        "type": "heading_2",
+        "heading_2": {
+            "rich_text": [{"type": "text", "text": {"content": text}}],
+        },
+    }

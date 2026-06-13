@@ -3,7 +3,9 @@
 from report.notion.blocks import (
     RICH_TEXT_LIMIT,
     bulleted_link,
+    bulleted_text,
     chunk_rich_text,
+    heading_2,
     linked_text,
 )
 
@@ -85,3 +87,35 @@ class TestBulletedLink:
     def test_children_omitted_when_falsy(self):
         result = bulleted_link("outer", "https://example.com/outer", children=[])
         assert "children" not in result["bulleted_list_item"]
+
+
+class TestBulletedText:
+    def test_short_text_single_chunk(self):
+        result = bulleted_text("hello")
+        assert result == {
+            "object": "block",
+            "type": "bulleted_list_item",
+            "bulleted_list_item": {
+                "rich_text": [{"type": "text", "text": {"content": "hello"}}],
+            },
+        }
+
+    def test_long_text_uses_chunking(self):
+        text = "a" * (RICH_TEXT_LIMIT + 50)
+        result = bulleted_text(text)
+        rich_text = result["bulleted_list_item"]["rich_text"]
+        assert len(rich_text) == 2
+        assert len(rich_text[0]["text"]["content"]) == RICH_TEXT_LIMIT
+        assert len(rich_text[1]["text"]["content"]) == 50
+
+
+class TestHeading2:
+    def test_plain_text(self):
+        result = heading_2("Summary")
+        assert result == {
+            "object": "block",
+            "type": "heading_2",
+            "heading_2": {
+                "rich_text": [{"type": "text", "text": {"content": "Summary"}}],
+            },
+        }
