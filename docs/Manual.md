@@ -44,20 +44,20 @@ push を伴わずにセッションだけ転送したい場合、または hook 
 | `ayumy sync --report --date 2026-03-25` | 指定日のレポートを生成・再生成 |
 | `ayumy sync --report --date 2026-03-01..2026-03-05` | 日付範囲を一括生成 |
 
-`--report` 指定時の Lambda 呼び出しは非同期のため、コマンド自体はすぐ完了する。実行結果は Slack 通知で確認する。実行方式別の対象期間は [Spec.md §5.1](Spec.md#51-github-アクティビティの取得) と [§7.1](Spec.md#71-実行方式) を参照
+`--report` 指定時の Lambda 呼び出しは非同期のため、コマンド自体はすぐ完了する。実行結果は Slack 通知で確認する。実行方式別の対象期間は [Spec: GitHub Activity Fetch](Spec.md#github-activity-fetch) と [Spec: Lambda Execution Modes](Spec.md#lambda-execution-modes) を参照
 
 ## Reading Notion Reports
 1 日 × リポジトリ単位で Notion ページが作成される。GitHub アクティビティが 0 件のリポジトリにはページは作成されない
 
 ### ページプロパティ
-日付・リポジトリ名・タグ・Commits / Merged / Closed / Sessions の件数などが Properties に入る。プロパティの一覧は [Spec.md §6.1](Spec.md#61-データベースプロパティ) を参照
+日付・リポジトリ名・タグ・Commits / Merged / Closed / Sessions の件数などが Properties に入る。プロパティの一覧は [Spec: Database Properties](Spec.md#database-properties) を参照
 
 ### ページ本文
 - **Summary** — Claude API が生成したリポジトリの作業要点（2〜5 項目）
 - **Done / In Progress / Todo** — PR / Issue をステータス別に列挙。該当が無いセクションは表示しない
 - **Timeline** — 対象日の作業を時系列で並べる。PR ブロックは `🔀` を冒頭に置き、配下にその PR の commit をネストする。merge commit や直接 commit、Issue の open / close は最上位に `🔸` / `🟢` / `✅` などの prefix 付きで並ぶ
 
-ステータス振り分けやイレギュラーな完了（unmerged close / not_planned / duplicate）の prefix 規則は [Spec.md §6.2](Spec.md#62-ページ本文children-blocks) を参照
+ステータス振り分けやイレギュラーな完了（unmerged close / not_planned / duplicate）の prefix 規則は [Spec: Page Body](Spec.md#page-body) を参照
 
 ## Troubleshooting
 ### pre-push hook の再設置
