@@ -4,7 +4,15 @@ from datetime import datetime
 from unittest.mock import MagicMock
 
 from report import JST
-from report.slack import HEADLINE_MAX, SlackClient, _escape_mrkdwn
+from report.slack import (
+    HEADLINE_MAX,
+    SlackClient,
+    _context_block,
+    _divider,
+    _escape_mrkdwn,
+    _header_block,
+    _section_block,
+)
 from report.summarizer import ValidationResult
 
 
@@ -220,6 +228,64 @@ class TestEscapeMrkdwn:
 
     def test_passes_plain_text_through(self):
         assert _escape_mrkdwn("plain text 日本語") == "plain text 日本語"
+
+
+class TestBlockPrimitives:
+    def test_divider(self):
+        assert _divider() == {"type": "divider"}
+
+    def test_header_block(self):
+        assert _header_block("📝", "2026-03-28") == {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": "📝 Daily Report (2026-03-28)",
+            },
+        }
+
+    def test_section_block(self):
+        assert _section_block("hello") == {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": "hello"},
+        }
+
+    def test_context_block(self):
+        assert _context_block("ctx") == {
+            "type": "context",
+            "elements": [{"type": "mrkdwn", "text": "ctx"}],
+        }
+
+
+class TestAppendWithDivider:
+    def test_appends_blocks_without_divider_when_buffer_empty(self):
+        client = _make_client()
+        block = _section_block("first")
+
+        client._append_with_divider(block)
+
+        assert client._blocks == [block]
+
+    def test_prepends_divider_when_buffer_has_content(self):
+        client = _make_client()
+        first = _section_block("first")
+        second = _section_block("second")
+        client._blocks.append(first)
+
+        client._append_with_divider(second)
+
+        assert client._blocks == [first, _divider(), second]
+
+    def test_appends_multiple_blocks_after_divider(self):
+        client = _make_client()
+        client._blocks.append(_section_block("existing"))
+        header = _header_block("📝", "2026-03-28")
+        section = _section_block("body")
+
+        client._append_with_divider(header, section)
+
+        assert client._blocks[-3] == _divider()
+        assert client._blocks[-2] == header
+        assert client._blocks[-1] == section
 
 
 class TestNotifyNoActivity:

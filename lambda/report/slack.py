@@ -31,6 +31,32 @@ def _escape_mrkdwn(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+def _divider() -> dict:
+    """Build a Slack divider block."""
+    return {"type": "divider"}
+
+
+def _header_block(emoji: str, date_str: str) -> dict:
+    """Build a Slack header block with a `{emoji} Daily Report ({date_str})` title."""
+    return {
+        "type": "header",
+        "text": {
+            "type": "plain_text",
+            "text": f"{emoji} Daily Report ({date_str})",
+        },
+    }
+
+
+def _section_block(text: str) -> dict:
+    """Build a Slack mrkdwn section block."""
+    return {"type": "section", "text": {"type": "mrkdwn", "text": text}}
+
+
+def _context_block(text: str) -> dict:
+    """Build a Slack mrkdwn context block."""
+    return {"type": "context", "elements": [{"type": "mrkdwn", "text": text}]}
+
+
 class SlackClient:
     """Client for sending daily report notifications via Slack Incoming Webhook."""
 
@@ -38,6 +64,12 @@ class SlackClient:
         self.client = WebhookClient(webhook_url)
         self._blocks: list[dict] = []
         self._fallback_parts: list[str] = []
+
+    def _append_with_divider(self, *blocks: dict) -> None:
+        """Append `blocks` to the buffer, prepending a divider when the buffer already holds content."""
+        if self._blocks:
+            self._blocks.append(_divider())
+        self._blocks.extend(blocks)
 
     def notify(
         self,
