@@ -98,243 +98,28 @@ class TestProcessDate:
 
         pipeline_clients["slack_client"].notify_validation_errors.assert_called_once()
 
-    def test_supplements_session_commits_when_github_has_none(self, pipeline_clients):
+    def test_invokes_session_commit_merge_per_repo(self, pipeline_clients):
+        # Stub fetch_activity so we can observe merge_session_commits on the real container
+        activity = make_github("my-repo")
+        pipeline_clients["github_client"].fetch_activity.return_value = activity
         session = make_session(
             "my-repo",
             tools=("Bash",),
-            session_commits=[
-                {"sha": "a1b2c3d", "message": "Fix login bug"},
-            ],
+            session_commits=[{"sha": "a1b2c3d", "message": "Fix login bug"}],
         )
-        # GitHub API has the repo but no commits
-        pipeline_clients["github_client"].fetch_activity.return_value = make_github(
-            "my-repo"
-        )
-
         report = _make_report(
-            [
-                {
-                    "name": "my-repo",
-                    "summary": ["work"],
-                    "tags": [],
-                }
-            ]
+            [{"name": "my-repo", "summary": ["work"], "tags": []}],
         )
         pipeline_clients["summary_client"].generate_summary.return_value = report
         pipeline_clients["notion_client"].create_report_pages.return_value = []
 
         process_date(SINCE, UNTIL, session, **pipeline_clients)
 
-        # Session commits should be injected into github_activity
-        call_args = pipeline_clients["summary_client"].generate_summary.call_args[0]
-        github_md = call_args[1]
-        assert "Fix login bug" in github_md
-
-        # Verify GitHubActivity passed to Notion also contains the commit
-        # with normalized fields (date from session, constructed url, empty author)
+        # End-to-end: the session commit reaches the activity that flows to Notion
         notion_args = pipeline_clients["notion_client"].create_report_pages.call_args[0]
-        activity = notion_args[4]
-        assert "my-repo" in activity.repos()
-        injected = next(
-            c for c in activity.repos()["my-repo"]["commits"] if c.sha == "a1b2c3d"
-        )
-        assert injected.date == "2026-03-28T10:00:00+09:00"
-        assert injected.url == f"https://github.com/{OWNER}/my-repo/commit/a1b2c3d"
-        assert injected.author == ""
-
-    def test_session_commit_uses_per_commit_timestamp_when_present(
-        self, pipeline_clients
-    ):
-        session = make_session(
-            "my-repo",
-            end="2026-03-28T12:00:00+09:00",
-            messages=("Work",),
-            tools=("Bash",),
-            session_commits=[
-                {
-                    "sha": "aaa1111",
-                    "message": "Mid commit",
-                    "timestamp": "2026-03-28T10:45:00+09:00",
-                },
-                {
-                    "sha": "bbb2222",
-                    "message": "Late commit",
-                },  # legacy: no timestamp
-            ],
-        )
-        pipeline_clients["github_client"].fetch_activity.return_value = make_github(
-            "my-repo"
-        )
-
-        report = _make_report(
-            [
-                {
-                    "name": "my-repo",
-                    "summary": ["work"],
-                    "tags": [],
-                }
-            ]
-        )
-        pipeline_clients["summary_client"].generate_summary.return_value = report
-        pipeline_clients["notion_client"].create_report_pages.return_value = []
-
-        process_date(SINCE, UNTIL, session, **pipeline_clients)
-
-        notion_args = pipeline_clients["notion_client"].create_report_pages.call_args[0]
-        commits = notion_args[4].repos()["my-repo"]["commits"]
-        # Per-commit timestamp wins; legacy entry falls back to session start_time
-        first = next(c for c in commits if c.sha == "aaa1111")
-        second = next(c for c in commits if c.sha == "bbb2222")
-        assert first.date == "2026-03-28T10:45:00+09:00"
-        assert second.date == "2026-03-28T10:00:00+09:00"
-
-    def test_dedupes_session_commits_across_sessions(self, pipeline_clients):
-        session = make_session(
-            "my-repo",
-            entries=[
-                make_session_entry(
-                    session_id="s1",
-                    project="my-repo",
-                    messages=("Work",),
-                    tools=("Bash",),
-                    session_commits=[
-                        {
-                            "sha": "aaa1111",
-                            "message": "Shared commit",
-                            "timestamp": "2026-03-28T10:30:00+09:00",
-                        },
-                    ],
-                ),
-                make_session_entry(
-                    session_id="s2",
-                    project="my-repo",
-                    start="2026-03-28T14:00:00+09:00",
-                    end="2026-03-28T15:00:00+09:00",
-                    messages=("More work",),
-                    tools=("Bash",),
-                    session_commits=[
-                        {
-                            "sha": "aaa1111",
-                            "message": "Shared commit",
-                            "timestamp": "2026-03-28T14:30:00+09:00",
-                        },
-                    ],
-                ),
-            ],
-        )
-        pipeline_clients["github_client"].fetch_activity.return_value = make_github(
-            "my-repo"
-        )
-
-        report = _make_report(
-            [
-                {
-                    "name": "my-repo",
-                    "summary": ["work"],
-                    "tags": [],
-                }
-            ]
-        )
-        pipeline_clients["summary_client"].generate_summary.return_value = report
-        pipeline_clients["notion_client"].create_report_pages.return_value = []
-
-        process_date(SINCE, UNTIL, session, **pipeline_clients)
-
-        notion_args = pipeline_clients["notion_client"].create_report_pages.call_args[0]
-        commits = notion_args[4].repos()["my-repo"]["commits"]
-        # Same SHA appearing in two sessions should appear only once,
-        # with the earliest occurrence (s1) winning
-        assert len(commits) == 1
-        assert commits[0].sha == "aaa1111"
-        assert commits[0].date == "2026-03-28T10:30:00+09:00"
-
-    def test_supplements_session_commits_for_missing_repo(self, pipeline_clients):
-        session = make_session(
-            "my-repo",
-            tools=("Bash",),
-            session_commits=[
-                {"sha": "a1b2c3d", "message": "Fix login bug"},
-            ],
-        )
-        # GitHub API returned no data for this repo at all
-        pipeline_clients["github_client"].fetch_activity.return_value = GitHubActivity(
-            {}
-        )
-
-        report = _make_report(
-            [
-                {
-                    "name": "my-repo",
-                    "summary": ["work"],
-                    "tags": [],
-                }
-            ]
-        )
-        pipeline_clients["summary_client"].generate_summary.return_value = report
-        pipeline_clients["notion_client"].create_report_pages.return_value = []
-
-        process_date(SINCE, UNTIL, session, **pipeline_clients)
-
-        call_args = pipeline_clients["summary_client"].generate_summary.call_args[0]
-        github_md = call_args[1]
-        assert "Fix login bug" in github_md
-
-        # Verify GitHubActivity passed to Notion contains the injected repo
-        # with the same URL construction as when the repo was already present
-        notion_args = pipeline_clients["notion_client"].create_report_pages.call_args[0]
-        activity = notion_args[4]
-        assert "my-repo" in activity.repos()
-        commits = activity.repos()["my-repo"]["commits"]
-        assert len(commits) == 1
-        assert commits[0].url == f"https://github.com/{OWNER}/my-repo/commit/a1b2c3d"
-
-    def test_merges_and_deduplicates_session_commits(self, pipeline_clients):
-        session = make_session(
-            "my-repo",
-            messages=("Work",),
-            tools=("Bash",),
-            session_commits=[
-                {"sha": "abc1234", "message": "Existing commit"},
-                {"sha": "def5678", "message": "Squash-lost commit"},
-            ],
-        )
-        # GitHub API found one commit with full SHA that overlaps with session
-        pipeline_clients["github_client"].fetch_activity.return_value = make_github(
-            "my-repo",
-            commits=[
-                make_commit(
-                    sha="abc1234abcdef1234abcdef1234abcdef12345678",
-                    message="Existing commit",
-                    url=f"https://github.com/{OWNER}/my-repo/commit/abc1234",
-                )
-            ],
-        )
-
-        report = _make_report(
-            [
-                {
-                    "name": "my-repo",
-                    "summary": ["work"],
-                    "tags": [],
-                }
-            ]
-        )
-        pipeline_clients["summary_client"].generate_summary.return_value = report
-        pipeline_clients["notion_client"].create_report_pages.return_value = []
-
-        process_date(SINCE, UNTIL, session, **pipeline_clients)
-
-        call_args = pipeline_clients["summary_client"].generate_summary.call_args[0]
-        github_md = call_args[1]
-        # Both commits present, no duplicates
-        assert "Existing commit" in github_md
-        assert "Squash-lost commit" in github_md
-        assert github_md.count("Existing commit") == 1
-
-        # Verify GitHubActivity passed to Notion has exactly 2 commits (no duplication)
-        notion_args = pipeline_clients["notion_client"].create_report_pages.call_args[0]
-        activity = notion_args[4]
-        assert len(activity.repos()["my-repo"]["commits"]) == 2
+        merged = notion_args[4].repos()["my-repo"]["commits"]
+        assert [c.sha for c in merged] == ["a1b2c3d"]
+        assert merged[0].url == f"https://github.com/{OWNER}/my-repo/commit/a1b2c3d"
 
     def test_detects_skipped_repos(self, pipeline_clients):
         session = make_session("repo")
@@ -416,84 +201,6 @@ class TestProcessDate:
         kwargs = pipeline_clients["github_client"].fetch_activity.call_args.kwargs
         assert kwargs["session_pulls"] == {}
         assert kwargs["session_issues"] == {}
-
-
-class TestSessionCommitPullNumbersPopulation:
-    @pytest.fixture(autouse=True)
-    def _setup(self, pipeline_clients):
-        self.clients = pipeline_clients
-        self.clients["summary_client"].generate_summary.return_value = _make_report(
-            [{"name": "my-repo", "summary": [], "tags": []}],
-        )
-        self.clients["notion_client"].create_report_pages.return_value = []
-
-    def _session(self, session_commits):
-        return make_session(
-            "my-repo",
-            messages=("Work",),
-            tools=("Bash",),
-            session_commits=session_commits,
-        )
-
-    def test_populates_for_new_session_commits_only(self):
-        session = self._session(
-            [
-                {"sha": "abc1234", "message": "Existing"},
-                {"sha": "def5678", "message": "Squash-lost"},
-            ]
-        )
-        self.clients["github_client"].fetch_activity.return_value = make_github(
-            "my-repo",
-            commits=[
-                make_commit(
-                    sha="abc1234abcdef1234abcdef1234abcdef12345678",
-                    message="Existing",
-                    url=f"https://github.com/{OWNER}/my-repo/commit/abc1234",
-                )
-            ],
-        )
-
-        process_date(SINCE, UNTIL, session, **self.clients)
-
-        populate = self.clients["github_client"].populate_commit_pull_numbers
-        populate.assert_called_once()
-        args = populate.call_args.args
-        assert args[0] == "my-repo"
-        assert [c.sha for c in args[1]] == ["def5678"]
-
-    def test_populates_all_session_commits_when_repo_missing(self):
-        session = self._session(
-            [
-                {"sha": "aaa1111", "message": "C1"},
-                {"sha": "bbb2222", "message": "C2"},
-            ]
-        )
-        self.clients["github_client"].fetch_activity.return_value = GitHubActivity({})
-
-        process_date(SINCE, UNTIL, session, **self.clients)
-
-        populate = self.clients["github_client"].populate_commit_pull_numbers
-        populate.assert_called_once()
-        args = populate.call_args.args
-        assert args[0] == "my-repo"
-        assert [c.sha for c in args[1]] == ["aaa1111", "bbb2222"]
-
-    def test_skips_populate_when_all_session_commits_overlap_with_search(self):
-        session = self._session([{"sha": "abc1234", "message": "Existing"}])
-        self.clients["github_client"].fetch_activity.return_value = make_github(
-            "my-repo",
-            commits=[
-                make_commit(
-                    sha="abc1234abcdef1234abcdef1234abcdef12345678",
-                    message="Existing",
-                    url=f"https://github.com/{OWNER}/my-repo/commit/abc1234",
-                )
-            ],
-        )
-
-        process_date(SINCE, UNTIL, session, **self.clients)
-
-        self.clients["github_client"].populate_commit_pull_numbers.assert_not_called()
 
 
 class TestRun:
