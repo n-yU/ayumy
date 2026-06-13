@@ -144,7 +144,10 @@ Claude Code は会話を `~/.claude/projects/` 以下にローカル保存して
 - メタデータ（セッション ID、タイムスタンプ、ブランチ等）は JSONL の各エントリに埋め込まれている
 - 外部インデックスファイルは存在しない
 
-JSONL の各エントリは以下の構造を持つ（Claude Code が生成するデータの観測に基づく。公式仕様は存在しない）
+JSONL の各エントリは Claude Code が生成するデータの観測に基づく構造を持つ（公式仕様は存在しない）
+
+<details>
+<summary>JSONL Entry Fields</summary>
 
 | Field | Type | Description |
 |---|---|---|
@@ -177,6 +180,8 @@ JSONL の各エントリは以下の構造を持つ（Claude Code が生成す�
 - pre-commit hook の出力が先行する場合にも対応する（行単位でパターンを検索）
 - 通常の `[branch sha]` 形式に加え、`[branch (root-commit) sha]` や `[detached HEAD sha]` にも対応する
 - これにより squash merge で GitHub API から取得できないコミットを補完する
+
+</details>
 
 Claude Code が生成するため、タイムスタンプのフォーマットは安定しており、パース時に防御的な例外処理（`ValueError` の catch 等）は行わない
 
@@ -295,7 +300,10 @@ DynamoDB の `ayumy-sessions` テーブルから対象日付をパーティシ�
 ### Session Write to DynamoDB
 レポート生成の前処理として、S3 上の未アーカイブ JSONL をパースし、セッションメタデータを DynamoDB に書き込む。日付フィルタなしで全エントリを処理し、JST 日付ごとにグルーピングする
 
-**テーブル設計**（テーブル名: `ayumy-sessions`、オンデマンドモード、PITR 有効）
+テーブル名は `ayumy-sessions`、オンデマンドモードかつ PITR 有効
+
+<details>
+<summary>DynamoDB Table Schema</summary>
 
 | Key | Attribute | Type | Description |
 |---|---|---|---|
@@ -312,6 +320,8 @@ DynamoDB の `ayumy-sessions` テーブルから対象日付をパーティシ�
 | | `session_issues` | List | session 中の Bash tool 操作で言及された Issue 番号のソート済みリスト（未検出時は空リスト） |
 | | `updated_at` | String | ISO 8601、書き込み・更新時刻 |
 | | `reported_at` | String | ISO 8601、レポート生成時刻（未生成時は未設定） |
+
+</details>
 
 書き込み時の動作
 
@@ -336,7 +346,8 @@ GitHub アクティビティと Claude Code セッションログの両方をコ
 - **Claude Code での作業**: 上記の要点の中に Claude Code セッションでの相談・実装方針の検討内容も含めて構わない
 - PR/Issue のステータス別一覧と時系列のイベントは Notion 本文の生成時にプログラムで組み立てるため、Claude API の出力には含めない
 
-入力フォーマット
+<details>
+<summary>Summary Prompt Format</summary>
 
 ```
 以下は {日付} の GitHub アクティビティおよび Claude Code での作業記録です。
@@ -359,6 +370,8 @@ GitHub アクティビティと Claude Code セッションログの両方をコ
 - ユーザー: 認証機能のリファクタリングについて相談
 - ツール使用: ファイル編集 (auth.ts, middleware.ts)
 ```
+
+</details>
 
 出力にはリポジトリごとの作業要点（箇条書き）とタグの提案を含める
 
@@ -459,7 +472,11 @@ ayumy sync --report --date 2026-03-01..2026-03-05  # 日付範囲のレポート
 ### Environment Variables
 Lambda 関数の環境変数として設定する。機密情報は AWS Secrets Manager に保管し、Lambda から参照する
 
+<details>
+<summary>Lambda Environment Variables</summary>
+
 **Lambda 環境変数**
+
 | Variable | Description |
 |---|---|
 | `AYUMY_S3_BUCKET` | セッションログの保管先 S3 バケット名 |
@@ -468,12 +485,15 @@ Lambda 関数の環境変数として設定する。機密情報は AWS Secrets 
 | `NOTION_DATABASE_ID` | 書き込み先の Notion データベース ID |
 
 **Secrets Manager に保管**
+
 | Secret | Description |
 |---|---|
 | `GITHUB_PAT` | GitHub Fine-grained PAT（全 owner リポジトリへの read 権限） |
 | `ANTHROPIC_API_KEY` | Anthropic API キー |
 | `NOTION_SECRET` | Notion Internal Integration トークン |
 | `SLACK_WEBHOOK_URL` | Slack Incoming Webhook URL |
+
+</details>
 
 ### Lambda Function Configuration
 - **ランタイム**: Python 3.12
@@ -509,16 +529,21 @@ sam build && sam deploy
 ### Running Cost
 課金が発生するのは Anthropic API と AWS。GitHub API と Notion API は無料枠内で収まる
 
+<details>
+<summary>Running Cost Breakdown</summary>
+
 **Anthropic API（`claude-sonnet-4-20250514`）**
 - 入力: $3 / 1M tokens、出力: $15 / 1M tokens
 
 **1日あたりのトークン使用量（目安）**
+
 | Item | Tokens |
 |---|---|
 | 入力（プロンプト + GitHub アクティビティ + JSONL 抽出データ） | ~10,000 |
 | 出力（構造化された日本語要約） | ~1,500 |
 
 **コスト概算**
+
 | Period | Cost |
 |---|---|
 | 1日 | ~$0.05（入力 $0.03 + 出力 $0.02） |
@@ -528,12 +553,15 @@ sam build && sam deploy
 ※ セッションログが大量にある日はトークン数が増加する。上記は平均的な開発日の見積もり
 
 **AWS**
+
 | Service | Estimate |
 |---|---|
 | Lambda | 無料枠内（月100万リクエスト、1日1〜数回の実行） |
 | S3 | 月数円（年間 1〜2 GB 程度） |
 | EventBridge Scheduler | 無料枠内 |
 | Secrets Manager | ~$0.40/月（シークレット4件） |
+
+</details>
 
 ### Storage Management
 - セッションログは S3 経由で DynamoDB に永続化し、クライアントマシンのディスクを消費しない
