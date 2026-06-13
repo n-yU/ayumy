@@ -102,7 +102,7 @@ class TestGitHubActivityFormat:
 
 class TestMergeSessionCommits:
     def _populate_no_op(self, repo_name, commits):
-        """Fake populate_pull_numbers used when PR resolution is irrelevant to the test."""
+        pass
 
     def test_does_nothing_when_no_session_commits(self):
         activity = GitHubActivity({})
