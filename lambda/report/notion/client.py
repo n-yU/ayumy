@@ -14,30 +14,9 @@ from .. import (
 )
 from ..domain import CommitInfo, PullInfo
 from ..github import GitHubActivity, RepoActivity
+from .blocks import bulleted_link, chunk_rich_text
 
 logger = logging.getLogger(__name__)
-
-
-RICH_TEXT_LIMIT = 2000
-
-
-def _chunk_rich_text(text: str) -> list[dict]:
-    """Split `text` into rich_text objects each within Notion's per-item character limit."""
-    return [
-        {"type": "text", "text": {"content": text[i : i + RICH_TEXT_LIMIT]}}
-        for i in range(0, len(text), RICH_TEXT_LIMIT)
-    ]
-
-
-def _linked_text(content: str, url: str) -> list[dict]:
-    """Build hyperlinked rich_text objects, each within Notion's per-item character limit and sharing the same link."""
-    return [
-        {
-            "type": "text",
-            "text": {"content": content[i : i + RICH_TEXT_LIMIT], "link": {"url": url}},
-        }
-        for i in range(0, len(content), RICH_TEXT_LIMIT)
-    ]
 
 
 def _is_in_range(iso_timestamp: str | None, since: datetime, until: datetime) -> bool:
@@ -46,27 +25,6 @@ def _is_in_range(iso_timestamp: str | None, since: datetime, until: datetime) ->
         return False
     dt = datetime.fromisoformat(iso_timestamp)
     return since <= dt < until
-
-
-def _bulleted_link(
-    label: str,
-    url: str,
-    prefix: str = "",
-    children: list[dict] | None = None,
-) -> dict:
-    """Build a `bulleted_list_item` block with an optional plain-text `prefix` rendered before the linked label and optional nested `children`."""
-    rich_text: list[dict] = []
-    if prefix:
-        rich_text.append({"type": "text", "text": {"content": prefix}})
-    rich_text.extend(_linked_text(label, url))
-    body: dict = {"rich_text": rich_text}
-    if children:
-        body["children"] = children
-    return {
-        "object": "block",
-        "type": "bulleted_list_item",
-        "bulleted_list_item": body,
-    }
 
 
 class NotionClient:
@@ -174,7 +132,7 @@ class NotionClient:
                 }
             )
             for label, url, prefix in items:
-                blocks.append(_bulleted_link(label, url, prefix))
+                blocks.append(bulleted_link(label, url, prefix))
 
         return blocks
 
@@ -209,7 +167,7 @@ class NotionClient:
                 continue
             ts = datetime.fromisoformat(c.date)
             if c.sha in merge_sha_to_pr:
-                entries.append((ts, 1, _bulleted_link(c.label(), c.url, prefix="🔸 ")))
+                entries.append((ts, 1, bulleted_link(c.label(), c.url, prefix="🔸 ")))
                 continue
             # Pick smallest PR number for deterministic nesting independent of pull_numbers order
             attached_prs = [n for n in c.pull_numbers if n in pr_by_number]
@@ -217,7 +175,7 @@ class NotionClient:
             if attached_pr is not None:
                 pr_nested_commits[attached_pr].append(c)
             else:
-                entries.append((ts, 1, _bulleted_link(c.label(), c.url, prefix="🔸 ")))
+                entries.append((ts, 1, bulleted_link(c.label(), c.url, prefix="🔸 ")))
 
         for pr_number, pr in pr_by_number.items():
             nested = sorted(
@@ -239,12 +197,12 @@ class NotionClient:
                 candidates.append(datetime.fromisoformat(pr.closed_at))
             if not candidates:
                 continue
-            children = [_bulleted_link(c.label(), c.url, prefix="🔸 ") for c in nested]
+            children = [bulleted_link(c.label(), c.url, prefix="🔸 ") for c in nested]
             entries.append(
                 (
                     min(candidates),
                     0,
-                    _bulleted_link(
+                    bulleted_link(
                         pr.label(repo_name),
                         pr.url,
                         prefix="🔀 ",
@@ -258,7 +216,7 @@ class NotionClient:
                     (
                         datetime.fromisoformat(pr.closed_at),
                         1,
-                        _bulleted_link(
+                        bulleted_link(
                             pr.label(repo_name),
                             pr.url,
                             prefix="⚠️ close: ",
@@ -273,7 +231,7 @@ class NotionClient:
                     (
                         datetime.fromisoformat(issue.created_at),
                         1,
-                        _bulleted_link(label, issue.url, prefix="🟢 open: "),
+                        bulleted_link(label, issue.url, prefix="🟢 open: "),
                     )
                 )
             if _is_in_range(issue.closed_at, since, until):
@@ -281,7 +239,7 @@ class NotionClient:
                     (
                         datetime.fromisoformat(issue.closed_at),
                         1,
-                        _bulleted_link(
+                        bulleted_link(
                             label,
                             issue.url,
                             prefix=issue.timeline_close_prefix(),
@@ -330,7 +288,7 @@ class NotionClient:
                     "object": "block",
                     "type": "bulleted_list_item",
                     "bulleted_list_item": {
-                        "rich_text": _chunk_rich_text(item),
+                        "rich_text": chunk_rich_text(item),
                     },
                 }
             )
