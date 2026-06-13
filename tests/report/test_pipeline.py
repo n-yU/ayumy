@@ -135,11 +135,11 @@ class TestProcessDate:
         activity = notion_args[4]
         assert "my-repo" in activity.repos()
         injected = next(
-            c for c in activity.repos()["my-repo"]["commits"] if c["sha"] == "a1b2c3d"
+            c for c in activity.repos()["my-repo"]["commits"] if c.sha == "a1b2c3d"
         )
-        assert injected["date"] == "2026-03-28T10:00:00+09:00"
-        assert injected["url"] == f"https://github.com/{OWNER}/my-repo/commit/a1b2c3d"
-        assert injected["author"] == ""
+        assert injected.date == "2026-03-28T10:00:00+09:00"
+        assert injected.url == f"https://github.com/{OWNER}/my-repo/commit/a1b2c3d"
+        assert injected.author == ""
 
     def test_session_commit_uses_per_commit_timestamp_when_present(
         self, pipeline_clients
@@ -182,10 +182,10 @@ class TestProcessDate:
         notion_args = pipeline_clients["notion_client"].create_report_pages.call_args[0]
         commits = notion_args[4].repos()["my-repo"]["commits"]
         # Per-commit timestamp wins; legacy entry falls back to session start_time
-        first = next(c for c in commits if c["sha"] == "aaa1111")
-        second = next(c for c in commits if c["sha"] == "bbb2222")
-        assert first["date"] == "2026-03-28T10:45:00+09:00"
-        assert second["date"] == "2026-03-28T10:00:00+09:00"
+        first = next(c for c in commits if c.sha == "aaa1111")
+        second = next(c for c in commits if c.sha == "bbb2222")
+        assert first.date == "2026-03-28T10:45:00+09:00"
+        assert second.date == "2026-03-28T10:00:00+09:00"
 
     def test_dedupes_session_commits_across_sessions(self, pipeline_clients):
         session = make_session(
@@ -244,8 +244,8 @@ class TestProcessDate:
         # Same SHA appearing in two sessions should appear only once,
         # with the earliest occurrence (s1) winning
         assert len(commits) == 1
-        assert commits[0]["sha"] == "aaa1111"
-        assert commits[0]["date"] == "2026-03-28T10:30:00+09:00"
+        assert commits[0].sha == "aaa1111"
+        assert commits[0].date == "2026-03-28T10:30:00+09:00"
 
     def test_supplements_session_commits_for_missing_repo(self, pipeline_clients):
         session = make_session(
@@ -285,7 +285,7 @@ class TestProcessDate:
         assert "my-repo" in activity.repos()
         commits = activity.repos()["my-repo"]["commits"]
         assert len(commits) == 1
-        assert commits[0]["url"] == f"https://github.com/{OWNER}/my-repo/commit/a1b2c3d"
+        assert commits[0].url == f"https://github.com/{OWNER}/my-repo/commit/a1b2c3d"
 
     def test_merges_and_deduplicates_session_commits(self, pipeline_clients):
         session = make_session(
@@ -458,7 +458,7 @@ class TestSessionCommitPullNumbersPopulation:
         populate.assert_called_once()
         args = populate.call_args.args
         assert args[0] == "my-repo"
-        assert [c["sha"] for c in args[1]] == ["def5678"]
+        assert [c.sha for c in args[1]] == ["def5678"]
 
     def test_populates_all_session_commits_when_repo_missing(self):
         session = self._session(
@@ -475,7 +475,7 @@ class TestSessionCommitPullNumbersPopulation:
         populate.assert_called_once()
         args = populate.call_args.args
         assert args[0] == "my-repo"
-        assert [c["sha"] for c in args[1]] == ["aaa1111", "bbb2222"]
+        assert [c.sha for c in args[1]] == ["aaa1111", "bbb2222"]
 
     def test_skips_populate_when_all_session_commits_overlap_with_search(self):
         session = self._session([{"sha": "abc1234", "message": "Existing"}])

@@ -1,5 +1,6 @@
 """GitHub activity client."""
 
+import dataclasses
 import logging
 import time
 from datetime import datetime, timedelta
@@ -7,10 +8,10 @@ from functools import cached_property
 
 from github import Github, GithubException, UnknownObjectException
 from github.Issue import Issue
-from github.PullRequest import PullRequest
 from github.Repository import Repository
 
-from . import CommitInfo, GitHubActivity, IssueInfo, PullInfo, RepoActivity
+from . import GitHubActivity, RepoActivity
+from .domain import CommitInfo, IssueInfo, PullInfo
 
 logger = logging.getLogger(__name__)
 
@@ -75,14 +76,9 @@ class GitHubClient:
             if author_date < since or author_date >= until:
                 continue
             results.append(
-                {
-                    "sha": c.sha,
-                    "message": c.commit.message.split("\n")[0],
-                    "author": c.commit.author.name,
-                    "date": author_date.isoformat(),
-                    "url": c.html_url,
-                    "pull_numbers": self._fetch_pulls_for_commit(repo, c.sha),
-                }
+                CommitInfo.from_search_commit(
+                    c, pull_numbers=self._fetch_pulls_for_commit(repo, c.sha)
+                )
             )
         return results
 
@@ -117,7 +113,7 @@ class GitHubClient:
                 break
             if pr.updated_at >= until:
                 continue
-            results.append(_build_pull_info(pr))
+            results.append(PullInfo.from_pull_request(pr))
         return results
 
     def fetch_issues(
@@ -148,7 +144,7 @@ class GitHubClient:
                 continue
             if issue.updated_at >= until:
                 continue
-            results.append(_build_issue_info(issue))
+            results.append(IssueInfo.from_issue(issue))
         return results
 
     def fetch_activity(
@@ -271,27 +267,31 @@ class GitHubClient:
         respectively so a single missing commit does not abort the
         whole report.
         """
-        unresolved = [c for c in commits if not c.get("pull_numbers")]
-        if not unresolved:
+        unresolved_indices = [i for i, c in enumerate(commits) if not c.pull_numbers]
+        if not unresolved_indices:
             return
         repo = self.g.get_user().get_repo(repo_name)
-        for c in unresolved:
+        for i in unresolved_indices:
+            c = commits[i]
             try:
-                commit = repo.get_commit(c["sha"])
+                commit = repo.get_commit(c.sha)
             except GithubException as e:
                 if e.status not in (404, 422):
                     raise
                 logger.warning(
                     "Commit %s lookup failed (%s); keeping commit but "
                     "skipping PR association",
-                    c["sha"][:7],
+                    c.short_sha,
                     e.status,
                 )
-                c["pull_numbers"] = []
+                commits[i] = c.with_pull_numbers(())
                 continue
-            c["sha"] = commit.sha
-            c["url"] = commit.html_url
-            c["pull_numbers"] = [pr.number for pr in commit.get_pulls()]
+            commits[i] = dataclasses.replace(
+                c,
+                sha=commit.sha,
+                url=commit.html_url,
+                pull_numbers=tuple(pr.number for pr in commit.get_pulls()),
+            )
 
     def _fetch_pulls_hybrid(
         self,
@@ -315,7 +315,7 @@ class GitHubClient:
 
         commit_numbers: set[int] = set()
         for c in commits:
-            commit_numbers.update(c.get("pull_numbers", []))
+            commit_numbers.update(c.pull_numbers)
 
         session_set: set[int] = set(session_numbers)
         exempt_numbers = commit_numbers | session_set
@@ -327,10 +327,10 @@ class GitHubClient:
             except UnknownObjectException:
                 logger.warning("PR #%d not found (404), skipping", n)
                 continue
-            info = _build_pull_info(pr)
+            info = PullInfo.from_pull_request(pr)
             # Search-only entries must have a state event in [since, until)
             if n in event_numbers and n not in exempt_numbers:
-                if not _pull_has_event_in_range(info, since, until):
+                if not info.has_event_in_range(since, until):
                     continue
             results.append(info)
         return results
@@ -368,74 +368,10 @@ class GitHubClient:
         results: list[IssueInfo] = []
         for number in sorted(seen):
             issue = seen[number]
-            info = _build_issue_info(issue)
+            info = IssueInfo.from_issue(issue)
             # Search-only entries must have a state event in [since, until)
             if number in event_numbers and number not in session_set:
-                if not _issue_has_event_in_range(info, since, until):
+                if not info.has_event_in_range(since, until):
                     continue
             results.append(info)
         return results
-
-
-def _build_pull_info(pr: PullRequest) -> PullInfo:
-    """Construct a PullInfo dict from a PyGithub PullRequest."""
-    if pr.merged_at:
-        state = "merged"
-    elif pr.state == "closed":
-        state = "closed"
-    else:
-        state = "open"
-    return {
-        "number": pr.number,
-        "title": pr.title,
-        "state": state,
-        "author": pr.user.login,
-        "labels": [label.name for label in pr.labels],
-        "draft": bool(pr.draft),
-        "url": pr.html_url,
-        "created_at": pr.created_at.isoformat(),
-        "merged_at": pr.merged_at.isoformat() if pr.merged_at else None,
-        "closed_at": pr.closed_at.isoformat() if pr.closed_at else None,
-        # GitHub returns a "test merge" SHA for unmerged PRs,
-        # meaningful only when the PR is actually merged
-        "merge_commit_sha": pr.merge_commit_sha if pr.merged_at else None,
-    }
-
-
-def _build_issue_info(issue: Issue) -> IssueInfo:
-    """Construct an IssueInfo dict from a PyGithub Issue."""
-    return {
-        "number": issue.number,
-        "title": issue.title,
-        "state": issue.state,
-        "author": issue.user.login,
-        "labels": [label.name for label in issue.labels],
-        "url": issue.html_url,
-        "created_at": issue.created_at.isoformat(),
-        "closed_at": issue.closed_at.isoformat() if issue.closed_at else None,
-        "state_reason": issue.state_reason,
-    }
-
-
-def _pull_has_event_in_range(
-    info: PullInfo,
-    since: datetime,
-    until: datetime,
-) -> bool:
-    """Return True if any of created/merged/closed falls within range."""
-    for ts in (info["created_at"], info["merged_at"], info["closed_at"]):
-        if ts and since <= datetime.fromisoformat(ts) < until:
-            return True
-    return False
-
-
-def _issue_has_event_in_range(
-    info: IssueInfo,
-    since: datetime,
-    until: datetime,
-) -> bool:
-    """Return True if either created or closed falls within range."""
-    for ts in (info["created_at"], info["closed_at"]):
-        if ts and since <= datetime.fromisoformat(ts) < until:
-            return True
-    return False

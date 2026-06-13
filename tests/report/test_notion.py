@@ -5,6 +5,7 @@ from datetime import datetime
 from unittest.mock import MagicMock
 
 from report import JST
+from report.domain import CommitInfo, IssueInfo, PullInfo
 from report.notion import RICH_TEXT_LIMIT, NotionClient, _chunk_rich_text, _linked_text
 
 SINCE = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
@@ -17,15 +18,15 @@ def _commit(
     hour: int = 10,
     minute: int = 0,
     pull_numbers: list[int] | None = None,
-) -> dict:
-    return {
-        "sha": sha,
-        "message": message,
-        "author": "user",
-        "date": datetime(2026, 3, 28, hour, minute, tzinfo=JST).isoformat(),
-        "url": f"https://github.com/n-yU/repo/commit/{sha}",
-        "pull_numbers": pull_numbers or [],
-    }
+) -> CommitInfo:
+    return CommitInfo(
+        sha=sha,
+        message=message,
+        author="user",
+        date=datetime(2026, 3, 28, hour, minute, tzinfo=JST).isoformat(),
+        url=f"https://github.com/n-yU/repo/commit/{sha}",
+        pull_numbers=tuple(pull_numbers or ()),
+    )
 
 
 def _pr(
@@ -38,20 +39,20 @@ def _pr(
     merged_at: str | None = None,
     closed_at: str | None = None,
     merge_commit_sha: str | None = None,
-) -> dict:
-    return {
-        "number": number,
-        "title": title,
-        "state": state,
-        "author": "user",
-        "labels": [],
-        "draft": draft,
-        "url": f"https://github.com/n-yU/repo/pull/{number}",
-        "created_at": created_at or "2026-03-27T09:00:00+09:00",
-        "merged_at": merged_at,
-        "closed_at": closed_at,
-        "merge_commit_sha": merge_commit_sha,
-    }
+) -> PullInfo:
+    return PullInfo(
+        number=number,
+        title=title,
+        state=state,
+        author="user",
+        labels=(),
+        draft=draft,
+        url=f"https://github.com/n-yU/repo/pull/{number}",
+        created_at=created_at or "2026-03-27T09:00:00+09:00",
+        merged_at=merged_at,
+        closed_at=closed_at,
+        merge_commit_sha=merge_commit_sha,
+    )
 
 
 def _issue(
@@ -62,18 +63,18 @@ def _issue(
     created_at: str | None = None,
     closed_at: str | None = None,
     state_reason: str | None = None,
-) -> dict:
-    return {
-        "number": number,
-        "title": title,
-        "state": state,
-        "author": "user",
-        "labels": [],
-        "url": f"https://github.com/n-yU/repo/issues/{number}",
-        "created_at": created_at or "2026-03-27T09:00:00+09:00",
-        "closed_at": closed_at,
-        "state_reason": state_reason,
-    }
+) -> IssueInfo:
+    return IssueInfo(
+        number=number,
+        title=title,
+        state=state,
+        author="user",
+        labels=(),
+        url=f"https://github.com/n-yU/repo/issues/{number}",
+        created_at=created_at or "2026-03-27T09:00:00+09:00",
+        closed_at=closed_at,
+        state_reason=state_reason,
+    )
 
 
 def _make_client() -> NotionClient:
@@ -377,14 +378,14 @@ class TestTimelineSection:
         early = _commit(
             "aaa1111", "earlier in time", hour=10, minute=0, pull_numbers=[1]
         )
-        late = {
-            "sha": "bbb2222",
-            "message": "later in time",
-            "author": "user",
-            "date": "2026-03-28T09:00:00+00:00",
-            "url": "https://github.com/n-yU/repo/commit/bbb2222",
-            "pull_numbers": [1],
-        }
+        late = CommitInfo(
+            sha="bbb2222",
+            message="later in time",
+            author="user",
+            date="2026-03-28T09:00:00+00:00",
+            url="https://github.com/n-yU/repo/commit/bbb2222",
+            pull_numbers=(1,),
+        )
         repo_activity = {
             "commits": [late, early],
             "pulls": [_pr(1, "feat", "open", created_at="2026-03-28T09:00:00+09:00")],

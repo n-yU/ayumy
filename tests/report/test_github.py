@@ -9,6 +9,8 @@ from github import GithubException, UnknownObjectException
 from report import JST
 from report.github import _SEARCH_BATCH, _SEARCH_WINDOW, GitHubClient
 
+from ._builders import make_commit
+
 # Default JST day window used across most tests
 SINCE = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
 UNTIL = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
@@ -135,11 +137,11 @@ class TestFetchCommits:
 
         result = client.fetch_commits(repo, SINCE, UNTIL)
         assert len(result) == 1
-        assert result[0]["sha"] == "abc123"
-        assert result[0]["message"] == "Fix bug"
-        assert result[0]["author"] == "user"
-        assert result[0]["url"] == "https://github.com/n-yU/my-repo/commit/abc123"
-        assert result[0]["pull_numbers"] == []
+        assert result[0].sha == "abc123"
+        assert result[0].message == "Fix bug"
+        assert result[0].author == "user"
+        assert result[0].url == "https://github.com/n-yU/my-repo/commit/abc123"
+        assert result[0].pull_numbers == ()
 
     def test_populates_pull_numbers_from_associated_prs(self):
         client = _make_client()
@@ -158,7 +160,7 @@ class TestFetchCommits:
         ]
 
         result = client.fetch_commits(repo, SINCE, UNTIL)
-        assert result[0]["pull_numbers"] == [5, 9]
+        assert result[0].pull_numbers == (5, 9)
         repo.get_commit.assert_called_once_with("abc123")
 
     def test_widens_query_one_day_each_side_for_utc_safety(self):
@@ -208,7 +210,7 @@ class TestFetchCommits:
 
         result = client.fetch_commits(repo, SINCE, partial_until)
         assert len(result) == 1
-        assert result[0]["sha"] == "aaa"
+        assert result[0].sha == "aaa"
 
 
 class TestFetchPulls:
@@ -228,12 +230,12 @@ class TestFetchPulls:
 
         result = client.fetch_pulls(repo, SINCE, UNTIL)
         assert len(result) == 1
-        assert result[0]["state"] == "merged"
-        assert result[0]["draft"] is False
-        assert result[0]["url"] == "https://github.com/n-yU/repo/pull/1"
-        assert result[0]["created_at"] == "2026-03-27T09:00:00+09:00"
-        assert result[0]["merged_at"] == "2026-03-28T10:00:00+09:00"
-        assert result[0]["closed_at"] == "2026-03-28T10:00:00+09:00"
+        assert result[0].state == "merged"
+        assert result[0].draft is False
+        assert result[0].url == "https://github.com/n-yU/repo/pull/1"
+        assert result[0].created_at == "2026-03-27T09:00:00+09:00"
+        assert result[0].merged_at == "2026-03-28T10:00:00+09:00"
+        assert result[0].closed_at == "2026-03-28T10:00:00+09:00"
 
     def test_determines_closed_state(self):
         client = _make_client()
@@ -250,9 +252,9 @@ class TestFetchPulls:
         repo.get_pulls.return_value = [pr]
 
         result = client.fetch_pulls(repo, SINCE, UNTIL)
-        assert result[0]["state"] == "closed"
-        assert result[0]["merged_at"] is None
-        assert result[0]["closed_at"] == "2026-03-28T10:00:00+09:00"
+        assert result[0].state == "closed"
+        assert result[0].merged_at is None
+        assert result[0].closed_at == "2026-03-28T10:00:00+09:00"
 
     def test_determines_open_state(self):
         client = _make_client()
@@ -269,9 +271,9 @@ class TestFetchPulls:
         repo.get_pulls.return_value = [pr]
 
         result = client.fetch_pulls(repo, SINCE, UNTIL)
-        assert result[0]["state"] == "open"
-        assert result[0]["draft"] is True
-        assert result[0]["closed_at"] is None
+        assert result[0].state == "open"
+        assert result[0].draft is True
+        assert result[0].closed_at is None
 
     def test_breaks_on_old_prs(self):
         client = _make_client()
@@ -306,10 +308,10 @@ class TestFetchIssues:
 
         result = client.fetch_issues(repo, SINCE, UNTIL)
         assert len(result) == 1
-        assert result[0]["number"] == 5
-        assert result[0]["url"] == "https://github.com/n-yU/repo/issues/5"
-        assert result[0]["created_at"] == "2026-03-28T10:00:00+09:00"
-        assert result[0]["closed_at"] is None
+        assert result[0].number == 5
+        assert result[0].url == "https://github.com/n-yU/repo/issues/5"
+        assert result[0].created_at == "2026-03-28T10:00:00+09:00"
+        assert result[0].closed_at is None
 
     def test_extracts_labels(self):
         client = _make_client()
@@ -329,9 +331,9 @@ class TestFetchIssues:
         repo.get_issues.return_value = [issue]
 
         result = client.fetch_issues(repo, SINCE, UNTIL)
-        assert result[0]["labels"] == ["bug"]
-        assert result[0]["closed_at"] == "2026-03-28T10:00:00+09:00"
-        assert result[0]["state_reason"] == "completed"
+        assert result[0].labels == ("bug",)
+        assert result[0].closed_at == "2026-03-28T10:00:00+09:00"
+        assert result[0].state_reason == "completed"
 
 
 class TestFetchActivity:
@@ -479,22 +481,22 @@ class TestPopulateCommitPullNumbers:
         self.client.g.get_user.return_value.get_repo.return_value = self.repo
 
     def _commit(self, sha, pull_numbers):
-        return {
-            "sha": sha,
-            "message": "m",
-            "author": "u",
-            "date": "...",
-            "url": "...",
-            "pull_numbers": pull_numbers,
-        }
+        return make_commit(
+            sha=sha,
+            message="m",
+            author="u",
+            date="...",
+            url="...",
+            pull_numbers=pull_numbers,
+        )
 
     def test_skips_commits_with_existing_pull_numbers(self):
         commits = [self._commit("aaa", [3]), self._commit("bbb", [7])]
         self.client.populate_commit_pull_numbers("repo", commits)
 
         self.repo.get_commit.assert_not_called()
-        assert commits[0]["pull_numbers"] == [3]
-        assert commits[1]["pull_numbers"] == [7]
+        assert commits[0].pull_numbers == (3,)
+        assert commits[1].pull_numbers == (7,)
 
     def test_resolves_only_unresolved_commits(self):
         commit_obj = MagicMock()
@@ -509,8 +511,8 @@ class TestPopulateCommitPullNumbers:
         self.client.populate_commit_pull_numbers("repo", commits)
 
         self.repo.get_commit.assert_called_once_with("bbb")
-        assert commits[0]["pull_numbers"] == [3]
-        assert commits[1]["pull_numbers"] == [11]
+        assert commits[0].pull_numbers == (3,)
+        assert commits[1].pull_numbers == (11,)
 
     def test_normalizes_short_sha_to_full(self):
         full_sha = "bbb2222abcdef1234abcdef1234abcdef12345678"
@@ -525,8 +527,8 @@ class TestPopulateCommitPullNumbers:
         self.client.populate_commit_pull_numbers("repo", commits)
 
         self.repo.get_commit.assert_called_once_with("bbb2222")
-        assert commits[0]["sha"] == full_sha
-        assert commits[0]["url"] == full_url
+        assert commits[0].sha == full_sha
+        assert commits[0].url == full_url
 
     def test_assigns_empty_list_on_404(self):
         self.repo.get_commit.side_effect = UnknownObjectException(
@@ -538,11 +540,10 @@ class TestPopulateCommitPullNumbers:
         commits = [self._commit("aaa", [])]
         self.client.populate_commit_pull_numbers("repo", commits)
 
-        assert commits[0]["pull_numbers"] == []
+        assert commits[0].pull_numbers == ()
 
     def test_assigns_empty_list_on_422(self):
-        # Short SHA ambiguity / not-found is reported as 422 by
-        # GET /commits/{sha}
+        # Short SHA ambiguity / not-found is reported as 422 by GET /commits/{sha}
         self.repo.get_commit.side_effect = GithubException(
             422,
             {"message": "No commit found for SHA: aaa"},
@@ -552,7 +553,7 @@ class TestPopulateCommitPullNumbers:
         commits = [self._commit("aaa", [])]
         self.client.populate_commit_pull_numbers("repo", commits)
 
-        assert commits[0]["pull_numbers"] == []
+        assert commits[0].pull_numbers == ()
 
     def test_propagates_other_github_errors(self):
         self.repo.get_commit.side_effect = GithubException(
@@ -594,14 +595,14 @@ class TestFetchPullsBackfill:
 
         # Commits already carry pull_numbers populated by fetch_commits
         commits = [
-            {
-                "sha": "deadbee",
-                "message": "",
-                "author": "",
-                "date": in_range.isoformat(),
-                "url": "",
-                "pull_numbers": [1, 4],
-            }
+            make_commit(
+                sha="deadbee",
+                message="",
+                author="",
+                date=in_range.isoformat(),
+                url="",
+                pull_numbers=[1, 4],
+            )
         ]
         result = client.fetch_pulls(
             repo,
@@ -611,7 +612,7 @@ class TestFetchPullsBackfill:
             commits=commits,
         )
 
-        numbers = sorted(r["number"] for r in result)
+        numbers = sorted(r.number for r in result)
         assert numbers == [1, 2, 3, 4]
         # Hybrid path no longer calls get_commit (data comes from pull_numbers)
         repo.get_commit.assert_not_called()
@@ -654,14 +655,14 @@ class TestFetchPullsBackfill:
         )
 
         commits = [
-            {
-                "sha": "abc",
-                "message": "",
-                "author": "",
-                "date": "",
-                "url": "",
-                "pull_numbers": [99],
-            }
+            make_commit(
+                sha="abc",
+                message="",
+                author="",
+                date="",
+                url="",
+                pull_numbers=[99],
+            )
         ]
         result = client.fetch_pulls(
             repo,
@@ -670,7 +671,7 @@ class TestFetchPullsBackfill:
             is_backfill=True,
             commits=commits,
         )
-        assert [r["number"] for r in result] == [99]
+        assert [r.number for r in result] == [99]
 
     def test_skips_pull_not_found(self):
         client = _make_client()
@@ -734,7 +735,7 @@ class TestFetchPullsBackfill:
             commits=[],
             session_numbers=[77],
         )
-        assert [r["number"] for r in result] == [77]
+        assert [r.number for r in result] == [77]
 
     def test_unions_session_with_search_and_dedups(self):
         client = _make_client()
@@ -761,7 +762,7 @@ class TestFetchPullsBackfill:
             commits=[],
             session_numbers=[10, 20],
         )
-        assert sorted(r["number"] for r in result) == [10, 20]
+        assert sorted(r.number for r in result) == [10, 20]
         # #10 was fetched once (event ∪ session uses sorted unique numbers)
         called = [c.args[0] for c in repo.get_pull.call_args_list]
         assert called == sorted(called) and len(called) == 2
@@ -810,8 +811,8 @@ class TestFetchIssuesBackfill:
             UNTIL,
             is_backfill=True,
         )
-        assert sorted(r["number"] for r in result) == [1, 2]
-        assert result[1]["state_reason"] == "completed"
+        assert sorted(r.number for r in result) == [1, 2]
+        assert result[1].state_reason == "completed"
 
     def test_post_filters_issue_outside_range(self):
         client = _make_client()
@@ -847,7 +848,7 @@ class TestFetchIssuesBackfill:
             is_backfill=True,
             session_numbers=[42],
         )
-        assert [r["number"] for r in result] == [42]
+        assert [r.number for r in result] == [42]
 
     def test_skips_session_number_resolving_to_pr(self):
         """Session #N may resolve to a PR; PRs must be filtered out."""
@@ -907,7 +908,7 @@ class TestFetchIssuesBackfill:
             is_backfill=True,
             session_numbers=[10],
         )
-        assert [r["number"] for r in result] == [10]
+        assert [r.number for r in result] == [10]
         repo.get_issue.assert_not_called()
 
 

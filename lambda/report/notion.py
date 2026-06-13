@@ -7,22 +7,19 @@ from notion_client import Client
 
 from . import (
     JST,
-    CommitInfo,
     GitHubActivity,
-    IssueInfo,
-    PullInfo,
     RepoActivity,
     ReportSummary,
     RepoSummary,
     SessionActivity,
     get_version,
 )
+from .domain import CommitInfo, PullInfo
 
 logger = logging.getLogger(__name__)
 
 
 RICH_TEXT_LIMIT = 2000
-SHA_PREFIX_LEN = 7
 
 
 def _chunk_rich_text(text: str) -> list[dict]:
@@ -52,16 +49,6 @@ def _is_in_range(iso_timestamp: str | None, since: datetime, until: datetime) ->
     return since <= dt < until
 
 
-def _pr_label(repo_name: str, pr: PullInfo) -> str:
-    """Render `repo#N: title` for a PR."""
-    return f"{repo_name}#{pr['number']}: {pr['title']}"
-
-
-def _issue_label(repo_name: str, issue: IssueInfo) -> str:
-    """Render `repo#N: title` for an Issue."""
-    return f"{repo_name}#{issue['number']}: {issue['title']}"
-
-
 def _bulleted_link(
     label: str,
     url: str,
@@ -81,37 +68,6 @@ def _bulleted_link(
         "type": "bulleted_list_item",
         "bulleted_list_item": body,
     }
-
-
-def _done_prefix_pr(pr: PullInfo) -> str:
-    """Return the Done-section prefix for a PR; `closed` (unmerged) PRs are flagged as irregular."""
-    if pr["state"] == "merged":
-        return "✅ "
-    return "⚠️ (closed) "
-
-
-_IRREGULAR_ISSUE_REASONS = {"not_planned": "not planned", "duplicate": "duplicate"}
-
-
-def _done_prefix_issue(issue: IssueInfo) -> str:
-    """Return the Done-section prefix for a closed Issue; `not_planned` / `duplicate` are flagged, others (including legacy `state_reason=None`) are regular Done."""
-    label = _IRREGULAR_ISSUE_REASONS.get(issue.get("state_reason") or "")
-    if label is None:
-        return "✅ "
-    return f"⚠️ ({label}) "
-
-
-def _commit_label(c: CommitInfo) -> str:
-    """Render `sha7: message` for a commit."""
-    return f"{c['sha'][:SHA_PREFIX_LEN]}: {c['message']}"
-
-
-def _issue_close_prefix(issue: IssueInfo) -> str:
-    """Return the timeline close-line prefix for a closed Issue."""
-    label = _IRREGULAR_ISSUE_REASONS.get(issue.get("state_reason") or "")
-    if label is None:
-        return "✅ close: "
-    return f"⚠️ close ({label}): "
 
 
 class NotionClient:
@@ -186,20 +142,20 @@ class NotionClient:
         todo: list[tuple[str, str, str]] = []
 
         for pr in repo_activity["pulls"]:
-            label = _pr_label(repo_name, pr)
-            if pr["state"] == "merged" or pr["state"] == "closed":
-                done.append((label, pr["url"], _done_prefix_pr(pr)))
+            label = pr.label(repo_name)
+            if pr.state == "merged" or pr.state == "closed":
+                done.append((label, pr.url, pr.done_prefix()))
             else:
-                in_progress.append((label, pr["url"], ""))
+                in_progress.append((label, pr.url, ""))
 
         for issue in repo_activity["issues"]:
-            label = _issue_label(repo_name, issue)
-            if issue["state"] == "closed":
-                done.append((label, issue["url"], _done_prefix_issue(issue)))
-            elif _is_in_range(issue["created_at"], since, until):
-                todo.append((label, issue["url"], ""))
+            label = issue.label(repo_name)
+            if issue.state == "closed":
+                done.append((label, issue.url, issue.done_prefix()))
+            elif _is_in_range(issue.created_at, since, until):
+                todo.append((label, issue.url, ""))
             else:
-                in_progress.append((label, issue["url"], ""))
+                in_progress.append((label, issue.url, ""))
 
         blocks: list[dict] = []
         for heading, items in (
@@ -241,103 +197,95 @@ class NotionClient:
         issues = repo_activity["issues"]
 
         merge_sha_to_pr: dict[str, PullInfo] = {
-            pr["merge_commit_sha"]: pr for pr in pulls if pr.get("merge_commit_sha")
+            pr.merge_commit_sha: pr for pr in pulls if pr.merge_commit_sha
         }
-        pr_by_number: dict[int, PullInfo] = {pr["number"]: pr for pr in pulls}
+        pr_by_number: dict[int, PullInfo] = {pr.number: pr for pr in pulls}
         pr_nested_commits: dict[int, list[CommitInfo]] = {n: [] for n in pr_by_number}
 
-        # (timestamp, secondary_priority, block);
-        # secondary 0 for PR headers, sorted before adjacent merge commits at the same time
+        # secondary_priority is 0 for PR headers so they sort before adjacent merge commits at the same ts
         entries: list[tuple[datetime, int, dict]] = []
 
         for c in repo_activity["commits"]:
-            if not _is_in_range(c["date"], since, until):
+            if not c.is_in_range(since, until):
                 continue
-            ts = datetime.fromisoformat(c["date"])
-            if c["sha"] in merge_sha_to_pr:
-                entries.append(
-                    (ts, 1, _bulleted_link(_commit_label(c), c["url"], prefix="🔸 "))
-                )
+            ts = datetime.fromisoformat(c.date)
+            if c.sha in merge_sha_to_pr:
+                entries.append((ts, 1, _bulleted_link(c.label(), c.url, prefix="🔸 ")))
                 continue
-            # Pick the smallest PR number to keep nesting deterministic,
-            # regardless of pull_numbers input order
-            attached_prs = [n for n in c.get("pull_numbers", []) if n in pr_by_number]
+            # Pick smallest PR number for deterministic nesting independent of pull_numbers order
+            attached_prs = [n for n in c.pull_numbers if n in pr_by_number]
             attached_pr = min(attached_prs) if attached_prs else None
             if attached_pr is not None:
                 pr_nested_commits[attached_pr].append(c)
             else:
-                entries.append(
-                    (ts, 1, _bulleted_link(_commit_label(c), c["url"], prefix="🔸 "))
-                )
+                entries.append((ts, 1, _bulleted_link(c.label(), c.url, prefix="🔸 ")))
 
         for pr_number, pr in pr_by_number.items():
             nested = sorted(
                 pr_nested_commits[pr_number],
-                key=lambda c: datetime.fromisoformat(c["date"]),
+                key=lambda c: datetime.fromisoformat(c.date),
             )
             candidates: list[datetime] = []
-            if _is_in_range(pr["created_at"], since, until):
-                candidates.append(datetime.fromisoformat(pr["created_at"]))
+            if _is_in_range(pr.created_at, since, until):
+                candidates.append(datetime.fromisoformat(pr.created_at))
             if nested:
-                candidates.append(datetime.fromisoformat(nested[0]["date"]))
-            if _is_in_range(pr["merged_at"], since, until):
-                candidates.append(datetime.fromisoformat(pr["merged_at"]))
+                candidates.append(datetime.fromisoformat(nested[0].date))
+            if _is_in_range(pr.merged_at, since, until):
+                candidates.append(datetime.fromisoformat(pr.merged_at))
             if (
-                pr["state"] == "closed"
-                and not pr["merged_at"]
-                and _is_in_range(pr["closed_at"], since, until)
+                pr.state == "closed"
+                and not pr.merged_at
+                and _is_in_range(pr.closed_at, since, until)
             ):
-                candidates.append(datetime.fromisoformat(pr["closed_at"]))
+                candidates.append(datetime.fromisoformat(pr.closed_at))
             if not candidates:
                 continue
-            children = [
-                _bulleted_link(_commit_label(c), c["url"], prefix="🔸 ") for c in nested
-            ]
+            children = [_bulleted_link(c.label(), c.url, prefix="🔸 ") for c in nested]
             entries.append(
                 (
                     min(candidates),
                     0,
                     _bulleted_link(
-                        _pr_label(repo_name, pr),
-                        pr["url"],
+                        pr.label(repo_name),
+                        pr.url,
                         prefix="🔀 ",
                         children=children or None,
                     ),
                 )
             )
             # Unmerged-closed PR also gets a top-level close line
-            if pr["state"] == "closed" and _is_in_range(pr["closed_at"], since, until):
+            if pr.state == "closed" and _is_in_range(pr.closed_at, since, until):
                 entries.append(
                     (
-                        datetime.fromisoformat(pr["closed_at"]),
+                        datetime.fromisoformat(pr.closed_at),
                         1,
                         _bulleted_link(
-                            _pr_label(repo_name, pr),
-                            pr["url"],
+                            pr.label(repo_name),
+                            pr.url,
                             prefix="⚠️ close: ",
                         ),
                     )
                 )
 
         for issue in issues:
-            label = _issue_label(repo_name, issue)
-            if _is_in_range(issue["created_at"], since, until):
+            label = issue.label(repo_name)
+            if _is_in_range(issue.created_at, since, until):
                 entries.append(
                     (
-                        datetime.fromisoformat(issue["created_at"]),
+                        datetime.fromisoformat(issue.created_at),
                         1,
-                        _bulleted_link(label, issue["url"], prefix="🟢 open: "),
+                        _bulleted_link(label, issue.url, prefix="🟢 open: "),
                     )
                 )
-            if _is_in_range(issue["closed_at"], since, until):
+            if _is_in_range(issue.closed_at, since, until):
                 entries.append(
                     (
-                        datetime.fromisoformat(issue["closed_at"]),
+                        datetime.fromisoformat(issue.closed_at),
                         1,
                         _bulleted_link(
                             label,
-                            issue["url"],
-                            prefix=_issue_close_prefix(issue),
+                            issue.url,
+                            prefix=issue.timeline_close_prefix(),
                         ),
                     )
                 )
@@ -470,12 +418,12 @@ class NotionClient:
 
             commits = len(repo_activity.get("commits", []))
             prs_merged = sum(
-                1 for pr in repo_activity.get("pulls", []) if pr["state"] == "merged"
+                1 for pr in repo_activity.get("pulls", []) if pr.state == "merged"
             )
             issues_closed = sum(
                 1
                 for issue in repo_activity.get("issues", [])
-                if issue["state"] == "closed"
+                if issue.state == "closed"
             )
             claude_sessions = len(session_activity.get(repo_name, []))
 
