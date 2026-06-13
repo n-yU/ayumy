@@ -30,7 +30,7 @@ template.yaml                        # AWS SAM テンプレート（Lambda, Even
 - **言語**: Python 3.12、デプロイ依存: `requests`, `anthropic`, `PyGithub`、開発依存: 左記 + `boto3`
 - **Claude モデル**: 要約生成に `claude-sonnet-4-20250514` を使用
 - **GitHub API**: REST、Fine-grained PAT、セッションログから特定したリポジトリのみ対象
-- **Notion API**: Internal Integration Token、データベースプロパティは [docs/Spec.md](docs/Spec.md) §6 に定義
+- **Notion API**: Internal Integration Token、データベースプロパティは [Spec: Database Properties](docs/Spec.md#database-properties) に定義
 - **Hook 設計**: フォアグラウンド同期実行で、転送失敗時は非ゼロ終了で push を中止する（silent fail 防止）。セッション ID 単位の上書きで冪等性を担保
 
 ## 環境変数
