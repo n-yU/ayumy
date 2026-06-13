@@ -12,7 +12,7 @@ from pathlib import Path, PurePosixPath
 import boto3
 from boto3.dynamodb.conditions import Key
 
-from . import JST, SessionActivity, SessionInfo
+from .. import JST, SessionActivity, SessionInfo
 
 logger = logging.getLogger(__name__)
 

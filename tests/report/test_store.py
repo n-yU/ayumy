@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from report.store import (
+from report.session.store import (
     SessionStore,
     _effective_cwd,
     _expand_home,
@@ -17,7 +17,7 @@ from report.store import (
 
 def _make_store():
     """Create a SessionStore with mocked boto3."""
-    with patch("report.store.boto3"):
+    with patch("report.session.store.boto3"):
         store = SessionStore("table")
     store.table = MagicMock()
     return store
