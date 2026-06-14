@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+if [[ -n "${GIT_STUB_LOG:-}" ]]; then
+  echo "git $*" >> "$GIT_STUB_LOG"
+fi
+
+case "${1:-}" in
+  rev-parse)
+    case "${2:-}" in
+      --show-toplevel)
+        if [[ -n "${GIT_STUB_TOPLEVEL:-}" ]]; then
+          echo "$GIT_STUB_TOPLEVEL"
+          exit 0
+        fi
+        exit "${GIT_STUB_TOPLEVEL_EXIT:-1}"
+        ;;
+      --git-dir)
+        if [[ -n "${GIT_STUB_GIT_DIR:-}" ]]; then
+          echo "$GIT_STUB_GIT_DIR"
+          exit 0
+        fi
+        exit "${GIT_STUB_GIT_DIR_EXIT:-1}"
+        ;;
+    esac
+    ;;
+  remote)
+    if [[ "${2:-}" == "get-url" ]]; then
+      if [[ -n "${GIT_STUB_REMOTE_URL:-}" ]]; then
+        echo "$GIT_STUB_REMOTE_URL"
+        exit 0
+      fi
+      exit "${GIT_STUB_REMOTE_URL_EXIT:-1}"
+    fi
+    ;;
+esac
+
+exit "${GIT_STUB_EXIT:-0}"

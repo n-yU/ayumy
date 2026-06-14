@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+if [[ -n "${AWS_STUB_LOG:-}" ]]; then
+  echo "aws $*" >> "$AWS_STUB_LOG"
+fi
+
+if [[ "${1:-}" == "--version" ]]; then
+  echo "${AWS_STUB_VERSION:-aws-cli/2.15.0 Python/3.11.0 Linux/x86_64 source/x86_64.linux}"
+  exit 0
+fi
+
+case "${1:-}" in
+  s3)
+    if [[ -n "${AWS_STUB_S3_FAIL_PATTERN:-}" ]]; then
+      for arg in "$@"; do
+        if [[ "$arg" == *"${AWS_STUB_S3_FAIL_PATTERN}"* ]]; then
+          exit 1
+        fi
+      done
+    fi
+    exit "${AWS_STUB_S3_EXIT:-0}"
+    ;;
+  lambda)
+    exit "${AWS_STUB_LAMBDA_EXIT:-0}"
+    ;;
+  *)
+    exit "${AWS_STUB_EXIT:-0}"
+    ;;
+esac
