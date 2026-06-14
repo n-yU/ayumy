@@ -10,6 +10,13 @@ fi
 
 case "${1:-}" in
   s3)
+    if [[ -n "${AWS_STUB_S3_FAIL_PATTERN:-}" ]]; then
+      for arg in "$@"; do
+        if [[ "$arg" == *"${AWS_STUB_S3_FAIL_PATTERN}"* ]]; then
+          exit 1
+        fi
+      done
+    fi
     exit "${AWS_STUB_S3_EXIT:-0}"
     ;;
   lambda)

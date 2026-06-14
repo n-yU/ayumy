@@ -152,6 +152,27 @@ teardown() {
   [[ "$output" == *"failed to upload"* ]]
 }
 
+@test "sync_session.sh: .ayumy_repo metadata is uploaded alongside JSONL when present" {
+  local proj_dir="$PROJECTS_DIR/myproj"
+  mkdir -p "$proj_dir"
+  echo '{}' > "$proj_dir/a.jsonl"
+  echo 'my-repo' > "$proj_dir/.ayumy_repo"
+  run "$SCRIPT" --project myproj
+  [ "$status" -eq 0 ]
+  grep -q "^aws s3 cp $proj_dir/a.jsonl " "$AWS_STUB_LOG"
+  grep -q "^aws s3 cp $proj_dir/.ayumy_repo " "$AWS_STUB_LOG"
+}
+
+@test "sync_session.sh: .ayumy_repo upload failure surfaces as exit 2" {
+  local proj_dir="$PROJECTS_DIR/myproj"
+  mkdir -p "$proj_dir"
+  echo '{}' > "$proj_dir/a.jsonl"
+  echo 'my-repo' > "$proj_dir/.ayumy_repo"
+  AWS_STUB_S3_FAIL_PATTERN=".ayumy_repo" run "$SCRIPT" --project myproj
+  [ "$status" -eq 2 ]
+  [[ "$output" == *".ayumy_repo metadata"* ]]
+}
+
 # --- --report path ---
 
 @test "sync_session.sh: --report invokes Lambda with manual source" {
