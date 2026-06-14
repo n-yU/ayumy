@@ -8,7 +8,6 @@ from report.session.store import SessionStore
 
 
 def _make_store():
-    """Create a SessionStore with mocked boto3."""
     with patch("report.session.store.boto3"):
         store = SessionStore("table")
     store.table = MagicMock()
@@ -16,7 +15,6 @@ def _make_store():
 
 
 def _make_session_client():
-    """Create a mock SessionClient."""
     client = MagicMock()
     client.bucket = "bucket"
     return client

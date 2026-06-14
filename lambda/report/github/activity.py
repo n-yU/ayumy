@@ -41,14 +41,7 @@ class GitHubActivity:
         owner: str,
         populate_pull_numbers: Callable[[str, list[CommitInfo]], None],
     ) -> None:
-        """Inject session-derived commits for `repo_name` into this activity.
-
-        Deduplicates the commits by SHA across `sessions`, drops ones already
-        covered by GitHub search (matched via SHA prefix on the existing repo's
-        commits), and resolves PR association via `populate_pull_numbers` on the
-        commits actually being injected so they nest under their parent PR in
-        downstream rendering.
-        """
+        """Dedup by SHA across `sessions`, drop those already covered by GitHub search (SHA-prefix match), and resolve PR association via `populate_pull_numbers` so injected commits nest under their parent PR."""
         seen_shas: set[str] = set()
         session_commits: list[CommitInfo] = []
         for s in sessions:
@@ -89,7 +82,7 @@ class GitHubActivity:
             }
 
     def format(self) -> str:
-        """Format GitHub activity as the Markdown block consumed by the Claude API prompt (Spec.md §5.4)."""
+        """Format GitHub activity as the Markdown block consumed by the Claude API prompt (Spec: Summary Generation)."""
         if not self._data:
             return "# GitHub アクティビティ\nアクティビティなし"
 

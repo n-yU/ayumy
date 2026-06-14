@@ -11,7 +11,6 @@ def _session(
     start="2026-03-28T10:00:00+09:00",
     session_commits=(),
 ):
-    """Build a SessionInfo-shaped dict carrying only the fields the merge reads."""
     return {
         "session_id": "s1",
         "project": "my-repo",

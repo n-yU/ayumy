@@ -6,7 +6,6 @@ from report.session import SessionClient
 
 
 def _make_client():
-    """Create a SessionClient with mocked boto3."""
     with patch("report.session.client.boto3"):
         client = SessionClient("bucket")
     client.s3 = MagicMock()

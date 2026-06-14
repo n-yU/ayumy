@@ -16,28 +16,21 @@ HEADLINE_MAX = 200
 
 
 def _truncate_headline(headline: str, limit: int = HEADLINE_MAX) -> str:
-    """Truncate `headline` with an ellipsis when it exceeds `limit`."""
     if len(headline) <= limit:
         return headline
     return headline[: limit - 1] + "…"
 
 
 def _escape_mrkdwn(text: str) -> str:
-    """Escape Slack mrkdwn special characters to neutralize mentions and markup.
-
-    All special sequences (`<!channel>`, `<@U...>`, `<url|text>`) start with `<`,
-    so replacing `&`, `<`, `>` with HTML entities is sufficient to disable them entirely.
-    """
+    """All Slack mrkdwn specials (`<!channel>`, `<@U...>`, `<url|text>`) start with `<`, so HTML-entity-escaping `&`/`<`/`>` is sufficient to disable them."""
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def _divider() -> dict:
-    """Build a Slack divider block."""
     return {"type": "divider"}
 
 
 def _header_block(text: str) -> dict:
-    """Build a Slack plain-text header block."""
     return {
         "type": "header",
         "text": {"type": "plain_text", "text": text},
@@ -45,12 +38,10 @@ def _header_block(text: str) -> dict:
 
 
 def _section_block(text: str) -> dict:
-    """Build a Slack mrkdwn section block."""
     return {"type": "section", "text": {"type": "mrkdwn", "text": text}}
 
 
 def _context_block(text: str) -> dict:
-    """Build a Slack mrkdwn context block."""
     return {"type": "context", "elements": [{"type": "mrkdwn", "text": text}]}
 
 
@@ -63,7 +54,6 @@ class SlackClient:
         self._fallback_parts: list[str] = []
 
     def _append_with_divider(self, *blocks: dict) -> None:
-        """Append `blocks` to the buffer, prepending a divider when the buffer already holds content."""
         if self._blocks:
             self._blocks.append(_divider())
         self._blocks.extend(blocks)
@@ -76,7 +66,6 @@ class SlackClient:
         fallback_suffix: str,
         skipped_repos: list[str] | None = None,
     ) -> None:
-        """Append a header + section pair (and optional skipped-repos context block) and record the fallback string."""
         title = f"{emoji} Daily Report ({date_str})"
         blocks = [_header_block(title), _section_block(body_text)]
         if skipped_repos:
@@ -91,10 +80,7 @@ class SlackClient:
         pages: list[tuple[str, str]],
         skipped_repos: list[str] | None = None,
     ) -> None:
-        """Buffer a daily-report notification for `target_date` listing the created Notion pages.
-
-        `skipped_repos` covers repos that appeared in `report` but were dropped during Notion page creation.
-        """
+        """`skipped_repos` covers repos that appeared in `report` but were dropped during Notion page creation."""
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
 
         if pages:
@@ -126,7 +112,6 @@ class SlackClient:
             )
 
     def notify_no_activity(self, target_date: datetime) -> None:
-        """Buffer a no-activity notification for `target_date`."""
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
         self._append_report_section("💤", date_str, "No activity", "No activity")
 
@@ -135,14 +120,12 @@ class SlackClient:
         target_date: datetime,
         result: ValidationResult,
     ) -> None:
-        """Buffer a notification listing the invalid tag values detected during summary validation."""
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
         lines = [f"• {name}: tags={tags}" for name, tags in result.invalid_tags.items()]
         body = f"Invalid tags detected\n{'\n'.join(lines)}"
         self._append_report_section("⚠️", date_str, body, "Invalid tags detected")
 
     def notify_error(self, target_date: datetime, error: Exception) -> None:
-        """Buffer an error notification carrying `error`'s message for `target_date`."""
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
         self._append_report_section("❌", date_str, str(error), str(error))
 
@@ -154,11 +137,7 @@ class SlackClient:
         memory_limit_mb: int | None = None,
         timeout_seconds: int | None = None,
     ) -> None:
-        """Buffer an execution-metrics context block.
-
-        `memory_limit_mb` / `timeout_seconds` are None when invoked from the CLI,
-        in which case ratios against the limits are omitted from the rendered text.
-        """
+        """`memory_limit_mb` / `timeout_seconds` are None from CLI; ratios against limits are then omitted from the rendered text."""
         if timeout_seconds is not None:
             elapsed_pct = elapsed / timeout_seconds * 100
             elapsed_text = f"{elapsed:.1f} / {timeout_seconds}s ({elapsed_pct:.0f}%)"
@@ -179,7 +158,6 @@ class SlackClient:
         )
 
     def flush(self) -> None:
-        """Send all buffered blocks as a single Slack message."""
         if not self._blocks:
             return
         fallback = " | ".join(self._fallback_parts)
@@ -188,9 +166,7 @@ class SlackClient:
         self._fallback_parts = []
 
     def _send(self, text: str, blocks: list[dict] | None = None) -> None:
-        """Send a message via Slack webhook on a best-effort basis;
-        failures are logged but do not raise so notification errors never abort report generation.
-        """
+        """Logs failures but does not raise; notification errors never abort report generation."""
         try:
             response = self.client.send(text=text, blocks=blocks)
             if response.status_code != 200:

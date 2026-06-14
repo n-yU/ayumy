@@ -20,7 +20,6 @@ logger = logging.getLogger(__name__)
 
 
 def _is_in_range(iso_timestamp: str | None, since: datetime, until: datetime) -> bool:
-    """Check whether an ISO timestamp falls within [since, until)."""
     if not iso_timestamp:
         return False
     dt = datetime.fromisoformat(iso_timestamp)
@@ -49,7 +48,7 @@ class NotionClient:
         return self._data_source_id
 
     def init_data_source(self) -> None:
-        """Resolve and cache the database's first data source ID for later query and page-creation calls."""
+        """Resolves and caches the first data source ID; required before query/page-creation calls."""
         db = self.client.databases.retrieve(database_id=self.database_id)
         self._data_source_id = db["data_sources"][0]["id"]
 
@@ -62,7 +61,7 @@ class NotionClient:
         issues_closed: int,
         claude_sessions: int,
     ) -> dict:
-        """Build the Notion page property payload (Spec.md §6.1) from report and per-repo activity counts."""
+        """Property payload per 'Spec: Database Properties'."""
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
         title_str = f"{target_date.astimezone(JST).strftime('%y-%m-%d')}: {repo_summary['name']}"
 
@@ -87,13 +86,7 @@ class NotionClient:
         since: datetime,
         until: datetime,
     ) -> list[dict]:
-        """Build the Done / In Progress / Todo sections for one repository (Spec.md §6.2).
-
-        Done collects merged or closed PRs and closed Issues.
-        Todo collects Issues created within `[since, until)` that are still open.
-        In Progress collects open PRs (including drafts) and any remaining open Issues.
-        Sections with no entries are omitted from the output.
-        """
+        """Per 'Spec: Page Body': Done = merged/closed PRs + closed issues; Todo = in-range open issues created in window; In Progress = remaining opens. Empty sections are omitted."""
         done: list[tuple[str, str, str]] = []
         in_progress: list[tuple[str, str, str]] = []
         todo: list[tuple[str, str, str]] = []
@@ -135,13 +128,7 @@ class NotionClient:
         since: datetime,
         until: datetime,
     ) -> list[dict]:
-        """Build the Timeline as a nested bullet list grouped by parent PR (Spec.md §6.2).
-
-        Non-merge PR-linked commits nest under their PR block via `children`.
-        Merge commits, direct commits, Issue open / close lines, and unmerged-closed PR lines sit at the top level.
-        Entries are ordered by their earliest activity in `[since, until)`;
-        when a PR header and its merge commit share a timestamp, the header is placed first.
-        """
+        """Per 'Spec: Page Body': non-merge PR-linked commits nest under their PR via `children`; merge commits, direct commits, issue lines, and unmerged-closed PR lines sit at top level. PR header sorts before its merge commit at the same ts (secondary_priority=0)."""
         pulls = repo_activity["pulls"]
         issues = repo_activity["issues"]
 
@@ -253,7 +240,6 @@ class NotionClient:
         since: datetime,
         until: datetime,
     ) -> list[dict]:
-        """Build the Notion page body blocks in Summary → status sections → Timeline order, omitting empty sections."""
         children: list[dict] = []
 
         children.append(heading_2("Summary"))
@@ -282,7 +268,6 @@ class NotionClient:
         issues_closed: int,
         claude_sessions: int,
     ) -> str:
-        """Create a Notion page for one repository's daily report and return its URL."""
         page = self.client.pages.create(
             parent={"database_id": self.database_id},
             properties=self._build_properties(
@@ -299,7 +284,7 @@ class NotionClient:
         return page["url"]
 
     def _archive_existing_pages(self, target_date: datetime) -> int:
-        """Archive existing pages for the target date so re-runs stay idempotent, returning the count archived."""
+        """Ensures re-runs stay idempotent."""
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
         # No pagination: daily page count won't exceed Notion's default page size (100)
         results = self.client.data_sources.query(
@@ -323,7 +308,7 @@ class NotionClient:
         activity: GitHubActivity,
         session_activity: SessionActivity,
     ) -> list[tuple[str, str]]:
-        """Create Notion pages for every repository in `report`, archiving any same-date pages first for idempotent re-runs."""
+        """Archives same-date pages first to ensure re-runs stay idempotent."""
         archived = self._archive_existing_pages(target_date)
         if archived:
             date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")

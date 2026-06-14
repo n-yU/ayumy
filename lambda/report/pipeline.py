@@ -37,11 +37,7 @@ def process_date(
     *,
     is_backfill: bool = False,
 ) -> None:
-    """Generate and publish the daily report for the `[since, until)` JST window.
-
-    `is_backfill=True` switches to the Hybrid PR/Issue fetch path (Spec.md §5.1.1),
-    so dates whose PR/Issue state has since drifted out of the `updated_at` window are still recoverable.
-    """
+    """When `is_backfill=True`, switches to Hybrid PR/Issue fetch (Spec: Hybrid Backfill Fetch) to recover items whose `updated_at` has drifted out of the window."""
     logger.info("Processing: %s ~ %s", since.isoformat(), until.isoformat())
 
     session_pulls: dict[str, list[int]] = {}
@@ -114,12 +110,9 @@ def run(
     memory_limit_mb: int | None = None,
     timeout_seconds: int | None = None,
 ) -> None:
-    """Run the report generation pipeline for one or more target dates.
-
-    `target_date` (`YYYY-MM-DD` or `YYYY-MM-DD..YYYY-MM-DD`) takes precedence and disables backfill;
-    otherwise the prior day's full window (scheduled) or today's partial window (`source="manual"`) is processed alongside any unreported backfill dates.
-    `memory_limit_mb` / `timeout_seconds` are reported to Slack as execution metrics,
-    and are None when invoked from the CLI.
+    """`target_date` (`YYYY-MM-DD` or `YYYY-MM-DD..YYYY-MM-DD`) takes precedence and disables backfill;
+    otherwise processes the prior day (scheduled) or today's partial window (`source="manual"`) plus unreported backfill dates.
+    `memory_limit_mb` / `timeout_seconds` are None from the CLI.
     """
     start = time.monotonic()
     since, until = get_target_date_range(source, target_date=target_date)

@@ -15,7 +15,6 @@ from report.session.parser import (
 
 
 def _make_session_client():
-    """Create a mock SessionClient."""
     client = MagicMock()
     client.bucket = "bucket"
     return client

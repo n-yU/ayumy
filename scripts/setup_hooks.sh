@@ -46,7 +46,6 @@ remove_legacy_post_commit() {
   return 0
 }
 
-# Install the hook to a single repository.
 # Arguments: $1 = path to .git directory
 install_hook() {
   local git_dir="$1"

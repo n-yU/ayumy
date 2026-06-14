@@ -35,7 +35,6 @@ path_to_project_name() {
   echo "$1" | sed 's|/|-|g'
 }
 
-# Find JSONL files newer than the marker, or all if no marker exists.
 find_changed_sessions() {
   local project_dir="$1"
   local marker="$project_dir/$MARKER_NAME"
@@ -47,7 +46,7 @@ find_changed_sessions() {
   fi
 }
 
-# Sync a single project. Returns 0 if files were transferred, 1 if nothing to do, 2 on transfer error.
+# Returns: 0 = transferred, 1 = no changes, 2 = transfer error.
 sync_project() {
   local project_dir="$1"
   local project_name
@@ -89,7 +88,6 @@ sync_project() {
     fi
   fi
 
-  # Promote temp marker to actual marker on success
   mv "$tmp_marker" "$project_dir/$MARKER_NAME"
   log "$project_name: done"
   return 0

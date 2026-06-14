@@ -11,7 +11,7 @@ from report.tags import ALLOWED_TAG_NAMES, TAG_DEFINITIONS
 
 
 def _make_client() -> SummaryClient:
-    """Build a SummaryClient without invoking Anthropic SDK init."""
+    # Bypass Anthropic SDK init
     return SummaryClient.__new__(SummaryClient)
 
 

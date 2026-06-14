@@ -17,16 +17,13 @@ class SessionStore:
         self.parser = parser or SessionLogParser()
 
     def ingest(self, session_client) -> list[str]:
-        """Parse all unarchived JSONL from S3 into DynamoDB items and return the processed S3 keys.
-
-        Existing attributes such as `reported_at` are preserved on re-ingestion.
-        """
+        """Existing attributes such as `reported_at` are preserved on re-ingestion."""
         items, keys = self.parser.build_items(session_client)
         self._write_items(items)
         return keys
 
     def _write_items(self, items: list[dict]) -> None:
-        """Write `items` to DynamoDB via `update_item` so existing `reported_at` values are preserved across re-ingestion."""
+        """Uses `update_item` to preserve existing `reported_at` values across re-ingestion."""
         for item in items:
             key = {
                 "date": item["date"],

@@ -78,7 +78,6 @@ class SessionActivity:
 
     @staticmethod
     def _format_time(iso_timestamp: str) -> str:
-        """Return JST HH:MM from an ISO 8601 timestamp; falls back to "??:??" on empty input."""
         if not iso_timestamp:
             return "??:??"
         dt = datetime.fromisoformat(iso_timestamp).astimezone(JST)

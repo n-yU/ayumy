@@ -26,7 +26,6 @@ _SHELL_STOPS = ("\n", "&&", "||", ";", "|")
 
 
 def _command_segment(command: str, start: int) -> str:
-    """Return the portion of `command` from `start` up to the next shell stop."""
     end = len(command)
     for stop in _SHELL_STOPS:
         i = command.find(stop, start)
@@ -36,12 +35,7 @@ def _command_segment(command: str, start: int) -> str:
 
 
 def _first_positional_int(segment: str) -> int | None:
-    """Return the first positional integer token in `segment`.
-
-    Tokenizes via shlex so quoted flag values count as one token,
-    preventing matches against integers that live inside strings like `--body "fix 999"`.
-    Flags (tokens starting with `-`) are skipped.
-    """
+    """Tokenizes via shlex so quoted flag values count as one token, preventing matches against integers like `--body "fix 999"`."""
     try:
         tokens = shlex.split(segment, posix=True)
     except ValueError:
@@ -55,11 +49,7 @@ def _first_positional_int(segment: str) -> int | None:
 
 
 def _expand_home(path: str, project_cwd: str | None) -> str:
-    """Expand a leading `~` using `project_cwd`'s home as the anchor.
-
-    Lambda's runtime user differs from the session author,
-    so `Path.expanduser` would resolve to the wrong home.
-    """
+    """Lambda's runtime user differs from session author, so `Path.expanduser` would resolve to the wrong home."""
     if path != "~" and not path.startswith("~/"):
         return path
     if project_cwd:
@@ -71,7 +61,6 @@ def _expand_home(path: str, project_cwd: str | None) -> str:
 
 
 def _effective_cwd(command: str, project_cwd: str | None) -> str | None:
-    """Return the inferred cwd of a Bash command, or None if not inferable."""
     try:
         # shlex doesn't treat `&&` as an operator, so normalize spacing for forms like `cd /path&&git ...`
         tokens = shlex.split(command.replace("&&", " && "), posix=True)
@@ -95,7 +84,6 @@ def _effective_cwd(command: str, project_cwd: str | None) -> str | None:
 
 
 def _is_cross_repo(effective_cwd: str | None, project_cwd: str | None) -> bool:
-    """Return True when the command runs outside the project working directory."""
     if not project_cwd or effective_cwd is None:
         return False
     cwd = PurePosixPath(effective_cwd)
@@ -104,11 +92,7 @@ def _is_cross_repo(effective_cwd: str | None, project_cwd: str | None) -> bool:
 
 
 def _extract_pr_issue_refs(command: str) -> tuple[set[int], set[int]]:
-    """Extract referenced PR and Issue numbers from a Bash command string.
-
-    `#N` inside `git` arguments is ambiguous between PR and Issue,
-    so it is placed in both sets and the fetcher reconciles each via 404 or the `pull_request` attribute.
-    """
+    """`#N` inside `git` args is ambiguous between PR and Issue; placed in both sets, fetcher reconciles via 404 or `pull_request` attribute."""
     pulls: set[int] = set()
     issues: set[int] = set()
 
@@ -143,10 +127,7 @@ class SessionLogParser:
     """Convert JSONL session logs read via `SessionClient` into DynamoDB-shaped items."""
 
     def build_items(self, session_client) -> tuple[list[dict], list[str]]:
-        """Parse every JSONL fetched via `session_client` into DynamoDB items grouped by (JST date, repo, session_id).
-
-        Entries without timestamps and projects without a `.ayumy_repo` metadata file are skipped.
-        """
+        """Groups by (JST date, repo, session_id). Entries without timestamps and projects without `.ayumy_repo` are skipped."""
         # MULTILINE lets the commit summary line match even when hook output precedes it
         commit_pattern = re.compile(r"^\[.+\s+([0-9a-f]+)\]\s+(.+)", re.MULTILINE)
 

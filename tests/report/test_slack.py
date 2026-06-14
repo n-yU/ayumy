@@ -17,7 +17,6 @@ from report.summarizer import ValidationResult
 
 
 def _make_client():
-    """Create a SlackClient with mocked webhook."""
     client = SlackClient.__new__(SlackClient)
     client.client = MagicMock()
     client.client.send.return_value = MagicMock(status_code=200)
@@ -27,12 +26,10 @@ def _make_client():
 
 
 def _get_send_kwargs(client):
-    """Extract kwargs from the most recent send() call."""
     return client.client.send.call_args.kwargs
 
 
 def _blocks_text(blocks):
-    """Concatenate all text content from blocks for easy assertion."""
     parts = []
     for block in blocks:
         if "text" in block and isinstance(block["text"], dict):
@@ -47,7 +44,6 @@ def _blocks_text(blocks):
 
 
 def _repo(name, summary=None):
-    """Build a minimal RepoSummary for tests."""
     return {
         "name": name,
         "summary": summary or [],

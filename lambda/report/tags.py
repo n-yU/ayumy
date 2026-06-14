@@ -1,9 +1,8 @@
 """Tag definitions for daily reports.
 
-Tags classify the kind of work performed on a given day. Definitions
-live in code rather than Notion because Notion's multi-select option
-lacks a description field, and the descriptions feed both the system
-prompt and the Claude API tool schema for tag selection guidance.
+Tags classify the kind of work performed on a given day.
+Definitions live in code rather than Notion because Notion's multi-select option lacks a description field,
+and the descriptions feed both the system prompt and the Claude API tool schema for tag selection guidance.
 """
 
 from typing import NamedTuple

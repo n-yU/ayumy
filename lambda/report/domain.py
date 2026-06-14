@@ -36,11 +36,10 @@ class CommitInfo:
         return self.sha[: self.SHA_PREFIX_LEN]
 
     def label(self) -> str:
-        """Render `sha7: message` for status / timeline rows."""
+        """For status / timeline rows."""
         return f"{self.short_sha}: {self.message}"
 
     def is_in_range(self, since: datetime, until: datetime) -> bool:
-        """Return True when `date` falls within `[since, until)`."""
         return since <= datetime.fromisoformat(self.date) < until
 
     @classmethod
@@ -49,11 +48,7 @@ class CommitInfo:
         commit: Commit,
         pull_numbers: Iterable[int] = (),
     ) -> CommitInfo:
-        """Build a CommitInfo from a PyGithub Commit.
-
-        `pull_numbers` is supplied separately because resolving the
-        associated PRs requires an extra API call.
-        """
+        """`pull_numbers` is supplied separately because resolving associated PRs requires an extra API call."""
         return cls(
             sha=commit.sha,
             message=commit.commit.message.split("\n")[0],
@@ -84,17 +79,16 @@ class PullInfo:
     merge_commit_sha: str | None
 
     def label(self, repo_name: str) -> str:
-        """Render `repo#N: title` for status / timeline rows."""
+        """For status / timeline rows."""
         return f"{repo_name}#{self.number}: {self.title}"
 
     def done_prefix(self) -> str:
-        """Return the Done-section prefix; `closed` (unmerged) PRs are flagged as irregular."""
+        """`closed` (unmerged) PRs are flagged as irregular."""
         if self.state == "merged":
             return "✅ "
         return "⚠️ (closed) "
 
     def has_event_in_range(self, since: datetime, until: datetime) -> bool:
-        """Return True if any of created / merged / closed falls within `[since, until)`."""
         for ts in (self.created_at, self.merged_at, self.closed_at):
             if ts and since <= datetime.fromisoformat(ts) < until:
                 return True
@@ -102,7 +96,6 @@ class PullInfo:
 
     @classmethod
     def from_pull_request(cls, pr: PullRequest) -> PullInfo:
-        """Build a PullInfo from a PyGithub PullRequest."""
         if pr.merged_at:
             state = "merged"
         elif pr.state == "closed":
@@ -140,25 +133,23 @@ class IssueInfo:
     state_reason: str | None
 
     def label(self, repo_name: str) -> str:
-        """Render `repo#N: title` for status / timeline rows."""
+        """For status / timeline rows."""
         return f"{repo_name}#{self.number}: {self.title}"
 
     def done_prefix(self) -> str:
-        """Return the Done-section prefix; `not_planned` / `duplicate` are flagged, others (including legacy `state_reason=None`) are regular Done."""
+        """`not_planned` / `duplicate` are flagged; legacy `state_reason=None` is regular Done."""
         label = _IRREGULAR_ISSUE_REASONS.get(self.state_reason or "")
         if label is None:
             return "✅ "
         return f"⚠️ ({label}) "
 
     def timeline_close_prefix(self) -> str:
-        """Return the timeline close-line prefix for a closed Issue."""
         label = _IRREGULAR_ISSUE_REASONS.get(self.state_reason or "")
         if label is None:
             return "✅ close: "
         return f"⚠️ close ({label}): "
 
     def has_event_in_range(self, since: datetime, until: datetime) -> bool:
-        """Return True if either created or closed falls within `[since, until)`."""
         for ts in (self.created_at, self.closed_at):
             if ts and since <= datetime.fromisoformat(ts) < until:
                 return True
@@ -166,7 +157,6 @@ class IssueInfo:
 
     @classmethod
     def from_issue(cls, issue: Issue) -> IssueInfo:
-        """Build an IssueInfo from a PyGithub Issue."""
         return cls(
             number=issue.number,
             title=issue.title,

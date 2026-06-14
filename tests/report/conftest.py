@@ -11,7 +11,6 @@ from ._builders import OWNER
 
 @pytest.fixture
 def pipeline_clients():
-    """Mocked clients keyed for process_date(..., **clients) kwargs unpack."""
     github_client = MagicMock()
     github_client.owner = OWNER
     summary_client = MagicMock()

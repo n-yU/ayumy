@@ -16,7 +16,6 @@ class SessionClient:
         self.bucket = bucket
 
     def list_session_objects(self) -> list[dict[str, Any]]:
-        """List all unarchived JSONL objects in `claude-sessions/`."""
         prefix = "claude-sessions/"
         objects: list[dict[str, Any]] = []
         paginator = self.s3.get_paginator("list_objects_v2")
@@ -30,11 +29,7 @@ class SessionClient:
         return objects
 
     def read_repo_name(self, project: str) -> str | None:
-        """Read the repo name from the `.ayumy_repo` metadata file in S3.
-
-        Returns None when the metadata file is missing, empty, or contains `/` or `:`,
-        which would indicate an accidentally pasted URL rather than a bare repo name.
-        """
+        """Returns None on missing/empty file or when content has `/` or `:` (heuristic to detect accidentally pasted URLs)."""
         key = f"claude-sessions/{project}/.ayumy_repo"
         try:
             resp = self.s3.get_object(Bucket=self.bucket, Key=key)
@@ -46,10 +41,7 @@ class SessionClient:
             return None
 
     def delete_sessions(self, keys: list[str]) -> int:
-        """Delete the given JSONL objects from S3 and return the number actually removed.
-
-        Errors per key are logged but do not raise; the caller (pipeline) decides whether to retry on the next run.
-        """
+        """Errors per key are logged but do not raise; caller (pipeline) decides whether to retry on the next run."""
         if not keys:
             return 0
 

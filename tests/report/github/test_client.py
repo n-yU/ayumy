@@ -18,7 +18,6 @@ UNTIL = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
 
 
 def _make_client():
-    """Create a GitHubClient with mocked PyGithub."""
     client = GitHubClient.__new__(GitHubClient)
     client.g = MagicMock()
     client._search_count = 0
@@ -27,7 +26,6 @@ def _make_client():
 
 
 def _make_pr_issue(number):
-    """Create a search_issues result mock with just a PR number."""
     item = MagicMock()
     item.number = number
     return item
@@ -42,7 +40,6 @@ def _make_commit_mock(
     repo_full_name="n-yU/my-repo",
     url=None,
 ):
-    """Create a search_commits result mock with the fields fetch_commits reads."""
     commit = MagicMock()
     commit.sha = sha
     commit.commit.message = message
@@ -64,7 +61,6 @@ def _make_pull(
     labels=None,
     draft=False,
 ):
-    """Create a PullRequest mock with the fields fetch_pulls reads."""
     pr = MagicMock()
     pr.number = number
     pr.title = title
@@ -95,7 +91,6 @@ def _make_issue(
     labels=None,
     pull_request=None,
 ):
-    """Create an Issue mock with the fields fetch_issues reads."""
     issue = MagicMock()
     issue.number = number
     issue.title = title
@@ -112,7 +107,6 @@ def _make_issue(
 
 
 def _make_activity_repo(client, *, name="repo", full_name="n-yU/repo"):
-    """Wire client.g.get_user().get_repo() to return a repo mock and return it."""
     mock_user = MagicMock()
     client.g.get_user.return_value = mock_user
     mock_repo = MagicMock()
