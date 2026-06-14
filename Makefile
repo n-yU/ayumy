@@ -1,4 +1,4 @@
-.PHONY: lambda-install lambda-invoke lambda-deploy test format format-check lint lint-fix oidc-deploy scan-sessions aws-auth-check
+.PHONY: lambda-install lambda-invoke lambda-deploy test test-python test-shell format format-check lint lint-fix oidc-deploy scan-sessions aws-auth-check
 
 FORMAT_TARGETS := lambda tests
 
@@ -22,11 +22,21 @@ lambda-invoke:
 lambda-deploy: aws-auth-check
 	sam build && sam deploy --no-confirm-changeset
 
-# Run unit tests
-# Override the target path via TARGET, e.g. `make test TARGET=tests/report/test_notion.py`
-TARGET ?= tests/
+# Run Python + shell tests together. TARGET= has no effect; use test-python / test-shell for that.
 test: lambda-install
+	.venv/bin/python -m pytest tests/python/ -v
+	bats tests/shell/
+
+# Override the target path via TARGET, e.g.
+#   make test-python TARGET=tests/python/report/test_notion.py
+#   make test-shell TARGET=tests/shell/sync_session.bats
+test-python: TARGET = tests/python/
+test-python: lambda-install
 	.venv/bin/python -m pytest $(TARGET) -v
+
+test-shell: TARGET = tests/shell/
+test-shell:
+	bats $(TARGET)
 
 # Apply Ruff formatter and isort-equivalent import sort
 format: lambda-install
