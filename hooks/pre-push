@@ -10,8 +10,7 @@
 set -eu
 
 # Resolve the ayumy repository root from this symlink target.
-# `|| true` keeps set -eu from aborting before the explicit empty-string check.
-hook_path="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || true)"
+hook_path="$(readlink -f "$0" 2>/dev/null || true)"
 if [[ -z "$hook_path" ]]; then
   echo "[ayumy] could not resolve hook path from: $0" >&2
   exit 1

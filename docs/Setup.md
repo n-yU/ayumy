@@ -59,6 +59,8 @@
 ※ レガシーな Incoming WebHooks App ではなく、Slack App の Incoming Webhooks 機能を使用する
 
 ## 7. クライアントマシン
+クライアント側のスクリプト（`scripts/`, `hooks/`, `bin/ayumy`）は macOS のみサポートする
+
 1. リポジトリをクローン: `git clone https://github.com/{user}/ayumy.git ~/ayumy`
 2. PATH を通す: `export PATH="$HOME/ayumy/bin:$PATH"`（`~/.zshrc` 等に追加）
 3. 環境変数を設定（`~/.zshrc` 等に追加）
