@@ -17,7 +17,10 @@ Ayumy の構築後の日常運用ガイド。基本的な操作・Notion レポ�
   - [CloudWatch Logs の確認](#cloudwatch-logs-の確認)
 
 ## Overview
-Ayumy は git push と日次の定期実行を起点に、GitHub アクティビティと Claude Code セッションを集約して Notion にレポートを書き込む。クライアントマシンと AWS Lambda の 2 フェーズで動作し、運用者が普段触れるのはクライアントマシン側のみ。Lambda の処理は EventBridge による日次実行と `ayumy sync --report` 経由の手動実行で起動する
+- git push と日次の定期実行を起点に、GitHub アクティビティと Claude Code セッションを集約して Notion にレポートを書き込む
+- クライアントマシンと AWS Lambda の 2 フェーズで動作し、運用者が普段触れるのはクライアントマシン側のみ
+- Lambda の処理は EventBridge による日次実行と `ayumy sync --report` 経由の手動実行で起動する
+- クライアント側のスクリプト（`scripts/`, `hooks/`, `bin/ayumy`）は macOS のみサポート
 
 ## Daily Operations
 ### pre-push hook による自動転送

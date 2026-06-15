@@ -128,7 +128,7 @@ s3://{bucket}/
 
 ## Phase 1: Session Log Transfer
 ### Phase 1 Overview
-Claude Code セッションの JSONL を S3 バケットに転送する
+Claude Code セッションの JSONL を S3 バケットに転送する。クライアント側のスクリプト（`scripts/`, `hooks/`, `bin/ayumy`）は macOS のみサポートする
 
 - **自動転送（pre-push hook）**: push を契機に、当該プロジェクトの未同期セッションを同期転送。失敗時は push を中止する
 - **手動転送（`ayumy sync`）**: push せずに作業を中断する場合など、任意のタイミングで実行
