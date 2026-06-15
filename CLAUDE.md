@@ -64,4 +64,3 @@ Lambda（環境変数 + Secrets Manager）:
 - アクティビティの取得対象期間: 前日 JST 00:00:00 〜 当日 JST 00:00:00
 - アクティビティが 0 件の日はスキップまたは「活動なし」と記録
 - 各 commit における整合性チェック（共通 CLAUDE.md の Git 操作セクション参照）の対象に含めるドキュメントは [Spec.md](docs/Spec.md), [Initial-Development.md](docs/archive/Initial-Development.md), [README.md](README.md), [Setup.md](docs/Setup.md), [Manual.md](docs/Manual.md)
-- デプロイや手動確認が必要な変更（実行フローの変更、外部サービス連携の追加・変更など）を含む PR では、description に `### Verification` セクションを設ける。デプロイ成功・コマンド実行結果・既存機能の正常動作など、手動で確認すべき項目をチェックリストで列挙する。PR 作成後、Copilot review が指摘なし（approved 相当）になってからユーザーに検証の開始を確認する。指摘がある場合は先に対応する
