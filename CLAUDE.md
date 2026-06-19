@@ -29,7 +29,7 @@ template.yaml                        # AWS SAM テンプレート（Lambda, Even
 - **テスト・lint・format コマンド**: `make test`（Python + shell 一括）／ `make test-python` ／ `make test-shell` ／ `make format` ／ `make format-check` ／ `make lint` ／ `make lint-fix` を使う
 - **避けるコマンド**: `uv run pytest` を使わない（CWD の `pyproject.toml` を project marker として検出し `uv.lock` を暗黙生成してしまうため。本リポジトリは `lambda/requirements.txt` 主導で `uv.lock` を管理対象外としている）
 - **言語**: Python 3.12、デプロイ依存: `requests`, `anthropic`, `PyGithub`、開発依存: 左記 + `boto3`
-- **Claude モデル**: 要約生成に `claude-sonnet-4-20250514` を使用
+- **Claude モデル**: 要約生成に `claude-sonnet-4-6` を使用
 - **GitHub API**: REST、Fine-grained PAT、セッションログから特定したリポジトリのみ対象
 - **Notion API**: Internal Integration Token、データベースプロパティは [Spec: Database Properties](docs/Spec.md#database-properties) に定義
 - **Hook 設計**: フォアグラウンド同期実行で、転送失敗時は非ゼロ終了で push を中止する（silent fail 防止）。セッション ID 単位の上書きで冪等性を担保

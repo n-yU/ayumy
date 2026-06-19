@@ -338,7 +338,7 @@ DynamoDB の `ayumy-sessions` テーブルから対象日付をパーティシ�
 - これにより `scan_backfill_dates` が同じ日を再検出しなくなる
 
 ### Summary Generation
-使用モデル: `claude-sonnet-4-20250514`
+使用モデル: `claude-sonnet-4-6`
 
 GitHub アクティビティと Claude Code セッションログの両方をコンテキストとして渡し、リポジトリごとの要約を生成する。文体は常体で統一し、ですます調は使用しない
 
@@ -532,7 +532,7 @@ sam build && sam deploy
 <details>
 <summary>Running Cost Breakdown</summary>
 
-**Anthropic API（`claude-sonnet-4-20250514`）**
+**Anthropic API（`claude-sonnet-4-6`）**
 - 入力: $3 / 1M tokens、出力: $15 / 1M tokens
 
 **1日あたりのトークン使用量（目安）**
