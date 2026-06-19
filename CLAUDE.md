@@ -49,15 +49,6 @@ Lambda（環境変数 + Secrets Manager）:
 - `AYUMY_S3_BUCKET` — セッションログの保管先 S3 バケット名
 - `AYUMY_LAMBDA_FUNCTION` — Lambda 関数名（`--report` オプション用）
 
-## 書式規約
-- **Markdown の見出し**: 見出しの直後に空行を入れない（見出しの前には空行を入れる）
-
-## 言語規約
-- **コミットメッセージ**: 英語で書く
-- **コード内コメント**: 英語で書く
-- **GitHub Issue・PR**: タイトルは英語、本文は日本語で書く
-- **ドキュメント**（md ファイル）: タイトルは英語で書く
-
 ## 開発メモ
 - 仕様書は [Spec.md](docs/Spec.md)（日本語）— すべての要件の原典
 - 初期開発手順は [Initial-Development.md](docs/archive/Initial-Development.md) — フェーズ別の実装計画と v1 からの変遷を記録
