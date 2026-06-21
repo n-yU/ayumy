@@ -358,6 +358,33 @@ class TestRun:
         slack_client.notify_error.assert_called_once()
         store.scan_backfill_dates.assert_not_called()
 
+    def test_target_date_per_day_failure_logged_as_warning(self, run_patches, caplog):
+        target_since = datetime(2026, 3, 25, 0, 0, tzinfo=JST)
+        target_until = datetime(2026, 3, 26, 0, 0, tzinfo=JST)
+        run_patches["get_target_date_range"].return_value = (target_since, target_until)
+        store = run_patches["SessionStore"].return_value
+        slack_client = run_patches["SlackClient"].return_value
+
+        call_count = 0
+
+        def fetch_sessions_side_effect(date_str):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 2:
+                raise RuntimeError("middle day failure")
+            return SessionActivity({})
+
+        store.fetch_sessions.side_effect = fetch_sessions_side_effect
+
+        with caplog.at_level(logging.WARNING, logger="report.pipeline"):
+            run(source="manual", target_date="2026-03-25..2026-03-27")
+
+        # All 3 dates attempted, failed day logged as warning, no Slack error notify
+        assert store.fetch_sessions.call_count == 3
+        slack_client.notify_error.assert_not_called()
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("middle day failure" in r.getMessage() for r in warnings)
+
     def test_s3_delete_failure_continues_as_warning(self, run_patches, caplog):
         store = run_patches["SessionStore"].return_value
         store.ingest.return_value = ["claude-sessions/proj/s1.jsonl"]
