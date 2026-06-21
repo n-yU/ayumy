@@ -1,6 +1,12 @@
 [tool.pytest.ini_options]
 pythonpath = ["lambda"]
 
+[tool.coverage.run]
+source = ["lambda"]
+
+[tool.coverage.report]
+show_missing = true
+
 [tool.ruff]
 target-version = "py312"
 line-length = 88
