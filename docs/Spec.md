@@ -527,6 +527,19 @@ sam build && sam deploy
 - S3 転送失敗時、JSONL はソース側に残るため次回転送時にリトライ可能
 - AWS 認証情報が無効な場合は push が中止されるため、`aws login` 等で認証を修復してから再度 push する
 
+#### Classification Policy
+Lambda 側で発生する失敗は以下の 3 区分で扱う。`logger.warning` / `logger.error` / `raise` のいずれを選ぶかはこの分類に従う
+
+- **error として raise**: 当日のレポート生成の正しさに直接影響する失敗。1 日分のデータが欠落・誤動作するもの。通常発生することが想定されない失敗は影響度合いによらず原則ここに分類する
+- **warning として記録**: 部分的なデータ欠落で、レポート自体は生成できるが運用者が後追いすべき失敗
+- **suppress**: 意図された不在を表すケース（プロジェクトに `.ayumy_repo` が無い、shlex 解析失敗で番号抽出を諦める 等）
+
+`except Exception` は原則使わず、想定する具体例外型を捕捉する。broad catch を残すのは以下の 3 種類のみとし、いずれも「なぜ broad か」を示す inline comment を 1 行付与する
+
+- Lambda エントリ点（CloudWatch / 500 return のため）
+- pipeline 最終 fallback（Slack 通知に届けるため）
+- Slack 送信（ベストエフォート方針のため）
+
 ### Running Cost
 課金が発生するのは Anthropic API と AWS。GitHub API と Notion API は無料枠内で収まる
 
