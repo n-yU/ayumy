@@ -64,9 +64,9 @@ class SessionStore:
                 "end_time": item["end_time"],
                 "user_messages": item["user_messages"],
                 "tools_used": item["tools_used"],
-                "session_commits": item.get("session_commits", []),
-                "session_pulls": [int(n) for n in item.get("session_pulls", [])],
-                "session_issues": [int(n) for n in item.get("session_issues", [])],
+                "session_commits": item["session_commits"],
+                "session_pulls": [int(n) for n in item["session_pulls"]],
+                "session_issues": [int(n) for n in item["session_issues"]],
             }
             data.setdefault(repo, []).append(session_info)
 
