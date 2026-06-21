@@ -1,12 +1,14 @@
 """Slack notification client."""
 
 import logging
+from collections import defaultdict
 from datetime import datetime
 
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackClientError
 
 from . import JST, ReportSummary
+from .notice import Notice
 from .summarizer import ValidationResult
 
 logger = logging.getLogger(__name__)
@@ -168,15 +170,42 @@ class SlackClient:
         self._blocks = []
         self._fallback_parts = []
 
-    def _send(self, text: str, blocks: list[dict] | None = None) -> None:
+    def send_notice_thread(self, notice: Notice) -> None:
+        """Posts as a reply to `parent_ts` so the warning digest stays attached to the daily summary."""
+        if not notice or self.parent_ts is None:
+            return
+        grouped: dict[str, list[str]] = defaultdict(list)
+        for entry in notice.entries():
+            line = f"• {_escape_mrkdwn(entry.title)}"
+            if entry.details:
+                detail_str = ", ".join(
+                    f"{k}={_escape_mrkdwn(v)}" for k, v in entry.details.items()
+                )
+                line += f"  `{detail_str}`"
+            grouped[entry.source].append(line)
+        total = len(notice)
+        blocks: list[dict] = [_header_block(f"⚠️ Warnings ({total})")]
+        for source, lines in grouped.items():
+            blocks.append(
+                _section_block(f"*{source}* ({len(lines)})\n" + "\n".join(lines))
+            )
+        fallback = f"⚠️ {total} warning(s) emitted"
+        self._send(fallback, blocks, thread_ts=self.parent_ts)
+
+    def _send(
+        self,
+        text: str,
+        blocks: list[dict] | None = None,
+        *,
+        thread_ts: str | None = None,
+    ) -> None:
         """Suppress Slack SDK failures as best-effort; other exceptions propagate to the pipeline."""
         try:
-            response = self.client.chat_postMessage(
-                channel=self.channel,
-                text=text,
-                blocks=blocks,
-            )
-            if self.parent_ts is None:
+            kwargs: dict = {"channel": self.channel, "text": text, "blocks": blocks}
+            if thread_ts is not None:
+                kwargs["thread_ts"] = thread_ts
+            response = self.client.chat_postMessage(**kwargs)
+            if self.parent_ts is None and thread_ts is None:
                 self.parent_ts = response.get("ts")
         except SlackClientError as e:
             # Broad within Slack SDK errors: best-effort notification must not abort the pipeline

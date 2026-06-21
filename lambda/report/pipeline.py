@@ -228,3 +228,4 @@ def run(
             timeout_seconds=timeout_seconds,
         )
         slack_client.flush()
+        slack_client.send_notice_thread(notice)
