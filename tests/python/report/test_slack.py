@@ -10,6 +10,7 @@ from report import JST
 from report.notice import Notice, NoticeSource
 from report.slack import (
     HEADLINE_MAX,
+    SECTION_TEXT_MAX,
     SlackClient,
     _context_block,
     _divider,
@@ -617,3 +618,20 @@ class TestSendNoticeThread:
         self.client.send_notice_thread(notice)
 
         assert self.client.parent_ts == "1700000000.000100"
+
+    def test_splits_long_source_into_multiple_sections(self):
+        notice = Notice()
+        # Each line is ~100 chars; 60 lines exceed the section text cap and force splitting
+        long_title = "Malformed JSONL line skipped " + "x" * 70
+        for i in range(60):
+            notice.add(NoticeSource.SESSION, long_title, key=f"k{i}")
+
+        self.client.send_notice_thread(notice)
+
+        blocks = _get_send_kwargs(self.client)["blocks"]
+        section_blocks = [b for b in blocks if b["type"] == "section"]
+        assert len(section_blocks) >= 2
+        for block in section_blocks:
+            text = block["text"]["text"]
+            assert len(text) <= SECTION_TEXT_MAX
+            assert text.startswith("*session*")

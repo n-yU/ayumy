@@ -13,9 +13,11 @@ from .summarizer import ValidationResult
 
 logger = logging.getLogger(__name__)
 
-# Per-headline max length (truncated with ellipsis beyond this);
-# keeps the aggregated section text within Slack's 3000-char limit for a realistic number of repos per day
+# Slack section text limit is 3000; truncate headlines so per-day aggregation stays within bounds
 HEADLINE_MAX = 200
+
+# Slack section text limit is 3000; cap below to leave room for headers and continuation prefixes
+SECTION_TEXT_MAX = 2900
 
 
 def _truncate_headline(headline: str, limit: int = HEADLINE_MAX) -> str:
@@ -46,6 +48,25 @@ def _section_block(text: str) -> dict:
 
 def _context_block(text: str) -> dict:
     return {"type": "context", "elements": [{"type": "mrkdwn", "text": text}]}
+
+
+def _chunk_lines(lines: list[str], limit: int) -> list[str]:
+    """A single line longer than `limit` still occupies its own chunk (Slack truncates rather than rejects)."""
+    chunks: list[str] = []
+    current: list[str] = []
+    used = 0
+    for line in lines:
+        added = len(line) + (1 if current else 0)
+        if current and used + added > limit:
+            chunks.append("\n".join(current))
+            current = [line]
+            used = len(line)
+        else:
+            current.append(line)
+            used += added
+    if current:
+        chunks.append("\n".join(current))
+    return chunks
 
 
 class SlackClient:
@@ -186,9 +207,9 @@ class SlackClient:
         total = len(notice)
         blocks: list[dict] = [_header_block(f"⚠️ Warnings ({total})")]
         for source, lines in grouped.items():
-            blocks.append(
-                _section_block(f"*{source}* ({len(lines)})\n" + "\n".join(lines))
-            )
+            header = f"*{source}* ({len(lines)})"
+            for chunk in _chunk_lines(lines, SECTION_TEXT_MAX - len(header) - 1):
+                blocks.append(_section_block(f"{header}\n{chunk}"))
         fallback = f"⚠️ {total} warning(s) emitted"
         self._send(fallback, blocks, thread_ts=self.parent_ts)
 
