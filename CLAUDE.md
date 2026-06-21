@@ -26,7 +26,7 @@ template.yaml                        # AWS SAM テンプレート（Lambda, Even
 - **実行環境**: AWS Lambda（SAM でデプロイ）
 - **クライアント対応 OS**: クライアント側のスクリプト（`scripts/`, `hooks/`, `bin/ayumy`）は macOS のみサポート
 - **ローカル開発**: uv で `.venv` を管理。shell テスト実行には bats が必要（`brew install bats-core`）
-- **テスト・lint・format コマンド**: `make test`（Python + shell 一括）／ `make test-python` ／ `make test-shell` ／ `make format` ／ `make format-check` ／ `make lint` ／ `make lint-fix` を使う
+- **テスト・lint・format コマンド**: `make test`（Python + shell 一括）／ `make test-python` ／ `make test-shell` ／ `make test-cov`（Python カバレッジ計測。Shell カバレッジは CI でのみ取得）／ `make format` ／ `make format-check` ／ `make lint` ／ `make lint-fix` を使う
 - **避けるコマンド**: `uv run pytest` を使わない（CWD の `pyproject.toml` を project marker として検出し `uv.lock` を暗黙生成してしまうため。本リポジトリは `lambda/requirements.txt` 主導で `uv.lock` を管理対象外としている）
 - **言語**: Python 3.12、デプロイ依存: `requests`, `anthropic`, `PyGithub`、開発依存: 左記 + `boto3`
 - **Claude モデル**: 要約生成に `claude-sonnet-4-6` を使用
