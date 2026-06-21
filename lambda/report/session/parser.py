@@ -183,9 +183,7 @@ class SessionLogParser:
                 elif isinstance(entry_cwd_raw, str):
                     entry_cwd = entry_cwd_raw
                 else:
-                    logger.warning(
-                        "Unexpected cwd type in %s: %r", key, entry_cwd_raw
-                    )
+                    logger.warning("Unexpected cwd type in %s: %r", key, entry_cwd_raw)
                     entry_cwd = None
                 if project_cwd is None and entry_cwd:
                     project_cwd = entry_cwd

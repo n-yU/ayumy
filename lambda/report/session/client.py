@@ -38,9 +38,7 @@ class SessionClient:
         name = resp["Body"].read().decode("utf-8").strip()
         if name and "/" not in name and ":" not in name:
             return name
-        logger.warning(
-            "Invalid .ayumy_repo content for project %s: %r", project, name
-        )
+        logger.warning("Invalid .ayumy_repo content for project %s: %r", project, name)
         return None
 
     def delete_sessions(self, keys: list[str]) -> int:
