@@ -3,7 +3,7 @@
 import logging
 from datetime import datetime
 
-from slack_sdk.webhook import WebhookClient
+from slack_sdk import WebClient
 
 from . import JST, ReportSummary
 from .summarizer import ValidationResult
@@ -46,12 +46,14 @@ def _context_block(text: str) -> dict:
 
 
 class SlackClient:
-    """Client for sending daily report notifications via Slack Incoming Webhook."""
+    """Client for sending daily report notifications via Slack chat.postMessage."""
 
-    def __init__(self, webhook_url: str) -> None:
-        self.client = WebhookClient(webhook_url)
+    def __init__(self, token: str, channel: str) -> None:
+        self.client = WebClient(token=token)
+        self.channel = channel
         self._blocks: list[dict] = []
         self._fallback_parts: list[str] = []
+        self.parent_ts: str | None = None
 
     def _append_with_divider(self, *blocks: dict) -> None:
         if self._blocks:
@@ -168,12 +170,17 @@ class SlackClient:
     def _send(self, text: str, blocks: list[dict] | None = None) -> None:
         """Logs failures but does not raise; notification errors never abort report generation."""
         try:
-            response = self.client.send(text=text, blocks=blocks)
-            if response.status_code != 200:
+            response = self.client.chat_postMessage(
+                channel=self.channel,
+                text=text,
+                blocks=blocks,
+            )
+            if not response.get("ok"):
                 logger.error(
-                    "Failed to send Slack notification: status=%d, body=%s",
-                    response.status_code,
-                    response.body,
+                    "Failed to send Slack notification: error=%s",
+                    response.get("error"),
                 )
+                return
+            self.parent_ts = response.get("ts")
         except Exception as e:
             logger.exception("Failed to send Slack notification: %r", e)

@@ -6,6 +6,9 @@ Parameters:
   NotionDatabaseId:
     Type: String
     Description: Notion database ID for daily reports
+  SlackChannelId:
+    Type: String
+    Description: Slack channel ID for notifications (e.g. C0XXXXXXXXX)
   LambdaTimeoutSeconds:
     Type: Number
     Default: 300
@@ -65,6 +68,7 @@ Resources:
           AYUMY_DYNAMO_TABLE: !Ref SessionTable
           AYUMY_LAMBDA_TIMEOUT: !Ref LambdaTimeoutSeconds
           NOTION_DATABASE_ID: !Ref NotionDatabaseId
+          SLACK_CHANNEL: !Ref SlackChannelId
       Policies:
         - S3CrudPolicy:
             BucketName: !Ref SessionBucket

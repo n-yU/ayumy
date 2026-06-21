@@ -19,14 +19,19 @@ from report.summarizer import ValidationResult
 def _make_client():
     client = SlackClient.__new__(SlackClient)
     client.client = MagicMock()
-    client.client.send.return_value = MagicMock(status_code=200)
+    client.client.chat_postMessage.return_value = {
+        "ok": True,
+        "ts": "1700000000.000100",
+    }
+    client.channel = "C0TEST"
     client._blocks = []
     client._fallback_parts = []
+    client.parent_ts = None
     return client
 
 
 def _get_send_kwargs(client):
-    return client.client.send.call_args.kwargs
+    return client.client.chat_postMessage.call_args.kwargs
 
 
 def _blocks_text(blocks):
@@ -414,8 +419,8 @@ class TestNotifyMetrics:
         )
         client.flush()
 
-        # `text` kwarg passed to webhook send() carries the fallback string
-        fallback = client.client.send.call_args.kwargs["text"]
+        # `text` kwarg passed to chat_postMessage() carries the fallback string
+        fallback = client.client.chat_postMessage.call_args.kwargs["text"]
         assert "v0.2.1" in fallback
         assert "45.0 / 300s (15%)" in fallback
         assert "128 / 256 MB (50%)" in fallback
@@ -487,7 +492,7 @@ class TestFlush:
         client.flush()
 
         # Single send call
-        assert client.client.send.call_count == 1
+        assert client.client.chat_postMessage.call_count == 1
         blocks = _get_send_kwargs(client)["blocks"]
         text = _blocks_text(blocks)
         assert "Daily Report" in text
@@ -500,7 +505,7 @@ class TestFlush:
 
         client.flush()
 
-        client.client.send.assert_not_called()
+        client.client.chat_postMessage.assert_not_called()
 
     def test_clears_buffer_after_flush(self):
         client = _make_client()
@@ -510,4 +515,4 @@ class TestFlush:
         client.flush()
         client.flush()
 
-        assert client.client.send.call_count == 1
+        assert client.client.chat_postMessage.call_count == 1
