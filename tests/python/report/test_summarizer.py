@@ -6,13 +6,16 @@ from unittest.mock import MagicMock
 import pytest
 
 from report import JST
+from report.notice import Notice
 from report.summarizer import _SYSTEM_PROMPT, TOOL_NAME, SummaryClient, ValidationResult
 from report.tags import ALLOWED_TAG_NAMES, TAG_DEFINITIONS
 
 
 def _make_client() -> SummaryClient:
     # Bypass Anthropic SDK init
-    return SummaryClient.__new__(SummaryClient)
+    client = SummaryClient.__new__(SummaryClient)
+    client._notice = Notice()
+    return client
 
 
 class TestBuildToolSchema:

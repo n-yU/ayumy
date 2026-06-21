@@ -10,6 +10,7 @@ from os.path import normpath
 from pathlib import Path, PurePosixPath
 
 from .. import JST
+from ..notice import Notice, NoticeSource
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +127,9 @@ def _extract_pr_issue_refs(command: str) -> tuple[set[int], set[int]]:
 class SessionLogParser:
     """Convert JSONL session logs read via `SessionClient` into DynamoDB-shaped items."""
 
+    def __init__(self, notice: Notice | None = None) -> None:
+        self._notice = notice or Notice()
+
     def build_items(self, session_client) -> tuple[list[dict], list[str]]:
         """Groups by (JST date, repo, session_id). Entries without timestamps and projects without `.ayumy_repo` are skipped."""
         # MULTILINE lets the commit summary line match even when hook output precedes it
@@ -174,7 +178,12 @@ class SessionLogParser:
                 try:
                     entry = json.loads(line)
                 except json.JSONDecodeError:
-                    logger.warning("Skipping malformed line in %s", key)
+                    self._notice.add(
+                        NoticeSource.SESSION,
+                        "Malformed JSONL line skipped",
+                        logger=logger,
+                        key=key,
+                    )
                     continue
 
                 entry_cwd_raw = entry.get("cwd")
@@ -183,7 +192,13 @@ class SessionLogParser:
                 elif isinstance(entry_cwd_raw, str):
                     entry_cwd = entry_cwd_raw
                 else:
-                    logger.warning("Unexpected cwd type in %s: %r", key, entry_cwd_raw)
+                    self._notice.add(
+                        NoticeSource.SESSION,
+                        "Unexpected cwd type",
+                        logger=logger,
+                        key=key,
+                        type=type(entry_cwd_raw).__name__,
+                    )
                     entry_cwd = None
                 if project_cwd is None and entry_cwd:
                     project_cwd = entry_cwd
@@ -236,8 +251,12 @@ class SessionLogParser:
                             continue
                         command = block.get("input", {}).get("command", "")
                         if not isinstance(command, str):
-                            logger.warning(
-                                "Unexpected command type in %s: %r", key, command
+                            self._notice.add(
+                                NoticeSource.SESSION,
+                                "Unexpected Bash command type",
+                                logger=logger,
+                                key=key,
+                                type=type(command).__name__,
                             )
                             continue
                         if not command:

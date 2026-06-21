@@ -5,15 +5,18 @@ from typing import Any
 
 import boto3
 
+from ..notice import Notice, NoticeSource
+
 logger = logging.getLogger(__name__)
 
 
 class SessionClient:
     """Client for managing Claude Code session JSONL files on S3."""
 
-    def __init__(self, bucket: str) -> None:
+    def __init__(self, bucket: str, notice: Notice | None = None) -> None:
         self.s3 = boto3.client("s3")
         self.bucket = bucket
+        self._notice = notice or Notice()
 
     def list_session_objects(self) -> list[dict[str, Any]]:
         prefix = "claude-sessions/"
@@ -38,7 +41,13 @@ class SessionClient:
         name = resp["Body"].read().decode("utf-8").strip()
         if name and "/" not in name and ":" not in name:
             return name
-        logger.warning("Invalid .ayumy_repo content for project %s: %r", project, name)
+        self._notice.add(
+            NoticeSource.SESSION,
+            "Invalid .ayumy_repo content",
+            logger=logger,
+            project=project,
+            content=repr(name),
+        )
         return None
 
     def delete_sessions(self, keys: list[str]) -> int:
@@ -58,11 +67,12 @@ class SessionClient:
             )
             deleted += len(resp.get("Deleted", []))
 
-            errors = resp.get("Errors", [])
-            if errors:
-                logger.warning(
-                    "Failed to delete %d S3 object(s): %s",
-                    len(errors),
-                    [{"Key": e.get("Key"), "Code": e.get("Code")} for e in errors],
+            for err in resp.get("Errors", []):
+                self._notice.add(
+                    NoticeSource.SESSION,
+                    "S3 object deletion failed",
+                    logger=logger,
+                    key=err.get("Key") or "",
+                    code=err.get("Code") or "",
                 )
         return deleted

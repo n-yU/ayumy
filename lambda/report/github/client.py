@@ -11,6 +11,7 @@ from github.Issue import Issue
 from github.Repository import Repository
 
 from ..domain import CommitInfo, IssueInfo, PullInfo
+from ..notice import Notice, NoticeSource
 from .activity import GitHubActivity, RepoActivity
 
 logger = logging.getLogger(__name__)
@@ -26,10 +27,11 @@ _ISSUE_EVENTS = ("created", "closed")
 class GitHubClient:
     """GitHub activity fetcher via PyGithub."""
 
-    def __init__(self, pat: str) -> None:
+    def __init__(self, pat: str, notice: Notice | None = None) -> None:
         self.g = Github(pat, per_page=100)
         self._search_count = 0
         self._window_start = 0.0
+        self._notice = notice or Notice()
 
     @cached_property
     def owner(self) -> str:
@@ -224,7 +226,13 @@ class GitHubClient:
             commit = repo.get_commit(sha)
             return [pr.number for pr in commit.get_pulls()]
         except UnknownObjectException:
-            logger.warning("Commit %s not found (404), skipping", sha[:7])
+            self._notice.add(
+                NoticeSource.GITHUB,
+                "Commit not found (404)",
+                logger=logger,
+                repo=repo.full_name,
+                sha=sha[:7],
+            )
             return []
 
     def populate_commit_pull_numbers(
@@ -246,11 +254,13 @@ class GitHubClient:
             except GithubException as e:
                 if e.status not in (404, 422):
                     raise
-                logger.warning(
-                    "Commit %s lookup failed (%s); keeping commit but "
-                    "skipping PR association",
-                    c.short_sha,
-                    e.status,
+                self._notice.add(
+                    NoticeSource.GITHUB,
+                    "Commit PR lookup failed",
+                    logger=logger,
+                    repo=repo_name,
+                    sha=c.short_sha,
+                    status=str(e.status),
                 )
                 commits[i] = c.with_pull_numbers(())
                 continue
@@ -287,7 +297,13 @@ class GitHubClient:
             try:
                 pr = repo.get_pull(n)
             except UnknownObjectException:
-                logger.warning("PR #%d not found (404), skipping", n)
+                self._notice.add(
+                    NoticeSource.GITHUB,
+                    "PR not found (404)",
+                    logger=logger,
+                    repo=repo.full_name,
+                    number=str(n),
+                )
                 continue
             info = PullInfo.from_pull_request(pr)
             # Search-only entries must have a state event in [since, until)

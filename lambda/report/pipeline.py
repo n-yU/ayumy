@@ -18,6 +18,7 @@ from . import (
     require_env,
 )
 from .github import GitHubClient
+from .notice import Notice, NoticeSource
 from .notion import NotionClient
 from .session import SessionClient, SessionStore
 from .slack import SlackClient
@@ -124,10 +125,11 @@ def run(
         token=require_env("SLACK_BOT_TOKEN"),
         channel=require_env("SLACK_CHANNEL"),
     )
+    notice = Notice()
 
     try:
-        session_client = SessionClient(require_env("AYUMY_S3_BUCKET"))
-        store = SessionStore(require_env("AYUMY_DYNAMO_TABLE"))
+        session_client = SessionClient(require_env("AYUMY_S3_BUCKET"), notice=notice)
+        store = SessionStore(require_env("AYUMY_DYNAMO_TABLE"), notice=notice)
 
         ingested_keys = store.ingest(session_client)
         logger.info("Ingested %d JSONL file(s)", len(ingested_keys))
@@ -137,8 +139,10 @@ def run(
                 deleted = session_client.delete_sessions(ingested_keys)
                 logger.info("Deleted %d JSONL file(s) from S3", deleted)
             except (ClientError, BotoCoreError):
-                logger.warning(
+                notice.add(
+                    NoticeSource.PIPELINE,
                     "S3 deletion failed; JSONL will be re-ingested on next run",
+                    logger=logger,
                     exc_info=True,
                 )
 
@@ -154,13 +158,14 @@ def run(
             if backfill_dates:
                 logger.info("Backfill dates detected: %s", backfill_dates)
 
-        github_client = GitHubClient(require_env("GITHUB_PAT"))
+        github_client = GitHubClient(require_env("GITHUB_PAT"), notice=notice)
         notion_client = NotionClient(
             require_env("NOTION_SECRET"),
             require_env("NOTION_DATABASE_ID"),
+            notice=notice,
         )
         notion_client.init_data_source()
-        summary_client = SummaryClient(require_env("ANTHROPIC_API_KEY"))
+        summary_client = SummaryClient(require_env("ANTHROPIC_API_KEY"), notice=notice)
 
         for d in process_dates:
             if not target_date and d == primary_date:
@@ -187,8 +192,14 @@ def run(
                     slack_client.notify_error(day_since, e)
                     e._notified = True  # type: ignore[attr-defined]
                     raise
-                msg = f"Report generation failed for {date_str}: {e!r}"
-                logger.warning(msg, exc_info=True)
+                notice.add(
+                    NoticeSource.PIPELINE,
+                    "Report generation failed",
+                    logger=logger,
+                    exc_info=True,
+                    date=date_str,
+                    error=repr(e),
+                )
 
     except Exception as e:
         # Broad: pipeline final fallback, ensures any uncaught failure reaches Slack
