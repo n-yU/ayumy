@@ -169,7 +169,7 @@ class SlackClient:
         self._fallback_parts = []
 
     def _send(self, text: str, blocks: list[dict] | None = None) -> None:
-        """Logs failures but does not raise; notification errors never abort report generation."""
+        """Suppress Slack SDK failures as best-effort; other exceptions propagate to the pipeline."""
         try:
             response = self.client.chat_postMessage(
                 channel=self.channel,
