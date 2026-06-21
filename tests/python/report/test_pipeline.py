@@ -1,10 +1,12 @@
 """Tests for report generation pipeline."""
 
+import logging
 from contextlib import ExitStack
 from datetime import date, datetime
 from unittest.mock import patch
 
 import pytest
+from botocore.exceptions import ClientError
 
 from report import JST, SessionActivity
 from report.github import GitHubActivity
@@ -340,21 +342,37 @@ class TestRun:
 
         run(source=None)
 
-        # Backfill failure notified but primary still processed
+        # Backfill failure logged as warning (no notify_error), primary still processed
         assert store.fetch_sessions.call_count == 2
-        slack_client.notify_error.assert_called_once()
-        backfill_since = slack_client.notify_error.call_args[0][0]
-        assert backfill_since.date() == date(2026, 3, 27)
+        slack_client.notify_error.assert_not_called()
 
-    def test_continues_when_ingestion_fails(self, run_patches):
+    def test_ingestion_failure_aborts_run(self, run_patches):
         store = run_patches["SessionStore"].return_value
         store.ingest.side_effect = RuntimeError("DynamoDB error")
         slack_client = run_patches["SlackClient"].return_value
 
-        run(source=None)
+        with pytest.raises(RuntimeError, match="DynamoDB error"):
+            run(source=None)
 
-        # Ingestion error notified but pipeline continues
+        # Ingestion failure surfaces to the final fallback and Slack notification
         slack_client.notify_error.assert_called_once()
+        store.scan_backfill_dates.assert_not_called()
+
+    def test_s3_delete_failure_continues_as_warning(self, run_patches, caplog):
+        store = run_patches["SessionStore"].return_value
+        store.ingest.return_value = ["claude-sessions/proj/s1.jsonl"]
+        session_client = run_patches["SessionClient"].return_value
+        session_client.delete_sessions.side_effect = ClientError(
+            {"Error": {"Code": "AccessDenied", "Message": "denied"}}, "DeleteObjects"
+        )
+        slack_client = run_patches["SlackClient"].return_value
+
+        with caplog.at_level(logging.WARNING, logger="report.pipeline"):
+            run(source=None)
+
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("S3 deletion failed" in r.getMessage() for r in warnings)
+        slack_client.notify_error.assert_not_called()
         store.scan_backfill_dates.assert_called_once()
 
     def test_marks_reported_after_success(self, run_patches):

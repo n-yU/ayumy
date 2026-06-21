@@ -78,8 +78,9 @@ class SessionActivity:
 
     @staticmethod
     def _format_time(iso_timestamp: str) -> str:
+        # Parser fills `start_time` / `end_time` for every session item, so an empty value indicates a parser regression
         if not iso_timestamp:
-            return "??:??"
+            raise ValueError("Session timestamp is missing")
         dt = datetime.fromisoformat(iso_timestamp).astimezone(JST)
         return dt.strftime("%H:%M")
 

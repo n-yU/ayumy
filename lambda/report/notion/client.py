@@ -325,13 +325,13 @@ class NotionClient:
 
             repo_activity = activity.repos()[repo_name]
 
-            commits = len(repo_activity.get("commits", []))
+            commits = len(repo_activity["commits"])
             prs_merged = sum(
-                1 for pr in repo_activity.get("pulls", []) if pr.state == "merged"
+                1 for pr in repo_activity["pulls"] if pr.state == "merged"
             )
             issues_closed = sum(
                 1
-                for issue in repo_activity.get("issues", [])
+                for issue in repo_activity["issues"]
                 if issue.state == "closed"
             )
             claude_sessions = len(session_activity.get(repo_name, []))

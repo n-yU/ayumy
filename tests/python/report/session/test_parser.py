@@ -1,6 +1,7 @@
 """Tests for SessionLogParser."""
 
 import json
+import logging
 from unittest.mock import MagicMock
 
 import pytest
@@ -792,6 +793,62 @@ class TestBuildItems:
 
         assert items == []
         assert keys == []
+
+
+class TestBuildItemsTypeViolations:
+    """Session log spec violations surface as warnings instead of silent skips."""
+
+    def setup_method(self):
+        self.parser = SessionLogParser()
+        self.client = _make_session_client()
+        self.client.list_session_objects.return_value = [
+            {"Key": "claude-sessions/proj/s1.jsonl"},
+        ]
+        self.client.read_repo_name.return_value = "repo"
+
+    def test_non_string_cwd_logs_warning(self, caplog):
+        lines = _jsonl_lines(
+            {
+                "type": "user",
+                "timestamp": "2026-03-28T10:00:00+09:00",
+                "cwd": 123,
+                "message": {"content": "msg"},
+            },
+        )
+        self.client.s3.get_object.return_value = _s3_body(lines)
+
+        with caplog.at_level(logging.WARNING, logger="report.session.parser"):
+            self.parser.build_items(self.client)
+
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert warnings
+        assert "cwd" in warnings[0].getMessage()
+
+    def test_non_string_bash_command_logs_warning(self, caplog):
+        lines = _jsonl_lines(
+            {
+                "type": "assistant",
+                "timestamp": "2026-03-28T10:00:00+09:00",
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": "t1",
+                            "name": "Bash",
+                            "input": {"command": ["ls"]},
+                        }
+                    ]
+                },
+            },
+        )
+        self.client.s3.get_object.return_value = _s3_body(lines)
+
+        with caplog.at_level(logging.WARNING, logger="report.session.parser"):
+            self.parser.build_items(self.client)
+
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert warnings
+        assert "command" in warnings[0].getMessage()
 
 
 class TestBuildItemsCwdFilter:

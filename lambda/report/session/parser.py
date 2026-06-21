@@ -178,11 +178,15 @@ class SessionLogParser:
                     continue
 
                 entry_cwd_raw = entry.get("cwd")
-                entry_cwd = (
-                    entry_cwd_raw
-                    if isinstance(entry_cwd_raw, str) and entry_cwd_raw
-                    else None
-                )
+                if entry_cwd_raw is None or entry_cwd_raw == "":
+                    entry_cwd = None
+                elif isinstance(entry_cwd_raw, str):
+                    entry_cwd = entry_cwd_raw
+                else:
+                    logger.warning(
+                        "Unexpected cwd type in %s: %r", key, entry_cwd_raw
+                    )
+                    entry_cwd = None
                 if project_cwd is None and entry_cwd:
                     project_cwd = entry_cwd
 
@@ -233,7 +237,12 @@ class SessionLogParser:
                         if block.get("name") != "Bash":
                             continue
                         command = block.get("input", {}).get("command", "")
-                        if not isinstance(command, str) or not command:
+                        if not isinstance(command, str):
+                            logger.warning(
+                                "Unexpected command type in %s: %r", key, command
+                            )
+                            continue
+                        if not command:
                             continue
                         cwd = _effective_cwd(command, entry_cwd or project_cwd)
                         if cwd is None:
