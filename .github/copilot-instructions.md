@@ -73,7 +73,7 @@ ayumy リポジトリの PR レビューにおいて、過去の PR で繰り返
 
 ### プロジェクト固有の設定前提
 すでにプロジェクト側で対処済みのため、対応提案は不要
-- `samconfig.toml` がリポジトリにコミット済みで、`sam deploy` が stack 名・capabilities・S3 バケット／プレフィックス・`NotionDatabaseId` を自動読み込みする
+- `samconfig.toml` はローカル保存（`.gitignore` 対象）で、`sam deploy` が stack 名・capabilities・S3 バケット／プレフィックス・`NotionDatabaseId` / `SlackChannelId` を自動読み込みする
 - `lambda/VERSION` はリポジトリルート `VERSION` への git symlink（mode `120000`）であり drift しない
 - `make oidc-deploy` は初回のみの手動実行で、テンプレート default 値への依存は意図的
 - GitHub のユーザーリポは `affiliation=owner` で取得しており、別オーナーとの同名衝突は起こり得ない
