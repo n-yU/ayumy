@@ -175,12 +175,6 @@ class SlackClient:
                 text=text,
                 blocks=blocks,
             )
-            if not response.get("ok"):
-                logger.error(
-                    "Failed to send Slack notification: error=%s",
-                    response.get("error"),
-                )
-                return
             if self.parent_ts is None:
                 self.parent_ts = response.get("ts")
         except Exception as e:
