@@ -1,4 +1,4 @@
-.PHONY: lambda-install lambda-invoke lambda-deploy test test-python test-shell format format-check lint lint-fix oidc-deploy scan-sessions aws-auth-check
+.PHONY: lambda-install lambda-invoke lambda-deploy test test-python test-shell test-cov format format-check lint lint-fix oidc-deploy scan-sessions aws-auth-check
 
 FORMAT_TARGETS := lambda tests
 
@@ -37,6 +37,11 @@ test-python: lambda-install
 test-shell: TARGET = tests/shell/
 test-shell:
 	bats $(TARGET)
+
+# Run Python tests with coverage measurement. Shell coverage is captured on CI only.
+test-cov: lambda-install
+	.venv/bin/python -m pytest tests/python/ -v \
+		--cov=lambda --cov-report=term-missing --cov-report=xml:coverage-python.xml
 
 # Apply Ruff formatter and isort-equivalent import sort
 format: lambda-install
