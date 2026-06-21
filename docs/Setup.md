@@ -16,12 +16,24 @@
    - シークレット名: `ayumy/notion-secret`
    - プレーンテキストで Integration トークンを貼り付け
 
-## 3. AWS SAM
+## 3. Slack
+1. [Slack API](https://api.slack.com/apps) で App を作成（From scratch）
+2. OAuth & Permissions の Bot Token Scopes に `chat:write` を追加し、Install to Workspace で認可
+3. 発行された Bot User OAuth Token（`xoxb-` で始まる）を控える
+4. 通知先 channel を Slack クライアントで開き、`/invite @<app-name>` で bot を invite
+5. channel 名をクリック → About タブ最下部の Channel ID（`C` または `G` で始まる）を控える
+6. AWS Secrets Manager（ap-northeast-1）に Bot Token を登録
+   - シークレットのタイプ: その他のシークレットのタイプ
+   - シークレット名: `ayumy/slack-bot-token`
+   - プレーンテキストで Bot User OAuth Token を貼り付け
+
+## 4. AWS SAM
 1. AWS SAM CLI をインストール: `brew install aws-sam-cli`
 2. `sam build && sam deploy --guided` で初回デプロイを実行
    - Stack Name: `ayumy`
    - Region: `ap-northeast-1`
-   - `NotionDatabaseId` パラメータに「2. Notion」で取得したデータベース ID を入力
+   - `NotionDatabaseId` に「2. Notion」で取得したデータベース ID を入力
+   - `SlackChannelId` に「3. Slack」で取得した channel ID を入力
    - Confirm changes before deploy: `Y`
    - Allow SAM CLI IAM role creation: `Y`
    - Disable rollback: `N`
@@ -30,7 +42,7 @@
 
 2回目以降のデプロイは `sam build && sam deploy` のみでよい。デプロイ用 S3 バケットを変更する場合は `samconfig.toml` の `s3_bucket` を編集し、`sam deploy --no-resolve-s3` で実行する。
 
-## 4. GitHub PAT
+## 5. GitHub PAT
 1. GitHub Settings → Developer settings → Fine-grained personal access tokens で PAT を作成
    - Resource owner: 自分の個人アカウント
    - Repository access: All repositories
@@ -41,22 +53,12 @@
    - シークレット名: `ayumy/github-pat`
    - プレーンテキストで `github_pat_...` の値をそのまま貼り付け
 
-## 5. Anthropic API
+## 6. Anthropic API
 1. [Anthropic Console](https://console.anthropic.com/) で API キーを発行（API は従量課金で、サブスクリプションプランとは別）
 2. AWS Secrets Manager（ap-northeast-1）に登録
    - シークレットのタイプ: その他のシークレットのタイプ
    - シークレット名: `ayumy/anthropic-api-key`
    - プレーンテキストで API キーを貼り付け
-
-## 6. Slack
-1. [Slack API](https://api.slack.com/apps) で App を作成（From scratch）
-2. Incoming Webhooks を有効化し、通知先チャンネルを選択して Webhook URL を発行
-3. AWS Secrets Manager（ap-northeast-1）に登録
-   - シークレットのタイプ: その他のシークレットのタイプ
-   - シークレット名: `ayumy/slack-webhook-url`
-   - プレーンテキストで Webhook URL を貼り付け
-
-※ レガシーな Incoming WebHooks App ではなく、Slack App の Incoming Webhooks 機能を使用する
 
 ## 7. クライアントマシン
 クライアント側のスクリプト（`scripts/`, `hooks/`, `bin/ayumy`）は macOS のみサポートする
@@ -64,6 +66,6 @@
 1. リポジトリをクローン: `git clone https://github.com/{user}/ayumy.git ~/ayumy`
 2. PATH を通す: `export PATH="$HOME/ayumy/bin:$PATH"`（`~/.zshrc` 等に追加）
 3. 環境変数を設定（`~/.zshrc` 等に追加）
-   - `AYUMY_S3_BUCKET`: 「3. AWS SAM」の Outputs の `SessionBucketName`
-   - `AYUMY_LAMBDA_FUNCTION`: 「3. AWS SAM」の Outputs の `ReportFunctionName`
+   - `AYUMY_S3_BUCKET`: 「4. AWS SAM」の Outputs の `SessionBucketName`
+   - `AYUMY_LAMBDA_FUNCTION`: 「4. AWS SAM」の Outputs の `ReportFunctionName`
 4. 対象リポジトリに hook を設置: `ayumy setup-hooks --all <repositories-dir>`

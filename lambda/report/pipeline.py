@@ -118,7 +118,10 @@ def run(
     since, until = get_target_date_range(source, target_date=target_date)
     primary_date = since.astimezone(JST).date()
 
-    slack_client = SlackClient(require_env("SLACK_WEBHOOK_URL"))
+    slack_client = SlackClient(
+        token=require_env("SLACK_BOT_TOKEN"),
+        channel=require_env("SLACK_CHANNEL"),
+    )
 
     try:
         session_client = SessionClient(require_env("AYUMY_S3_BUCKET"))

@@ -17,7 +17,7 @@ def lambda_handler(event, context):
         "GITHUB_PAT": "ayumy/github-pat",
         "ANTHROPIC_API_KEY": "ayumy/anthropic-api-key",
         "NOTION_SECRET": "ayumy/notion-secret",
-        "SLACK_WEBHOOK_URL": "ayumy/slack-webhook-url",
+        "SLACK_BOT_TOKEN": "ayumy/slack-bot-token",
     }
 
     for env_var, secret_id in secret_names.items():

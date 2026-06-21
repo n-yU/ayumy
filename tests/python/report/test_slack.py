@@ -19,14 +19,19 @@ from report.summarizer import ValidationResult
 def _make_client():
     client = SlackClient.__new__(SlackClient)
     client.client = MagicMock()
-    client.client.send.return_value = MagicMock(status_code=200)
+    client.client.chat_postMessage.return_value = {
+        "ok": True,
+        "ts": "1700000000.000100",
+    }
+    client.channel = "C0TEST"
     client._blocks = []
     client._fallback_parts = []
+    client.parent_ts = None
     return client
 
 
 def _get_send_kwargs(client):
-    return client.client.send.call_args.kwargs
+    return client.client.chat_postMessage.call_args.kwargs
 
 
 def _blocks_text(blocks):
@@ -414,8 +419,8 @@ class TestNotifyMetrics:
         )
         client.flush()
 
-        # `text` kwarg passed to webhook send() carries the fallback string
-        fallback = client.client.send.call_args.kwargs["text"]
+        # `text` kwarg passed to chat_postMessage() carries the fallback string
+        fallback = client.client.chat_postMessage.call_args.kwargs["text"]
         assert "v0.2.1" in fallback
         assert "45.0 / 300s (15%)" in fallback
         assert "128 / 256 MB (50%)" in fallback
@@ -476,19 +481,21 @@ class TestNotifyError:
 
 
 class TestFlush:
+    def setup_method(self):
+        self.client = _make_client()
+        self.target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+
     def test_sends_combined_message(self):
-        client = _make_client()
-        target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
         report = {"summary": "summary", "repositories": []}
         pages = [("repo", "https://notion.so/p")]
 
-        client.notify(target, report, pages)
-        client.notify_metrics(10.0, 100.0, "0.2.1", memory_limit_mb=512)
-        client.flush()
+        self.client.notify(self.target, report, pages)
+        self.client.notify_metrics(10.0, 100.0, "0.2.1", memory_limit_mb=512)
+        self.client.flush()
 
         # Single send call
-        assert client.client.send.call_count == 1
-        blocks = _get_send_kwargs(client)["blocks"]
+        assert self.client.client.chat_postMessage.call_count == 1
+        blocks = _get_send_kwargs(self.client)["blocks"]
         text = _blocks_text(blocks)
         assert "Daily Report" in text
         assert "10.0s" in text
@@ -496,18 +503,40 @@ class TestFlush:
         assert any(b["type"] == "divider" for b in blocks)
 
     def test_does_not_send_when_empty(self):
-        client = _make_client()
+        self.client.flush()
 
-        client.flush()
-
-        client.client.send.assert_not_called()
+        self.client.client.chat_postMessage.assert_not_called()
 
     def test_clears_buffer_after_flush(self):
-        client = _make_client()
-        target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        self.client.notify_error(self.target, RuntimeError("fail"))
+        self.client.flush()
+        self.client.flush()
 
-        client.notify_error(target, RuntimeError("fail"))
-        client.flush()
-        client.flush()
+        assert self.client.client.chat_postMessage.call_count == 1
 
-        assert client.client.send.call_count == 1
+    def test_captures_parent_ts_after_send(self):
+        self.client.notify_error(self.target, RuntimeError("fail"))
+        self.client.flush()
+
+        assert self.client.parent_ts == "1700000000.000100"
+
+    def test_parent_ts_not_overwritten_on_subsequent_sends(self):
+        self.client.notify_error(self.target, RuntimeError("first"))
+        self.client.flush()
+        initial_ts = self.client.parent_ts
+
+        self.client.client.chat_postMessage.return_value = {
+            "ok": True,
+            "ts": "1800000000.000200",
+        }
+        self.client.notify_error(self.target, RuntimeError("second"))
+        self.client.flush()
+
+        assert self.client.parent_ts == initial_ts
+
+    def test_sends_to_configured_channel(self):
+        self.client.notify_error(self.target, RuntimeError("fail"))
+        self.client.flush()
+
+        kwargs = _get_send_kwargs(self.client)
+        assert kwargs["channel"] == "C0TEST"
