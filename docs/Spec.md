@@ -68,7 +68,7 @@ flowchart TB
         GH[GitHub API]
         Claude[Claude API]
         Notion[Notion]
-        Slack[Slack Webhook]
+        Slack[Slack API]
     end
 
     Hook --> S3
@@ -92,7 +92,7 @@ S3 上のオブジェクトキー構造は [Directory Structure](#directory-stru
 | GitHub API (REST) | アクティビティデータの取得 | Fine-grained PAT |
 | Anthropic API | 自然言語による要約生成 | API Key |
 | Notion API | 作業記録の書き込み | Internal Integration Token |
-| Slack Incoming Webhook | 完了通知 | Webhook URL |
+| Slack Web API | 完了通知 | Bot User OAuth Token |
 | AWS S3 | セッションログの保管 | AWS 認証情報（IAM ユーザー / プロファイル） |
 | Amazon DynamoDB | セッションメタデータの集約 | IAM ロール |
 | AWS Lambda | レポート生成の実行環境 | IAM ロール |
@@ -376,7 +376,7 @@ GitHub アクティビティと Claude Code セッションログの両方をコ
 出力にはリポジトリごとの作業要点（箇条書き）とタグの提案を含める
 
 ### Slack Notification
-Notion への書き込み完了後、Slack Incoming Webhook で指定チャンネルに通知を送信する
+Notion への書き込み完了後、Slack Web API の `chat.postMessage` で指定チャンネルに通知を送信する
 
 通知内容
 - Notion ページへのリンク（リポジトリごとに 1 行）。Claude API が生成した summary 箇条書きの先頭項目がある場合は 1 文サマリとしてリンクの後ろに付加する
@@ -483,6 +483,7 @@ Lambda 関数の環境変数として設定する。機密情報は AWS Secrets 
 | `AYUMY_DYNAMO_TABLE` | セッションメタデータの DynamoDB テーブル名 |
 | `AYUMY_LAMBDA_TIMEOUT` | Lambda 関数の timeout 秒数（template.yaml の `LambdaTimeoutSeconds` パラメータと連動） |
 | `NOTION_DATABASE_ID` | 書き込み先の Notion データベース ID |
+| `SLACK_CHANNEL` | 通知先 Slack channel ID |
 
 **Secrets Manager に保管**
 
@@ -491,7 +492,7 @@ Lambda 関数の環境変数として設定する。機密情報は AWS Secrets 
 | `GITHUB_PAT` | GitHub Fine-grained PAT（全 owner リポジトリへの read 権限） |
 | `ANTHROPIC_API_KEY` | Anthropic API キー |
 | `NOTION_SECRET` | Notion Internal Integration トークン |
-| `SLACK_WEBHOOK_URL` | Slack Incoming Webhook URL |
+| `SLACK_BOT_TOKEN` | Slack Bot User OAuth Token |
 
 </details>
 

@@ -26,7 +26,7 @@ flowchart TB
         GH[GitHub API]
         Claude[Claude API]
         Notion[Notion]
-        Slack[Slack Webhook]
+        Slack[Slack API]
     end
 
     Hook --> S3
@@ -43,7 +43,7 @@ flowchart TB
 ```
 
 ## Tech Stack
-| 技術 | 用途 |
+| Technology | Purpose |
 |---|---|
 | AWS Lambda | レポート生成の実行環境 |
 | AWS S3 | セッションログの保管 |
@@ -53,7 +53,7 @@ flowchart TB
 | GitHub API (REST) | 開発アクティビティの取得 |
 | Anthropic API (`claude-sonnet-4-6`) | 自然言語による要約生成 |
 | Notion API | 作業記録の書き込み |
-| Slack Incoming Webhook | 完了通知 |
+| Slack Web API | 完了通知 |
 
 ## Directory Structure
 ```
@@ -69,7 +69,7 @@ ayumy/
 ## Running Cost
 Anthropic API と AWS の費用が発生する（GitHub API・Notion API は無料枠内）
 
-| 項目 | コスト |
+| Item | Cost |
 |---|---|
 | Anthropic API | ~$1.5/月 |
 | AWS（Lambda, S3, Secrets Manager 等） | ~$0.5/月 |
