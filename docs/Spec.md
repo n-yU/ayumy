@@ -534,10 +534,11 @@ Lambda 側で発生する失敗は以下の 3 区分で扱う。`logger.warning`
 - **warning として記録**: 部分的なデータ欠落で、レポート自体は生成できるが運用者が後追いすべき失敗
 - **suppress**: 意図された不在を表すケース（プロジェクトに `.ayumy_repo` が無い、shlex 解析失敗で番号抽出を諦める 等）
 
-`except Exception` は原則使わず、想定する具体例外型を捕捉する。broad catch を残すのは以下の 3 種類のみとし、いずれも「なぜ broad か」を示す inline comment を 1 行付与する
+`except Exception` は原則使わず、想定する具体例外型を捕捉する。broad catch を残すのは以下のグループのみとし、いずれも「なぜ broad か」を示す inline comment を 1 行付与する。同一グループ内で複数の箇所が該当する場合もある
 
 - Lambda エントリ点（CloudWatch / 500 return のため）
 - pipeline 最終 fallback（Slack 通知に届けるため）
+- pipeline 日次 loop（1 日分の失敗を error / warning に分類するため）
 - Slack 送信（ベストエフォート方針のため）
 
 ### Running Cost
