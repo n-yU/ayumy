@@ -21,7 +21,7 @@
 2. OAuth & Permissions の Bot Token Scopes に `chat:write` を追加し、Install to Workspace で認可
 3. 発行された Bot User OAuth Token（`xoxb-` で始まる）を控える
 4. 通知先 channel を Slack クライアントで開き、`/invite @<app-name>` で bot を invite
-5. channel 名をクリック → About タブ最下部の Channel ID（`C` で始まる）を控える
+5. channel 名をクリック → About タブ最下部の Channel ID（`C` または `G` で始まる）を控える
 6. AWS Secrets Manager（ap-northeast-1）に Bot Token を登録
    - シークレットのタイプ: その他のシークレットのタイプ
    - シークレット名: `ayumy/slack-bot-token`
