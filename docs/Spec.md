@@ -386,6 +386,16 @@ Notion への書き込み完了後、Slack Web API の `chat.postMessage` で指
 
 通知が失敗しても処理全体は正常終了とする（通知はベストエフォート）
 
+#### Warning Thread
+Classification Policy で warning に分類した失敗は 1 run 単位で集約クラスに蓄積し、上記の親メッセージ送信後にその `ts` を `thread_ts` として thread 返信として投稿する。運用者は CloudWatch の `logger.warning` 出力に加え、Slack の thread でも警告を把握できる
+
+- 集約は明示的な `add()` 呼び出しで行い、logging.Handler 経由の自動収集はしない（第三者ライブラリの warning 混入を避けるため）
+- `add()` 内部で `logger.warning` を発火するため、各呼び出し箇所は 1 行で CloudWatch と aggregator の両方に届く
+- 発生元は限定的な値しか取らないため `StrEnum` で集約し、表記揺れを防ぐ
+- thread 投稿の本文は発生元ごとにグルーピングし、各 entry の件名と関連識別子（commit SHA、PR 番号、S3 key 等）を Block Kit で構造化する
+- 集約 warning が 0 件の run では thread 投稿しない
+- thread 投稿の失敗は親通知の成功を壊さないよう独立して suppress する（ベストエフォート方針を継承）
+
 ### Processed JSONL Cleanup
 DynamoDB への書き込みが正常に完了した後、処理した JSONL ファイルを S3 から削除する。削除対象は `ingest` で処理したオブジェクトキーに限定し、処理中に到着した遅延ファイルが誤って削除されるのを防ぐ。セッションデータは DynamoDB に永続化されているため、JSONL の保持は不要
 
