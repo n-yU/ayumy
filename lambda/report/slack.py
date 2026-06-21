@@ -51,11 +51,12 @@ def _context_block(text: str) -> dict:
 
 
 def _chunk_lines(lines: list[str], limit: int) -> list[str]:
-    """A single line longer than `limit` still occupies its own chunk (Slack truncates rather than rejects)."""
+    """Truncates any single line longer than `limit` so each chunk stays within Slack's section text limit."""
     chunks: list[str] = []
     current: list[str] = []
     used = 0
-    for line in lines:
+    for raw in lines:
+        line = raw if len(raw) <= limit else raw[: limit - 1] + "…"
         added = len(line) + (1 if current else 0)
         if current and used + added > limit:
             chunks.append("\n".join(current))

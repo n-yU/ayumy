@@ -635,3 +635,17 @@ class TestSendNoticeThread:
             text = block["text"]["text"]
             assert len(text) <= SECTION_TEXT_MAX
             assert text.startswith("*session*")
+
+    def test_truncates_single_line_exceeding_section_limit(self):
+        notice = Notice()
+        # Single line longer than SECTION_TEXT_MAX must be truncated to keep the section within the limit
+        notice.add(NoticeSource.SESSION, "Oversized warning " + "x" * 4000)
+
+        self.client.send_notice_thread(notice)
+
+        blocks = _get_send_kwargs(self.client)["blocks"]
+        section_blocks = [b for b in blocks if b["type"] == "section"]
+        assert len(section_blocks) == 1
+        text = section_blocks[0]["text"]["text"]
+        assert len(text) <= SECTION_TEXT_MAX
+        assert text.endswith("…")
