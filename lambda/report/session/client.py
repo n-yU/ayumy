@@ -29,19 +29,20 @@ class SessionClient:
         return objects
 
     def read_repo_name(self, project: str) -> str | None:
-        """Returns None on missing/empty file or when content has `/` or `:` (heuristic to detect accidentally pasted URLs)."""
+        """Missing `.ayumy_repo` is treated as intentional absence; content validation failure is logged as warning."""
         key = f"claude-sessions/{project}/.ayumy_repo"
         try:
             resp = self.s3.get_object(Bucket=self.bucket, Key=key)
-            name = resp["Body"].read().decode("utf-8").strip()
-            if name and "/" not in name and ":" not in name:
-                return name
-            return None
         except self.s3.exceptions.NoSuchKey:
             return None
+        name = resp["Body"].read().decode("utf-8").strip()
+        if name and "/" not in name and ":" not in name:
+            return name
+        logger.warning("Invalid .ayumy_repo content for project %s: %r", project, name)
+        return None
 
     def delete_sessions(self, keys: list[str]) -> int:
-        """Errors per key are logged but do not raise; caller (pipeline) decides whether to retry on the next run."""
+        """Per-key failures are logged as warning; caller (pipeline) decides whether to retry on the next run."""
         if not keys:
             return 0
 
@@ -59,7 +60,7 @@ class SessionClient:
 
             errors = resp.get("Errors", [])
             if errors:
-                logger.error(
+                logger.warning(
                     "Failed to delete %d S3 object(s): %s",
                     len(errors),
                     [{"Key": e.get("Key"), "Code": e.get("Code")} for e in errors],

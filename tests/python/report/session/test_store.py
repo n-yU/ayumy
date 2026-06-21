@@ -4,6 +4,8 @@ import json
 from datetime import date
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from report.session.store import SessionStore
 
 
@@ -28,6 +30,25 @@ def _s3_body(text: str):
 
 def _jsonl_lines(*entries):
     return "\n".join(json.dumps(e) for e in entries)
+
+
+def _item(**overrides):
+    """DynamoDB item with `SessionInfo` required keys filled in; overrides replace any default."""
+    base = {
+        "date": "2026-03-28",
+        "repo#session_id": "repo#s1",
+        "repo": "repo",
+        "project": "proj",
+        "start_time": "2026-03-28T10:00:00+09:00",
+        "end_time": "2026-03-28T11:00:00+09:00",
+        "user_messages": ["msg"],
+        "tools_used": [],
+        "session_commits": [],
+        "session_pulls": [],
+        "session_issues": [],
+    }
+    base.update(overrides)
+    return base
 
 
 class TestWriteItems:
@@ -89,16 +110,12 @@ class TestFetchSessions:
         store = _make_store()
         store.table.query.return_value = {
             "Items": [
-                {
-                    "date": "2026-03-28",
-                    "repo#session_id": "my-repo#s1",
-                    "repo": "my-repo",
-                    "project": "proj",
-                    "start_time": "2026-03-28T10:00:00+09:00",
-                    "end_time": "2026-03-28T11:00:00+09:00",
-                    "user_messages": ["Fix bug"],
-                    "tools_used": ["Edit", "Read"],
-                },
+                _item(
+                    **{"repo#session_id": "my-repo#s1"},
+                    repo="my-repo",
+                    user_messages=["Fix bug"],
+                    tools_used=["Edit", "Read"],
+                ),
             ],
         }
 
@@ -115,26 +132,20 @@ class TestFetchSessions:
         store = _make_store()
         store.table.query.return_value = {
             "Items": [
-                {
-                    "date": "2026-03-28",
-                    "repo#session_id": "repo-a#s1",
-                    "repo": "repo-a",
-                    "project": "proj-a",
-                    "start_time": "2026-03-28T10:00:00+09:00",
-                    "end_time": "2026-03-28T11:00:00+09:00",
-                    "user_messages": ["msg1"],
-                    "tools_used": [],
-                },
-                {
-                    "date": "2026-03-28",
-                    "repo#session_id": "repo-b#s2",
-                    "repo": "repo-b",
-                    "project": "proj-b",
-                    "start_time": "2026-03-28T12:00:00+09:00",
-                    "end_time": "2026-03-28T13:00:00+09:00",
-                    "user_messages": ["msg2"],
-                    "tools_used": [],
-                },
+                _item(
+                    **{"repo#session_id": "repo-a#s1"},
+                    repo="repo-a",
+                    project="proj-a",
+                    user_messages=["msg1"],
+                ),
+                _item(
+                    **{"repo#session_id": "repo-b#s2"},
+                    repo="repo-b",
+                    project="proj-b",
+                    start_time="2026-03-28T12:00:00+09:00",
+                    end_time="2026-03-28T13:00:00+09:00",
+                    user_messages=["msg2"],
+                ),
             ],
         }
 
@@ -154,26 +165,13 @@ class TestFetchSessions:
         store = _make_store()
         store.table.query.return_value = {
             "Items": [
-                {
-                    "date": "2026-03-28",
-                    "repo#session_id": "repo#s2",
-                    "repo": "repo",
-                    "project": "proj",
-                    "start_time": "2026-03-28T14:00:00+09:00",
-                    "end_time": "2026-03-28T15:00:00+09:00",
-                    "user_messages": ["later"],
-                    "tools_used": [],
-                },
-                {
-                    "date": "2026-03-28",
-                    "repo#session_id": "repo#s1",
-                    "repo": "repo",
-                    "project": "proj",
-                    "start_time": "2026-03-28T10:00:00+09:00",
-                    "end_time": "2026-03-28T11:00:00+09:00",
-                    "user_messages": ["earlier"],
-                    "tools_used": [],
-                },
+                _item(
+                    **{"repo#session_id": "repo#s2"},
+                    start_time="2026-03-28T14:00:00+09:00",
+                    end_time="2026-03-28T15:00:00+09:00",
+                    user_messages=["later"],
+                ),
+                _item(user_messages=["earlier"]),
             ],
         }
 
@@ -187,23 +185,17 @@ class TestFetchSessions:
         store = _make_store()
         store.table.query.return_value = {
             "Items": [
-                {
-                    "date": "2026-03-28",
-                    "repo#session_id": "repo#s1",
-                    "repo": "repo",
-                    "project": "proj",
-                    "start_time": "2026-03-28T10:00:00+09:00",
-                    "end_time": "2026-03-28T11:00:00+09:00",
-                    "user_messages": ["Fix bug"],
-                    "tools_used": ["Edit"],
-                    "session_commits": [
+                _item(
+                    user_messages=["Fix bug"],
+                    tools_used=["Edit"],
+                    session_commits=[
                         {
                             "sha": "a1b2c3d",
                             "message": "Fix the bug",
                             "timestamp": "2026-03-28T10:30:00+09:00",
                         },
                     ],
-                },
+                ),
             ],
         }
 
@@ -222,18 +214,7 @@ class TestFetchSessions:
         store = _make_store()
         store.table.query.return_value = {
             "Items": [
-                {
-                    "date": "2026-03-28",
-                    "repo#session_id": "repo#s1",
-                    "repo": "repo",
-                    "project": "proj",
-                    "start_time": "2026-03-28T10:00:00+09:00",
-                    "end_time": "2026-03-28T11:00:00+09:00",
-                    "user_messages": ["msg"],
-                    "tools_used": [],
-                    "session_pulls": [87, 82],
-                    "session_issues": [84],
-                },
+                _item(session_pulls=[87, 82], session_issues=[84]),
             ],
         }
 
@@ -243,50 +224,14 @@ class TestFetchSessions:
         assert sessions[0]["session_pulls"] == [87, 82]
         assert sessions[0]["session_issues"] == [84]
 
-    def test_defaults_session_pulls_and_issues_when_missing(self):
+    def test_raises_when_session_keys_missing(self):
         store = _make_store()
-        store.table.query.return_value = {
-            "Items": [
-                {
-                    "date": "2026-03-28",
-                    "repo#session_id": "repo#s1",
-                    "repo": "repo",
-                    "project": "proj",
-                    "start_time": "2026-03-28T10:00:00+09:00",
-                    "end_time": "2026-03-28T11:00:00+09:00",
-                    "user_messages": ["msg"],
-                    "tools_used": [],
-                },
-            ],
-        }
+        item = _item()
+        del item["session_commits"]
+        store.table.query.return_value = {"Items": [item]}
 
-        activity = store.fetch_sessions("2026-03-28")
-
-        sessions = activity.get("repo")
-        assert sessions[0]["session_pulls"] == []
-        assert sessions[0]["session_issues"] == []
-
-    def test_defaults_session_commits_when_missing(self):
-        store = _make_store()
-        store.table.query.return_value = {
-            "Items": [
-                {
-                    "date": "2026-03-28",
-                    "repo#session_id": "repo#s1",
-                    "repo": "repo",
-                    "project": "proj",
-                    "start_time": "2026-03-28T10:00:00+09:00",
-                    "end_time": "2026-03-28T11:00:00+09:00",
-                    "user_messages": ["msg"],
-                    "tools_used": [],
-                },
-            ],
-        }
-
-        activity = store.fetch_sessions("2026-03-28")
-
-        sessions = activity.get("repo")
-        assert sessions[0]["session_commits"] == []
+        with pytest.raises(KeyError):
+            store.fetch_sessions("2026-03-28")
 
 
 class TestScanBackfillDates:

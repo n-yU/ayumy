@@ -25,6 +25,7 @@ def lambda_handler(event, context):
             resp = secrets_client.get_secret_value(SecretId=secret_id)
             os.environ[env_var] = resp["SecretString"]
         except Exception as e:
+            # Broad: Lambda entry point, surface any failure as 500 to CloudWatch
             logger.exception("Failed to retrieve secret %s: %s", secret_id, e)
             return {
                 "statusCode": 500,
@@ -45,6 +46,7 @@ def lambda_handler(event, context):
             timeout_seconds=timeout_seconds,
         )
     except Exception:
+        # Broad: Lambda entry point, return 500 so CloudWatch records the failure
         logger.exception("Report generation failed")
         return {
             "statusCode": 500,

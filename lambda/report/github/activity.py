@@ -45,7 +45,7 @@ class GitHubActivity:
         seen_shas: set[str] = set()
         session_commits: list[CommitInfo] = []
         for s in sessions:
-            for c in s.get("session_commits", []):
+            for c in s["session_commits"]:
                 if c["sha"] in seen_shas:
                     continue
                 seen_shas.add(c["sha"])

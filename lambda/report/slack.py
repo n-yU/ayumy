@@ -4,6 +4,7 @@ import logging
 from datetime import datetime
 
 from slack_sdk import WebClient
+from slack_sdk.errors import SlackClientError
 
 from . import JST, ReportSummary
 from .summarizer import ValidationResult
@@ -168,7 +169,7 @@ class SlackClient:
         self._fallback_parts = []
 
     def _send(self, text: str, blocks: list[dict] | None = None) -> None:
-        """Logs failures but does not raise; notification errors never abort report generation."""
+        """Suppress Slack SDK failures as best-effort; other exceptions propagate to the pipeline."""
         try:
             response = self.client.chat_postMessage(
                 channel=self.channel,
@@ -177,5 +178,6 @@ class SlackClient:
             )
             if self.parent_ts is None:
                 self.parent_ts = response.get("ts")
-        except Exception as e:
+        except SlackClientError as e:
+            # Broad within Slack SDK errors: best-effort notification must not abort the pipeline
             logger.exception("Failed to send Slack notification: %r", e)

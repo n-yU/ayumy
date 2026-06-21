@@ -101,22 +101,17 @@ def make_session_entry(
     session_pulls=None,
     session_issues=None,
 ):
-    """Omits `session_*` keys when None."""
-    entry = {
+    return {
         "session_id": session_id,
         "project": project,
         "start_time": start,
         "end_time": end,
         "user_messages": list(messages),
         "tools_used": list(tools),
+        "session_commits": list(session_commits or ()),
+        "session_pulls": list(session_pulls or ()),
+        "session_issues": list(session_issues or ()),
     }
-    if session_commits is not None:
-        entry["session_commits"] = session_commits
-    if session_pulls is not None:
-        entry["session_pulls"] = session_pulls
-    if session_issues is not None:
-        entry["session_issues"] = session_issues
-    return entry
 
 
 def make_session(repo="my-repo", *, entries=None, **entry_kwargs):

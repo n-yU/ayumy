@@ -3,6 +3,9 @@
 from datetime import datetime
 from unittest.mock import MagicMock
 
+import pytest
+from slack_sdk.errors import SlackApiError
+
 from report import JST
 from report.slack import (
     HEADLINE_MAX,
@@ -540,3 +543,18 @@ class TestFlush:
 
         kwargs = _get_send_kwargs(self.client)
         assert kwargs["channel"] == "C0TEST"
+
+    def test_suppresses_slack_sdk_errors(self):
+        self.client.client.chat_postMessage.side_effect = SlackApiError(
+            "rate_limited", response={"error": "rate_limited"}
+        )
+        self.client.notify_error(self.target, RuntimeError("fail"))
+
+        self.client.flush()
+
+    def test_propagates_unrelated_errors(self):
+        self.client.client.chat_postMessage.side_effect = RuntimeError("boom")
+        self.client.notify_error(self.target, RuntimeError("fail"))
+
+        with pytest.raises(RuntimeError, match="boom"):
+            self.client.flush()

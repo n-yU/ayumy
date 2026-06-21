@@ -6,6 +6,8 @@ import resource
 import time
 from datetime import datetime
 
+from botocore.exceptions import BotoCoreError, ClientError
+
 from . import (
     JST,
     SessionActivity,
@@ -127,21 +129,18 @@ def run(
         session_client = SessionClient(require_env("AYUMY_S3_BUCKET"))
         store = SessionStore(require_env("AYUMY_DYNAMO_TABLE"))
 
-        ingested_keys: list[str] = []
-        try:
-            ingested_keys = store.ingest(session_client)
-            logger.info("Ingested %d JSONL file(s)", len(ingested_keys))
-        except Exception as e:
-            logger.exception("DynamoDB ingestion failed")
-            slack_client.notify_error(since, e)
+        ingested_keys = store.ingest(session_client)
+        logger.info("Ingested %d JSONL file(s)", len(ingested_keys))
 
         if ingested_keys:
             try:
                 deleted = session_client.delete_sessions(ingested_keys)
                 logger.info("Deleted %d JSONL file(s) from S3", deleted)
-            except Exception as e:
-                logger.exception("S3 deletion failed")
-                slack_client.notify_error(since, e)
+            except (ClientError, BotoCoreError):
+                logger.warning(
+                    "S3 deletion failed; JSONL will be re-ingested on next run",
+                    exc_info=True,
+                )
 
         backfill_set: set[str] = set()
         if target_date:
@@ -163,7 +162,6 @@ def run(
         notion_client.init_data_source()
         summary_client = SummaryClient(require_env("ANTHROPIC_API_KEY"))
 
-        errors: list[Exception] = []
         for d in process_dates:
             if not target_date and d == primary_date:
                 day_since, day_until = since, until
@@ -184,19 +182,16 @@ def run(
                 )
                 store.mark_reported(date_str)
             except Exception as e:
-                slack_client.notify_error(day_since, e)
-                e._notified = True  # type: ignore[attr-defined]
+                # Broad: pipeline loop classifies per-day failure into error or warning
                 if not target_date and d == primary_date:
+                    slack_client.notify_error(day_since, e)
+                    e._notified = True  # type: ignore[attr-defined]
                     raise
-                if target_date:
-                    errors.append(e)
-
-        if errors:
-            raise errors[0]
+                msg = f"Report generation failed for {date_str}: {e!r}"
+                logger.warning(msg, exc_info=True)
 
     except Exception as e:
-        # Errors from process_date are already notified with the correct date,
-        # so only notify here for errors outside the loop (scan, data source init)
+        # Broad: pipeline final fallback, ensures any uncaught failure reaches Slack
         if not getattr(e, "_notified", False):
             slack_client.notify_error(since, e)
         raise

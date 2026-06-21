@@ -1,5 +1,7 @@
 """Tests for SessionActivity formatting."""
 
+import pytest
+
 from report import SessionActivity
 
 
@@ -27,8 +29,9 @@ class TestSessionActivityFormat:
         assert "- ユーザー: Fix the bug" in result
         assert "- ツール使用: Read, Edit" in result
 
-    def test_format_time_empty(self):
-        assert SessionActivity._format_time("") == "??:??"
+    def test_format_time_empty_raises(self):
+        with pytest.raises(ValueError, match="Session timestamp is missing"):
+            SessionActivity._format_time("")
 
     def test_format_time_utc_to_jst(self):
         # UTC 15:00 = JST 00:00
