@@ -520,6 +520,20 @@ class TestFlush:
 
         assert self.client.parent_ts == "1700000000.000100"
 
+    def test_parent_ts_not_overwritten_on_subsequent_sends(self):
+        self.client.notify_error(self.target, RuntimeError("first"))
+        self.client.flush()
+        initial_ts = self.client.parent_ts
+
+        self.client.client.chat_postMessage.return_value = {
+            "ok": True,
+            "ts": "1800000000.000200",
+        }
+        self.client.notify_error(self.target, RuntimeError("second"))
+        self.client.flush()
+
+        assert self.client.parent_ts == initial_ts
+
     def test_sends_to_configured_channel(self):
         self.client.notify_error(self.target, RuntimeError("fail"))
         self.client.flush()
