@@ -38,7 +38,9 @@ class Notice:
         **details: str,
     ) -> None:
         """Forwards to `logger.warning` so CloudWatch retains the message; pass `logger=` for the caller's namespace."""
-        self._entries.append(NoticeEntry(source=source, title=title, details=dict(details)))
+        self._entries.append(
+            NoticeEntry(source=source, title=title, details=dict(details))
+        )
         target = logger or _DEFAULT_LOGGER
         if details:
             detail_str = ", ".join(f"{k}={v}" for k, v in details.items())
