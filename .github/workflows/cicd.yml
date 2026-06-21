@@ -28,11 +28,55 @@ jobs:
       - name: Run Python tests
         run: python -m pytest tests/python/ -v
 
-      - name: Install bats
-        run: sudo apt-get update && sudo apt-get install -y bats
+      - name: Install bats and kcov
+        run: sudo apt-get update && sudo apt-get install -y bats kcov
 
       - name: Run shell tests
         run: bats tests/shell/
+
+      - name: Probe kcov shell coverage
+        if: always()
+        run: |
+          mkdir -p coverage-shell
+          kcov \
+            --include-path=scripts,hooks,bin \
+            --bash-parse-files-in-dir=scripts,hooks,bin \
+            coverage-shell \
+            bats tests/shell/ || true
+          {
+            echo "## Shell coverage probe (kcov)"
+            echo ""
+            echo '```'
+            ls -la coverage-shell/ || true
+            echo '```'
+            xml=$(find coverage-shell -name cobertura.xml -path '*bats*' | head -1)
+            echo ""
+            echo "**Cobertura XML**: \`$xml\`"
+            if [ -n "$xml" ]; then
+              echo ""
+              echo '```xml'
+              head -6 "$xml"
+              echo '```'
+              echo ""
+              echo "**Files captured**:"
+              echo '```'
+              grep -E 'filename=' "$xml" | head -20 || true
+              echo '```'
+              echo ""
+              echo "**Line summary**:"
+              echo '```'
+              grep -E '^<coverage|<package name' "$xml" | head -10 || true
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload kcov probe artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kcov-probe
+          path: coverage-shell/
+          if-no-files-found: ignore
 
   deploy:
     needs: test
