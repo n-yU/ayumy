@@ -187,7 +187,8 @@ def run(
                     slack_client.notify_error(day_since, e)
                     e._notified = True  # type: ignore[attr-defined]
                     raise
-                logger.warning("Report generation failed for %s: %r", date_str, e)
+                msg = f"Report generation failed for {date_str}: {e!r}"
+                logger.warning(msg, exc_info=True)
 
     except Exception as e:
         # Broad: pipeline final fallback, ensures any uncaught failure reaches Slack
