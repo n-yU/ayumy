@@ -8,7 +8,8 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Pinned because Ubuntu 24.04 (noble) removed kcov from universe; 22.04 still ships it.
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
@@ -25,14 +26,28 @@ jobs:
       - name: Lint
         run: python -m ruff check lambda tests
 
-      - name: Run Python tests
-        run: python -m pytest tests/python/ -v
+      - name: Run Python tests with coverage
+        run: |
+          python -m pytest tests/python/ -v \
+            --cov=lambda --cov-report=term-missing --cov-report=xml:coverage-python.xml
 
-      - name: Install bats
-        run: sudo apt-get update && sudo apt-get install -y bats
+      - name: Install bats and kcov
+        run: sudo apt-get update && sudo apt-get install -y bats kcov
 
-      - name: Run shell tests
-        run: bats tests/shell/
+      - name: Run shell tests with coverage
+        run: |
+          mkdir -p coverage-shell
+          kcov --include-path=scripts,hooks,bin \
+            --bash-parse-files-in-dir=scripts,hooks,bin \
+            coverage-shell bats tests/shell/
+
+      - name: Report coverage summary
+        if: always()
+        run: bash .github/scripts/coverage_summary.sh
+
+      - name: Note partial coverage on test failure
+        if: failure()
+        run: echo "_Coverage values may be partial when tests fail._" >> "$GITHUB_STEP_SUMMARY"
 
   deploy:
     needs: test
