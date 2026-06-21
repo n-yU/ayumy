@@ -40,7 +40,7 @@ test-shell:
 
 # Run Python tests with coverage measurement. Shell coverage is captured on CI only.
 test-cov: lambda-install
-	.venv/bin/python -m pytest tests/python/ -v \
+	.venv/bin/python -m pytest tests/python/ \
 		--cov=lambda --cov-report=term-missing --cov-report=xml:coverage-python.xml
 
 # Apply Ruff formatter and isort-equivalent import sort
