@@ -9,6 +9,7 @@ from github import GithubException, UnknownObjectException
 from report import JST
 from report.github import GitHubClient
 from report.github.client import _SEARCH_BATCH, _SEARCH_WINDOW
+from report.notice import Notice
 
 from .._builders import make_commit
 
@@ -22,6 +23,7 @@ def _make_client():
     client.g = MagicMock()
     client._search_count = 0
     client._window_start = 0.0
+    client._notice = Notice()
     return client
 
 

@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 from report import JST, SessionActivity
 from report.domain import CommitInfo, IssueInfo, PullInfo
 from report.github import GitHubActivity
+from report.notice import Notice
 from report.notion import NotionClient
 
 SINCE = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
@@ -83,6 +84,7 @@ def _make_client() -> NotionClient:
     client.client = MagicMock()
     client.database_id = "db-id"
     client._data_source_id = None
+    client._notice = Notice()
     return client
 
 

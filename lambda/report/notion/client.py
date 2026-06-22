@@ -14,6 +14,7 @@ from .. import (
 )
 from ..domain import CommitInfo, PullInfo
 from ..github import GitHubActivity, RepoActivity
+from ..notice import Notice, NoticeSource
 from .blocks import bulleted_link, bulleted_text, heading_2
 
 logger = logging.getLogger(__name__)
@@ -29,10 +30,13 @@ def _is_in_range(iso_timestamp: str | None, since: datetime, until: datetime) ->
 class NotionClient:
     """Client for writing daily report pages to a Notion database."""
 
-    def __init__(self, token: str, database_id: str) -> None:
+    def __init__(
+        self, token: str, database_id: str, notice: Notice | None = None
+    ) -> None:
         self.client = Client(auth=token)
         self.database_id = database_id
         self._data_source_id: str | None = None
+        self._notice = notice or Notice()
 
     @property
     def data_source_id(self) -> str:
@@ -320,7 +324,12 @@ class NotionClient:
             repo_name = repo_summary["name"]
 
             if repo_name not in activity:
-                logger.warning("Skipping unknown repo: %s", repo_name)
+                self._notice.add(
+                    NoticeSource.NOTION,
+                    "Unknown repo skipped",
+                    logger=logger,
+                    repo=repo_name,
+                )
                 continue
 
             repo_activity = activity.repos()[repo_name]

@@ -1,19 +1,23 @@
 """Slack notification client."""
 
 import logging
+from collections import defaultdict
 from datetime import datetime
 
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackClientError
 
 from . import JST, ReportSummary
+from .notice import Notice
 from .summarizer import ValidationResult
 
 logger = logging.getLogger(__name__)
 
-# Per-headline max length (truncated with ellipsis beyond this);
-# keeps the aggregated section text within Slack's 3000-char limit for a realistic number of repos per day
+# Slack section text limit is 3000; truncate headlines so per-day aggregation stays within bounds
 HEADLINE_MAX = 200
+
+# Slack section text limit is 3000; cap below to leave room for headers and continuation prefixes
+SECTION_TEXT_MAX = 2900
 
 
 def _truncate_headline(headline: str, limit: int = HEADLINE_MAX) -> str:
@@ -44,6 +48,26 @@ def _section_block(text: str) -> dict:
 
 def _context_block(text: str) -> dict:
     return {"type": "context", "elements": [{"type": "mrkdwn", "text": text}]}
+
+
+def _chunk_lines(lines: list[str], limit: int) -> list[str]:
+    """Truncates any single line longer than `limit` so each chunk stays within Slack's section text limit."""
+    chunks: list[str] = []
+    current: list[str] = []
+    used = 0
+    for raw in lines:
+        line = raw if len(raw) <= limit else raw[: limit - 1] + "…"
+        added = len(line) + (1 if current else 0)
+        if current and used + added > limit:
+            chunks.append("\n".join(current))
+            current = [line]
+            used = len(line)
+        else:
+            current.append(line)
+            used += added
+    if current:
+        chunks.append("\n".join(current))
+    return chunks
 
 
 class SlackClient:
@@ -168,15 +192,42 @@ class SlackClient:
         self._blocks = []
         self._fallback_parts = []
 
-    def _send(self, text: str, blocks: list[dict] | None = None) -> None:
+    def send_notice_thread(self, notice: Notice) -> None:
+        """Posts as a reply to `parent_ts` so the warning digest stays attached to the daily summary."""
+        if not notice or self.parent_ts is None:
+            return
+        grouped: dict[str, list[str]] = defaultdict(list)
+        for entry in notice.entries():
+            line = f"• {_escape_mrkdwn(entry.title)}"
+            if entry.details:
+                detail_str = ", ".join(
+                    f"{k}={_escape_mrkdwn(v)}" for k, v in entry.details.items()
+                )
+                line += f"  `{detail_str}`"
+            grouped[entry.source].append(line)
+        total = len(notice)
+        blocks: list[dict] = [_header_block(f"⚠️ Warnings ({total})")]
+        for source, lines in grouped.items():
+            header = f"*{source}* ({len(lines)})"
+            for chunk in _chunk_lines(lines, SECTION_TEXT_MAX - len(header) - 1):
+                blocks.append(_section_block(f"{header}\n{chunk}"))
+        fallback = f"⚠️ {total} warning(s) emitted"
+        self._send(fallback, blocks, thread_ts=self.parent_ts)
+
+    def _send(
+        self,
+        text: str,
+        blocks: list[dict] | None = None,
+        *,
+        thread_ts: str | None = None,
+    ) -> None:
         """Suppress Slack SDK failures as best-effort; other exceptions propagate to the pipeline."""
         try:
-            response = self.client.chat_postMessage(
-                channel=self.channel,
-                text=text,
-                blocks=blocks,
-            )
-            if self.parent_ts is None:
+            kwargs: dict = {"channel": self.channel, "text": text, "blocks": blocks}
+            if thread_ts is not None:
+                kwargs["thread_ts"] = thread_ts
+            response = self.client.chat_postMessage(**kwargs)
+            if self.parent_ts is None and thread_ts is None:
                 self.parent_ts = response.get("ts")
         except SlackClientError as e:
             # Broad within Slack SDK errors: best-effort notification must not abort the pipeline

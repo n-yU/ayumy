@@ -6,15 +6,21 @@ import boto3
 from boto3.dynamodb.conditions import Key
 
 from .. import SessionActivity, SessionInfo
+from ..notice import Notice
 from .parser import SessionLogParser
 
 
 class SessionStore:
     """Client for reading and writing session metadata in DynamoDB."""
 
-    def __init__(self, table_name: str, parser: SessionLogParser | None = None) -> None:
+    def __init__(
+        self,
+        table_name: str,
+        notice: Notice | None = None,
+        parser: SessionLogParser | None = None,
+    ) -> None:
         self.table = boto3.resource("dynamodb").Table(table_name)
-        self.parser = parser or SessionLogParser()
+        self.parser = parser or SessionLogParser(notice)
 
     def ingest(self, session_client) -> list[str]:
         """Existing attributes such as `reported_at` are preserved on re-ingestion."""

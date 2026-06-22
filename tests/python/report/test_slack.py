@@ -7,8 +7,10 @@ import pytest
 from slack_sdk.errors import SlackApiError
 
 from report import JST
+from report.notice import Notice, NoticeSource
 from report.slack import (
     HEADLINE_MAX,
+    SECTION_TEXT_MAX,
     SlackClient,
     _context_block,
     _divider,
@@ -558,3 +560,92 @@ class TestFlush:
 
         with pytest.raises(RuntimeError, match="boom"):
             self.client.flush()
+
+
+class TestSendNoticeThread:
+    def setup_method(self):
+        self.client = _make_client()
+        self.client.parent_ts = "1700000000.000100"
+
+    def test_does_not_send_when_notice_empty(self):
+        self.client.send_notice_thread(Notice())
+
+        self.client.client.chat_postMessage.assert_not_called()
+
+    def test_does_not_send_when_parent_ts_missing(self):
+        self.client.parent_ts = None
+        notice = Notice()
+        notice.add(NoticeSource.SESSION, "Malformed JSONL line skipped", key="x")
+
+        self.client.send_notice_thread(notice)
+
+        self.client.client.chat_postMessage.assert_not_called()
+
+    def test_posts_as_thread_reply(self):
+        notice = Notice()
+        notice.add(NoticeSource.GITHUB, "Commit not found (404)", sha="abc1234")
+
+        self.client.send_notice_thread(notice)
+
+        kwargs = _get_send_kwargs(self.client)
+        assert kwargs["thread_ts"] == "1700000000.000100"
+        assert kwargs["channel"] == "C0TEST"
+
+    def test_groups_entries_by_source(self):
+        notice = Notice()
+        notice.add(NoticeSource.GITHUB, "Commit not found (404)", sha="abc1234")
+        notice.add(NoticeSource.GITHUB, "PR not found (404)", number="42")
+        notice.add(NoticeSource.SESSION, "Malformed JSONL line skipped", key="x")
+
+        self.client.send_notice_thread(notice)
+
+        blocks = _get_send_kwargs(self.client)["blocks"]
+        text = _blocks_text(blocks)
+        assert "Warnings (3)" in text
+        assert "*github* (2)" in text
+        assert "*session* (1)" in text
+        assert "Commit not found (404)" in text
+        assert "Malformed JSONL line skipped" in text
+
+    def test_does_not_overwrite_parent_ts(self):
+        notice = Notice()
+        notice.add(NoticeSource.SESSION, "Malformed JSONL line skipped", key="x")
+        self.client.client.chat_postMessage.return_value = {
+            "ok": True,
+            "ts": "1900000000.000300",
+        }
+
+        self.client.send_notice_thread(notice)
+
+        assert self.client.parent_ts == "1700000000.000100"
+
+    def test_splits_long_source_into_multiple_sections(self):
+        notice = Notice()
+        # Each line is ~100 chars; 60 lines exceed the section text cap and force splitting
+        long_title = "Malformed JSONL line skipped " + "x" * 70
+        for i in range(60):
+            notice.add(NoticeSource.SESSION, long_title, key=f"k{i}")
+
+        self.client.send_notice_thread(notice)
+
+        blocks = _get_send_kwargs(self.client)["blocks"]
+        section_blocks = [b for b in blocks if b["type"] == "section"]
+        assert len(section_blocks) >= 2
+        for block in section_blocks:
+            text = block["text"]["text"]
+            assert len(text) <= SECTION_TEXT_MAX
+            assert text.startswith("*session*")
+
+    def test_truncates_single_line_exceeding_section_limit(self):
+        notice = Notice()
+        # Single line longer than SECTION_TEXT_MAX must be truncated to keep the section within the limit
+        notice.add(NoticeSource.SESSION, "Oversized warning " + "x" * 4000)
+
+        self.client.send_notice_thread(notice)
+
+        blocks = _get_send_kwargs(self.client)["blocks"]
+        section_blocks = [b for b in blocks if b["type"] == "section"]
+        assert len(section_blocks) == 1
+        text = section_blocks[0]["text"]["text"]
+        assert len(text) <= SECTION_TEXT_MAX
+        assert text.endswith("…")

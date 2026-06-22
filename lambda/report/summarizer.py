@@ -6,6 +6,7 @@ from datetime import datetime
 import anthropic
 
 from . import JST, ReportSummary
+from .notice import Notice, NoticeSource
 from .tags import ALLOWED_TAG_NAMES, TAG_DEFINITIONS
 
 logger = logging.getLogger(__name__)
@@ -52,8 +53,9 @@ class ValidationResult:
 class SummaryClient:
     """Client for generating daily report summaries via Claude API."""
 
-    def __init__(self, api_key: str) -> None:
+    def __init__(self, api_key: str, notice: Notice | None = None) -> None:
         self.client = anthropic.Anthropic(api_key=api_key)
+        self._notice = notice or Notice()
 
     def _build_tool_schema(self) -> dict:
         """`tags` enum bars the model from emitting values outside the code-defined allowlist."""
@@ -152,6 +154,12 @@ class SummaryClient:
             if invalid:
                 result.invalid_tags[name] = invalid
                 repo["tags"] = [t for t in repo["tags"] if t in tag_set]
-                logger.warning("Removed invalid tags for %s: %s", name, invalid)
+                self._notice.add(
+                    NoticeSource.SUMMARY,
+                    "Invalid tags removed",
+                    logger=logger,
+                    repo=name,
+                    tags=",".join(invalid),
+                )
 
         return result
