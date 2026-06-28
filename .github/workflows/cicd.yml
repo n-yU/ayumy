@@ -21,10 +21,8 @@ jobs:
 
       - name: Verify requirements lock is in sync with .in sources
         run: |
-          uv pip compile lambda/requirements.in --generate-hashes --python-version 3.12 --output-file /tmp/check-requirements.txt
-          uv pip compile lambda/requirements-dev.in --generate-hashes --python-version 3.12 --output-file /tmp/check-requirements-dev.txt
-          diff lambda/requirements.txt /tmp/check-requirements.txt
-          diff lambda/requirements-dev.txt /tmp/check-requirements-dev.txt
+          make lock
+          git diff --exit-code lambda/requirements.txt lambda/requirements-dev.txt
 
       - name: Install dependencies
         run: python -m pip install -r lambda/requirements-dev.txt
