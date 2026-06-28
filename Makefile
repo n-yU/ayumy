@@ -9,7 +9,11 @@ FORMAT_TARGETS := lambda tests
 help: ## Show this help message
 	@awk 'BEGIN {FS = ":.*?## "} \
 		/^##@ / {printf "\n\033[1;33m%s\033[0m\n", substr($$0, 5); next} \
-		/^[a-zA-Z_%-]+:.*?## / {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+		/^[a-zA-Z_%-]+:.*?## / { \
+			name = $$1; \
+			if (name == "help-%") name = "help-<target>"; \
+			printf "  \033[36m%-16s\033[0m %s\n", name, $$2 \
+		}' $(MAKEFILE_LIST)
 
 help-%: ## Show description and usage for <target>
 	@awk -v target="$*" 'BEGIN {FS = ":.*?## "} \
