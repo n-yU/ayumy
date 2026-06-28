@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help lambda-install lambda-invoke lambda-deploy test test-python test-shell test-cov format format-check lint lint-fix oidc-deploy scan-sessions aws-auth-check
+.PHONY: help help-% lambda-install lambda-invoke lambda-deploy test test-python test-shell test-cov format format-check lint lint-fix oidc-deploy scan-sessions aws-auth-check
 
 FORMAT_TARGETS := lambda tests
 
