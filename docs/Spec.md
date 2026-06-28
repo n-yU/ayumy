@@ -510,7 +510,7 @@ Lambda 関数の環境変数として設定する。機密情報は AWS Secrets 
 - **ランタイム**: Python 3.12
 - **ハンドラ**: [lambda/handler.py](../lambda/handler.py)（[lambda/report](../lambda/report) パッケージを呼び出すエントリポイント）
 - **タイムアウト / メモリ**: [template.yaml](../template.yaml) で定義（タイムアウトは SAM パラメータ化、メモリは固定値）
-- **依存パッケージ**: [lambda/requirements.txt](../lambda/requirements.txt)（デプロイ）と [lambda/requirements-dev.txt](../lambda/requirements-dev.txt)（ローカル開発、`boto3` 等を追加）に定義。`boto3` は Lambda ランタイム同梱版を利用するためデプロイ側には含めない
+- **依存パッケージ**: 直接依存を [lambda/requirements.in](../lambda/requirements.in)（デプロイ）と [lambda/requirements-dev.in](../lambda/requirements-dev.in)（ローカル開発、`boto3` 等を追加）に定義し、`uv pip compile --generate-hashes` で hash 付き lock の [lambda/requirements.txt](../lambda/requirements.txt) と [lambda/requirements-dev.txt](../lambda/requirements-dev.txt) を生成する。Lambda デプロイ・CI・ローカル install はすべて生成済みの `.txt` を読む。`boto3` は Lambda ランタイム同梱版を利用するためデプロイ側には含めない
 - **IAM ロール**: S3 バケットへの読み書き、DynamoDB テーブルへの読み書き、Secrets Manager の読み取り、CloudWatch Logs への書き込み
 
 ### Deployment

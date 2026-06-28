@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help help-% lambda-install lambda-invoke lambda-deploy test test-python test-shell test-cov format format-check lint lint-fix oidc-deploy scan-sessions aws-auth-check
+.PHONY: help help-% lambda-install lambda-invoke lambda-deploy lock test test-python test-shell test-cov format format-check lint lint-fix oidc-deploy scan-sessions aws-auth-check
 
 FORMAT_TARGETS := lambda tests
 
@@ -36,6 +36,10 @@ lambda-invoke: ## Invoke Lambda function locally for testing
 
 lambda-deploy: aws-auth-check ## Build and deploy Lambda function to AWS
 	sam build && sam deploy --no-confirm-changeset
+
+lock: ## Regenerate hash-pinned requirements*.txt from requirements*.in
+	uv pip compile lambda/requirements.in --generate-hashes --python-version 3.12 --output-file lambda/requirements.txt
+	uv pip compile lambda/requirements-dev.in --generate-hashes --python-version 3.12 --output-file lambda/requirements-dev.txt
 
 ##@ Test
 

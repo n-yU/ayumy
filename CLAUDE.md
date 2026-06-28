@@ -17,8 +17,10 @@ scripts/setup_hooks.sh               # hook の設置スクリプト
 hooks/pre-push                       # Git hook（各リポジトリにシンボリックリンクで配置）
 lambda/handler.py                    # Lambda ハンドラ（report パッケージを呼び出すエントリポイント）
 lambda/report/                       # メインパッケージ: GitHub API + Claude API + Notion API
-lambda/requirements.txt              # Lambda デプロイ用の依存パッケージ
-lambda/requirements-dev.txt          # ローカル開発用の依存パッケージ（boto3 を含む）
+lambda/requirements.in               # Lambda デプロイ依存の source（直接依存のみ、バージョン範囲指定）
+lambda/requirements-dev.in           # ローカル開発依存の source（boto3 等を追加、`-r requirements.in` で本体を参照）
+lambda/requirements.txt              # `requirements.in` から `uv pip compile --generate-hashes` で生成した hash 付き lock
+lambda/requirements-dev.txt          # `requirements-dev.in` から同様に生成した hash 付き lock
 template.yaml                        # AWS SAM テンプレート（Lambda, EventBridge, IAM ロール, S3 バケット, DynamoDB テーブル）
 ```
 
@@ -27,7 +29,8 @@ template.yaml                        # AWS SAM テンプレート（Lambda, Even
 - **クライアント対応 OS**: クライアント側のスクリプト（`scripts/`, `hooks/`, `bin/ayumy`）は macOS のみサポート
 - **ローカル開発**: uv で `.venv` を管理。shell テスト実行には bats が必要（`brew install bats-core`）
 - **テスト・lint・format コマンド**: `make test`（Python + shell 一括）／ `make test-python` ／ `make test-shell` ／ `make test-cov`（Python カバレッジ計測。Shell カバレッジは CI でのみ取得）／ `make format` ／ `make format-check` ／ `make lint` ／ `make lint-fix` を使う。target 一覧と用途は `make help` で確認できる
-- **避けるコマンド**: `uv run pytest` を使わない（CWD の `pyproject.toml` を project marker として検出し `uv.lock` を暗黙生成してしまうため。本リポジトリは `lambda/requirements.txt` 主導で `uv.lock` を管理対象外としている）
+- **依存管理**: 直接依存は `lambda/requirements.in` / `lambda/requirements-dev.in` に記述し、`make lock` で `uv pip compile --generate-hashes` を呼んで hash 付きの `lambda/requirements.txt` / `lambda/requirements-dev.txt` を再生成する。Lambda デプロイ・CI・`make lambda-install` はいずれも生成された `.txt` を読むため、`.in` を変更したら必ず `make lock` を実行し `.txt` を commit する。`uv` のバージョンが異なると `.txt` の出力が変わり CI drift check が誤検知するため、ローカルでも CI 側（`.github/workflows/cicd.yml` の `astral-sh/setup-uv`）と同じバージョンを使う
+- **避けるコマンド**: `uv run pytest` を使わない（CWD の `pyproject.toml` を project marker として検出し `uv.lock` を暗黙生成してしまうため。本リポジトリは `pip-compile` ベースの `requirements*.txt` を lock として運用し、`uv.lock` は管理対象外としている）
 - **言語**: Python 3.12、デプロイ依存: `requests`, `anthropic`, `PyGithub`、開発依存: 左記 + `boto3`
 - **Claude モデル**: 要約生成に `claude-sonnet-4-6` を使用
 - **GitHub API**: REST、Fine-grained PAT、セッションログから特定したリポジトリのみ対象
