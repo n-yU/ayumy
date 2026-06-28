@@ -54,6 +54,11 @@ ayumy リポジトリの PR レビューにおいて、過去の PR で繰り返
 - 実行環境は AWS Lambda（SAM デプロイ）、ローカル CLI は `python -m report`
 - 仕様の原典は docs/Spec.md（日本語）。コードと食い違う場合は Spec.md を正とする
 
+### クライアント側ツールの環境前提
+クライアント側のビルド・開発ツール（Makefile, scripts/, hooks/, bin/ayumy）は macOS のみサポートしており、Lambda 実行環境には持ち込まない。以下は対応不要
+- BSD awk / BSD make など macOS 標準（GNU awk / GNU Make 3.81）以外の方言への対応提案、および POSIX 純粋互換への書き換え提案
+- これらツールが Lambda 上で動作するかどうかの懸念
+
 ### スケール上限の具体値（共通方針「スケール・容量」に対する閾値）
 以下は実運用で到達しないため、対応提案は不要
 - GitHub Search API の 1000 件上限、`search_commits` のページネーション（1日 100 コミット超は想定しない）
@@ -76,9 +81,6 @@ ayumy リポジトリの PR レビューにおいて、過去の PR で繰り返
 - `samconfig.toml` はローカル保存（`.gitignore` 対象）で、`sam deploy` が stack 名・capabilities・S3 バケット／プレフィックス・`NotionDatabaseId` / `SlackChannelId` を自動読み込みする
 - `lambda/VERSION` はリポジトリルート `VERSION` への git symlink（mode `120000`）であり drift しない
 - `make oidc-deploy` は初回のみの手動実行で、テンプレート default 値への依存は意図的
-- GitHub のユーザーリポは `affiliation=owner` で取得しており、別オーナーとの同名衝突は起こり得ない
-- macOS の `mktemp` はテンプレート無指定でも動作する
-- Lambda ウォーム実行間で `os.environ` を再利用するのは意図的
 
 ### 意図的な設計判断
 以下は意図的な設計のため変更を提案しない
