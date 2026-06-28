@@ -18,6 +18,8 @@ jobs:
           python-version: "3.12"
 
       - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.10.12"
 
       - name: Verify requirements lock is in sync with .in sources
         run: |
