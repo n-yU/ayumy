@@ -8,7 +8,7 @@ from config import CONFIG
 from config.config import (
     ClaudeConfig,
     Config,
-    GithubConfig,
+    GitHubConfig,
     PipelineConfig,
     SlackConfig,
     _load,
@@ -22,7 +22,7 @@ class TestConfigShape:
     def test_all_sections_are_populated(self):
         assert isinstance(CONFIG.claude, ClaudeConfig)
         assert isinstance(CONFIG.slack, SlackConfig)
-        assert isinstance(CONFIG.github, GithubConfig)
+        assert isinstance(CONFIG.github, GitHubConfig)
         assert isinstance(CONFIG.pipeline, PipelineConfig)
 
     def test_top_level_config_is_immutable(self):

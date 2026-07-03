@@ -18,7 +18,7 @@ class SlackConfig:
 
 
 @dataclass(frozen=True)
-class GithubConfig:
+class GitHubConfig:
     search_batch: int
     search_window_sec: int
 
@@ -33,7 +33,7 @@ class PipelineConfig:
 class Config:
     claude: ClaudeConfig
     slack: SlackConfig
-    github: GithubConfig
+    github: GitHubConfig
     pipeline: PipelineConfig
 
 
@@ -44,7 +44,7 @@ def _load() -> Config:
     return Config(
         claude=ClaudeConfig(**data["claude"]),
         slack=SlackConfig(**data["slack"]),
-        github=GithubConfig(**data["github"]),
+        github=GitHubConfig(**data["github"]),
         pipeline=PipelineConfig(**data["pipeline"]),
     )
 
