@@ -108,6 +108,7 @@ ayumy/
 ├── hooks/pre-push      # 各リポジトリにシンボリックリンクで配置
 ├── lambda/
 │   ├── handler.py      # Lambda ハンドラ
+│   ├── config/         # チューニング定数の YAML と loader
 │   └── report/         # メインパッケージ
 ├── template.yaml       # AWS SAM テンプレート
 ├── docs/
@@ -512,6 +513,9 @@ Lambda 関数の環境変数として設定する。機密情報は AWS Secrets 
 - **タイムアウト / メモリ**: [template.yaml](../template.yaml) で定義（タイムアウトは SAM パラメータ化、メモリは固定値）
 - **依存パッケージ**: 直接依存を [lambda/requirements.in](../lambda/requirements.in)（デプロイ）と [lambda/requirements-dev.in](../lambda/requirements-dev.in)（ローカル開発、`boto3` 等を追加）に定義し、`uv pip compile --generate-hashes` で hash 付き lock の [lambda/requirements.txt](../lambda/requirements.txt) と [lambda/requirements-dev.txt](../lambda/requirements-dev.txt) を生成する。Lambda デプロイ・CI・ローカル install はすべて生成済みの `.txt` を読む。`boto3` は Lambda ランタイム同梱版を利用するためデプロイ側には含めない
 - **IAM ロール**: S3 バケットへの読み書き、DynamoDB テーブルへの読み書き、Secrets Manager の読み取り、CloudWatch Logs への書き込み
+- **チューニング定数**: モデル ID・API throttle 値・truncation 長など「振る舞いを調整する値」を [lambda/config/config.yml](../lambda/config/config.yml) に集約する
+  - Lambda コールドスタート時に [lambda/config/config.py](../lambda/config/config.py) の loader が frozen dataclass singleton として読み込む
+  - 環境依存値と secret は環境変数 / Secrets Manager 経由で扱い、config.yml には持ち込まない
 
 ### Deployment
 AWS SAM（[template.yaml](../template.yaml)）で Lambda 関数、EventBridge Scheduler、IAM ロール、S3 バケット、DynamoDB テーブルを管理する

@@ -5,18 +5,16 @@ from datetime import datetime
 
 import anthropic
 
+from config import CONFIG
+
 from . import JST, ReportSummary
 from .notice import Notice, NoticeSource
 from .tags import ALLOWED_TAG_NAMES, TAG_DEFINITIONS
 
 logger = logging.getLogger(__name__)
 
-MODEL = "claude-sonnet-4-6"
-MAX_TOKENS = 2048
 TOOL_NAME = "submit_daily_report"
-
 _TAG_GUIDANCE = "\n".join(f"- {t.name}: {t.description}" for t in TAG_DEFINITIONS)
-
 _SYSTEM_PROMPT = f"""\
 あなたは開発者の日次アクティビティを要約するアシスタントです。
 与えられた GitHub アクティビティと Claude Code セッションログをもとに、
@@ -128,8 +126,8 @@ class SummaryClient:
         tool = self._build_tool_schema()
 
         message = self.client.messages.create(
-            model=MODEL,
-            max_tokens=MAX_TOKENS,
+            model=CONFIG.claude.model,
+            max_tokens=CONFIG.claude.max_tokens,
             system=_SYSTEM_PROMPT,
             tools=[tool],
             tool_choice={"type": "tool", "name": TOOL_NAME},

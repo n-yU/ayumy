@@ -7,20 +7,19 @@ from datetime import datetime
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackClientError
 
+from config import CONFIG
+
 from . import JST, ReportSummary
 from .notice import Notice
 from .summarizer import ValidationResult
 
 logger = logging.getLogger(__name__)
 
-# Slack section text limit is 3000; truncate headlines so per-day aggregation stays within bounds
-HEADLINE_MAX = 200
-
 # Slack section text limit is 3000; cap below to leave room for headers and continuation prefixes
 SECTION_TEXT_MAX = 2900
 
 
-def _truncate_headline(headline: str, limit: int = HEADLINE_MAX) -> str:
+def _truncate_headline(headline: str, limit: int = CONFIG.slack.headline_max) -> str:
     if len(headline) <= limit:
         return headline
     return headline[: limit - 1] + "…"

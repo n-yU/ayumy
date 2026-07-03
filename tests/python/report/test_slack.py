@@ -6,10 +6,10 @@ from unittest.mock import MagicMock
 import pytest
 from slack_sdk.errors import SlackApiError
 
+from config import CONFIG
 from report import JST
 from report.notice import Notice, NoticeSource
 from report.slack import (
-    HEADLINE_MAX,
     SECTION_TEXT_MAX,
     SlackClient,
     _context_block,
@@ -176,7 +176,7 @@ class TestNotify:
     def test_long_headline_is_truncated(self):
         client = _make_client()
         target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
-        long_headline = "あ" * (HEADLINE_MAX + 50)
+        long_headline = "あ" * (CONFIG.slack.headline_max + 50)
         report = {"repositories": [_repo("repo", [long_headline])]}
         pages = [("repo", "https://notion.so/p")]
 
@@ -184,9 +184,9 @@ class TestNotify:
         client.flush()
 
         page_text = _get_send_kwargs(client)["blocks"][1]["text"]["text"]
-        # headline portion after " — " should be truncated to HEADLINE_MAX
+        # headline portion after " — " should be truncated to CONFIG.slack.headline_max
         headline_part = page_text.split(" — ", 1)[1]
-        assert len(headline_part) == HEADLINE_MAX
+        assert len(headline_part) == CONFIG.slack.headline_max
         assert headline_part.endswith("…")
 
     def test_headline_newlines_are_collapsed(self):

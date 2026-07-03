@@ -6,9 +6,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 from github import GithubException, UnknownObjectException
 
+from config import CONFIG
 from report import JST
 from report.github import GitHubClient
-from report.github.client import _SEARCH_BATCH, _SEARCH_WINDOW
 from report.notice import Notice
 
 from .._builders import make_commit
@@ -340,7 +340,7 @@ class TestFetchActivity:
         """Sleeps only the remaining window time when batch limit is hit."""
         client = _make_client()
         # Simulate: already processed a batch, window started at t=100
-        client._search_count = _SEARCH_BATCH
+        client._search_count = CONFIG.github.search_batch
         client._window_start = 100
         # Current time: t=105 → elapsed=5, sleep=15
         mock_time.return_value = 105
@@ -352,7 +352,7 @@ class TestFetchActivity:
 
         client.fetch_activity(SINCE, UNTIL, ["repo-0"])
 
-        mock_sleep.assert_called_once_with(_SEARCH_WINDOW - 5)
+        mock_sleep.assert_called_once_with(CONFIG.github.search_window_sec - 5)
         assert client._search_count == 1
 
     @patch("report.github.client.time.sleep")
@@ -361,7 +361,7 @@ class TestFetchActivity:
         """Skips sleep when enough time has passed since window start."""
         client = _make_client()
         # Simulate: already processed a batch, window started at t=100
-        client._search_count = _SEARCH_BATCH
+        client._search_count = CONFIG.github.search_batch
         client._window_start = 100
         # Current time: t=125 → elapsed=25 > 20s window
         mock_time.return_value = 125

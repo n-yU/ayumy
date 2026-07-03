@@ -7,6 +7,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import NotRequired, TypedDict
 
+from config import CONFIG
+
 JST = timezone(timedelta(hours=9))
 
 
@@ -124,22 +126,20 @@ def date_to_range(target: date) -> tuple[datetime, datetime]:
 def parse_target_dates(target_date: str) -> list[date]:
     """Parse a single `YYYY-MM-DD` or a `YYYY-MM-DD..YYYY-MM-DD` range into an inclusive date list.
 
-    The range is capped at 31 days to bound activity fetch volume.
+    The range is capped by `CONFIG.pipeline.max_range_days` to bound activity fetch volume.
 
     Raises:
-        ValueError: If the start date is after the end date, or the range exceeds 31 days.
+        ValueError: If the start date is after the end date, or the range exceeds the configured cap.
     """
-    MAX_RANGE_DAYS = 31
-
     if ".." in target_date:
         start_str, end_str = target_date.split("..", 1)
         start = date.fromisoformat(start_str)
         end = date.fromisoformat(end_str)
         if start > end:
             raise ValueError(f"Start date {start} is after end date {end}")
-        if (end - start).days >= MAX_RANGE_DAYS:
+        if (end - start).days >= CONFIG.pipeline.max_range_days:
             raise ValueError(
-                f"Date range exceeds {MAX_RANGE_DAYS} days: {start}..{end}"
+                f"Date range exceeds {CONFIG.pipeline.max_range_days} days: {start}..{end}"
             )
         dates = []
         current = start
