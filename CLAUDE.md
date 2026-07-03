@@ -16,6 +16,7 @@ scripts/sync_session.sh              # セッション転送スクリプト（ho
 scripts/setup_hooks.sh               # hook の設置スクリプト
 hooks/pre-push                       # Git hook（各リポジトリにシンボリックリンクで配置）
 lambda/handler.py                    # Lambda ハンドラ（report パッケージを呼び出すエントリポイント）
+lambda/config/                       # チューニング定数の YAML と loader（モデル ID・throttle 値等）
 lambda/report/                       # メインパッケージ: GitHub API + Claude API + Notion API
 lambda/requirements.in               # Lambda デプロイ依存の source（直接依存のみ、バージョン範囲指定）
 lambda/requirements-dev.in           # ローカル開発依存の source（boto3 等を追加、`-r requirements.in` で本体を参照）
@@ -32,7 +33,7 @@ template.yaml                        # AWS SAM テンプレート（Lambda, Even
 - **依存管理**: 直接依存は `lambda/requirements.in` / `lambda/requirements-dev.in` に記述し、`make lock` で `uv pip compile --generate-hashes` を呼んで hash 付きの `lambda/requirements.txt` / `lambda/requirements-dev.txt` を再生成する。Lambda デプロイ・CI・`make lambda-install` はいずれも生成された `.txt` を読むため、`.in` を変更したら必ず `make lock` を実行し `.txt` を commit する。`uv` のバージョンが異なると `.txt` の出力が変わり CI drift check が誤検知するため、ローカルでも CI 側（`.github/workflows/cicd.yml` の `astral-sh/setup-uv`）と同じバージョンを使う
 - **避けるコマンド**: `uv run pytest` を使わない（CWD の `pyproject.toml` を project marker として検出し `uv.lock` を暗黙生成してしまうため。本リポジトリは `pip-compile` ベースの `requirements*.txt` を lock として運用し、`uv.lock` は管理対象外としている）
 - **言語**: Python 3.12、デプロイ依存: `requests`, `anthropic`, `PyGithub`、開発依存: 左記 + `boto3`
-- **Claude モデル**: 要約生成に `claude-sonnet-4-6` を使用
+- **Claude モデル**: 要約生成モデルは [lambda/config/config.yml](lambda/config/config.yml) で定義（既定 `claude-sonnet-4-6`）
 - **GitHub API**: REST、Fine-grained PAT、セッションログから特定したリポジトリのみ対象
 - **Notion API**: Internal Integration Token、データベースプロパティは [Spec: Database Properties](docs/Spec.md#database-properties) に定義
 - **Hook 設計**: フォアグラウンド同期実行で、転送失敗時は非ゼロ終了で push を中止する（silent fail 防止）。セッション ID 単位の上書きで冪等性を担保
@@ -56,6 +57,7 @@ Lambda（環境変数 + Secrets Manager）:
 ## 開発メモ
 - 仕様書は [Spec.md](docs/Spec.md)（日本語）— すべての要件の原典
 - 初期開発手順は [Initial-Development.md](docs/archive/Initial-Development.md) — フェーズ別の実装計画と v1 からの変遷を記録
+- [Manual.md](docs/Manual.md) は運用者目線で書く。実装寄りの用語（「振る舞いを調整する値」等）や構造の説明（「〜に集約されている」等）は使わず、「何ができるか」「どこで変更するか」を具体的に示す。実装・仕様レベルの細部は Spec.md 側に委ねる
 - JSONL の生データは S3 バケットに保管し、リモートリポジトリには push しない
 - アクティビティの取得対象期間: 前日 JST 00:00:00 〜 当日 JST 00:00:00
 - アクティビティが 0 件の日はスキップまたは「活動なし」と記録

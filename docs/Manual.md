@@ -6,6 +6,7 @@ Ayumy の構築後の日常運用ガイド。基本的な操作・Notion レポ�
   - [pre-push hook による自動転送](#pre-push-hook-による自動転送)
   - [手動同期](#手動同期)
   - [手動レポート生成](#手動レポート生成)
+- [Config](#config)
 - [Reading Notion Reports](#reading-notion-reports)
   - [ページプロパティ](#ページプロパティ)
   - [ページ本文](#ページ本文)
@@ -48,6 +49,10 @@ push を伴わずにセッションだけ転送したい場合、または hook 
 | `ayumy sync --report --date 2026-03-01..2026-03-05` | 日付範囲を一括生成 |
 
 `--report` 指定時の Lambda 呼び出しは非同期のため、コマンド自体はすぐ完了する。実行結果は Slack 通知で確認する。実行方式別の対象期間は [Spec: GitHub Activity Fetch](Spec.md#github-activity-fetch) と [Spec: Lambda Execution Modes](Spec.md#lambda-execution-modes) を参照
+
+## Config
+- 使用する Claude モデルなど各種設定は [lambda/config/config.yml](../lambda/config/config.yml) で変更できる
+- 編集後は `sam deploy` で Lambda に反映する
 
 ## Reading Notion Reports
 1 日 × リポジトリ単位で Notion ページが作成される。GitHub アクティビティが 0 件のリポジトリにはページは作成されない
