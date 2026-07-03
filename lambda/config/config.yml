@@ -1,0 +1,25 @@
+# Ayumy tuning constants read at Lambda cold start by lambda/config/config.py.
+# Environment-dependent values (S3 bucket, DynamoDB table, ...) and secrets are configured
+# via environment variables / Secrets Manager and are not tracked here.
+
+claude:
+  # Anthropic model used for daily summary generation.
+  model: claude-sonnet-4-6
+  # Maximum output tokens per Claude API request.
+  max_tokens: 2048
+
+slack:
+  # Character limit for the per-repo headline shown in the Slack summary section.
+  headline_max: 200
+
+github:
+  # Search API rate limit is 30 requests/minute; issue `search_batch` calls then sleep
+  # until `search_window_sec` has elapsed to stay within the limit.
+  search_batch: 10
+  search_window_sec: 20
+
+pipeline:
+  # Maximum number of past dates to backfill on scheduled runs.
+  max_backfill: 3
+  # Maximum span (exclusive upper bound in days) for the `--date A..B` manual sync option.
+  max_range_days: 31
