@@ -9,7 +9,7 @@ claude:
   max_tokens: 2048
 
 slack:
-  # Character limit for the per-repo headline shown in the Slack summary section.
+  # Per-repo headline character limit; multiple headlines aggregate into the 3000-char Slack section body.
   headline_max: 200
 
 github:
