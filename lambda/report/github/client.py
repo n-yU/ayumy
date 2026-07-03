@@ -10,15 +10,13 @@ from github import Github, GithubException, UnknownObjectException
 from github.Issue import Issue
 from github.Repository import Repository
 
+from config import CONFIG
+
 from ..domain import CommitInfo, IssueInfo, PullInfo
 from ..notice import Notice, NoticeSource
 from .activity import GitHubActivity, RepoActivity
 
 logger = logging.getLogger(__name__)
-
-# Search API rate limit: 30 requests/minute
-_SEARCH_BATCH = 10
-_SEARCH_WINDOW = 20
 
 _PULL_EVENTS = ("created", "merged", "closed")
 _ISSUE_EVENTS = ("created", "closed")
@@ -39,10 +37,10 @@ class GitHubClient:
 
     def _search_throttle(self) -> None:
         """Call this once before each Search API request; sleeps when the per-window count reaches the batch size."""
-        if self._search_count >= _SEARCH_BATCH:
+        if self._search_count >= CONFIG.github.search_batch:
             elapsed = time.time() - self._window_start
-            if elapsed < _SEARCH_WINDOW:
-                sleep_time = _SEARCH_WINDOW - elapsed
+            if elapsed < CONFIG.github.search_window_sec:
+                sleep_time = CONFIG.github.search_window_sec - elapsed
                 logger.info("Search API throttle: sleeping %.0fs", sleep_time)
                 time.sleep(sleep_time)
             self._search_count = 0

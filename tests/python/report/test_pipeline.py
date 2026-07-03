@@ -8,9 +8,10 @@ from unittest.mock import patch
 import pytest
 from botocore.exceptions import ClientError
 
+from config import CONFIG
 from report import JST, SessionActivity
 from report.github import GitHubActivity
-from report.pipeline import MAX_BACKFILL, process_date, run
+from report.pipeline import process_date, run
 from report.summarizer import ValidationResult
 
 from ._builders import (
@@ -297,7 +298,7 @@ class TestRun:
 
     def test_backfill_limited_to_max(self, run_patches):
         store = run_patches["SessionStore"].return_value
-        # 5 past dates, but only MAX_BACKFILL most recent should be processed
+        # 5 past dates, but only CONFIG.pipeline.max_backfill most recent should be processed
         store.scan_backfill_dates.return_value = [
             date(2026, 3, 23),
             date(2026, 3, 24),
@@ -307,9 +308,7 @@ class TestRun:
         ]
 
         run(source=None)
-
-        # MAX_BACKFILL + 1 primary
-        assert store.fetch_sessions.call_count == MAX_BACKFILL + 1
+        assert store.fetch_sessions.call_count == CONFIG.pipeline.max_backfill + 1
 
     def test_notify_on_primary_failure(self, run_patches):
         store = run_patches["SessionStore"].return_value

@@ -8,6 +8,8 @@ from datetime import datetime
 
 from botocore.exceptions import BotoCoreError, ClientError
 
+from config import CONFIG
+
 from . import (
     JST,
     SessionActivity,
@@ -25,8 +27,6 @@ from .slack import SlackClient
 from .summarizer import SummaryClient
 
 logger = logging.getLogger(__name__)
-
-MAX_BACKFILL = 3
 
 
 def process_date(
@@ -152,7 +152,7 @@ def run(
             backfill_set = {d.isoformat() for d in process_dates}
         else:
             backfill_dates = store.scan_backfill_dates(primary_date)
-            backfill_dates = backfill_dates[-MAX_BACKFILL:]
+            backfill_dates = backfill_dates[-CONFIG.pipeline.max_backfill :]
             process_dates = backfill_dates + [primary_date]
             backfill_set = {d.isoformat() for d in backfill_dates}
             if backfill_dates:
