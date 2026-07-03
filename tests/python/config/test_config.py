@@ -49,8 +49,7 @@ class TestConfigValues:
 
 
 class TestLoader:
-    def test_load_returns_a_new_config_instance(self):
-        # Confirms the loader is idempotent and does not mutate module state
+    def test_load_returns_value_equal_to_singleton(self):
         result = _load()
         assert isinstance(result, Config)
         assert result == CONFIG
