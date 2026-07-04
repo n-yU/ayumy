@@ -235,7 +235,17 @@ def run(
             memory_limit_mb,
             timeout_seconds,
         )
-        cost_display = cost_store.compute_display(datetime.now(JST).date())
+        try:
+            cost_display = cost_store.compute_display(datetime.now(JST).date())
+        except Exception:
+            # Broad: cost display is auxiliary; any failure here should not block metrics/notice notifications
+            notice.add(
+                NoticeSource.PIPELINE,
+                "Cost display computation failed; cost line omitted",
+                logger=logger,
+                exc_info=True,
+            )
+            cost_display = None
         slack_client.notify_metrics(
             elapsed,
             peak_memory_mb,

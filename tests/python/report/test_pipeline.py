@@ -322,6 +322,18 @@ class TestRun:
         assert call.kwargs["timeout_seconds"] == 300
         slack_client.flush.assert_called_once()
 
+    def test_omits_cost_when_compute_display_fails(self, run_patches):
+        cost_store = run_patches["CostStore"].return_value
+        cost_store.compute_display.side_effect = RuntimeError("dynamodb down")
+        slack_client = run_patches["SlackClient"].return_value
+
+        run(source=None)
+
+        slack_client.notify_metrics.assert_called_once()
+        assert slack_client.notify_metrics.call_args.kwargs["cost"] is None
+        slack_client.flush.assert_called_once()
+        slack_client.send_notice_thread.assert_called_once()
+
     def test_backfills_past_dates(self, run_patches):
         store = run_patches["SessionStore"].return_value
         store.scan_backfill_dates.return_value = [
