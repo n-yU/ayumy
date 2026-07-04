@@ -9,7 +9,7 @@ from boto3.dynamodb.conditions import Key
 
 from config import CONFIG
 
-from . import SummaryUsage
+from . import JST, SummaryUsage
 
 
 @dataclass(frozen=True)
@@ -46,16 +46,17 @@ class CostStore:
 
     def start_record(self, target_date: date, usage: SummaryUsage) -> str:
         """`model` and pricing are snapshotted onto the row so later config changes do not affect historical spend."""
-        year_month = target_date.strftime("%Y-%m")
-        date_str = target_date.isoformat()
-        executed_at = datetime.now(UTC).isoformat()
-        sk = f"{date_str}#{executed_at}"
+        executed_at_utc = datetime.now(UTC)
+        executed_date_jst = executed_at_utc.astimezone(JST).date()
+        year_month = executed_date_jst.strftime("%Y-%m")
+        executed_at = executed_at_utc.isoformat()
+        sk = f"{executed_date_jst.isoformat()}#{executed_at}"
         rates = CONFIG.claude.pricing[CONFIG.claude.model]
         self.table.put_item(
             Item={
                 "year_month": year_month,
                 "sk": sk,
-                "date": date_str,
+                "target_date": target_date.isoformat(),
                 "executed_at": executed_at,
                 "model": CONFIG.claude.model,
                 "input_usd_per_1m_tokens": Decimal(
@@ -73,8 +74,9 @@ class CostStore:
         self._run_spend_usd += usage.spend_usd
         return sk
 
-    def mark_reported(self, target_date: date, sk: str) -> None:
-        year_month = target_date.strftime("%Y-%m")
+    def mark_reported(self, sk: str) -> None:
+        # SK layout is "<jst_date>#<utc_iso>"; the year_month prefix locates the partition
+        year_month = sk[:7]
         self.table.update_item(
             Key={"year_month": year_month, "sk": sk},
             UpdateExpression="SET reported = :true",

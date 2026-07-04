@@ -1,6 +1,6 @@
 """Tests for CostStore."""
 
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -35,13 +35,40 @@ class TestStartRecord:
 
         self.store.table.put_item.assert_called_once()
         item = self.store.table.put_item.call_args.kwargs["Item"]
-        assert item["year_month"] == "2026-03"
-        assert item["date"] == "2026-03-28"
+        assert item["target_date"] == "2026-03-28"
         assert item["sk"] == sk
         assert item["input_tokens"] == 1000
         assert item["output_tokens"] == 200
         assert item["spend_usd"] == Decimal("0.012")
         assert item["reported"] is False
+
+    def test_year_month_and_sk_reflect_execution_time_in_jst(self):
+        # 2026-07-01 UTC 14:30 = 2026-07-01 JST 23:30 → year_month "2026-07"
+        frozen_utc = datetime(2026, 7, 1, 14, 30, 0, tzinfo=UTC)
+        usage = SummaryUsage(input_tokens=0, output_tokens=0, spend_usd=0.0)
+
+        with patch("report.cost.datetime") as mock_dt:
+            mock_dt.now.return_value = frozen_utc
+            sk = self.store.start_record(date(2026, 6, 30), usage)
+
+        item = self.store.table.put_item.call_args.kwargs["Item"]
+        assert item["year_month"] == "2026-07"
+        assert item["target_date"] == "2026-06-30"
+        assert sk.startswith("2026-07-01#")
+        assert item["executed_at"] == frozen_utc.isoformat()
+
+    def test_jst_midnight_boundary_uses_next_calendar_day(self):
+        # 2026-06-30 UTC 15:00 = 2026-07-01 JST 00:00 → year_month "2026-07"
+        frozen_utc = datetime(2026, 6, 30, 15, 0, 0, tzinfo=UTC)
+        usage = SummaryUsage(input_tokens=0, output_tokens=0, spend_usd=0.0)
+
+        with patch("report.cost.datetime") as mock_dt:
+            mock_dt.now.return_value = frozen_utc
+            sk = self.store.start_record(date(2026, 6, 30), usage)
+
+        item = self.store.table.put_item.call_args.kwargs["Item"]
+        assert item["year_month"] == "2026-07"
+        assert sk.startswith("2026-07-01#")
 
     def test_captures_active_model_and_pricing(self):
         usage = SummaryUsage(input_tokens=0, output_tokens=0, spend_usd=0.0)
@@ -54,24 +81,20 @@ class TestStartRecord:
         assert item["input_usd_per_1m_tokens"] > 0
         assert item["output_usd_per_1m_tokens"] > 0
 
-    def test_sk_starts_with_target_date(self):
-        usage = SummaryUsage(input_tokens=0, output_tokens=0, spend_usd=0.0)
-
-        sk = self.store.start_record(date(2026, 3, 28), usage)
-
-        assert sk.startswith("2026-03-28#")
-
 
 class TestMarkReported:
     def setup_method(self):
         self.store = _make_store()
 
-    def test_updates_reported_flag(self):
-        self.store.mark_reported(date(2026, 3, 28), "2026-03-28#exec")
+    def test_updates_reported_flag_and_derives_year_month_from_sk(self):
+        self.store.mark_reported("2026-07-01#2026-07-01T00:00:00+00:00")
 
         self.store.table.update_item.assert_called_once()
         kwargs = self.store.table.update_item.call_args.kwargs
-        assert kwargs["Key"] == {"year_month": "2026-03", "sk": "2026-03-28#exec"}
+        assert kwargs["Key"] == {
+            "year_month": "2026-07",
+            "sk": "2026-07-01#2026-07-01T00:00:00+00:00",
+        }
         assert "reported" in kwargs["UpdateExpression"]
         assert kwargs["ExpressionAttributeValues"] == {":true": True}
 

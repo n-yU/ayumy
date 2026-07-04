@@ -102,7 +102,7 @@ class TestProcessDate:
         target_date, usage = start.call_args.args
         assert target_date == date(2026, 3, 28)
         assert usage.spend_usd == 0.012
-        mark.assert_called_once_with(date(2026, 3, 28), "2026-03-28#exec")
+        mark.assert_called_once_with("2026-03-28#exec")
 
     def test_notifies_validation_errors(self, pipeline_clients):
         session = make_session("repo")

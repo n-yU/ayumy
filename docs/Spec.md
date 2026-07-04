@@ -402,16 +402,16 @@ Classification Policy で warning に分類した失敗は 1 run 単位で集約
 ### Cost Execution Log Persistence
 Claude API 呼び出しのコスト管理として、要約生成のたびに 1 実行 = 1 record を DynamoDB に永続化する
 
-テーブル名は `ayumy-cost`、オンデマンドモードかつ PITR 有効
+テーブル名は `ayumy-costs`、オンデマンドモードかつ PITR 有効
 
 <details>
 <summary>DynamoDB Table Schema</summary>
 
 | Key | Attribute | Type | Description |
 |---|---|---|---|
-| PK | `year_month` | String | JST の `YYYY-MM`、月次 Query の効率化用 |
-| SK | `sk` | String | `<JST_date>#<executed_at>` 形式で日時順に並ぶ |
-| | `date` | String | JST 日付（`YYYY-MM-DD`） |
+| PK | `year_month` | String | 実行時刻の JST 月（`YYYY-MM`）、月次 Query の効率化用 |
+| SK | `sk` | String | `<実行 JST date>#<executed_at>` 形式で日時順に並ぶ |
+| | `target_date` | String | 対象レポート日（JST `YYYY-MM-DD`） |
 | | `executed_at` | String | ISO 8601 UTC、Lambda 実行時刻 |
 | | `model` | String | 実行時の Claude モデル ID |
 | | `input_usd_per_1m_tokens` | Number | 実行時の入力単価 |
@@ -422,6 +422,8 @@ Claude API 呼び出しのコスト管理として、要約生成のたびに 1 
 | | `reported` | Boolean | Notion 書き込み成功時に true |
 
 </details>
+
+`year_month` と SK の日付部分は **実行時刻の JST** を基準に決まる（対象レポート日ではない）。理由は backfill 実行のコストも「支払いが発生した実行月」に含めることで、Anthropic の請求サイクルと Slack 表示（当月累計）を一致させるため
 
 書き込みは 2 段階に分ける
 

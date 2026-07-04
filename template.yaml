@@ -44,7 +44,7 @@ Resources:
   CostTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: ayumy-cost
+      TableName: ayumy-costs
       BillingMode: PAY_PER_REQUEST
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
