@@ -383,7 +383,7 @@ Notion への書き込み完了後、Slack Web API の `chat.postMessage` で指
 通知内容
 - Notion ページへのリンク（リポジトリごとに 1 行）。Claude API が生成した summary 箇条書きの先頭項目がある場合は 1 文サマリとしてリンクの後ろに付加する
 - 実行メトリクス: ayumy バージョン、経過時間（Lambda 実行時は timeout との比率）、ピークメモリ（Lambda 実行時は memory limit との比率）
-- Claude API コスト: 今回の実行 spend、当月累計・前月同期間比、当月レポート回数・前月同期間比、1 レポートあたりのコスト・前月同期間比（永続化された履歴の詳細は [Cost Execution Log Persistence](#cost-execution-log-persistence)）
+- Claude API コスト: 今回の実行の利用金額、当月累計・前月同期間比、当月レポート回数・前月同期間比。実行メトリクスと同じ context block に統合して 1 行で表示する。前月データが無く比率を計算できない項目は `(MoM ...)` 部分を丸ごと省略する（永続化された履歴の詳細は [Cost Execution Log Persistence](#cost-execution-log-persistence)）
 
 アクティビティが 0 件で Notion ページが作成されなかった場合は、正常稼働を示す簡易通知を送信する。処理中にエラーが発生した場合もエラー内容を通知する
 
