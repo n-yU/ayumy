@@ -9,7 +9,7 @@ import pytest
 from botocore.exceptions import ClientError
 
 from config import CONFIG
-from report import JST, SessionActivity
+from report import JST, SessionActivity, SummaryUsage
 from report.github import GitHubActivity
 from report.pipeline import process_date, run
 from report.summarizer import ValidationResult
@@ -27,6 +27,8 @@ from ._builders import (
 # Default JST day window used across most tests
 SINCE = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
 UNTIL = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+
+_STUB_USAGE = SummaryUsage(input_tokens=0, output_tokens=0, spend_usd=0.0)
 
 
 def _make_report(repos=None):
@@ -61,7 +63,10 @@ class TestProcessDate:
                 }
             ]
         )
-        pipeline_clients["summary_client"].generate_summary.return_value = report
+        pipeline_clients["summary_client"].generate_summary.return_value = (
+            report,
+            _STUB_USAGE,
+        )
         pipeline_clients["notion_client"].create_report_pages.return_value = [
             ("my-repo", "https://notion.so/page1"),
         ]
@@ -75,6 +80,29 @@ class TestProcessDate:
         assert notion_args[0] == SINCE
         assert notion_args[1] == SINCE
         assert notion_args[2] == UNTIL
+
+    def test_records_cost_before_and_after_notion(self, pipeline_clients):
+        session = make_session("my-repo")
+        pipeline_clients["github_client"].fetch_activity.return_value = make_github(
+            "my-repo", commits=[make_commit(sha="abc")]
+        )
+        report = _make_report([{"name": "my-repo", "summary": ["work"], "tags": []}])
+        pipeline_clients["summary_client"].generate_summary.return_value = (
+            report,
+            SummaryUsage(input_tokens=1000, output_tokens=200, spend_usd=0.012),
+        )
+        pipeline_clients["cost_store"].start_record.return_value = "2026-03-28#exec"
+        pipeline_clients["notion_client"].create_report_pages.return_value = []
+
+        process_date(SINCE, UNTIL, session, **pipeline_clients)
+
+        start = pipeline_clients["cost_store"].start_record
+        mark = pipeline_clients["cost_store"].mark_reported
+        start.assert_called_once()
+        target_date, usage = start.call_args.args
+        assert target_date == date(2026, 3, 28)
+        assert usage.spend_usd == 0.012
+        mark.assert_called_once_with("2026-03-28#exec")
 
     def test_notifies_validation_errors(self, pipeline_clients):
         session = make_session("repo")
@@ -91,7 +119,10 @@ class TestProcessDate:
                 }
             ]
         )
-        pipeline_clients["summary_client"].generate_summary.return_value = report
+        pipeline_clients["summary_client"].generate_summary.return_value = (
+            report,
+            _STUB_USAGE,
+        )
         invalid = ValidationResult()
         invalid.invalid_tags = {"repo": ["BadTag"]}
         pipeline_clients["summary_client"].validate_report.return_value = invalid
@@ -113,7 +144,10 @@ class TestProcessDate:
         report = _make_report(
             [{"name": "my-repo", "summary": ["work"], "tags": []}],
         )
-        pipeline_clients["summary_client"].generate_summary.return_value = report
+        pipeline_clients["summary_client"].generate_summary.return_value = (
+            report,
+            _STUB_USAGE,
+        )
         pipeline_clients["notion_client"].create_report_pages.return_value = []
 
         process_date(SINCE, UNTIL, session, **pipeline_clients)
@@ -148,7 +182,10 @@ class TestProcessDate:
                 }
             ]
         )
-        pipeline_clients["summary_client"].generate_summary.return_value = report
+        pipeline_clients["summary_client"].generate_summary.return_value = (
+            report,
+            _STUB_USAGE,
+        )
         pipeline_clients["notion_client"].create_report_pages.return_value = []
 
         process_date(SINCE, UNTIL, session, **pipeline_clients)
@@ -225,6 +262,7 @@ class TestRun:
             "GitHubClient": "report.pipeline.GitHubClient",
             "SessionClient": "report.pipeline.SessionClient",
             "SessionStore": "report.pipeline.SessionStore",
+            "CostStore": "report.pipeline.CostStore",
             "SlackClient": "report.pipeline.SlackClient",
             "require_env": "report.pipeline.require_env",
             "get_target_date_range": "report.pipeline.get_target_date_range",
@@ -282,6 +320,31 @@ class TestRun:
         # version is the third positional argument
         assert call.args[2] == "0.2.1"
         assert call.kwargs["timeout_seconds"] == 300
+        slack_client.flush.assert_called_once()
+
+    def test_omits_cost_when_compute_display_fails(self, run_patches):
+        cost_store = run_patches["CostStore"].return_value
+        cost_store.compute_display.side_effect = RuntimeError("dynamodb down")
+        slack_client = run_patches["SlackClient"].return_value
+
+        run(source=None)
+
+        slack_client.notify_metrics.assert_called_once()
+        assert slack_client.notify_metrics.call_args.kwargs["cost"] is None
+        slack_client.flush.assert_called_once()
+        slack_client.send_notice_thread.assert_called_once()
+
+    def test_survives_cost_store_init_failure(self, run_patches):
+        run_patches["CostStore"].side_effect = RuntimeError("no env")
+        slack_client = run_patches["SlackClient"].return_value
+
+        with pytest.raises(RuntimeError):
+            run(source=None)
+
+        # Main-flow error still reaches Slack, and the metrics chain runs with cost=None
+        slack_client.notify_error.assert_called_once()
+        slack_client.notify_metrics.assert_called_once()
+        assert slack_client.notify_metrics.call_args.kwargs["cost"] is None
         slack_client.flush.assert_called_once()
 
     def test_backfills_past_dates(self, run_patches):

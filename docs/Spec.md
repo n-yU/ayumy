@@ -19,6 +19,7 @@ Ayumy の全要件を記す。アーキテクチャ・データフロー・外�
   - [Session Log Read](#session-log-read)
   - [Session Write to DynamoDB](#session-write-to-dynamodb)
   - [Summary Generation](#summary-generation)
+  - [Cost Execution Log Persistence](#cost-execution-log-persistence)
   - [Slack Notification](#slack-notification)
   - [Processed JSONL Cleanup](#processed-jsonl-cleanup)
 - [Notion Database Specification](#notion-database-specification)
@@ -62,7 +63,7 @@ flowchart TB
     S3[(S3 Bucket<br/>session logs)]
     Schedule[EventBridge<br/>daily at JST 00:00]
     Lambda[AWS Lambda<br/>report]
-    DDB[(DynamoDB<br/>session metadata)]
+    DDB[(DynamoDB<br/>session metadata + cost log)]
 
     subgraph External[External APIs]
         GH[GitHub API]
@@ -382,6 +383,7 @@ Notion への書き込み完了後、Slack Web API の `chat.postMessage` で指
 通知内容
 - Notion ページへのリンク（リポジトリごとに 1 行）。Claude API が生成した summary 箇条書きの先頭項目がある場合は 1 文サマリとしてリンクの後ろに付加する
 - 実行メトリクス: ayumy バージョン、経過時間（Lambda 実行時は timeout との比率）、ピークメモリ（Lambda 実行時は memory limit との比率）
+- Claude API コスト: 今回の実行 spend、当月累計・前月同期間比、当月レポート回数・前月同期間比、1 レポートあたりのコスト・前月同期間比（永続化された履歴の詳細は [Cost Execution Log Persistence](#cost-execution-log-persistence)）
 
 アクティビティが 0 件で Notion ページが作成されなかった場合は、正常稼働を示す簡易通知を送信する。処理中にエラーが発生した場合もエラー内容を通知する
 
@@ -396,6 +398,41 @@ Classification Policy で warning に分類した失敗は 1 run 単位で集約
 - thread 投稿の本文は発生元ごとにグルーピングし、各 entry の件名と関連識別子（commit SHA、PR 番号、S3 key 等）を Block Kit で構造化する
 - 集約 warning が 0 件の run では thread 投稿しない
 - thread 投稿の失敗は親通知の成功を壊さないよう独立して suppress する（ベストエフォート方針を継承）
+
+### Cost Execution Log Persistence
+Claude API 呼び出しのコスト管理として、要約生成のたびに 1 実行 = 1 record を DynamoDB に永続化する
+
+テーブル名は `ayumy-costs`、オンデマンドモードかつ PITR 有効
+
+<details>
+<summary>DynamoDB Table Schema</summary>
+
+| Key | Attribute | Type | Description |
+|---|---|---|---|
+| PK | `year_month` | String | 実行時刻の JST 月（`YYYY-MM`）、月次 Query の効率化用 |
+| SK | `sk` | String | `<実行 JST date>#<executed_at>` 形式で日時順に並ぶ |
+| | `target_date` | String | 対象レポート日（JST `YYYY-MM-DD`） |
+| | `executed_at` | String | ISO 8601 UTC、Lambda 実行時刻 |
+| | `model` | String | 実行時の Claude モデル ID |
+| | `input_usd_per_1m_tokens` | Number | 実行時の入力単価 |
+| | `output_usd_per_1m_tokens` | Number | 実行時の出力単価 |
+| | `input_tokens` | Number | 入力トークン数 |
+| | `output_tokens` | Number | 出力トークン数 |
+| | `spend_usd` | Number | 単価 × トークン数を実行時に計算した USD |
+| | `reported` | Boolean | Notion 書き込み成功時に true |
+
+</details>
+
+`year_month` と SK の日付部分は **実行時刻の JST** を基準に決まる（対象レポート日ではない）。理由は backfill 実行のコストも「支払いが発生した実行月」に含めることで、Anthropic の請求サイクルと Slack 表示（当月累計）を一致させるため
+
+書き込みは 2 段階に分ける
+
+- generate_summary 成功時に PutItem で `reported=false` を含む全 attribute を書き込む
+- create_report_pages 成功時に同じ SK に対して UpdateItem で `reported=true` に更新する
+
+`model` と単価を行ごとに保持することで、期中でモデル差し替えや pricing 改定が起きても実行時点の値を遡って再解釈しない。過去分は無期限に保持し、TTL は設定しない
+
+Slack 通知に表示する月次メトリクスは、当月・前月同期間の各行を Query で取得したうえでアプリケーション側で集計する（DynamoDB は SUM / COUNT 相当の集計関数を提供しないため）
 
 ### Processed JSONL Cleanup
 DynamoDB への書き込みが正常に完了した後、処理した JSONL ファイルを S3 から削除する。削除対象は `ingest` で処理したオブジェクトキーに限定し、処理中に到着した遅延ファイルが誤って削除されるのを防ぐ。セッションデータは DynamoDB に永続化されているため、JSONL の保持は不要
@@ -492,6 +529,7 @@ Lambda 関数の環境変数として設定する。機密情報は AWS Secrets 
 |---|---|
 | `AYUMY_S3_BUCKET` | セッションログの保管先 S3 バケット名 |
 | `AYUMY_DYNAMO_TABLE` | セッションメタデータの DynamoDB テーブル名 |
+| `AYUMY_COST_TABLE` | Claude API コスト実行ログの DynamoDB テーブル名 |
 | `AYUMY_LAMBDA_TIMEOUT` | Lambda 関数の timeout 秒数（template.yaml の `LambdaTimeoutSeconds` パラメータと連動） |
 | `NOTION_DATABASE_ID` | 書き込み先の Notion データベース ID |
 | `SLACK_CHANNEL` | 通知先 Slack channel ID |
@@ -563,6 +601,7 @@ Lambda 側で発生する失敗は以下の 3 区分で扱う。`logger.warning`
 
 **Anthropic API（`claude-sonnet-4-6`）**
 - 入力: $3 / 1M tokens、出力: $15 / 1M tokens
+- 実行時のトークン → USD 換算に使う単価は [lambda/config/config.yml](../lambda/config/config.yml) の `claude.pricing` に定義する
 
 **1日あたりのトークン使用量（目安）**
 

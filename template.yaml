@@ -40,6 +40,25 @@ Resources:
         - AttributeName: "repo#session_id"
           KeyType: RANGE
 
+  # DynamoDB table for per-execution Claude API cost log
+  CostTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ayumy-costs
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      AttributeDefinitions:
+        - AttributeName: year_month
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: year_month
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+
   # S3 bucket for session log storage
   SessionBucket:
     Type: AWS::S3::Bucket
@@ -66,6 +85,7 @@ Resources:
         Variables:
           AYUMY_S3_BUCKET: !Ref SessionBucket
           AYUMY_DYNAMO_TABLE: !Ref SessionTable
+          AYUMY_COST_TABLE: !Ref CostTable
           AYUMY_LAMBDA_TIMEOUT: !Ref LambdaTimeoutSeconds
           NOTION_DATABASE_ID: !Ref NotionDatabaseId
           SLACK_CHANNEL: !Ref SlackChannelId
@@ -74,6 +94,8 @@ Resources:
             BucketName: !Ref SessionBucket
         - DynamoDBCrudPolicy:
             TableName: !Ref SessionTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref CostTable
         - AWSSecretsManagerGetSecretValuePolicy:
             SecretArn: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:ayumy/*"
       Events:
@@ -96,3 +118,6 @@ Outputs:
   SessionTableName:
     Description: DynamoDB table name for session metadata
     Value: !Ref SessionTable
+  CostTableName:
+    Description: DynamoDB table name for per-execution Claude API cost log
+    Value: !Ref CostTable

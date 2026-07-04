@@ -2,6 +2,7 @@
 
 import os
 from collections.abc import KeysView
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
@@ -95,6 +96,32 @@ class RepoSummary(TypedDict):
 
 class ReportSummary(TypedDict):
     repositories: list[RepoSummary]
+
+
+@dataclass(frozen=True)
+class SummaryUsage:
+    """Token counts and USD spend for a single Claude API call.
+
+    `spend_usd` is computed locally from the active model's configured rates,
+    not returned by the Anthropic API.
+    """
+
+    input_tokens: int
+    output_tokens: int
+    spend_usd: float
+
+    @classmethod
+    def from_call(cls, input_tokens: int, output_tokens: int) -> "SummaryUsage":
+        rates = CONFIG.claude.pricing[CONFIG.claude.model]
+        spend_usd = (
+            input_tokens * rates["input_usd_per_1m_tokens"]
+            + output_tokens * rates["output_usd_per_1m_tokens"]
+        ) / 1_000_000
+        return cls(
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            spend_usd=spend_usd,
+        )
 
 
 def require_env(name: str) -> str:

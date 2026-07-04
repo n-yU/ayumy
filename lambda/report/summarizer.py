@@ -7,7 +7,7 @@ import anthropic
 
 from config import CONFIG
 
-from . import JST, ReportSummary
+from . import JST, ReportSummary, SummaryUsage
 from .notice import Notice, NoticeSource
 from .tags import ALLOWED_TAG_NAMES, TAG_DEFINITIONS
 
@@ -116,8 +116,10 @@ class SummaryClient:
         target_date: datetime,
         formatted_github: str,
         formatted_sessions: str,
-    ) -> ReportSummary:
+    ) -> tuple[ReportSummary, SummaryUsage]:
         """Generate the structured summary via Claude API tool use.
+
+        Returns the parsed report and the token / spend record for the API call.
 
         Raises:
             ValueError: If the response contains no tool_use block for the expected tool.
@@ -134,9 +136,13 @@ class SummaryClient:
             messages=[{"role": "user", "content": prompt}],
         )
 
+        usage = SummaryUsage.from_call(
+            message.usage.input_tokens, message.usage.output_tokens
+        )
+
         for block in message.content:
             if getattr(block, "type", None) == "tool_use" and block.name == TOOL_NAME:
-                return block.input  # type: ignore[return-value]
+                return block.input, usage  # type: ignore[return-value]
 
         raise ValueError(f"Claude API response missing tool_use block for {TOOL_NAME}.")
 

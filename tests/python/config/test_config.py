@@ -1,6 +1,7 @@
 """Tests for the config loader."""
 
 from dataclasses import FrozenInstanceError
+from unittest.mock import patch
 
 import pytest
 
@@ -27,7 +28,7 @@ class TestConfigShape:
 
     def test_top_level_config_is_immutable(self):
         with pytest.raises(FrozenInstanceError):
-            CONFIG.claude = ClaudeConfig(model="x", max_tokens=1)  # type: ignore[misc]
+            CONFIG.claude = ClaudeConfig(model="x", max_tokens=1, pricing={})  # type: ignore[misc]
 
     def test_section_dataclass_is_immutable(self):
         with pytest.raises(FrozenInstanceError):
@@ -47,9 +48,37 @@ class TestConfigValues:
         assert CONFIG.pipeline.max_backfill > 0
         assert CONFIG.pipeline.max_range_days > 0
 
+    def test_active_model_has_pricing_entry(self):
+        assert CONFIG.claude.model in CONFIG.claude.pricing
+
+    def test_pricing_entries_have_positive_input_and_output_rates(self):
+        for model, rates in CONFIG.claude.pricing.items():
+            assert rates["input_usd_per_1m_tokens"] > 0, model
+            assert rates["output_usd_per_1m_tokens"] > 0, model
+
 
 class TestLoader:
     def test_load_returns_value_equal_to_singleton(self):
         result = _load()
         assert isinstance(result, Config)
         assert result == CONFIG
+
+    def test_load_raises_when_active_model_missing_from_pricing(self):
+        stub = {
+            "claude": {
+                "model": "unregistered-model",
+                "max_tokens": 1,
+                "pricing": {
+                    "other-model": {
+                        "input_usd_per_1m_tokens": 1.0,
+                        "output_usd_per_1m_tokens": 2.0,
+                    },
+                },
+            },
+            "slack": {"headline_max": 1},
+            "github": {"search_batch": 1, "search_window_sec": 1},
+            "pipeline": {"max_backfill": 1, "max_range_days": 1},
+        }
+        with patch("config.config.yaml.safe_load", return_value=stub):
+            with pytest.raises(ValueError, match="unregistered-model"):
+                _load()

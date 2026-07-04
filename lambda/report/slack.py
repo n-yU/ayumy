@@ -10,6 +10,7 @@ from slack_sdk.errors import SlackClientError
 from config import CONFIG
 
 from . import JST, ReportSummary
+from .cost import CostDisplay
 from .notice import Notice
 from .summarizer import ValidationResult
 
@@ -47,6 +48,28 @@ def _section_block(text: str) -> dict:
 
 def _context_block(text: str) -> dict:
     return {"type": "context", "elements": [{"type": "mrkdwn", "text": text}]}
+
+
+def _format_mom(change: float | None) -> str:
+    return "—" if change is None else f"{change:+.0f}%"
+
+
+def _render_cost_block(cost: CostDisplay) -> str:
+    return (
+        f"🧾 ${cost.current_run_spend_usd:.2f}"
+        f"  |  💰 MTD ${cost.monthly_spend_usd:.2f} (MoM {_format_mom(cost.spend_change_pct)})"
+        f"  |  🔁 {cost.monthly_report_count} reports (MoM {_format_mom(cost.report_count_change_pct)})"
+        f"  |  💵 avg ${cost.avg_per_report_usd:.2f} (MoM {_format_mom(cost.avg_change_pct)})"
+    )
+
+
+def _render_cost_fallback(cost: CostDisplay) -> str:
+    return (
+        f"💰 Cost: run ${cost.current_run_spend_usd:.2f}, "
+        f"MTD ${cost.monthly_spend_usd:.2f} (MoM {_format_mom(cost.spend_change_pct)}), "
+        f"{cost.monthly_report_count} reports (MoM {_format_mom(cost.report_count_change_pct)}), "
+        f"avg ${cost.avg_per_report_usd:.2f} (MoM {_format_mom(cost.avg_change_pct)})"
+    )
 
 
 def _chunk_lines(lines: list[str], limit: int) -> list[str]:
@@ -160,6 +183,7 @@ class SlackClient:
         elapsed: float,
         peak_memory_mb: float,
         version: str,
+        cost: CostDisplay | None = None,
         memory_limit_mb: int | None = None,
         timeout_seconds: int | None = None,
     ) -> None:
@@ -182,6 +206,11 @@ class SlackClient:
         self._fallback_parts.append(
             f"📊 Execution Metrics: v{version}, {elapsed_text}, {memory_text}"
         )
+
+        if cost is not None:
+            # No divider: cost block groups with the metrics caption as a single visual row
+            self._blocks.append(_context_block(_render_cost_block(cost)))
+            self._fallback_parts.append(_render_cost_fallback(cost))
 
     def flush(self) -> None:
         if not self._blocks:

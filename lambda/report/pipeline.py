@@ -19,6 +19,7 @@ from . import (
     parse_target_dates,
     require_env,
 )
+from .cost import CostDisplay, CostStore
 from .github import GitHubClient
 from .notice import Notice, NoticeSource
 from .notion import NotionClient
@@ -36,6 +37,7 @@ def process_date(
     github_client: GitHubClient,
     notion_client: NotionClient,
     summary_client: SummaryClient,
+    cost_store: CostStore,
     slack_client: SlackClient,
     *,
     is_backfill: bool = False,
@@ -79,11 +81,19 @@ def process_date(
         slack_client.notify_no_activity(since)
         return
 
-    report = summary_client.generate_summary(
+    report, usage = summary_client.generate_summary(
         since,
         github_activity.format(),
         session_activity.format(),
     )
+    logger.info(
+        "Claude API usage: input=%d, output=%d, spend=%.6f USD",
+        usage.input_tokens,
+        usage.output_tokens,
+        usage.spend_usd,
+    )
+
+    cost_sk = cost_store.start_record(since.date(), usage)
 
     validation = summary_client.validate_report(report)
     if validation:
@@ -99,6 +109,8 @@ def process_date(
     )
     for name, url in pages:
         logger.info("Created Notion page: %s -> %s", name, url)
+
+    cost_store.mark_reported(cost_sk)
 
     skipped_repos = [
         r["name"] for r in report["repositories"] if r["name"] not in github_activity
@@ -126,6 +138,7 @@ def run(
         channel=require_env("SLACK_CHANNEL"),
     )
     notice = Notice()
+    cost_store: CostStore | None = None
 
     try:
         session_client = SessionClient(require_env("AYUMY_S3_BUCKET"), notice=notice)
@@ -166,6 +179,7 @@ def run(
         )
         notion_client.init_data_source()
         summary_client = SummaryClient(require_env("ANTHROPIC_API_KEY"), notice=notice)
+        cost_store = CostStore(require_env("AYUMY_COST_TABLE"))
 
         for d in process_dates:
             if not target_date and d == primary_date:
@@ -182,6 +196,7 @@ def run(
                     github_client,
                     notion_client,
                     summary_client,
+                    cost_store,
                     slack_client,
                     is_backfill=date_str in backfill_set,
                 )
@@ -220,10 +235,23 @@ def run(
             memory_limit_mb,
             timeout_seconds,
         )
+        cost_display: CostDisplay | None = None
+        if cost_store is not None:
+            try:
+                cost_display = cost_store.compute_display(datetime.now(JST).date())
+            except Exception:
+                # Broad: cost display is auxiliary; any failure here should not block metrics/notice notifications
+                notice.add(
+                    NoticeSource.PIPELINE,
+                    "Cost display computation failed; cost line omitted",
+                    logger=logger,
+                    exc_info=True,
+                )
         slack_client.notify_metrics(
             elapsed,
             peak_memory_mb,
             get_version(),
+            cost=cost_display,
             memory_limit_mb=memory_limit_mb,
             timeout_seconds=timeout_seconds,
         )

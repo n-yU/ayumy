@@ -5,7 +5,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from report import JST
+from config import CONFIG
+from report import JST, SummaryUsage
 from report.notice import Notice
 from report.summarizer import _SYSTEM_PROMPT, TOOL_NAME, SummaryClient, ValidationResult
 from report.tags import ALLOWED_TAG_NAMES, TAG_DEFINITIONS
@@ -97,8 +98,11 @@ class TestGenerateSummary:
         self.client.client = MagicMock()
         self.target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
 
-    def _set_response(self, blocks):
-        self.client.client.messages.create.return_value = MagicMock(content=blocks)
+    def _set_response(self, blocks, input_tokens=100, output_tokens=50):
+        message = MagicMock(content=blocks)
+        message.usage.input_tokens = input_tokens
+        message.usage.output_tokens = output_tokens
+        self.client.client.messages.create.return_value = message
 
     def test_returns_input_from_tool_use_block(self):
         report = {
@@ -111,9 +115,26 @@ class TestGenerateSummary:
         text_block = MagicMock(type="text")
         self._set_response([text_block, tool_use])
 
-        result = self.client.generate_summary(self.target, "gh", "sess")
+        result, _ = self.client.generate_summary(self.target, "gh", "sess")
 
         assert result == report
+
+    def test_returns_usage_from_response(self):
+        tool_use = MagicMock(type="tool_use", input={"repositories": []})
+        tool_use.name = TOOL_NAME
+        self._set_response([tool_use], input_tokens=10_000, output_tokens=2_000)
+
+        _, usage = self.client.generate_summary(self.target, "gh", "sess")
+
+        rates = CONFIG.claude.pricing[CONFIG.claude.model]
+        expected_spend = (
+            10_000 * rates["input_usd_per_1m_tokens"]
+            + 2_000 * rates["output_usd_per_1m_tokens"]
+        ) / 1_000_000
+        assert isinstance(usage, SummaryUsage)
+        assert usage.input_tokens == 10_000
+        assert usage.output_tokens == 2_000
+        assert usage.spend_usd == pytest.approx(expected_spend)
 
     def test_raises_when_no_tool_use_block(self):
         text_block = MagicMock(type="text")

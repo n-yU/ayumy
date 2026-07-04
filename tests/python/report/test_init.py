@@ -6,8 +6,10 @@ from unittest.mock import patch
 
 import pytest
 
+from config import CONFIG
 from report import (
     JST,
+    SummaryUsage,
     date_to_range,
     get_target_date_range,
     get_version,
@@ -84,6 +86,25 @@ class TestGetTargetDateRange:
         since, until = get_target_date_range(target_date="2026-03-25..2026-03-28")
         assert since == datetime(2026, 3, 25, 0, 0, tzinfo=JST)
         assert until == datetime(2026, 3, 26, 0, 0, tzinfo=JST)
+
+
+class TestSummaryUsage:
+    def test_zero_tokens_produce_zero_spend(self):
+        usage = SummaryUsage.from_call(0, 0)
+        assert usage.input_tokens == 0
+        assert usage.output_tokens == 0
+        assert usage.spend_usd == 0.0
+
+    def test_spend_matches_configured_rates(self):
+        rates = CONFIG.claude.pricing[CONFIG.claude.model]
+        expected = (
+            1_000_000 * rates["input_usd_per_1m_tokens"]
+            + 500_000 * rates["output_usd_per_1m_tokens"]
+        ) / 1_000_000
+
+        usage = SummaryUsage.from_call(1_000_000, 500_000)
+
+        assert usage.spend_usd == pytest.approx(expected)
 
 
 class TestParseTargetDates:
