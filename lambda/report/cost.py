@@ -96,7 +96,7 @@ class CostStore:
 
     def compute_display(self, today: date) -> CostDisplay:
         """Build the Slack cost line inputs for the JST date `today`."""
-        current = self.fetch_month_summary(today.strftime("%Y-%m"))
+        current = self.fetch_month_summary(today.strftime("%Y-%m"), through_date=today)
 
         prev_last = today.replace(day=1) - timedelta(days=1)
         prev_day = min(today.day, prev_last.day)

@@ -184,3 +184,13 @@ class TestComputeDisplay:
         prev_query = self.store.table.query.call_args_list[1]
         condition = prev_query.kwargs["KeyConditionExpression"]
         assert "2026-02-28Z" in _condition_values(condition)
+
+    def test_caps_current_side_at_today(self):
+        self.store.table.query.return_value = {"Items": []}
+
+        # Future-dated backfill rows in the same month must not inflate the MTD total
+        self.store.compute_display(date(2026, 7, 5))
+
+        current_query = self.store.table.query.call_args_list[0]
+        condition = current_query.kwargs["KeyConditionExpression"]
+        assert "2026-07-05Z" in _condition_values(condition)
