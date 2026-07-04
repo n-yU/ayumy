@@ -7,6 +7,11 @@ claude:
   model: claude-sonnet-4-6
   # Maximum output tokens per Claude API request.
   max_tokens: 2048
+  # Unit prices per 1M tokens (USD) keyed by model id. `model` above must appear as a key.
+  pricing:
+    claude-sonnet-4-6:
+      input_usd_per_1m_tokens: 3.00
+      output_usd_per_1m_tokens: 15.00
 
 slack:
   # Per-repo headline character limit; multiple headlines aggregate into the 3000-char Slack section body.

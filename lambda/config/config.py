@@ -10,6 +10,7 @@ import yaml
 class ClaudeConfig:
     model: str
     max_tokens: int
+    pricing: dict[str, dict[str, float]]
 
 
 @dataclass(frozen=True)
@@ -41,8 +42,13 @@ def _load() -> Config:
     config_path = Path(__file__).parent / "config.yml"
     with config_path.open() as f:
         data = yaml.safe_load(f)
+    claude = ClaudeConfig(**data["claude"])
+    if claude.model not in claude.pricing:
+        raise ValueError(
+            f"claude.model '{claude.model}' has no entry in claude.pricing"
+        )
     return Config(
-        claude=ClaudeConfig(**data["claude"]),
+        claude=claude,
         slack=SlackConfig(**data["slack"]),
         github=GitHubConfig(**data["github"]),
         pipeline=PipelineConfig(**data["pipeline"]),
