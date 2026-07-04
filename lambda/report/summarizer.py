@@ -2,8 +2,10 @@
 
 import logging
 from datetime import datetime
+from typing import cast
 
 import anthropic
+import jsonschema
 
 from config import CONFIG
 
@@ -36,6 +38,42 @@ tags にはその日の作業内容を表す値を以下から選んでくださ
 {_TAG_GUIDANCE}
 GitHub の Issue/PR ラベル（enhancement など）に引きずられず、必ず上記のいずれかを使用してください。当てはまるものがない場合は other を使用してください。
 """
+_RESPONSE_SHAPE_SCHEMA = {
+    "type": "object",
+    "required": ["repositories"],
+    "properties": {
+        "repositories": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["name", "summary", "tags"],
+                "properties": {
+                    "name": {"type": "string"},
+                    "summary": {"type": "array", "items": {"type": "string"}},
+                    "tags": {"type": "array", "items": {"type": "string"}},
+                },
+            },
+        },
+    },
+}
+_VALUE_REPR_LIMIT = 200
+
+
+def _validate_response_shape(payload: object) -> ReportSummary:
+    try:
+        jsonschema.validate(payload, _RESPONSE_SHAPE_SCHEMA)
+    except jsonschema.ValidationError as e:
+        path = "/".join(str(p) for p in e.absolute_path) or "<root>"
+        value_repr = repr(e.instance)
+        if len(value_repr) > _VALUE_REPR_LIMIT:
+            value_repr = value_repr[:_VALUE_REPR_LIMIT] + "..."
+        summary_line = (
+            f"Claude API response shape invalid: "
+            f"path={path} validator={e.validator} expected={e.validator_value!r} "
+            f"got={type(e.instance).__name__} value={value_repr}"
+        )
+        raise ValueError(f"{summary_line}\n{e}") from e
+    return cast(ReportSummary, payload)
 
 
 class ValidationResult:
@@ -122,7 +160,8 @@ class SummaryClient:
         Returns the parsed report and the token / spend record for the API call.
 
         Raises:
-            ValueError: If the response contains no tool_use block for the expected tool.
+            ValueError: If the response contains no tool_use block for the expected tool,
+                or if the tool_use input violates the expected shape.
         """
         prompt = self.build_prompt(target_date, formatted_github, formatted_sessions)
         tool = self._build_tool_schema()
@@ -142,7 +181,7 @@ class SummaryClient:
 
         for block in message.content:
             if getattr(block, "type", None) == "tool_use" and block.name == TOOL_NAME:
-                return block.input, usage  # type: ignore[return-value]
+                return _validate_response_shape(block.input), usage
 
         raise ValueError(f"Claude API response missing tool_use block for {TOOL_NAME}.")
 

@@ -377,6 +377,8 @@ GitHub アクティビティと Claude Code セッションログの両方をコ
 
 出力にはリポジトリごとの作業要点（箇条書き）とタグの提案を含める
 
+Claude API の応答構造が想定を逸脱した場合、要約生成は原因を含む `ValueError` を投げ、[Classification Policy](#classification-policy) に沿って当該日のレポート生成を失敗させる。自動再試行は挟まず、運用者が `ayumy sync --report` で明示的に再実行する。検証範囲は必須項目と型に限定する
+
 ### Slack Notification
 Notion への書き込み完了後、Slack Web API の `chat.postMessage` で指定チャンネルに通知を送信する
 
