@@ -208,7 +208,7 @@ class SlackClient:
         )
 
         if cost is not None:
-            # No divider: cost block sits directly under the metrics caption per Plan Topic 1
+            # No divider: cost block groups with the metrics caption as a single visual row
             self._blocks.append(_context_block(_render_cost_block(cost)))
             self._fallback_parts.append(_render_cost_fallback(cost))
 
