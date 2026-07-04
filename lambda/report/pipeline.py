@@ -19,7 +19,7 @@ from . import (
     parse_target_dates,
     require_env,
 )
-from .cost import CostStore
+from .cost import CostDisplay, CostStore
 from .github import GitHubClient
 from .notice import Notice, NoticeSource
 from .notion import NotionClient
@@ -138,8 +138,8 @@ def run(
         token=require_env("SLACK_BOT_TOKEN"),
         channel=require_env("SLACK_CHANNEL"),
     )
-    cost_store = CostStore(require_env("AYUMY_COST_TABLE"))
     notice = Notice()
+    cost_store: CostStore | None = None
 
     try:
         session_client = SessionClient(require_env("AYUMY_S3_BUCKET"), notice=notice)
@@ -180,6 +180,7 @@ def run(
         )
         notion_client.init_data_source()
         summary_client = SummaryClient(require_env("ANTHROPIC_API_KEY"), notice=notice)
+        cost_store = CostStore(require_env("AYUMY_COST_TABLE"))
 
         for d in process_dates:
             if not target_date and d == primary_date:
@@ -235,17 +236,18 @@ def run(
             memory_limit_mb,
             timeout_seconds,
         )
-        try:
-            cost_display = cost_store.compute_display(datetime.now(JST).date())
-        except Exception:
-            # Broad: cost display is auxiliary; any failure here should not block metrics/notice notifications
-            notice.add(
-                NoticeSource.PIPELINE,
-                "Cost display computation failed; cost line omitted",
-                logger=logger,
-                exc_info=True,
-            )
-            cost_display = None
+        cost_display: CostDisplay | None = None
+        if cost_store is not None:
+            try:
+                cost_display = cost_store.compute_display(datetime.now(JST).date())
+            except Exception:
+                # Broad: cost display is auxiliary; any failure here should not block metrics/notice notifications
+                notice.add(
+                    NoticeSource.PIPELINE,
+                    "Cost display computation failed; cost line omitted",
+                    logger=logger,
+                    exc_info=True,
+                )
         slack_client.notify_metrics(
             elapsed,
             peak_memory_mb,

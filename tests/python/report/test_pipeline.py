@@ -334,6 +334,19 @@ class TestRun:
         slack_client.flush.assert_called_once()
         slack_client.send_notice_thread.assert_called_once()
 
+    def test_survives_cost_store_init_failure(self, run_patches):
+        run_patches["CostStore"].side_effect = RuntimeError("no env")
+        slack_client = run_patches["SlackClient"].return_value
+
+        with pytest.raises(RuntimeError):
+            run(source=None)
+
+        # Main-flow error still reaches Slack, and the metrics chain runs with cost=None
+        slack_client.notify_error.assert_called_once()
+        slack_client.notify_metrics.assert_called_once()
+        assert slack_client.notify_metrics.call_args.kwargs["cost"] is None
+        slack_client.flush.assert_called_once()
+
     def test_backfills_past_dates(self, run_patches):
         store = run_patches["SessionStore"].return_value
         store.scan_backfill_dates.return_value = [
