@@ -439,8 +439,8 @@ class TestNotifyMetricsWithCost:
             current_run_spend_usd=0.0340,
             monthly_spend_usd=1.23,
             spend_change_pct=8.0,
-            monthly_report_count=12,
-            report_count_change_pct=5.0,
+            monthly_call_count=12,
+            call_count_change_pct=5.0,
         )
 
     def test_block_contains_cost_metrics(self):
@@ -450,15 +450,15 @@ class TestNotifyMetricsWithCost:
         text = _blocks_text(_get_send_kwargs(self.client)["blocks"])
         assert "🧾 $0.0340" in text
         assert "💰 MTD $1.23 (MoM +8%)" in text
-        assert "🔁 12 reports (MoM +5%)" in text
+        assert "🔁 12 calls (MoM +5%)" in text
 
     def test_none_change_pct_omits_mom_fragment(self):
         cost = CostDisplay(
             current_run_spend_usd=0.0340,
             monthly_spend_usd=1.23,
             spend_change_pct=None,
-            monthly_report_count=12,
-            report_count_change_pct=None,
+            monthly_call_count=12,
+            call_count_change_pct=None,
         )
 
         self.client.notify_metrics(1.0, 100.0, "0.3.2", cost=cost)
@@ -467,15 +467,15 @@ class TestNotifyMetricsWithCost:
         text = _blocks_text(_get_send_kwargs(self.client)["blocks"])
         assert "MoM" not in text
         assert "MTD $1.23" in text
-        assert "12 reports" in text
+        assert "12 calls" in text
 
     def test_zero_change_pct_still_rendered(self):
         cost = CostDisplay(
             current_run_spend_usd=0.0340,
             monthly_spend_usd=1.23,
             spend_change_pct=0.0,
-            monthly_report_count=12,
-            report_count_change_pct=0.0,
+            monthly_call_count=12,
+            call_count_change_pct=0.0,
         )
 
         self.client.notify_metrics(1.0, 100.0, "0.3.2", cost=cost)

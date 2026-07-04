@@ -385,7 +385,7 @@ Notion への書き込み完了後、Slack Web API の `chat.postMessage` で指
 通知内容
 - Notion ページへのリンク（リポジトリごとに 1 行）。Claude API が生成した summary 箇条書きの先頭項目がある場合は 1 文サマリとしてリンクの後ろに付加する
 - 実行メトリクス: ayumy バージョン、経過時間（Lambda 実行時は timeout との比率）、ピークメモリ（Lambda 実行時は memory limit との比率）
-- Claude API コスト: 今回の実行の利用金額、当月累計・前月同期間比、当月レポート回数・前月同期間比。実行メトリクスと同じ context block に統合して 1 行で表示する。前月データが無く比率を計算できない項目は `(MoM ...)` 部分を丸ごと省略する（永続化された履歴の詳細は [Cost Execution Log Persistence](#cost-execution-log-persistence)）
+- Claude API コスト: 今回の実行の利用金額、当月累計・前月同期間比、当月の Claude API 呼び出し回数・前月同期間比。実行メトリクスと同じ context block に統合して 1 行で表示する。前月データが無く比率を計算できない項目は `(MoM ...)` 部分を丸ごと省略する（永続化された履歴の詳細は [Cost Execution Log Persistence](#cost-execution-log-persistence)）
 
 アクティビティが 0 件で Notion ページが作成されなかった場合は、正常稼働を示す簡易通知を送信する。処理中にエラーが発生した場合もエラー内容を通知する
 
@@ -421,16 +421,12 @@ Claude API 呼び出しのコスト管理として、要約生成のたびに 1 
 | | `input_tokens` | Number | 入力トークン数 |
 | | `output_tokens` | Number | 出力トークン数 |
 | | `spend_usd` | Number | 単価 × トークン数を実行時に計算した USD |
-| | `reported` | Boolean | Notion 書き込み成功時に true |
 
 </details>
 
 `year_month` と SK の日付部分は **実行時刻の JST** を基準に決まる（対象レポート日ではない）。理由は backfill 実行のコストも「支払いが発生した実行月」に含めることで、Anthropic の請求サイクルと Slack 表示（当月累計）を一致させるため
 
-書き込みは 2 段階に分ける
-
-- generate_summary 成功時に PutItem で `reported=false` を含む全 attribute を書き込む
-- create_report_pages 成功時に同じ SK に対して UpdateItem で `reported=true` に更新する
+書き込みは generate_summary 成功時に PutItem で全 attribute を 1 度書き込む。1 行 = 1 回の Claude API 呼び出しに対応するため、Slack に表示する月次「Claude API 呼び出し回数」は当月・前月同期間の行数をそのまま集計すればよい
 
 `model` と単価を行ごとに保持することで、期中でモデル差し替えや pricing 改定が起きても実行時点の値を遡って再解釈しない。過去分は無期限に保持し、TTL は設定しない
 
