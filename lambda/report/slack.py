@@ -190,12 +190,12 @@ class SlackClient:
         if cost is not None:
             run_text = f"🧾 ${cost.current_run_spend_usd:.4f}"
             mtd_text = f"💰 MTD ${cost.monthly_spend_usd:.2f}{_mom_suffix(cost.spend_change_pct)}"
-            reports_text = f"🔁 {cost.monthly_report_count} reports{_mom_suffix(cost.report_count_change_pct)}"
-            parts.extend([run_text, mtd_text, reports_text])
+            calls_text = f"🔁 {cost.monthly_call_count} calls{_mom_suffix(cost.call_count_change_pct)}"
+            parts.extend([run_text, mtd_text, calls_text])
             fallback += (
                 f", run ${cost.current_run_spend_usd:.4f}"
                 f", MTD ${cost.monthly_spend_usd:.2f}{_mom_suffix(cost.spend_change_pct)}"
-                f", {cost.monthly_report_count} reports{_mom_suffix(cost.report_count_change_pct)}"
+                f", {cost.monthly_call_count} calls{_mom_suffix(cost.call_count_change_pct)}"
             )
 
         self._append_with_divider(_context_block("  |  ".join(parts)))

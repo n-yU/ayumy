@@ -81,7 +81,7 @@ class TestProcessDate:
         assert notion_args[1] == SINCE
         assert notion_args[2] == UNTIL
 
-    def test_records_cost_before_and_after_notion(self, pipeline_clients):
+    def test_records_cost_after_summary_generation(self, pipeline_clients):
         session = make_session("my-repo")
         pipeline_clients["github_client"].fetch_activity.return_value = make_github(
             "my-repo", commits=[make_commit(sha="abc")]
@@ -91,18 +91,15 @@ class TestProcessDate:
             report,
             SummaryUsage(input_tokens=1000, output_tokens=200, spend_usd=0.012),
         )
-        pipeline_clients["cost_store"].start_record.return_value = "2026-03-28#exec"
         pipeline_clients["notion_client"].create_report_pages.return_value = []
 
         process_date(SINCE, UNTIL, session, **pipeline_clients)
 
         start = pipeline_clients["cost_store"].start_record
-        mark = pipeline_clients["cost_store"].mark_reported
         start.assert_called_once()
         target_date, usage = start.call_args.args
         assert target_date == date(2026, 3, 28)
         assert usage.spend_usd == 0.012
-        mark.assert_called_once_with("2026-03-28#exec")
 
     def test_notifies_validation_errors(self, pipeline_clients):
         session = make_session("repo")

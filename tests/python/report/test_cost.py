@@ -28,19 +28,18 @@ class TestStartRecord:
     def setup_method(self):
         self.store = _make_store()
 
-    def test_writes_row_with_reported_false(self):
+    def test_writes_row_without_reported_field(self):
         usage = SummaryUsage(input_tokens=1000, output_tokens=200, spend_usd=0.012)
 
-        sk = self.store.start_record(date(2026, 3, 28), usage)
+        self.store.start_record(date(2026, 3, 28), usage)
 
         self.store.table.put_item.assert_called_once()
         item = self.store.table.put_item.call_args.kwargs["Item"]
         assert item["target_date"] == "2026-03-28"
-        assert item["sk"] == sk
         assert item["input_tokens"] == 1000
         assert item["output_tokens"] == 200
         assert item["spend_usd"] == Decimal("0.012")
-        assert item["reported"] is False
+        assert "reported" not in item
 
     def test_year_month_and_sk_reflect_execution_time_in_jst(self):
         # 2026-07-01 UTC 14:30 = 2026-07-01 JST 23:30 → year_month "2026-07"
@@ -49,12 +48,12 @@ class TestStartRecord:
 
         with patch("report.cost.datetime") as mock_dt:
             mock_dt.now.return_value = frozen_utc
-            sk = self.store.start_record(date(2026, 6, 30), usage)
+            self.store.start_record(date(2026, 6, 30), usage)
 
         item = self.store.table.put_item.call_args.kwargs["Item"]
         assert item["year_month"] == "2026-07"
         assert item["target_date"] == "2026-06-30"
-        assert sk.startswith("2026-07-01#")
+        assert item["sk"].startswith("2026-07-01#")
         assert item["executed_at"] == frozen_utc.isoformat()
 
     def test_jst_midnight_boundary_uses_next_calendar_day(self):
@@ -64,11 +63,11 @@ class TestStartRecord:
 
         with patch("report.cost.datetime") as mock_dt:
             mock_dt.now.return_value = frozen_utc
-            sk = self.store.start_record(date(2026, 6, 30), usage)
+            self.store.start_record(date(2026, 6, 30), usage)
 
         item = self.store.table.put_item.call_args.kwargs["Item"]
         assert item["year_month"] == "2026-07"
-        assert sk.startswith("2026-07-01#")
+        assert item["sk"].startswith("2026-07-01#")
 
     def test_captures_active_model_and_pricing(self):
         usage = SummaryUsage(input_tokens=0, output_tokens=0, spend_usd=0.0)
@@ -80,23 +79,6 @@ class TestStartRecord:
         assert item["model"]
         assert item["input_usd_per_1m_tokens"] > 0
         assert item["output_usd_per_1m_tokens"] > 0
-
-
-class TestMarkReported:
-    def setup_method(self):
-        self.store = _make_store()
-
-    def test_updates_reported_flag_and_derives_year_month_from_sk(self):
-        self.store.mark_reported("2026-07-01#2026-07-01T00:00:00+00:00")
-
-        self.store.table.update_item.assert_called_once()
-        kwargs = self.store.table.update_item.call_args.kwargs
-        assert kwargs["Key"] == {
-            "year_month": "2026-07",
-            "sk": "2026-07-01#2026-07-01T00:00:00+00:00",
-        }
-        assert "reported" in kwargs["UpdateExpression"]
-        assert kwargs["ExpressionAttributeValues"] == {":true": True}
 
 
 class TestRunSpendAccumulator:
@@ -123,19 +105,19 @@ class TestFetchMonthSummary:
     def _query_returns(self, items):
         self.store.table.query.return_value = {"Items": items}
 
-    def test_sums_spend_and_counts_reported_items(self):
+    def test_sums_spend_and_counts_all_rows(self):
         self._query_returns(
             [
-                {"spend_usd": Decimal("0.10"), "reported": True},
-                {"spend_usd": Decimal("0.05"), "reported": False},
-                {"spend_usd": Decimal("0.02"), "reported": True},
+                {"spend_usd": Decimal("0.10")},
+                {"spend_usd": Decimal("0.05")},
+                {"spend_usd": Decimal("0.02")},
             ]
         )
 
         summary = self.store.fetch_month_summary("2026-03")
 
         assert summary.spend_usd == 0.17
-        assert summary.report_count == 2
+        assert summary.call_count == 3
 
     def test_applies_through_date_ceiling_to_sk(self):
         self._query_returns([])
@@ -151,7 +133,7 @@ class TestFetchMonthSummary:
 
         summary = self.store.fetch_month_summary("2026-03")
 
-        assert summary == MonthSummary(spend_usd=0.0, report_count=0)
+        assert summary == MonthSummary(spend_usd=0.0, call_count=0)
 
 
 class TestComputeDisplay:
@@ -163,13 +145,13 @@ class TestComputeDisplay:
         self.store.table.query.side_effect = [
             {
                 "Items": [
-                    {"spend_usd": Decimal("1.00"), "reported": True},
-                    {"spend_usd": Decimal("0.20"), "reported": True},
+                    {"spend_usd": Decimal("1.00")},
+                    {"spend_usd": Decimal("0.20")},
                 ]
             },
             {
                 "Items": [
-                    {"spend_usd": Decimal("1.00"), "reported": True},
+                    {"spend_usd": Decimal("1.00")},
                 ]
             },
         ]
@@ -181,26 +163,26 @@ class TestComputeDisplay:
         assert display.current_run_spend_usd == 0.06
         assert display.monthly_spend_usd == pytest.approx(1.20)
         assert display.spend_change_pct == pytest.approx(20.0)
-        assert display.monthly_report_count == 2
-        assert display.report_count_change_pct == pytest.approx(100.0)
+        assert display.monthly_call_count == 2
+        assert display.call_count_change_pct == pytest.approx(100.0)
 
     def test_first_month_returns_none_change_pct(self):
         self.store.table.query.side_effect = [
-            {"Items": [{"spend_usd": Decimal("0.10"), "reported": True}]},
+            {"Items": [{"spend_usd": Decimal("0.10")}]},
             {"Items": []},
         ]
 
         display = self.store.compute_display(date(2026, 7, 5))
 
         assert display.spend_change_pct is None
-        assert display.report_count_change_pct is None
+        assert display.call_count_change_pct is None
 
     def test_caps_prev_day_at_prev_month_last_day(self):
         # March 31 → February compare should cap at Feb 28 (2026 is not a leap year)
         with patch.object(
             self.store,
             "fetch_month_summary",
-            return_value=MonthSummary(spend_usd=0.0, report_count=0),
+            return_value=MonthSummary(spend_usd=0.0, call_count=0),
         ) as mock_fetch:
             self.store.compute_display(date(2026, 3, 31))
 
@@ -211,7 +193,7 @@ class TestComputeDisplay:
         with patch.object(
             self.store,
             "fetch_month_summary",
-            return_value=MonthSummary(spend_usd=0.0, report_count=0),
+            return_value=MonthSummary(spend_usd=0.0, call_count=0),
         ) as mock_fetch:
             self.store.compute_display(date(2026, 7, 5))
 

@@ -40,7 +40,7 @@
    - Save arguments to configuration file: `Y`
 3. Outputs に表示される `ReportFunctionName` と `SessionBucketName` を控える（「7. クライアントマシン」で使用）
 
-2回目以降のデプロイは `sam build && sam deploy` のみでよい。デプロイ用 S3 バケットを変更する場合は `samconfig.toml` の `s3_bucket` を編集し、`sam deploy --no-resolve-s3` で実行する。
+2回目以降のデプロイは `make lambda-deploy` のみでよい。デプロイ用 S3 バケットを変更する場合は `samconfig.toml` の `s3_bucket` を編集し、`sam deploy --no-resolve-s3` で実行する
 
 ## 5. GitHub PAT
 1. GitHub Settings → Developer settings → Fine-grained personal access tokens で PAT を作成

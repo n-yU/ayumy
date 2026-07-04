@@ -93,7 +93,7 @@ def process_date(
         usage.spend_usd,
     )
 
-    cost_sk = cost_store.start_record(since.date(), usage)
+    cost_store.start_record(since.date(), usage)
 
     validation = summary_client.validate_report(report)
     if validation:
@@ -109,8 +109,6 @@ def process_date(
     )
     for name, url in pages:
         logger.info("Created Notion page: %s -> %s", name, url)
-
-    cost_store.mark_reported(cost_sk)
 
     skipped_repos = [
         r["name"] for r in report["repositories"] if r["name"] not in github_activity
