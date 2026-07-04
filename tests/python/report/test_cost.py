@@ -176,21 +176,23 @@ class TestComputeDisplay:
         assert display.avg_change_pct is None
 
     def test_caps_prev_day_at_prev_month_last_day(self):
-        self.store.table.query.return_value = {"Items": []}
-
         # March 31 → February compare should cap at Feb 28 (2026 is not a leap year)
-        self.store.compute_display(date(2026, 3, 31))
+        with patch.object(
+            self.store,
+            "fetch_month_summary",
+            return_value=MonthSummary(spend_usd=0.0, report_count=0),
+        ) as mock_fetch:
+            self.store.compute_display(date(2026, 3, 31))
 
-        prev_query = self.store.table.query.call_args_list[1]
-        condition = prev_query.kwargs["KeyConditionExpression"]
-        assert "2026-02-28Z" in _condition_values(condition)
+        assert mock_fetch.call_args_list[1].kwargs["through_date"] == date(2026, 2, 28)
 
     def test_caps_current_side_at_today(self):
-        self.store.table.query.return_value = {"Items": []}
-
         # Future-dated backfill rows in the same month must not inflate the MTD total
-        self.store.compute_display(date(2026, 7, 5))
+        with patch.object(
+            self.store,
+            "fetch_month_summary",
+            return_value=MonthSummary(spend_usd=0.0, report_count=0),
+        ) as mock_fetch:
+            self.store.compute_display(date(2026, 7, 5))
 
-        current_query = self.store.table.query.call_args_list[0]
-        condition = current_query.kwargs["KeyConditionExpression"]
-        assert "2026-07-05Z" in _condition_values(condition)
+        assert mock_fetch.call_args_list[0].kwargs["through_date"] == date(2026, 7, 5)
