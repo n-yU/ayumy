@@ -143,6 +143,45 @@ class TestGenerateSummary:
         with pytest.raises(ValueError, match=TOOL_NAME):
             self.client.generate_summary(self.target, "gh", "sess")
 
+    def _set_tool_use_input(self, payload):
+        tool_use = MagicMock(type="tool_use", input=payload)
+        tool_use.name = TOOL_NAME
+        self._set_response([tool_use])
+
+    def test_raises_when_repositories_field_missing(self):
+        self._set_tool_use_input({})
+
+        with pytest.raises(ValueError, match="repositories") as exc:
+            self.client.generate_summary(self.target, "gh", "sess")
+        assert "shape invalid" in str(exc.value)
+
+    def test_raises_when_repositories_not_list(self):
+        self._set_tool_use_input({"repositories": "oops"})
+
+        with pytest.raises(ValueError, match="path=repositories") as exc:
+            self.client.generate_summary(self.target, "gh", "sess")
+        assert "got=str" in str(exc.value)
+
+    def test_raises_when_repository_item_not_dict(self):
+        self._set_tool_use_input({"repositories": ["not a dict"]})
+
+        with pytest.raises(ValueError, match="path=repositories/0") as exc:
+            self.client.generate_summary(self.target, "gh", "sess")
+        assert "got=str" in str(exc.value)
+
+    def test_raises_when_repository_field_type_mismatch(self):
+        self._set_tool_use_input(
+            {
+                "repositories": [
+                    {"name": 123, "summary": ["s1", "s2"], "tags": ["CI/CD"]}
+                ]
+            }
+        )
+
+        with pytest.raises(ValueError, match="path=repositories/0/name") as exc:
+            self.client.generate_summary(self.target, "gh", "sess")
+        assert "got=int" in str(exc.value)
+
 
 class TestValidationResult:
     def test_bool_empty(self):
