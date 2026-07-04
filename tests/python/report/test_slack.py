@@ -8,6 +8,7 @@ from slack_sdk.errors import SlackApiError
 
 from config import CONFIG
 from report import JST
+from report.cost import CostDisplay
 from report.notice import Notice, NoticeSource
 from report.slack import (
     SECTION_TEXT_MAX,
@@ -429,6 +430,72 @@ class TestNotifyMetrics:
         assert "v0.2.1" in fallback
         assert "45.0 / 300s (15%)" in fallback
         assert "128 / 256 MB (50%)" in fallback
+
+
+class TestNotifyMetricsWithCost:
+    def setup_method(self):
+        self.client = _make_client()
+        self.cost = CostDisplay(
+            current_run_spend_usd=0.06,
+            monthly_spend_usd=1.23,
+            spend_change_pct=8.0,
+            monthly_report_count=12,
+            report_count_change_pct=5.0,
+            avg_per_report_usd=0.10,
+            avg_change_pct=3.0,
+        )
+
+    def test_block_contains_cost_line(self):
+        self.client.notify_metrics(1.0, 100.0, "0.3.2", cost=self.cost)
+        self.client.flush()
+
+        text = _blocks_text(_get_send_kwargs(self.client)["blocks"])
+        assert "🧾 $0.06" in text
+        assert "💰 MTD $1.23 (MoM +8%)" in text
+        assert "🔁 12 reports (MoM +5%)" in text
+        assert "💵 avg $0.10 (MoM +3%)" in text
+
+    def test_no_prev_data_renders_dash(self):
+        cost = CostDisplay(
+            current_run_spend_usd=0.06,
+            monthly_spend_usd=1.23,
+            spend_change_pct=None,
+            monthly_report_count=12,
+            report_count_change_pct=None,
+            avg_per_report_usd=0.10,
+            avg_change_pct=None,
+        )
+
+        self.client.notify_metrics(1.0, 100.0, "0.3.2", cost=cost)
+        self.client.flush()
+
+        text = _blocks_text(_get_send_kwargs(self.client)["blocks"])
+        assert "MoM —" in text
+        assert "MoM +" not in text
+        assert "MoM -" not in text
+
+    def test_cost_block_follows_metrics_without_divider(self):
+        self.client.notify_metrics(1.0, 100.0, "0.3.2", cost=self.cost)
+        self.client.flush()
+
+        blocks = _get_send_kwargs(self.client)["blocks"]
+        # Metrics context block then cost context block, no divider between
+        assert [b["type"] for b in blocks] == ["context", "context"]
+
+    def test_fallback_text_includes_cost(self):
+        self.client.notify_metrics(1.0, 100.0, "0.3.2", cost=self.cost)
+        self.client.flush()
+
+        fallback = self.client.client.chat_postMessage.call_args.kwargs["text"]
+        assert "run $0.06" in fallback
+        assert "MTD $1.23 (MoM +8%)" in fallback
+
+    def test_cost_is_omitted_when_none(self):
+        self.client.notify_metrics(1.0, 100.0, "0.3.2")
+        self.client.flush()
+
+        blocks = _get_send_kwargs(self.client)["blocks"]
+        assert len(blocks) == 1
 
 
 class TestNotifyValidationErrors:

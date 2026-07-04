@@ -138,6 +138,7 @@ def run(
         token=require_env("SLACK_BOT_TOKEN"),
         channel=require_env("SLACK_CHANNEL"),
     )
+    cost_store = CostStore(require_env("AYUMY_COST_TABLE"))
     notice = Notice()
 
     try:
@@ -179,7 +180,6 @@ def run(
         )
         notion_client.init_data_source()
         summary_client = SummaryClient(require_env("ANTHROPIC_API_KEY"), notice=notice)
-        cost_store = CostStore(require_env("AYUMY_COST_TABLE"))
 
         for d in process_dates:
             if not target_date and d == primary_date:
@@ -235,10 +235,12 @@ def run(
             memory_limit_mb,
             timeout_seconds,
         )
+        cost_display = cost_store.compute_display(datetime.now(JST).date())
         slack_client.notify_metrics(
             elapsed,
             peak_memory_mb,
             get_version(),
+            cost=cost_display,
             memory_limit_mb=memory_limit_mb,
             timeout_seconds=timeout_seconds,
         )
