@@ -158,7 +158,7 @@ class TestComputeDisplay:
     def setup_method(self):
         self.store = _make_store()
 
-    def test_computes_mom_for_all_three_metrics(self):
+    def test_computes_mom_for_both_metrics(self):
         # First query: current month; second query: prev month
         self.store.table.query.side_effect = [
             {
@@ -183,8 +183,6 @@ class TestComputeDisplay:
         assert display.spend_change_pct == pytest.approx(20.0)
         assert display.monthly_report_count == 2
         assert display.report_count_change_pct == pytest.approx(100.0)
-        assert display.avg_per_report_usd == pytest.approx(0.60)
-        assert display.avg_change_pct == pytest.approx(-40.0)
 
     def test_first_month_returns_none_change_pct(self):
         self.store.table.query.side_effect = [
@@ -196,7 +194,6 @@ class TestComputeDisplay:
 
         assert display.spend_change_pct is None
         assert display.report_count_change_pct is None
-        assert display.avg_change_pct is None
 
     def test_caps_prev_day_at_prev_month_last_day(self):
         # March 31 → February compare should cap at Feb 28 (2026 is not a leap year)

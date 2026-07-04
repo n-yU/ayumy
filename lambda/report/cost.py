@@ -27,8 +27,6 @@ class CostDisplay:
     spend_change_pct: float | None
     monthly_report_count: int
     report_count_change_pct: float | None
-    avg_per_report_usd: float
-    avg_change_pct: float | None
 
 
 def _pct_change(current: float, prev: float) -> float | None:
@@ -107,11 +105,6 @@ class CostStore:
             prev_last.strftime("%Y-%m"), through_date=prev_through
         )
 
-        current_avg = (
-            current.spend_usd / current.report_count if current.report_count else 0.0
-        )
-        prev_avg = prev.spend_usd / prev.report_count if prev.report_count else 0.0
-
         return CostDisplay(
             current_run_spend_usd=self._run_spend_usd,
             monthly_spend_usd=current.spend_usd,
@@ -120,8 +113,6 @@ class CostStore:
             report_count_change_pct=_pct_change(
                 current.report_count, prev.report_count
             ),
-            avg_per_report_usd=current_avg,
-            avg_change_pct=_pct_change(current_avg, prev_avg),
         )
 
     def _query_all(self, condition) -> list[dict]:

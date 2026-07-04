@@ -436,66 +436,82 @@ class TestNotifyMetricsWithCost:
     def setup_method(self):
         self.client = _make_client()
         self.cost = CostDisplay(
-            current_run_spend_usd=0.06,
+            current_run_spend_usd=0.0340,
             monthly_spend_usd=1.23,
             spend_change_pct=8.0,
             monthly_report_count=12,
             report_count_change_pct=5.0,
-            avg_per_report_usd=0.10,
-            avg_change_pct=3.0,
         )
 
-    def test_block_contains_cost_line(self):
+    def test_block_contains_cost_metrics(self):
         self.client.notify_metrics(1.0, 100.0, "0.3.2", cost=self.cost)
         self.client.flush()
 
         text = _blocks_text(_get_send_kwargs(self.client)["blocks"])
-        assert "🧾 $0.06" in text
+        assert "🧾 $0.0340" in text
         assert "💰 MTD $1.23 (MoM +8%)" in text
         assert "🔁 12 reports (MoM +5%)" in text
-        assert "💵 avg $0.10 (MoM +3%)" in text
 
-    def test_no_prev_data_renders_dash(self):
+    def test_none_change_pct_omits_mom_fragment(self):
         cost = CostDisplay(
-            current_run_spend_usd=0.06,
+            current_run_spend_usd=0.0340,
             monthly_spend_usd=1.23,
             spend_change_pct=None,
             monthly_report_count=12,
             report_count_change_pct=None,
-            avg_per_report_usd=0.10,
-            avg_change_pct=None,
         )
 
         self.client.notify_metrics(1.0, 100.0, "0.3.2", cost=cost)
         self.client.flush()
 
         text = _blocks_text(_get_send_kwargs(self.client)["blocks"])
-        assert "MoM —" in text
-        assert "MoM +" not in text
-        assert "MoM -" not in text
+        assert "MoM" not in text
+        assert "MTD $1.23" in text
+        assert "12 reports" in text
 
-    def test_cost_block_follows_metrics_without_divider(self):
+    def test_zero_change_pct_still_rendered(self):
+        cost = CostDisplay(
+            current_run_spend_usd=0.0340,
+            monthly_spend_usd=1.23,
+            spend_change_pct=0.0,
+            monthly_report_count=12,
+            report_count_change_pct=0.0,
+        )
+
+        self.client.notify_metrics(1.0, 100.0, "0.3.2", cost=cost)
+        self.client.flush()
+
+        text = _blocks_text(_get_send_kwargs(self.client)["blocks"])
+        assert "MoM +0%" in text
+
+    def test_metrics_and_cost_share_single_context_block(self):
         self.client.notify_metrics(1.0, 100.0, "0.3.2", cost=self.cost)
         self.client.flush()
 
         blocks = _get_send_kwargs(self.client)["blocks"]
-        # Metrics context block then cost context block, no divider between
-        assert [b["type"] for b in blocks] == ["context", "context"]
+        assert [b["type"] for b in blocks] == ["context"]
+        # All metrics and cost fields share the same caption line
+        caption = blocks[0]["elements"][0]["text"]
+        assert "🔖 v0.3.2" in caption
+        assert "🧾 $0.0340" in caption
+        assert "💰 MTD" in caption
 
     def test_fallback_text_includes_cost(self):
         self.client.notify_metrics(1.0, 100.0, "0.3.2", cost=self.cost)
         self.client.flush()
 
         fallback = self.client.client.chat_postMessage.call_args.kwargs["text"]
-        assert "run $0.06" in fallback
+        assert "run $0.0340" in fallback
         assert "MTD $1.23 (MoM +8%)" in fallback
 
     def test_cost_is_omitted_when_none(self):
         self.client.notify_metrics(1.0, 100.0, "0.3.2")
         self.client.flush()
 
-        blocks = _get_send_kwargs(self.client)["blocks"]
-        assert len(blocks) == 1
+        text = _blocks_text(_get_send_kwargs(self.client)["blocks"])
+        assert "🧾" not in text
+        assert "💰" not in text
+        assert "🔁" not in text
 
 
 class TestNotifyValidationErrors:
