@@ -20,7 +20,7 @@ flowchart TB
     S3[(S3 Bucket<br/>session logs)]
     Schedule[EventBridge<br/>daily at JST 00:00]
     Lambda[AWS Lambda<br/>report]
-    DDB[(DynamoDB<br/>session metadata)]
+    DDB[(DynamoDB<br/>session metadata + cost log)]
 
     subgraph External[External APIs]
         GH[GitHub API]
@@ -47,7 +47,7 @@ flowchart TB
 |---|---|
 | AWS Lambda | レポート生成の実行環境 |
 | AWS S3 | セッションログの保管 |
-| Amazon DynamoDB | セッションメタデータの集約 |
+| Amazon DynamoDB | セッションメタデータと Claude API コスト履歴の集約 |
 | Amazon EventBridge Scheduler | 日次の定期実行 |
 | Python 3.12 | メインスクリプト（`requests`, `anthropic`, `PyGithub`） |
 | GitHub API (REST) | 開発アクティビティの取得 |
