@@ -79,10 +79,16 @@ def process_date(
         slack_client.notify_no_activity(since)
         return
 
-    report = summary_client.generate_summary(
+    report, usage = summary_client.generate_summary(
         since,
         github_activity.format(),
         session_activity.format(),
+    )
+    logger.info(
+        "Claude API usage: input=%d, output=%d, spend=%.6f USD",
+        usage.input_tokens,
+        usage.output_tokens,
+        usage.spend_usd,
     )
 
     validation = summary_client.validate_report(report)

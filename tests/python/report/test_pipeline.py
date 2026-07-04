@@ -9,7 +9,7 @@ import pytest
 from botocore.exceptions import ClientError
 
 from config import CONFIG
-from report import JST, SessionActivity
+from report import JST, SessionActivity, SummaryUsage
 from report.github import GitHubActivity
 from report.pipeline import process_date, run
 from report.summarizer import ValidationResult
@@ -27,6 +27,8 @@ from ._builders import (
 # Default JST day window used across most tests
 SINCE = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
 UNTIL = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+
+_STUB_USAGE = SummaryUsage(input_tokens=0, output_tokens=0, spend_usd=0.0)
 
 
 def _make_report(repos=None):
@@ -61,7 +63,10 @@ class TestProcessDate:
                 }
             ]
         )
-        pipeline_clients["summary_client"].generate_summary.return_value = report
+        pipeline_clients["summary_client"].generate_summary.return_value = (
+            report,
+            _STUB_USAGE,
+        )
         pipeline_clients["notion_client"].create_report_pages.return_value = [
             ("my-repo", "https://notion.so/page1"),
         ]
@@ -91,7 +96,10 @@ class TestProcessDate:
                 }
             ]
         )
-        pipeline_clients["summary_client"].generate_summary.return_value = report
+        pipeline_clients["summary_client"].generate_summary.return_value = (
+            report,
+            _STUB_USAGE,
+        )
         invalid = ValidationResult()
         invalid.invalid_tags = {"repo": ["BadTag"]}
         pipeline_clients["summary_client"].validate_report.return_value = invalid
@@ -113,7 +121,10 @@ class TestProcessDate:
         report = _make_report(
             [{"name": "my-repo", "summary": ["work"], "tags": []}],
         )
-        pipeline_clients["summary_client"].generate_summary.return_value = report
+        pipeline_clients["summary_client"].generate_summary.return_value = (
+            report,
+            _STUB_USAGE,
+        )
         pipeline_clients["notion_client"].create_report_pages.return_value = []
 
         process_date(SINCE, UNTIL, session, **pipeline_clients)
@@ -148,7 +159,10 @@ class TestProcessDate:
                 }
             ]
         )
-        pipeline_clients["summary_client"].generate_summary.return_value = report
+        pipeline_clients["summary_client"].generate_summary.return_value = (
+            report,
+            _STUB_USAGE,
+        )
         pipeline_clients["notion_client"].create_report_pages.return_value = []
 
         process_date(SINCE, UNTIL, session, **pipeline_clients)
