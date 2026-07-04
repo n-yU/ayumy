@@ -204,6 +204,7 @@ def run(
             except Exception as e:
                 # Broad: pipeline loop classifies per-day failure into error or warning
                 if not target_date and d == primary_date:
+                    logger.exception("Report generation failed for %s", date_str)
                     slack_client.notify_error(day_since, e)
                     e._notified = True  # type: ignore[attr-defined]
                     raise

@@ -373,18 +373,27 @@ class TestRun:
         run(source=None)
         assert store.fetch_sessions.call_count == CONFIG.pipeline.max_backfill + 1
 
-    def test_notify_on_primary_failure(self, run_patches):
+    def test_notify_on_primary_failure(self, run_patches, caplog):
         store = run_patches["SessionStore"].return_value
         store.fetch_sessions.side_effect = RuntimeError("DynamoDB error")
         slack_client = run_patches["SlackClient"].return_value
 
-        with pytest.raises(RuntimeError, match="DynamoDB error"):
+        with (
+            caplog.at_level(logging.ERROR, logger="report.pipeline"),
+            pytest.raises(RuntimeError, match="DynamoDB error"),
+        ):
             run(source=None)
 
         slack_client.notify_error.assert_called_once()
         # Metrics should still be sent on failure (finally block)
         slack_client.notify_metrics.assert_called_once()
         slack_client.flush.assert_called_once()
+        errors = [r for r in caplog.records if r.levelno == logging.ERROR]
+        assert any(
+            "Report generation failed for 2026-03-28" in r.getMessage()
+            and r.exc_info is not None
+            for r in errors
+        )
 
     def test_backfill_failure_does_not_stop_primary(self, run_patches):
         store = run_patches["SessionStore"].return_value
