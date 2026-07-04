@@ -8,7 +8,13 @@ import pytest
 from config import CONFIG
 from report import JST, SummaryUsage
 from report.notice import Notice
-from report.summarizer import _SYSTEM_PROMPT, TOOL_NAME, SummaryClient, ValidationResult
+from report.summarizer import (
+    _SYSTEM_PROMPT,
+    _VALUE_REPR_LIMIT,
+    TOOL_NAME,
+    SummaryClient,
+    ValidationResult,
+)
 from report.tags import ALLOWED_TAG_NAMES, TAG_DEFINITIONS
 
 
@@ -181,6 +187,18 @@ class TestGenerateSummary:
         with pytest.raises(ValueError, match="path=repositories/0/name") as exc:
             self.client.generate_summary(self.target, "gh", "sess")
         assert "got=int" in str(exc.value)
+
+    def test_truncates_long_instance_value_in_error_message(self):
+        long_value = "x" * (_VALUE_REPR_LIMIT * 2)
+        self._set_tool_use_input({"repositories": long_value})
+
+        with pytest.raises(ValueError) as exc:
+            self.client.generate_summary(self.target, "gh", "sess")
+
+        summary_line = str(exc.value).split("\n", 1)[0]
+        assert summary_line.endswith("...")
+        value_portion = summary_line.split("value=", 1)[1]
+        assert len(value_portion) <= _VALUE_REPR_LIMIT + len("...")
 
 
 class TestValidationResult:
