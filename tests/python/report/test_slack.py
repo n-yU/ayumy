@@ -107,7 +107,7 @@ class TestNotify:
 
         kwargs = _get_send_kwargs(client)
         text = _blocks_text(kwargs["blocks"])
-        assert "🗒️ Session-only: notes-repo" in text
+        assert "📓 Session-only: notes-repo" in text
 
     def test_session_only_repos_with_no_pages(self):
         client = _make_client()
@@ -119,7 +119,7 @@ class TestNotify:
 
         kwargs = _get_send_kwargs(client)
         text = _blocks_text(kwargs["blocks"])
-        assert "🗒️ Session-only: notes-repo" in text
+        assert "📓 Session-only: notes-repo" in text
 
     def test_block_structure(self):
         client = _make_client()
@@ -345,7 +345,7 @@ class TestNotifySessionOnly:
 
         blocks = _get_send_kwargs(client)["blocks"]
         assert blocks[0]["type"] == "header"
-        assert "🗒️" in blocks[0]["text"]["text"]
+        assert "📓" in blocks[0]["text"]["text"]
         assert blocks[1]["type"] == "section"
 
 

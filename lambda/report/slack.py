@@ -104,7 +104,7 @@ class SlackClient:
         blocks = [_header_block(title), _section_block(body_text)]
         if session_only_repos:
             blocks.append(
-                _context_block(f"🗒️ Session-only: {', '.join(session_only_repos)}")
+                _context_block(f"📓 Session-only: {', '.join(session_only_repos)}")
             )
         self._append_with_divider(*blocks)
         self._fallback_parts.append(f"{title}: {fallback_suffix}")
@@ -158,7 +158,7 @@ class SlackClient:
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
         repos_text = ", ".join(session_only_repos)
         body = f"Session-only: {repos_text}"
-        self._append_report_section("🗒️", date_str, body, f"Session-only: {repos_text}")
+        self._append_report_section("📓", date_str, body, f"Session-only: {repos_text}")
 
     def notify_validation_errors(
         self,
