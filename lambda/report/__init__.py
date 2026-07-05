@@ -1,7 +1,7 @@
 """Ayumy daily report generator."""
 
 import os
-from collections.abc import KeysView
+from collections.abc import Container, KeysView
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
@@ -55,6 +55,12 @@ class SessionActivity:
         self, key: str, default: list[SessionInfo] | None = None
     ) -> list[SessionInfo] | None:
         return self._data.get(key, default)
+
+    def without(self, repos: Container[str]) -> "SessionActivity":
+        """Return a new SessionActivity with the given repos removed; used to strip session-only entries from the Claude prompt input."""
+        return SessionActivity(
+            {name: entries for name, entries in self._data.items() if name not in repos}
+        )
 
     def format(self) -> str:
         """Format session logs as the Markdown block consumed by the Claude API prompt."""

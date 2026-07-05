@@ -98,12 +98,14 @@ class SlackClient:
         date_str: str,
         body_text: str,
         fallback_suffix: str,
-        skipped_repos: list[str] | None = None,
+        session_only_repos: list[str] | None = None,
     ) -> None:
         title = f"{emoji} Daily Report ({date_str})"
         blocks = [_header_block(title), _section_block(body_text)]
-        if skipped_repos:
-            blocks.append(_context_block(f"⚠️ Skipped: {', '.join(skipped_repos)}"))
+        if session_only_repos:
+            blocks.append(
+                _context_block(f"📓 Session-only: {', '.join(session_only_repos)}")
+            )
         self._append_with_divider(*blocks)
         self._fallback_parts.append(f"{title}: {fallback_suffix}")
 
@@ -112,9 +114,9 @@ class SlackClient:
         target_date: datetime,
         report: ReportSummary,
         pages: list[tuple[str, str]],
-        skipped_repos: list[str] | None = None,
+        session_only_repos: list[str] | None = None,
     ) -> None:
-        """`skipped_repos` covers repos that appeared in `report` but were dropped during Notion page creation."""
+        """`session_only_repos` are repos that had Claude Code sessions but no GitHub activity; they were excluded from the Claude summary input and get surfaced here as a context row."""
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
 
         if pages:
@@ -134,7 +136,7 @@ class SlackClient:
                 date_str,
                 "\n".join(page_lines),
                 f"{len(pages)} page(s) created",
-                skipped_repos=skipped_repos,
+                session_only_repos=session_only_repos,
             )
         else:
             self._append_report_section(
@@ -142,12 +144,21 @@ class SlackClient:
                 date_str,
                 "No pages created",
                 "No pages created",
-                skipped_repos=skipped_repos,
+                session_only_repos=session_only_repos,
             )
 
     def notify_no_activity(self, target_date: datetime) -> None:
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
         self._append_report_section("💤", date_str, "No activity", "No activity")
+
+    def notify_session_only(
+        self, target_date: datetime, session_only_repos: list[str]
+    ) -> None:
+        """Send when every repo on this date is session-only; Claude summary is skipped and no Notion pages exist."""
+        date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
+        repos_text = ", ".join(session_only_repos)
+        body = f"Session-only: {repos_text}"
+        self._append_report_section("📓", date_str, body, f"Session-only: {repos_text}")
 
     def notify_validation_errors(
         self,

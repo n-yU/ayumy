@@ -52,7 +52,7 @@ push を伴わずにセッションだけ転送したい場合、または hook 
 
 ## Config
 - 使用する Claude モデルなど各種設定は [lambda/config/config.yml](../lambda/config/config.yml) で変更できる
-- 編集後は `sam deploy` で Lambda に反映する
+- 編集後は `make lambda-deploy` で Lambda に反映する
 
 ## Reading Notion Reports
 1 日 × リポジトリ単位で Notion ページが作成される。GitHub アクティビティが 0 件のリポジトリにはページは作成されない
@@ -97,6 +97,12 @@ Notion への書き込み完了後、以下の情報が Slack に届く。アク
 - リポジトリごとの Notion ページリンク
 - 実行メトリクス: バージョン、経過時間、ピークメモリ
 - Claude API コスト: 今回の実行の利用金額、当月累計、当月の Claude API 呼び出し回数。月次項目には前月同期間との差分（`MoM ±X%`）を並記し、前月データが無く計算できない項目では `(MoM ...)` を表示しない
+
+Claude Code で作業したが commit / push まで進まなかったリポジトリは Notion ページが作成されず、Slack 通知にリポジトリ名だけが表示される
+
+- 全リポジトリが該当する日は Daily Report の代わりに専用の簡易通知が届く
+- 一部リポジトリのみ該当する日は通常の Daily Report の下部にリポジトリ名が並ぶ
+- 後日 push で追いつけば、その日のレポートは自動で再生成される
 
 ### CloudWatch Logs の確認
 Lambda の詳細ログは CloudWatch Logs に出力される。Slack 通知だけでは分からないエラー原因や API レスポンスを確認したい場合に参照する

@@ -81,10 +81,27 @@ def process_date(
         slack_client.notify_no_activity(since)
         return
 
+    session_only_repos = sorted(
+        r for r in session_activity.keys() if r not in github_activity
+    )
+    effective_sessions = (
+        session_activity.without(session_only_repos)
+        if session_only_repos
+        else session_activity
+    )
+
+    if not github_activity and not effective_sessions:
+        logger.info(
+            "All repos are session-only, skipping Claude summary: %s",
+            session_only_repos,
+        )
+        slack_client.notify_session_only(since, session_only_repos)
+        return
+
     report, usage = summary_client.generate_summary(
         since,
         github_activity.format(),
-        session_activity.format(),
+        effective_sessions.format(),
     )
     logger.info(
         "Claude API usage: input=%d, output=%d, spend=%.6f USD",
@@ -110,11 +127,9 @@ def process_date(
     for name, url in pages:
         logger.info("Created Notion page: %s -> %s", name, url)
 
-    skipped_repos = [
-        r["name"] for r in report["repositories"] if r["name"] not in github_activity
-    ]
-
-    slack_client.notify(since, report, pages, skipped_repos)
+    slack_client.notify(
+        since, report, pages, session_only_repos=session_only_repos or None
+    )
 
 
 def run(
