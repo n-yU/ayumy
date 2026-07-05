@@ -569,7 +569,7 @@ Lambda 関数の環境変数として設定する。機密情報は AWS Secrets 
 AWS SAM（[template.yaml](../template.yaml)）で Lambda 関数、EventBridge Scheduler、IAM ロール、S3 バケット、DynamoDB テーブルを管理する
 
 ```bash
-sam build && sam deploy
+make lambda-deploy
 ```
 
 ## Operational Considerations

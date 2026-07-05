@@ -52,7 +52,7 @@ push を伴わずにセッションだけ転送したい場合、または hook 
 
 ## Config
 - 使用する Claude モデルなど各種設定は [lambda/config/config.yml](../lambda/config/config.yml) で変更できる
-- 編集後は `sam deploy` で Lambda に反映する
+- 編集後は `make lambda-deploy` で Lambda に反映する
 
 ## Reading Notion Reports
 1 日 × リポジトリ単位で Notion ページが作成される。GitHub アクティビティが 0 件のリポジトリにはページは作成されない
