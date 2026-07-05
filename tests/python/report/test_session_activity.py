@@ -42,3 +42,24 @@ class TestSessionActivityFormat:
         assert activity.get("repo") == []
         assert activity.get("missing") is None
         assert activity.get("missing", []) == []
+
+
+class TestSessionActivityWithout:
+    def test_removes_named_repos(self):
+        activity = SessionActivity({"a": [], "b": [], "c": []})
+        result = activity.without(["b"])
+        assert set(result.keys()) == {"a", "c"}
+
+    def test_returns_new_instance(self):
+        activity = SessionActivity({"a": [], "b": []})
+        result = activity.without(["a"])
+        assert result is not activity
+        assert set(activity.keys()) == {"a", "b"}
+
+    def test_ignores_unknown_names(self):
+        activity = SessionActivity({"a": []})
+        assert set(activity.without(["missing"]).keys()) == {"a"}
+
+    def test_empty_exclusion_returns_full_copy(self):
+        activity = SessionActivity({"a": [], "b": []})
+        assert set(activity.without([]).keys()) == {"a", "b"}

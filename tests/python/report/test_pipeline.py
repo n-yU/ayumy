@@ -164,36 +164,76 @@ class TestProcessDate:
         assert args[0] == "my-repo"
         assert [c.sha for c in args[1]] == ["a1b2c3d"]
 
-    def test_detects_skipped_repos(self, pipeline_clients):
-        session = make_session("repo")
-        pipeline_clients["github_client"].fetch_activity.return_value = make_github(
-            "repo", commits=[make_commit(sha="abc", repo="repo")]
+    def test_all_session_only_skips_summary(self, pipeline_clients):
+        session = make_session("repo-a")
+        pipeline_clients["github_client"].fetch_activity.return_value = GitHubActivity(
+            {}
         )
 
-        report = _make_report(
-            [
-                {
-                    "name": "unknown-repo",
-                    "summary": [],
-                    "tags": [],
-                }
-            ]
+        process_date(SINCE, UNTIL, session, **pipeline_clients)
+
+        pipeline_clients["summary_client"].generate_summary.assert_not_called()
+        pipeline_clients["cost_store"].start_record.assert_not_called()
+        pipeline_clients["notion_client"].create_report_pages.assert_not_called()
+        pipeline_clients["slack_client"].notify.assert_not_called()
+        pipeline_clients["slack_client"].notify_session_only.assert_called_once_with(
+            SINCE, ["repo-a"]
         )
+
+    def test_partial_session_only_excludes_from_prompt(self, pipeline_clients):
+        session = SessionActivity(
+            {
+                "repo-a": [
+                    {
+                        "session_id": "sa",
+                        "project": "repo-a",
+                        "start_time": "2026-03-28T10:00:00+09:00",
+                        "end_time": "2026-03-28T11:00:00+09:00",
+                        "user_messages": ["work on repo-a"],
+                        "tools_used": ["Edit"],
+                        "session_commits": [],
+                        "session_pulls": [],
+                        "session_issues": [],
+                    }
+                ],
+                "repo-b": [
+                    {
+                        "session_id": "sb",
+                        "project": "repo-b",
+                        "start_time": "2026-03-28T12:00:00+09:00",
+                        "end_time": "2026-03-28T13:00:00+09:00",
+                        "user_messages": ["design work on repo-b"],
+                        "tools_used": ["Read"],
+                        "session_commits": [],
+                        "session_pulls": [],
+                        "session_issues": [],
+                    }
+                ],
+            }
+        )
+        pipeline_clients["github_client"].fetch_activity.return_value = make_github(
+            "repo-a", commits=[make_commit(sha="abc", repo="repo-a")]
+        )
+
+        report = _make_report([{"name": "repo-a", "summary": ["work"], "tags": []}])
         pipeline_clients["summary_client"].generate_summary.return_value = (
             report,
             _STUB_USAGE,
         )
-        pipeline_clients["notion_client"].create_report_pages.return_value = []
+        pipeline_clients["notion_client"].create_report_pages.return_value = [
+            ("repo-a", "https://notion.so/a"),
+        ]
 
         process_date(SINCE, UNTIL, session, **pipeline_clients)
 
-        call_args = pipeline_clients["slack_client"].notify.call_args
-        skipped = (
-            call_args[0][3]
-            if len(call_args[0]) > 3
-            else call_args[1].get("skipped_repos", [])
-        )
-        assert "unknown-repo" in skipped
+        summary_args = pipeline_clients["summary_client"].generate_summary.call_args[0]
+        formatted_sessions = summary_args[2]
+        assert "repo-a" in formatted_sessions
+        assert "repo-b" not in formatted_sessions
+        assert "design work on repo-b" not in formatted_sessions
+
+        notify_kwargs = pipeline_clients["slack_client"].notify.call_args.kwargs
+        assert notify_kwargs["session_only_repos"] == ["repo-b"]
 
     def test_passes_session_refs_to_github_client_when_backfill(self, pipeline_clients):
         session = make_session(

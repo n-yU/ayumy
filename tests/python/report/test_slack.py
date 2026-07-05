@@ -96,30 +96,30 @@ class TestNotify:
         text = _blocks_text(kwargs["blocks"])
         assert "No pages created" in text
 
-    def test_includes_skipped_repos(self):
+    def test_includes_session_only_repos(self):
         client = _make_client()
         target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
         report = {"repositories": [_repo("repo", ["headline"])]}
         pages = [("repo", "https://notion.so/p")]
 
-        client.notify(target, report, pages, skipped_repos=["unknown-repo"])
+        client.notify(target, report, pages, session_only_repos=["notes-repo"])
         client.flush()
 
         kwargs = _get_send_kwargs(client)
         text = _blocks_text(kwargs["blocks"])
-        assert "unknown-repo" in text
+        assert "🗒️ Session-only: notes-repo" in text
 
-    def test_skipped_repos_with_no_pages(self):
+    def test_session_only_repos_with_no_pages(self):
         client = _make_client()
         target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
         report = {"repositories": []}
 
-        client.notify(target, report, [], skipped_repos=["unknown-repo"])
+        client.notify(target, report, [], session_only_repos=["notes-repo"])
         client.flush()
 
         kwargs = _get_send_kwargs(client)
         text = _blocks_text(kwargs["blocks"])
-        assert "unknown-repo" in text
+        assert "🗒️ Session-only: notes-repo" in text
 
     def test_block_structure(self):
         client = _make_client()
@@ -127,7 +127,7 @@ class TestNotify:
         report = {"repositories": [_repo("repo", ["h"])]}
         pages = [("repo", "https://notion.so/p")]
 
-        client.notify(target, report, pages, skipped_repos=["skipped"])
+        client.notify(target, report, pages, session_only_repos=["notes-repo"])
         client.flush()
 
         blocks = _get_send_kwargs(client)["blocks"]
@@ -135,7 +135,7 @@ class TestNotify:
         assert blocks[1]["type"] == "section"  # page links with headlines
         assert "text" in blocks[1]
         assert "fields" not in blocks[1]
-        assert blocks[2]["type"] == "context"  # skipped
+        assert blocks[2]["type"] == "context"  # session-only
 
     def test_page_line_omits_dash_when_no_headline(self):
         client = _make_client()
@@ -319,6 +319,33 @@ class TestNotifyNoActivity:
         blocks = _get_send_kwargs(client)["blocks"]
         assert blocks[0]["type"] == "header"
         assert "💤" in blocks[0]["text"]["text"]
+        assert blocks[1]["type"] == "section"
+
+
+class TestNotifySessionOnly:
+    def test_sends_session_only_message(self):
+        client = _make_client()
+        target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+
+        client.notify_session_only(target, ["repo-a", "repo-b"])
+        client.flush()
+
+        kwargs = _get_send_kwargs(client)
+        text = _blocks_text(kwargs["blocks"])
+        assert "2026-03-28" in text
+        assert "Session-only: repo-a, repo-b" in text
+        assert kwargs["text"]
+
+    def test_block_structure(self):
+        client = _make_client()
+        target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+
+        client.notify_session_only(target, ["repo-a"])
+        client.flush()
+
+        blocks = _get_send_kwargs(client)["blocks"]
+        assert blocks[0]["type"] == "header"
+        assert "🗒️" in blocks[0]["text"]["text"]
         assert blocks[1]["type"] == "section"
 
 
