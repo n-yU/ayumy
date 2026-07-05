@@ -377,6 +377,13 @@ GitHub アクティビティと Claude Code セッションログの両方をコ
 
 出力にはリポジトリごとの作業要点（箇条書き）とタグの提案を含める
 
+session ログはあるが GitHub アクティビティが対象日に存在しないリポジトリ（以下 session-only）は Claude API 入力から除外する。Notion ページを作成しない現状仕様（[Database Properties](#database-properties)）で捨てられる要約分の API コスト発生を抑えるため
+
+- 判定は session 由来 commit を GitHub アクティビティにマージした後の状態で行う
+- 対象日の全リポジトリが session-only の場合は Claude API 呼び出し自体を skip し、コスト記録も残さない
+- session-only 発生時は Slack 通知に反映する（[Slack Notification](#slack-notification)）
+- session store 側の "reported" スタンプは通常通り打つ。翌日以降 push で追いつけば `updated_at > reported_at` の backfill 判定でレポート生成が再走する
+
 Claude API の応答構造が想定を逸脱した場合、要約生成は原因を含む `ValueError` を投げ、[Classification Policy](#classification-policy) に沿って当該日のレポート生成を失敗させる。自動再試行は挟まず、運用者が `ayumy sync --report` で明示的に再実行する。検証範囲は必須項目と型に限定する
 
 ### Slack Notification
@@ -388,6 +395,11 @@ Notion への書き込み完了後、Slack Web API の `chat.postMessage` で指
 - Claude API コスト: 今回の実行の利用金額、当月累計・前月同期間比、当月の Claude API 呼び出し回数・前月同期間比。実行メトリクスと同じ context block に統合して 1 行で表示する。前月データが無く比率を計算できない項目は `(MoM ...)` 部分を丸ごと省略する（永続化された履歴の詳細は [Cost Execution Log Persistence](#cost-execution-log-persistence)）
 
 アクティビティが 0 件で Notion ページが作成されなかった場合は、正常稼働を示す簡易通知を送信する。処理中にエラーが発生した場合もエラー内容を通知する
+
+session-only の扱い（[Summary Generation](#summary-generation)）に応じて表示を分ける
+
+- 対象日の全リポジトリが session-only の場合は session-only 専用の簡易通知を送る
+- 部分的 session-only の場合は通常の Daily Report 通知の下部に session-only リポジトリ名を context として付記する
 
 通知が失敗しても処理全体は正常終了とする（通知はベストエフォート）
 
