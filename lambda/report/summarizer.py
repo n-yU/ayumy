@@ -57,6 +57,9 @@ _RESPONSE_SHAPE_SCHEMA = {
     },
 }
 _VALUE_REPR_LIMIT = 200
+_DEPRECATION_DOCS_URL = (
+    "https://docs.anthropic.com/en/docs/about-claude/model-deprecations"
+)
 
 
 def _validate_response_shape(payload: object) -> ReportSummary:
@@ -92,6 +95,39 @@ class SummaryClient:
     def __init__(self, api_key: str, notice: Notice | None = None) -> None:
         self.client = anthropic.Anthropic(api_key=api_key)
         self._notice = notice or Notice()
+
+    def check_deprecation(self) -> None:
+        """Warn when the configured Anthropic model is deprecated.
+
+        `deprecated_at` is not part of the SDK's `ModelInfo` type but is exposed via Pydantic
+        `extra='allow'` when the API returns it; we read it defensively with `getattr`.
+        """
+        model_id = CONFIG.claude.model
+        try:
+            model_info = self.client.models.retrieve(model_id)
+        except Exception:
+            # Broad: deprecation probe must not block summary generation; Classification Policy warning
+            self._notice.add(
+                NoticeSource.SUMMARY,
+                "Deprecation check failed",
+                logger=logger,
+                exc_info=True,
+                model=model_id,
+            )
+            return
+
+        deprecated_at = getattr(model_info, "deprecated_at", None)
+        if deprecated_at is None:
+            return
+
+        self._notice.add(
+            NoticeSource.SUMMARY,
+            "Claude model is deprecated",
+            logger=logger,
+            model=model_id,
+            deprecated_at=str(deprecated_at),
+            docs=_DEPRECATION_DOCS_URL,
+        )
 
     def _build_tool_schema(self) -> dict:
         """`tags` enum bars the model from emitting values outside the code-defined allowlist."""

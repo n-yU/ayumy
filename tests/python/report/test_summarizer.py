@@ -7,8 +7,9 @@ import pytest
 
 from config import CONFIG
 from report import JST, SummaryUsage
-from report.notice import Notice
+from report.notice import Notice, NoticeSource
 from report.summarizer import (
+    _DEPRECATION_DOCS_URL,
     _SYSTEM_PROMPT,
     _VALUE_REPR_LIMIT,
     TOOL_NAME,
@@ -199,6 +200,61 @@ class TestGenerateSummary:
         assert summary_line.endswith("...")
         value_portion = summary_line.split("value=", 1)[1]
         assert len(value_portion) <= _VALUE_REPR_LIMIT + len("...")
+
+
+class TestCheckDeprecation:
+    def setup_method(self):
+        self.notice = Notice()
+        self.client = _make_client()
+        self.client._notice = self.notice
+        self.client.client = MagicMock()
+
+    def _set_deprecated_at(self, value):
+        model_info = MagicMock(spec=["deprecated_at"])
+        model_info.deprecated_at = value
+        self.client.client.models.retrieve.return_value = model_info
+
+    def test_no_notice_when_field_absent(self):
+        # Attribute missing — mimics API responses without `deprecated_at`
+        model_info = MagicMock(spec=[])
+        self.client.client.models.retrieve.return_value = model_info
+
+        self.client.check_deprecation()
+
+        assert not self.notice
+
+    def test_no_notice_when_field_is_none(self):
+        self._set_deprecated_at(None)
+
+        self.client.check_deprecation()
+
+        assert not self.notice
+
+    def test_notice_when_deprecated_at_set(self):
+        self._set_deprecated_at("2026-04-14T00:00:00Z")
+
+        self.client.check_deprecation()
+
+        entries = self.notice.entries()
+        assert len(entries) == 1
+        entry = entries[0]
+        assert entry.source == NoticeSource.SUMMARY
+        assert entry.title == "Claude model is deprecated"
+        assert entry.details["model"] == CONFIG.claude.model
+        assert entry.details["deprecated_at"] == "2026-04-14T00:00:00Z"
+        assert entry.details["docs"] == _DEPRECATION_DOCS_URL
+
+    def test_notice_when_retrieve_raises(self):
+        self.client.client.models.retrieve.side_effect = RuntimeError("boom")
+
+        self.client.check_deprecation()
+
+        entries = self.notice.entries()
+        assert len(entries) == 1
+        entry = entries[0]
+        assert entry.source == NoticeSource.SUMMARY
+        assert entry.title == "Deprecation check failed"
+        assert entry.details["model"] == CONFIG.claude.model
 
 
 class TestValidationResult:

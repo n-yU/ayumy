@@ -192,6 +192,7 @@ def run(
         )
         notion_client.init_data_source()
         summary_client = SummaryClient(require_env("ANTHROPIC_API_KEY"), notice=notice)
+        summary_client.check_deprecation()
         cost_store = CostStore(require_env("AYUMY_COST_TABLE"))
 
         for d in process_dates:
