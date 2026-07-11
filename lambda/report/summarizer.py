@@ -99,8 +99,7 @@ class SummaryClient:
     def check_deprecation(self) -> None:
         """Warn when the configured Anthropic model is deprecated.
 
-        `deprecated_at` is not part of the SDK's `ModelInfo` type but is exposed via Pydantic
-        `extra='allow'` when the API returns it; we read it defensively with `getattr`.
+        Reads `deprecated_at` via `getattr` since it isn't declared on the SDK's `ModelInfo` but is exposed by Pydantic `extra='allow'`.
         """
         model_id = CONFIG.claude.model
         try:
