@@ -5,12 +5,6 @@ AYUMY_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 HOOK_SOURCE="$AYUMY_ROOT/hooks/pre-push"
 LEGACY_HOOK_SOURCE="$AYUMY_ROOT/hooks/post-commit"
 
-# Verify that the hook source exists (and is executable) before proceeding.
-if [[ ! -f "$HOOK_SOURCE" || ! -x "$HOOK_SOURCE" ]]; then
-  echo "ayumy setup-hooks: hook source not found or not executable: $HOOK_SOURCE" >&2
-  exit 1
-fi
-
 usage() {
   local code="${1:-1}"
   local dest=1
@@ -106,6 +100,12 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+# Runs after option parsing so --help / -h still work when the hook source is missing or non-executable.
+if [[ ! -f "$HOOK_SOURCE" || ! -x "$HOOK_SOURCE" ]]; then
+  echo "ayumy setup-hooks: hook source not found or not executable: $HOOK_SOURCE" >&2
+  exit 1
+fi
 
 if [[ -n "$all_dir" ]]; then
   if [[ ! -d "$all_dir" ]]; then
