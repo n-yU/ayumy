@@ -204,6 +204,7 @@ class TestGenerateSummary:
 
 class TestCheckDeprecation:
     def setup_method(self):
+        SummaryClient._deprecation_checked = False
         self.notice = Notice()
         self.client = _make_client()
         self.client._notice = self.notice
@@ -255,6 +256,15 @@ class TestCheckDeprecation:
         assert entry.source == NoticeSource.SUMMARY
         assert entry.title == "Deprecation check failed"
         assert entry.details["model"] == CONFIG.claude.model
+
+    def test_skips_on_warm_start(self):
+        self._set_deprecated_at("2026-04-14T00:00:00Z")
+
+        self.client.check_deprecation()
+        self.client.check_deprecation()
+
+        assert self.client.client.models.retrieve.call_count == 1
+        assert len(self.notice.entries()) == 1
 
 
 class TestValidationResult:

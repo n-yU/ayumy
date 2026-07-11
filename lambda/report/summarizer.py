@@ -2,7 +2,7 @@
 
 import logging
 from datetime import datetime
-from typing import cast
+from typing import ClassVar, cast
 
 import anthropic
 import jsonschema
@@ -92,6 +92,9 @@ class ValidationResult:
 class SummaryClient:
     """Client for generating daily report summaries via Claude API."""
 
+    # Class-level so Lambda warm-start invocations reuse the cold-start probe result
+    _deprecation_checked: ClassVar[bool] = False
+
     def __init__(self, api_key: str, notice: Notice | None = None) -> None:
         self.client = anthropic.Anthropic(api_key=api_key)
         self._notice = notice or Notice()
@@ -101,6 +104,9 @@ class SummaryClient:
 
         Reads `deprecated_at` via `getattr` since it isn't declared on the SDK's `ModelInfo` but is exposed by Pydantic `extra='allow'`.
         """
+        if SummaryClient._deprecation_checked:
+            return
+        SummaryClient._deprecation_checked = True
         model_id = CONFIG.claude.model
         try:
             model_info = self.client.models.retrieve(model_id)
