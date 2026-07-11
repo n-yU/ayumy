@@ -375,16 +375,16 @@ GitHub アクティビティと Claude Code セッションログの両方をコ
 
 </details>
 
-出力にはリポジトリごとの作業要点（箇条書き）とタグの提案を含める
-
-session ログはあるが GitHub アクティビティが対象日に存在しないリポジトリ（以下 session-only）は Claude API 入力から除外する。Notion ページを作成しない現状仕様（[Database Properties](#database-properties)）で捨てられる要約分の API コスト発生を抑えるため
-
-- 判定は session 由来 commit を GitHub アクティビティにマージした後の状態で行う
-- 対象日の全リポジトリが session-only の場合は Claude API 呼び出し自体を skip し、コスト記録も残さない
-- session-only 発生時は Slack 通知に反映する（[Slack Notification](#slack-notification)）
-- session store 側の "reported" スタンプは通常通り打つ。翌日以降 push で追いつけば `updated_at > reported_at` の backfill 判定でレポート生成が再走する
-
-Claude API の応答構造が想定を逸脱した場合、要約生成は原因を含む `ValueError` を投げ、[Classification Policy](#classification-policy) に沿って当該日のレポート生成を失敗させる。自動再試行は挟まず、運用者が `ayumy sync --report` で明示的に再実行する。検証範囲は必須項目と型に限定する
+- 出力にはリポジトリごとの作業要点（箇条書き）とタグの提案を含める
+- session ログはあるが GitHub アクティビティが対象日に存在しないリポジトリ（以下 session-only）は Claude API 入力から除外する。Notion ページを作成しない現状仕様（[Database Properties](#database-properties)）で捨てられる要約分の API コスト発生を抑えるため
+  - 判定は session 由来 commit を GitHub アクティビティにマージした後の状態で行う
+  - 対象日の全リポジトリが session-only の場合は Claude API 呼び出し自体を skip し、コスト記録も残さない
+  - session-only 発生時は Slack 通知に反映する（[Slack Notification](#slack-notification)）
+  - session store 側の "reported" スタンプは通常通り打つ。翌日以降 push で追いつけば `updated_at > reported_at` の backfill 判定でレポート生成が再走する
+- Claude API の応答構造が想定を逸脱した場合、要約生成は原因を含む `ValueError` を投げ、[Classification Policy](#classification-policy) に沿って当該日のレポート生成を失敗させる。自動再試行は挟まず、運用者が `ayumy sync --report` で明示的に再実行する。検証範囲は必須項目と型に限定する
+- Lambda 起動時に使用モデルの deprecation 状態を確認し、[Warning Thread](#warning-thread) に記録する
+  - deprecated 判定時は model ID・`deprecated_at`・公式 Model deprecations ページを warning に含める
+  - 確認自体が失敗した場合も同じ warning 経路に流し、要約生成は続行する
 
 ### Slack Notification
 Notion への書き込み完了後、Slack Web API の `chat.postMessage` で指定チャンネルに通知を送信する
