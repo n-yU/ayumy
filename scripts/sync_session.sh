@@ -8,7 +8,10 @@ MARKER_NAME=".ayumy_last_sync"
 # --- helpers ---
 
 usage() {
-  cat <<'USAGE'
+  local code="${1:-1}"
+  local dest=1
+  [[ "$code" -ne 0 ]] && dest=2
+  cat >&"$dest" <<'USAGE'
 Usage: sync_session.sh [--project <name>] [--all] [--report] [--date DATE]
 
 Options:
@@ -17,13 +20,14 @@ Options:
   --report            Invoke Lambda to generate report after sync
   --date DATE         Generate report for a specific date or range (requires --report)
                       Formats: YYYY-MM-DD or YYYY-MM-DD..YYYY-MM-DD
+  -h, --help          Show this help message
   (no args)           Auto-detect project from current directory
 
 Environment variables:
   AYUMY_S3_BUCKET        S3 bucket name for session storage (required)
   AYUMY_LAMBDA_FUNCTION  Lambda function name (required for --report)
 USAGE
-  exit 1
+  exit "$code"
 }
 
 log() { echo "[ayumy] $*"; }
@@ -102,6 +106,9 @@ target_date=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    -h|--help)
+      usage 0
+      ;;
     --project)
       [[ -n "$mode" && "$mode" != "project" ]] && { err "conflicting options: --project and --all"; usage; }
       mode="project"

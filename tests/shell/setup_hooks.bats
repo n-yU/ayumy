@@ -16,10 +16,32 @@ teardown() {
 
 # --- option parsing ---
 
-@test "setup_hooks.sh: --help exits 0 and shows usage" {
-  run "$SCRIPT" --help
+@test "setup_hooks.sh: --help exits 0 with usage on stdout" {
+  local out="$TMPDIR_TEST/out" err="$TMPDIR_TEST/err"
+  run bash -c "'$SCRIPT' --help >'$out' 2>'$err'"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"Usage:"* ]]
+  grep -q "Usage:" "$out"
+  [ ! -s "$err" ]
+}
+
+@test "setup_hooks.sh: -h exits 0 with usage on stdout" {
+  local out="$TMPDIR_TEST/out" err="$TMPDIR_TEST/err"
+  run bash -c "'$SCRIPT' -h >'$out' 2>'$err'"
+  [ "$status" -eq 0 ]
+  grep -q "Usage:" "$out"
+  [ ! -s "$err" ]
+}
+
+@test "setup_hooks.sh: --help succeeds even when the hook source is missing" {
+  local fake_root="$TMPDIR_TEST/fake-ayumy"
+  mkdir -p "$fake_root/scripts"
+  cp "$SCRIPT" "$fake_root/scripts/setup_hooks.sh"
+
+  local out="$TMPDIR_TEST/out" err="$TMPDIR_TEST/err"
+  run bash -c "'$fake_root/scripts/setup_hooks.sh' --help >'$out' 2>'$err'"
+  [ "$status" -eq 0 ]
+  grep -q "Usage:" "$out"
+  [ ! -s "$err" ]
 }
 
 @test "setup_hooks.sh: unknown option is rejected" {

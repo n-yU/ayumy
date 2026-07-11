@@ -4,17 +4,29 @@ set -euo pipefail
 AYUMY_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 usage() {
-  cat <<'USAGE'
+  local code="${1:-1}"
+  local dest=1
+  [[ "$code" -ne 0 ]] && dest=2
+  cat >&"$dest" <<'USAGE'
 Usage: ayumy <command> [options]
 
 Commands:
   sync          Sync Claude Code sessions to S3
   setup-hooks   Install pre-push hook to Git repositories
+
+Options:
+  -h, --help    Show this help message
 USAGE
-  exit 1
+  exit "$code"
 }
 
 [[ $# -eq 0 ]] && usage
+
+case "$1" in
+  -h|--help)
+    usage 0
+    ;;
+esac
 
 command="$1"
 shift

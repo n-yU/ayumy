@@ -19,6 +19,22 @@ teardown() {
 
 # --- option parsing ---
 
+@test "sync_session.sh: --help exits 0 with usage on stdout" {
+  local out="$TMPDIR_TEST/out" err="$TMPDIR_TEST/err"
+  run bash -c "'$SCRIPT' --help >'$out' 2>'$err'"
+  [ "$status" -eq 0 ]
+  grep -q "Usage:" "$out"
+  [ ! -s "$err" ]
+}
+
+@test "sync_session.sh: -h exits 0 with usage on stdout" {
+  local out="$TMPDIR_TEST/out" err="$TMPDIR_TEST/err"
+  run bash -c "'$SCRIPT' -h >'$out' 2>'$err'"
+  [ "$status" -eq 0 ]
+  grep -q "Usage:" "$out"
+  [ ! -s "$err" ]
+}
+
 @test "sync_session.sh: --project + --all conflict is rejected" {
   run "$SCRIPT" --project foo --all
   [ "$status" -ne 0 ]

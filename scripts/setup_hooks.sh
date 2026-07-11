@@ -5,14 +5,11 @@ AYUMY_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 HOOK_SOURCE="$AYUMY_ROOT/hooks/pre-push"
 LEGACY_HOOK_SOURCE="$AYUMY_ROOT/hooks/post-commit"
 
-# Verify that the hook source exists (and is executable) before proceeding.
-if [[ ! -f "$HOOK_SOURCE" || ! -x "$HOOK_SOURCE" ]]; then
-  echo "ayumy setup-hooks: hook source not found or not executable: $HOOK_SOURCE" >&2
-  exit 1
-fi
-
 usage() {
-  cat <<'USAGE'
+  local code="${1:-1}"
+  local dest=1
+  [[ "$code" -ne 0 ]] && dest=2
+  cat >&"$dest" <<'USAGE'
 Usage: ayumy setup-hooks [options]
 
 Install the pre-push hook to Git repositories via symlink.
@@ -24,9 +21,9 @@ left untouched.
 Options:
   --all <dir>   Scan immediate children of <dir> for Git repositories and install hooks
   --force       Overwrite an existing pre-push hook
-  --help        Show this help message
+  -h, --help    Show this help message
 USAGE
-  exit "${1:-1}"
+  exit "$code"
 }
 
 remove_legacy_post_commit() {
@@ -94,7 +91,7 @@ while [[ $# -gt 0 ]]; do
       force="true"
       shift
       ;;
-    --help)
+    -h|--help)
       usage 0
       ;;
     *)
@@ -103,6 +100,12 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+# Runs after option parsing so --help / -h still work when the hook source is missing or non-executable.
+if [[ ! -f "$HOOK_SOURCE" || ! -x "$HOOK_SOURCE" ]]; then
+  echo "ayumy setup-hooks: hook source not found or not executable: $HOOK_SOURCE" >&2
+  exit 1
+fi
 
 if [[ -n "$all_dir" ]]; then
   if [[ ! -d "$all_dir" ]]; then
