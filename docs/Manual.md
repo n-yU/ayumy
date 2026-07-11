@@ -24,6 +24,8 @@ Ayumy の構築後の日常運用ガイド。基本的な操作・Notion レポ�
 - クライアント側のスクリプト（`scripts/`, `hooks/`, `bin/ayumy`）は macOS のみサポート
 
 ## Daily Operations
+各コマンドは `--help` (または `-h`) で使い方を確認できる
+
 ### pre-push hook による自動転送
 - `ayumy setup-hooks` で設置した pre-push hook が、各リポジトリの push を契機に未同期セッションを S3 に転送する
 - 転送はフォアグラウンドで実行され、失敗時は非ゼロ終了で push を中止する。AWS 認証切れなどの障害は push 時点で顕在化する
