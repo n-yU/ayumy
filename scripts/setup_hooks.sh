@@ -12,7 +12,10 @@ if [[ ! -f "$HOOK_SOURCE" || ! -x "$HOOK_SOURCE" ]]; then
 fi
 
 usage() {
-  cat <<'USAGE'
+  local code="${1:-1}"
+  local dest=1
+  [[ "$code" -ne 0 ]] && dest=2
+  cat >&"$dest" <<'USAGE'
 Usage: ayumy setup-hooks [options]
 
 Install the pre-push hook to Git repositories via symlink.
@@ -24,9 +27,9 @@ left untouched.
 Options:
   --all <dir>   Scan immediate children of <dir> for Git repositories and install hooks
   --force       Overwrite an existing pre-push hook
-  --help        Show this help message
+  -h, --help    Show this help message
 USAGE
-  exit "${1:-1}"
+  exit "$code"
 }
 
 remove_legacy_post_commit() {
@@ -94,7 +97,7 @@ while [[ $# -gt 0 ]]; do
       force="true"
       shift
       ;;
-    --help)
+    -h|--help)
       usage 0
       ;;
     *)

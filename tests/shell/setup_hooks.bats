@@ -22,6 +22,12 @@ teardown() {
   [[ "$output" == *"Usage:"* ]]
 }
 
+@test "setup_hooks.sh: -h exits 0 and shows usage" {
+  run "$SCRIPT" -h
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Usage:"* ]]
+}
+
 @test "setup_hooks.sh: unknown option is rejected" {
   run "$SCRIPT" --bogus
   [ "$status" -ne 0 ]
