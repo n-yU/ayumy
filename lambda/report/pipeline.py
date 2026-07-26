@@ -138,7 +138,7 @@ def run(
     memory_limit_mb: int | None = None,
     timeout_seconds: int | None = None,
 ) -> None:
-    """`target_date` (`YYYY-MM-DD` or `YYYY-MM-DD..YYYY-MM-DD`) takes precedence and disables backfill;
+    """`target_date` (`YYYY-MM-DD` or `YYYY-MM-DD..YYYY-MM-DD`) takes precedence and processes every given date as a backfill;
     otherwise processes the prior day (scheduled) or today's partial window (`source="manual"`) plus unreported backfill dates.
     `memory_limit_mb` / `timeout_seconds` are None from the CLI.
     """
