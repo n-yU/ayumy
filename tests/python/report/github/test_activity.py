@@ -1,9 +1,14 @@
 """Tests for GitHubActivity formatting and session-commit merging."""
 
+from datetime import datetime as dt
+
+from report import JST
 from report.domain import CommitInfo, IssueInfo, PullInfo
 from report.github import GitHubActivity
 
 OWNER = "n-yU"
+SINCE = dt(2026, 3, 28, 0, 0, tzinfo=JST)
+UNTIL = dt(2026, 3, 29, 0, 0, tzinfo=JST)
 
 
 def _session(
@@ -24,17 +29,17 @@ def _session(
     }
 
 
-def _commit(message, sha="abc1234"):
+def _commit(message, sha="abc1234", date="2026-03-28T10:00:00+09:00"):
     return CommitInfo(
         sha=sha,
         message=message,
         author="user",
-        date="2026-03-28T10:00:00+09:00",
+        date=date,
         url=f"https://github.com/n-yU/repo/commit/{sha}",
     )
 
 
-def _pull(number, title, state, *, labels=()):
+def _pull(number, title, state, *, labels=(), merged_at=None, closed_at=None):
     return PullInfo(
         number=number,
         title=title,
@@ -44,13 +49,13 @@ def _pull(number, title, state, *, labels=()):
         draft=False,
         url=f"https://github.com/n-yU/repo/pull/{number}",
         created_at="2026-03-28T09:00:00+09:00",
-        merged_at=None,
-        closed_at=None,
+        merged_at=merged_at,
+        closed_at=closed_at or merged_at,
         merge_commit_sha=None,
     )
 
 
-def _issue(number, title, state, *, labels=()):
+def _issue(number, title, state, *, labels=(), closed_at=None):
     return IssueInfo(
         number=number,
         title=title,
@@ -59,7 +64,7 @@ def _issue(number, title, state, *, labels=()):
         labels=tuple(labels),
         url=f"https://github.com/n-yU/repo/issues/{number}",
         created_at="2026-03-28T09:00:00+09:00",
-        closed_at=None,
+        closed_at=closed_at,
         state_reason=None,
     )
 
@@ -67,17 +72,32 @@ def _issue(number, title, state, *, labels=()):
 class TestGitHubActivityFormat:
     def test_empty_activity(self):
         activity = GitHubActivity({})
-        assert activity.format() == "# GitHub アクティビティ\nアクティビティなし"
+        assert (
+            activity.format(SINCE, UNTIL)
+            == "# GitHub アクティビティ\nアクティビティなし"
+        )
 
     def test_with_commits_prs_issues(self):
         data = {
             "my-repo": {
                 "commits": [_commit("Fix bug")],
-                "pulls": [_pull(1, "Add feature", "merged", labels=("enhancement",))],
-                "issues": [_issue(2, "Bug report", "closed")],
+                "pulls": [
+                    _pull(
+                        1,
+                        "Add feature",
+                        "merged",
+                        labels=("enhancement",),
+                        merged_at="2026-03-28T10:00:00+09:00",
+                    )
+                ],
+                "issues": [
+                    _issue(
+                        2, "Bug report", "closed", closed_at="2026-03-28T11:00:00+09:00"
+                    )
+                ],
             },
         }
-        result = GitHubActivity(data).format()
+        result = GitHubActivity(data).format(SINCE, UNTIL)
         assert "## my-repo" in result
         assert "- Fix bug" in result
         assert "- [merged] #1 Add feature (enhancement)" in result
@@ -88,8 +108,39 @@ class TestGitHubActivityFormat:
             "z-repo": {"commits": [_commit("z")], "pulls": [], "issues": []},
             "a-repo": {"commits": [_commit("a")], "pulls": [], "issues": []},
         }
-        result = GitHubActivity(data).format()
+        result = GitHubActivity(data).format(SINCE, UNTIL)
         assert result.index("a-repo") < result.index("z-repo")
+
+    def test_omits_items_completed_before_window(self):
+        data = {
+            "my-repo": {
+                "commits": [_commit("Yesterday", date="2026-03-27T10:00:00+09:00")],
+                "pulls": [
+                    _pull(1, "Merged", "merged", merged_at="2026-03-27T10:00:00+09:00")
+                ],
+                "issues": [
+                    _issue(2, "Closed", "closed", closed_at="2026-03-27T11:00:00+09:00")
+                ],
+            },
+        }
+        result = GitHubActivity(data).format(SINCE, UNTIL)
+        assert result == "# GitHub アクティビティ\nアクティビティなし"
+
+    def test_reports_items_completed_after_window_as_open(self):
+        data = {
+            "my-repo": {
+                "commits": [],
+                "pulls": [
+                    _pull(1, "Merged", "merged", merged_at="2026-03-29T10:00:00+09:00")
+                ],
+                "issues": [
+                    _issue(2, "Closed", "closed", closed_at="2026-03-29T11:00:00+09:00")
+                ],
+            },
+        }
+        result = GitHubActivity(data).format(SINCE, UNTIL)
+        assert "- [open] #1 Merged" in result
+        assert "- [open] #2 Closed" in result
 
     def test_bool_and_contains(self):
         activity = GitHubActivity({"repo": {"commits": [], "pulls": [], "issues": []}})

@@ -100,7 +100,7 @@ def process_date(
 
     report, usage = summary_client.generate_summary(
         since,
-        github_activity.format(),
+        github_activity.format(since, until),
         effective_sessions.format(),
     )
     logger.info(

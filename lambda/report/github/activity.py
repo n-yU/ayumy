@@ -1,6 +1,7 @@
 """GitHubActivity container exposing repo-keyed PR / Issue / Commit data."""
 
 from collections.abc import Callable, KeysView
+from datetime import datetime
 from typing import TYPE_CHECKING, TypedDict
 
 from ..domain import CommitInfo, IssueInfo, PullInfo
@@ -81,32 +82,50 @@ class GitHubActivity:
                 "issues": [],
             }
 
-    def format(self) -> str:
-        """Format GitHub activity as the Markdown block consumed by the Claude API prompt (Spec: Summary Generation)."""
-        if not self._data:
-            return "# GitHub アクティビティ\nアクティビティなし"
+    def format(self, since: datetime, until: datetime) -> str:
+        """Format GitHub activity as the Markdown block consumed by the Claude API prompt (Spec: Summary Generation).
 
+        Filtered on the same window basis as the report page so the summary cannot describe items the page does not list.
+        """
         lines = ["# GitHub アクティビティ"]
         for repo_name, data in sorted(self._data.items()):
-            lines.append(f"## {repo_name}")
+            repo_lines: list[str] = []
 
-            if data["commits"]:
-                lines.append("### Commits")
-                for c in data["commits"]:
-                    lines.append(f"- {c.message}")
+            commits = [c for c in data["commits"] if c.is_in_range(since, until)]
+            if commits:
+                repo_lines.append("### Commits")
+                for c in commits:
+                    repo_lines.append(f"- {c.message}")
 
-            if data["pulls"]:
-                lines.append("### Pull Requests")
-                for pr in data["pulls"]:
+            pulls = [
+                (pr, state)
+                for pr in data["pulls"]
+                if (state := pr.state_in_range(since, until)) is not None
+            ]
+            if pulls:
+                repo_lines.append("### Pull Requests")
+                for pr, state in pulls:
                     labels = f" ({', '.join(pr.labels)})" if pr.labels else ""
-                    lines.append(f"- [{pr.state}] #{pr.number} {pr.title}{labels}")
+                    repo_lines.append(f"- [{state}] #{pr.number} {pr.title}{labels}")
 
-            if data["issues"]:
-                lines.append("### Issues")
-                for issue in data["issues"]:
+            issues = [
+                (issue, state)
+                for issue in data["issues"]
+                if (state := issue.state_in_range(since, until)) is not None
+            ]
+            if issues:
+                repo_lines.append("### Issues")
+                for issue, state in issues:
                     labels = f" ({', '.join(issue.labels)})" if issue.labels else ""
-                    lines.append(
-                        f"- [{issue.state}] #{issue.number} {issue.title}{labels}"
+                    repo_lines.append(
+                        f"- [{state}] #{issue.number} {issue.title}{labels}"
                     )
+
+            if repo_lines:
+                lines.append(f"## {repo_name}")
+                lines.extend(repo_lines)
+
+        if len(lines) == 1:
+            return "# GitHub アクティビティ\nアクティビティなし"
 
         return "\n".join(lines)
