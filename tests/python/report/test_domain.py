@@ -195,6 +195,19 @@ class TestPullInfo:
                 "open",
             ),
             ("closed", None, "2026-03-29T10:00:00+09:00", "open"),
+            # since is inclusive, until is exclusive
+            (
+                "merged",
+                "2026-03-28T00:00:00+09:00",
+                "2026-03-28T00:00:00+09:00",
+                "merged",
+            ),
+            (
+                "merged",
+                "2026-03-29T00:00:00+09:00",
+                "2026-03-29T00:00:00+09:00",
+                "open",
+            ),
         ],
     )
     def test_state_in_range(self, state, merged_at, closed_at, expected):
@@ -282,6 +295,9 @@ class TestIssueInfo:
             ("closed", "2026-03-28T10:00:00+09:00", "closed"),
             ("closed", "2026-03-27T10:00:00+09:00", None),
             ("closed", "2026-03-29T10:00:00+09:00", "open"),
+            # since is inclusive, until is exclusive
+            ("closed", "2026-03-28T00:00:00+09:00", "closed"),
+            ("closed", "2026-03-29T00:00:00+09:00", "open"),
         ],
     )
     def test_state_in_range(self, state, closed_at, expected):
