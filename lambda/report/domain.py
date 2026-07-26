@@ -1,4 +1,4 @@
-"""Frozen dataclasses for PR / Issue / Commit with their domain behavior."""
+"""Frozen dataclasses for PR / Issue / Commit with their domain behavior, plus the shared target-date window predicate."""
 
 from __future__ import annotations
 
