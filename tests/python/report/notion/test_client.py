@@ -79,25 +79,36 @@ def _issue(
     )
 
 
-def _make_client() -> NotionClient:
-    client = NotionClient.__new__(NotionClient)
-    client.client = MagicMock()
-    client.database_id = "db-id"
-    client._data_source_id = None
-    client._notice = Notice()
-    return client
+def _activity(
+    commits: list[CommitInfo] | None = None,
+    pulls: list[PullInfo] | None = None,
+    issues: list[IssueInfo] | None = None,
+) -> dict:
+    return {
+        "commits": commits or [],
+        "pulls": pulls or [],
+        "issues": issues or [],
+    }
 
 
-class TestBuildProperties:
+class ClientTestBase:
+    def setup_method(self):
+        self.client = NotionClient.__new__(NotionClient)
+        self.client.client = MagicMock()
+        self.client.database_id = "db-id"
+        self.client._data_source_id = None
+        self.client._notice = Notice()
+
+
+class TestBuildProperties(ClientTestBase):
     def test_basic_properties(self):
-        client = _make_client()
         target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
         repo_summary = {
             "name": "my-repo",
             "summary": ["要点1", "要点2"],
             "tags": ["CI/CD", "Testing"],
         }
-        props = client._build_properties(target, repo_summary, 5, 2, 1, 3)
+        props = self.client._build_properties(target, repo_summary, 5, 2, 1, 3)
 
         assert props["Name"]["title"][0]["text"]["content"] == "26-03-28: my-repo"
         assert props["Date"]["date"]["start"] == "2026-03-28"
@@ -115,12 +126,10 @@ class TestBuildProperties:
         )
 
 
-class TestStatusSections:
+class TestStatusSections(ClientTestBase):
     def test_done_collects_merged_and_closed(self):
-        client = _make_client()
-        repo_activity = {
-            "commits": [],
-            "pulls": [
+        repo_activity = _activity(
+            pulls=[
                 _pr(
                     1,
                     "Merged PR",
@@ -130,7 +139,7 @@ class TestStatusSections:
                 ),
                 _pr(2, "Rejected PR", "closed", closed_at="2026-03-28T11:00:00+09:00"),
             ],
-            "issues": [
+            issues=[
                 _issue(
                     10,
                     "Completed issue",
@@ -156,8 +165,8 @@ class TestStatusSections:
                     13, "Legacy closed", "closed", closed_at="2026-03-28T15:00:00+09:00"
                 ),
             ],
-        }
-        blocks = client._build_status_sections("repo", repo_activity, SINCE, UNTIL)
+        )
+        blocks = self.client._build_status_sections("repo", repo_activity, SINCE, UNTIL)
 
         assert blocks[0]["heading_2"]["rich_text"][0]["text"]["content"] == "Done"
 
@@ -199,20 +208,18 @@ class TestStatusSections:
         ]
 
     def test_in_progress_includes_open_prs_and_existing_open_issues(self):
-        client = _make_client()
-        repo_activity = {
-            "commits": [],
-            "pulls": [
+        repo_activity = _activity(
+            pulls=[
                 _pr(3, "WIP", "open", draft=True),
                 _pr(4, "Ready", "open", draft=False),
             ],
-            "issues": [
+            issues=[
                 _issue(
                     20, "Old open issue", "open", created_at="2026-03-20T09:00:00+09:00"
                 ),
             ],
-        }
-        blocks = client._build_status_sections("repo", repo_activity, SINCE, UNTIL)
+        )
+        blocks = self.client._build_status_sections("repo", repo_activity, SINCE, UNTIL)
         assert (
             blocks[0]["heading_2"]["rich_text"][0]["text"]["content"] == "In Progress"
         )
@@ -233,18 +240,15 @@ class TestStatusSections:
         ]
 
     def test_todo_collects_newly_created_open_issues(self):
-        client = _make_client()
-        repo_activity = {
-            "commits": [],
-            "pulls": [],
-            "issues": [
+        repo_activity = _activity(
+            issues=[
                 _issue(30, "New issue", "open", created_at="2026-03-28T11:00:00+09:00"),
                 _issue(
                     31, "Old open issue", "open", created_at="2026-03-20T09:00:00+09:00"
                 ),
             ],
-        }
-        blocks = client._build_status_sections("repo", repo_activity, SINCE, UNTIL)
+        )
+        blocks = self.client._build_status_sections("repo", repo_activity, SINCE, UNTIL)
         # In Progress (old) heading + bullet, Todo heading + bullet
         headings = [
             b["heading_2"]["rich_text"][0]["text"]["content"]
@@ -263,10 +267,82 @@ class TestStatusSections:
             "https://github.com/n-yU/repo/issues/30",  # Todo (newly created)
         ]
 
+    def test_items_completed_before_window_are_omitted(self):
+        repo_activity = _activity(
+            pulls=[
+                _pr(
+                    1,
+                    "Merged earlier",
+                    "merged",
+                    merged_at="2026-03-27T10:00:00+09:00",
+                    closed_at="2026-03-27T10:00:00+09:00",
+                ),
+                _pr(
+                    2,
+                    "Rejected earlier",
+                    "closed",
+                    closed_at="2026-03-27T11:00:00+09:00",
+                ),
+            ],
+            issues=[
+                _issue(
+                    10,
+                    "Closed earlier",
+                    "closed",
+                    closed_at="2026-03-27T12:00:00+09:00",
+                ),
+            ],
+        )
+        blocks = self.client._build_status_sections("repo", repo_activity, SINCE, UNTIL)
+        assert blocks == []
+
+    def test_items_completed_after_window_are_still_pending(self):
+        repo_activity = _activity(
+            pulls=[
+                _pr(
+                    1,
+                    "Merged next day",
+                    "merged",
+                    merged_at="2026-03-29T10:00:00+09:00",
+                    closed_at="2026-03-29T10:00:00+09:00",
+                ),
+            ],
+            issues=[
+                _issue(
+                    10,
+                    "Created in window, closed later",
+                    "closed",
+                    created_at="2026-03-28T09:00:00+09:00",
+                    closed_at="2026-03-29T12:00:00+09:00",
+                ),
+                _issue(
+                    11,
+                    "Created earlier, closed later",
+                    "closed",
+                    created_at="2026-03-20T09:00:00+09:00",
+                    closed_at="2026-03-29T13:00:00+09:00",
+                ),
+            ],
+        )
+        blocks = self.client._build_status_sections("repo", repo_activity, SINCE, UNTIL)
+        headings = [
+            b["heading_2"]["rich_text"][0]["text"]["content"]
+            for b in blocks
+            if b["type"] == "heading_2"
+        ]
+        assert headings == ["In Progress", "Todo"]
+        bullets = [b for b in blocks if b["type"] == "bulleted_list_item"]
+        labels = [
+            b["bulleted_list_item"]["rich_text"][0]["text"]["content"] for b in bullets
+        ]
+        assert labels == [
+            "repo#1: Merged next day",
+            "repo#11: Created earlier, closed later",
+            "repo#10: Created in window, closed later",
+        ]
+
     def test_empty_sections_omitted(self):
-        client = _make_client()
-        repo_activity = {"commits": [], "pulls": [], "issues": []}
-        blocks = client._build_status_sections("repo", repo_activity, SINCE, UNTIL)
+        blocks = self.client._build_status_sections("repo", _activity(), SINCE, UNTIL)
         assert blocks == []
 
 
@@ -281,13 +357,10 @@ def _bullet_children(block: dict) -> list[dict]:
     return block["bulleted_list_item"].get("children", [])
 
 
-class TestTimelineSection:
-    def setup_method(self):
-        self.client = _make_client()
-
+class TestTimelineSection(ClientTestBase):
     def test_pr_block_nests_non_merge_commits(self):
-        repo_activity = {
-            "commits": [
+        repo_activity = _activity(
+            commits=[
                 _commit(
                     "aaa1111", "branch commit 1", hour=9, minute=30, pull_numbers=[1]
                 ),
@@ -296,7 +369,7 @@ class TestTimelineSection:
                 ),
                 _commit("ccc3333", "Squash merge", hour=11, minute=0, pull_numbers=[1]),
             ],
-            "pulls": [
+            pulls=[
                 _pr(
                     1,
                     "Add feature",
@@ -307,8 +380,7 @@ class TestTimelineSection:
                     merge_commit_sha="ccc3333",
                 )
             ],
-            "issues": [],
-        }
+        )
         blocks = self.client._build_timeline_section(
             "repo", repo_activity, SINCE, UNTIL
         )
@@ -345,11 +417,10 @@ class TestTimelineSection:
             url="https://github.com/n-yU/repo/commit/bbb2222",
             pull_numbers=(1,),
         )
-        repo_activity = {
-            "commits": [late, early],
-            "pulls": [_pr(1, "feat", "open", created_at="2026-03-28T09:00:00+09:00")],
-            "issues": [],
-        }
+        repo_activity = _activity(
+            commits=[late, early],
+            pulls=[_pr(1, "feat", "open", created_at="2026-03-28T09:00:00+09:00")],
+        )
         blocks = self.client._build_timeline_section(
             "repo", repo_activity, SINCE, UNTIL
         )
@@ -362,16 +433,13 @@ class TestTimelineSection:
     def test_commit_with_multiple_pulls_nests_under_smallest_pr(self):
         # Cherry-picked commit appears in two PRs; nesting must not
         # depend on pull_numbers input order
-        repo_activity = {
-            "commits": [
-                _commit("aaa1111", "shared commit", hour=10, pull_numbers=[5, 2])
-            ],
-            "pulls": [
+        repo_activity = _activity(
+            commits=[_commit("aaa1111", "shared commit", hour=10, pull_numbers=[5, 2])],
+            pulls=[
                 _pr(2, "PR two", "open", created_at="2026-03-28T09:00:00+09:00"),
                 _pr(5, "PR five", "open", created_at="2026-03-28T09:00:00+09:00"),
             ],
-            "issues": [],
-        }
+        )
         blocks = self.client._build_timeline_section(
             "repo", repo_activity, SINCE, UNTIL
         )
@@ -383,11 +451,11 @@ class TestTimelineSection:
 
     def test_pr_header_sorts_before_merge_commit_at_same_time(self):
         # PR opened before window; only the squash merge commit lands in range
-        repo_activity = {
-            "commits": [
+        repo_activity = _activity(
+            commits=[
                 _commit("ccc3333", "Squash merge", hour=11, minute=0, pull_numbers=[2]),
             ],
-            "pulls": [
+            pulls=[
                 _pr(
                     2,
                     "Old PR finally merged",
@@ -398,8 +466,7 @@ class TestTimelineSection:
                     merge_commit_sha="ccc3333",
                 )
             ],
-            "issues": [],
-        }
+        )
         blocks = self.client._build_timeline_section(
             "repo", repo_activity, SINCE, UNTIL
         )
@@ -409,11 +476,9 @@ class TestTimelineSection:
         assert _bullet_text(blocks[2]) == "🔸 ccc3333: Squash merge"
 
     def test_direct_commit_renders_at_top_level(self):
-        repo_activity = {
-            "commits": [_commit("ddd4444", "Direct commit", hour=10)],
-            "pulls": [],
-            "issues": [],
-        }
+        repo_activity = _activity(
+            commits=[_commit("ddd4444", "Direct commit", hour=10)]
+        )
         blocks = self.client._build_timeline_section(
             "repo", repo_activity, SINCE, UNTIL
         )
@@ -421,22 +486,17 @@ class TestTimelineSection:
 
     def test_pr_with_no_in_range_activity_is_omitted(self):
         # Session-touched PR with no commits/state changes in range
-        repo_activity = {
-            "commits": [],
-            "pulls": [
-                _pr(8, "Touched", "open", created_at="2026-03-20T09:00:00+09:00")
-            ],
-            "issues": [],
-        }
+        repo_activity = _activity(
+            pulls=[_pr(8, "Touched", "open", created_at="2026-03-20T09:00:00+09:00")]
+        )
         blocks = self.client._build_timeline_section(
             "repo", repo_activity, SINCE, UNTIL
         )
         assert blocks == []
 
     def test_unmerged_pr_close_appears_at_top_level(self):
-        repo_activity = {
-            "commits": [],
-            "pulls": [
+        repo_activity = _activity(
+            pulls=[
                 _pr(
                     7,
                     "Rejected",
@@ -444,9 +504,8 @@ class TestTimelineSection:
                     created_at="2026-03-27T09:00:00+09:00",
                     closed_at="2026-03-28T15:00:00+09:00",
                 )
-            ],
-            "issues": [],
-        }
+            ]
+        )
         blocks = self.client._build_timeline_section(
             "repo", repo_activity, SINCE, UNTIL
         )
@@ -525,17 +584,16 @@ class TestTimelineSection:
         assert blocks == []
 
 
-class TestBuildChildren:
+class TestBuildChildren(ClientTestBase):
     def test_full_layout(self):
-        client = _make_client()
         repo_summary = {
             "name": "repo",
             "summary": ["point one", "point two"],
             "tags": [],
         }
-        repo_activity = {
-            "commits": [_commit("deadbeef00", "Commit msg", hour=10, minute=0)],
-            "pulls": [
+        repo_activity = _activity(
+            commits=[_commit("deadbeef00", "Commit msg", hour=10, minute=0)],
+            pulls=[
                 _pr(
                     1,
                     "Merged",
@@ -544,11 +602,13 @@ class TestBuildChildren:
                     closed_at="2026-03-28T11:00:00+09:00",
                 ),
             ],
-            "issues": [
+            issues=[
                 _issue(5, "Open today", "open", created_at="2026-03-28T09:00:00+09:00"),
             ],
-        }
-        children = client._build_children(repo_summary, repo_activity, SINCE, UNTIL)
+        )
+        children = self.client._build_children(
+            repo_summary, repo_activity, SINCE, UNTIL
+        )
         types = [c["type"] for c in children]
         # Summary heading + 2 bullets,
         # Done heading + 1 bullet, Todo heading + 1 bullet,
@@ -575,31 +635,28 @@ class TestBuildChildren:
         assert headings == ["Summary", "Done", "Todo", "Timeline"]
 
     def test_only_summary_when_no_activity(self):
-        client = _make_client()
         repo_summary = {"name": "repo", "summary": ["only point"], "tags": []}
-        repo_activity = {"commits": [], "pulls": [], "issues": []}
-        children = client._build_children(repo_summary, repo_activity, SINCE, UNTIL)
+        children = self.client._build_children(repo_summary, _activity(), SINCE, UNTIL)
         types = [c["type"] for c in children]
         assert types == ["heading_2", "bulleted_list_item"]
 
 
-class TestCreateReportPagesWiring:
+class TestCreateReportPagesWiring(ClientTestBase):
     def test_passes_since_until_to_create_page(self):
-        client = _make_client()
-        client._archive_existing_pages = MagicMock(return_value=0)
-        client.create_page = MagicMock(return_value="https://notion.so/page1")
+        self.client._archive_existing_pages = MagicMock(return_value=0)
+        self.client.create_page = MagicMock(return_value="https://notion.so/page1")
 
         target_date = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
         report = {"repositories": [{"name": "repo", "summary": [], "tags": []}]}
-        activity = GitHubActivity({"repo": {"commits": [], "pulls": [], "issues": []}})
+        activity = GitHubActivity({"repo": _activity()})
         sessions = SessionActivity({})
 
-        client.create_report_pages(
+        self.client.create_report_pages(
             target_date, SINCE, UNTIL, report, activity, sessions
         )
 
-        client.create_page.assert_called_once()
-        args = client.create_page.call_args[0]
+        self.client.create_page.assert_called_once()
+        args = self.client.create_page.call_args[0]
         # Signature: target_date, repo_summary, repo_activity, since, until, ...
         assert args[0] == target_date
         assert args[3] == SINCE

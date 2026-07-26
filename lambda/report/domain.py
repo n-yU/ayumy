@@ -18,6 +18,12 @@ if TYPE_CHECKING:
 _IRREGULAR_ISSUE_REASONS = {"not_planned": "not planned", "duplicate": "duplicate"}
 
 
+def in_range(iso_timestamp: str | None, since: datetime, until: datetime) -> bool:
+    if not iso_timestamp:
+        return False
+    return since <= datetime.fromisoformat(iso_timestamp) < until
+
+
 @dataclass(frozen=True, slots=True)
 class CommitInfo:
     """Commit in a repository with the PRs it is associated with."""
@@ -40,7 +46,7 @@ class CommitInfo:
         return f"{self.short_sha}: {self.message}"
 
     def is_in_range(self, since: datetime, until: datetime) -> bool:
-        return since <= datetime.fromisoformat(self.date) < until
+        return in_range(self.date, since, until)
 
     @classmethod
     def from_search_commit(
@@ -89,10 +95,24 @@ class PullInfo:
         return "⚠️ (closed) "
 
     def has_event_in_range(self, since: datetime, until: datetime) -> bool:
-        for ts in (self.created_at, self.merged_at, self.closed_at):
-            if ts and since <= datetime.fromisoformat(ts) < until:
-                return True
-        return False
+        return any(
+            in_range(ts, since, until)
+            for ts in (self.created_at, self.merged_at, self.closed_at)
+        )
+
+    @property
+    def completed_at(self) -> str | None:
+        return self.merged_at or self.closed_at
+
+    def state_in_range(self, since: datetime, until: datetime) -> str | None:
+        """State as of the end of the window, or None once the PR had already completed before `since`.
+
+        A PR completed after the window is reported as `open` because the completion belongs to the day it happened.
+        """
+        completed = self.completed_at
+        if completed is None or datetime.fromisoformat(completed) >= until:
+            return "open"
+        return self.state if in_range(completed, since, until) else None
 
     @classmethod
     def from_pull_request(cls, pr: PullRequest) -> PullInfo:
@@ -150,10 +170,23 @@ class IssueInfo:
         return f"⚠️ close ({label}): "
 
     def has_event_in_range(self, since: datetime, until: datetime) -> bool:
-        for ts in (self.created_at, self.closed_at):
-            if ts and since <= datetime.fromisoformat(ts) < until:
-                return True
-        return False
+        return any(
+            in_range(ts, since, until) for ts in (self.created_at, self.closed_at)
+        )
+
+    @property
+    def completed_at(self) -> str | None:
+        return self.closed_at
+
+    def state_in_range(self, since: datetime, until: datetime) -> str | None:
+        """State as of the end of the window, or None once the issue had already closed before `since`.
+
+        An issue closed after the window is reported as `open` because the close belongs to the day it happened.
+        """
+        completed = self.completed_at
+        if completed is None or datetime.fromisoformat(completed) >= until:
+            return "open"
+        return self.state if in_range(completed, since, until) else None
 
     @classmethod
     def from_issue(cls, issue: Issue) -> IssueInfo:
