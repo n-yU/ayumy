@@ -470,7 +470,7 @@ Notion ページの本文は Summary、ステータス別セクション、Timel
 [heading_2]            Summary
 [bulleted_list_item]   リポジトリの作業要点（2〜5項目）
 [heading_2]            Done（該当がある場合のみ）
-[bulleted_list_item]   マージ済み・クローズ済み PR、クローズ済み Issue
+[bulleted_list_item]   対象日に完了した PR や Issue
 [heading_2]            In Progress（該当がある場合のみ）
 [bulleted_list_item]   作業中の PR や Issue（draft PR を含む）
 [heading_2]            Todo（該当がある場合のみ）
@@ -479,11 +479,11 @@ Notion ページの本文は Summary、ステータス別セクション、Timel
 [bulleted_list_item]   PR ブロック親 + 配下 commit を `children` でネスト、merge commit / 直接 commit / Issue open / close / unmerged PR close を最上位に時系列で interleave
 ```
 
-ステータスの振り分け基準
+ステータスは取得時点の state ではなく、完了時刻（PR は merge、マージされず close された PR と Issue は close）が対象日ウィンドウ内かで振り分ける。対象日より前に完了したアイテムは、セッション内での言及や close 後の更新で取得対象に入っただけであるためいずれのセクションにも載せない
 
-- Done: マージ済み PR、クローズ済み（unmerged）PR、クローズ済み Issue
-- In Progress: オープン PR（draft 含む）、対象日より前に作成されたオープン Issue
-- Todo: 対象日に新規作成され、まだオープンの Issue
+- Done: 対象日に完了した PR / Issue
+- In Progress: 対象日終了時点で未完了の PR（draft 含む）、対象日より前に作成された未完了 Issue
+- Todo: 対象日に新規作成され、対象日終了時点で未完了の Issue
 
 Done セクションの各項目には状態を示す prefix を付ける。通常完了したものには `✅ `、イレギュラーな完了には `⚠️ (理由) ` を付け、後者は以下を区別する
 
