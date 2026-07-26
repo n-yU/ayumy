@@ -457,9 +457,9 @@ Date × Repository 単位でページを作成する。1日に複数ページが
 | Date | Date | 対象日 | `2025-03-01` |
 | Repository | Select | リポジトリ名 | `ayumy` |
 | Tags | Multi-select | 作業内容の分類タグ | `feature`, `refactor` |
-| Commits | Number | リポジトリのコミット数 | `5` |
-| Merged | Number | リポジトリのマージ PR 数 | `2` |
-| Closed | Number | リポジトリのクローズ Issue 数 | `1` |
+| Commits | Number | 対象日のコミット数 | `5` |
+| Merged | Number | 対象日にマージした PR 数 | `2` |
+| Closed | Number | 対象日にクローズした Issue 数 | `1` |
 | Sessions | Number | リポジトリのセッション数 | `3` |
 | Version | Text | レポート生成時の ayumy バージョン | `0.2.0` |
 

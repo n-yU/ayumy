@@ -20,12 +20,13 @@ def _commit(
     hour: int = 10,
     minute: int = 0,
     pull_numbers: list[int] | None = None,
+    day: int = 28,
 ) -> CommitInfo:
     return CommitInfo(
         sha=sha,
         message=message,
         author="user",
-        date=datetime(2026, 3, 28, hour, minute, tzinfo=JST).isoformat(),
+        date=datetime(2026, 3, day, hour, minute, tzinfo=JST).isoformat(),
         url=f"https://github.com/n-yU/repo/commit/{sha}",
         pull_numbers=tuple(pull_numbers or ()),
     )
@@ -661,3 +662,69 @@ class TestCreateReportPagesWiring(ClientTestBase):
         assert args[0] == target_date
         assert args[3] == SINCE
         assert args[4] == UNTIL
+
+    def test_counts_only_activity_within_window(self):
+        self.client._archive_existing_pages = MagicMock(return_value=0)
+        self.client.create_page = MagicMock(return_value="https://notion.so/page1")
+
+        report = {"repositories": [{"name": "repo", "summary": [], "tags": []}]}
+        activity = GitHubActivity(
+            {
+                "repo": _activity(
+                    commits=[
+                        _commit("aaa1111", "In window", hour=10),
+                        _commit("bbb2222", "Previous day", hour=10, day=27),
+                    ],
+                    pulls=[
+                        _pr(
+                            1,
+                            "Merged in window",
+                            "merged",
+                            merged_at="2026-03-28T10:00:00+09:00",
+                            closed_at="2026-03-28T10:00:00+09:00",
+                        ),
+                        _pr(
+                            2,
+                            "Merged before window",
+                            "merged",
+                            merged_at="2026-03-27T10:00:00+09:00",
+                            closed_at="2026-03-27T10:00:00+09:00",
+                        ),
+                        _pr(
+                            3,
+                            "Merged after window",
+                            "merged",
+                            merged_at="2026-03-29T10:00:00+09:00",
+                            closed_at="2026-03-29T10:00:00+09:00",
+                        ),
+                    ],
+                    issues=[
+                        _issue(
+                            10,
+                            "Closed in window",
+                            "closed",
+                            closed_at="2026-03-28T12:00:00+09:00",
+                        ),
+                        _issue(
+                            11,
+                            "Closed before window",
+                            "closed",
+                            closed_at="2026-03-27T12:00:00+09:00",
+                        ),
+                    ],
+                )
+            }
+        )
+
+        self.client.create_report_pages(
+            datetime(2026, 3, 28, 0, 0, tzinfo=JST),
+            SINCE,
+            UNTIL,
+            report,
+            activity,
+            SessionActivity({}),
+        )
+
+        args = self.client.create_page.call_args[0]
+        # Signature: ..., since, until, commits, prs_merged, issues_closed, sessions
+        assert args[5:9] == (1, 1, 1, 0)
