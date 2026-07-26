@@ -342,7 +342,7 @@ DynamoDB の `ayumy-sessions` テーブルから対象日付をパーティシ�
 ### Summary Generation
 使用モデル: `claude-sonnet-4-6`
 
-GitHub アクティビティと Claude Code セッションログの両方をコンテキストとして渡し、リポジトリごとの要約を生成する。文体は常体で統一し、ですます調は使用しない
+GitHub アクティビティと Claude Code セッションログの両方をコンテキストとして渡し、リポジトリごとの要約を生成する。GitHub アクティビティは Notion 本文と同じ対象日基準で絞り、対象日に完了していないアイテムを完了として渡さない。文体は常体で統一し、ですます調は使用しない
 
 - **リポジトリ別の要点**: 各リポジトリで行われた作業の要点を 2〜5 項目の箇条書きで記述する。最初の項目はそのリポジトリの最重要の要点として単独でも通じる内容にする（Slack 通知ではこの項目を 1 文サマリとして流用する）
 - **Claude Code での作業**: 上記の要点の中に Claude Code セッションでの相談・実装方針の検討内容も含めて構わない
@@ -457,9 +457,9 @@ Date × Repository 単位でページを作成する。1日に複数ページが
 | Date | Date | 対象日 | `2025-03-01` |
 | Repository | Select | リポジトリ名 | `ayumy` |
 | Tags | Multi-select | 作業内容の分類タグ | `feature`, `refactor` |
-| Commits | Number | リポジトリのコミット数 | `5` |
-| Merged | Number | リポジトリのマージ PR 数 | `2` |
-| Closed | Number | リポジトリのクローズ Issue 数 | `1` |
+| Commits | Number | 対象日のコミット数 | `5` |
+| Merged | Number | 対象日にマージした PR 数 | `2` |
+| Closed | Number | 対象日にクローズした Issue 数 | `1` |
 | Sessions | Number | リポジトリのセッション数 | `3` |
 | Version | Text | レポート生成時の ayumy バージョン | `0.2.0` |
 
@@ -470,7 +470,7 @@ Notion ページの本文は Summary、ステータス別セクション、Timel
 [heading_2]            Summary
 [bulleted_list_item]   リポジトリの作業要点（2〜5項目）
 [heading_2]            Done（該当がある場合のみ）
-[bulleted_list_item]   マージ済み・クローズ済み PR、クローズ済み Issue
+[bulleted_list_item]   対象日に完了した PR や Issue
 [heading_2]            In Progress（該当がある場合のみ）
 [bulleted_list_item]   作業中の PR や Issue（draft PR を含む）
 [heading_2]            Todo（該当がある場合のみ）
@@ -479,11 +479,11 @@ Notion ページの本文は Summary、ステータス別セクション、Timel
 [bulleted_list_item]   PR ブロック親 + 配下 commit を `children` でネスト、merge commit / 直接 commit / Issue open / close / unmerged PR close を最上位に時系列で interleave
 ```
 
-ステータスの振り分け基準
+ステータスは取得時点の state ではなく、完了時刻（PR は merge、マージされず close された PR と Issue は close）が対象日ウィンドウ内かで振り分ける。対象日より前に完了したアイテムは、セッション内での言及や close 後の更新で取得対象に入っただけであるためいずれのセクションにも載せない
 
-- Done: マージ済み PR、クローズ済み（unmerged）PR、クローズ済み Issue
-- In Progress: オープン PR（draft 含む）、対象日より前に作成されたオープン Issue
-- Todo: 対象日に新規作成され、まだオープンの Issue
+- Done: 対象日に完了した PR / Issue
+- In Progress: 対象日終了時点で未完了の PR（draft 含む）、対象日より前に作成された未完了 Issue
+- Todo: 対象日に新規作成され、対象日終了時点で未完了の Issue
 
 Done セクションの各項目には状態を示す prefix を付ける。通常完了したものには `✅ `、イレギュラーな完了には `⚠️ (理由) ` を付け、後者は以下を区別する
 

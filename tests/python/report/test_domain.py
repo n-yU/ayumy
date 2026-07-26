@@ -175,6 +175,45 @@ class TestPullInfo:
         pr = _pull(created_at=created_at, merged_at=merged_at, closed_at=closed_at)
         assert pr.has_event_in_range(SINCE, UNTIL) is expected
 
+    @pytest.mark.parametrize(
+        "state,merged_at,closed_at,expected",
+        [
+            ("open", None, None, "open"),
+            (
+                "merged",
+                "2026-03-28T10:00:00+09:00",
+                "2026-03-28T10:00:00+09:00",
+                "merged",
+            ),
+            ("closed", None, "2026-03-28T10:00:00+09:00", "closed"),
+            ("merged", "2026-03-27T10:00:00+09:00", "2026-03-27T10:00:00+09:00", None),
+            ("closed", None, "2026-03-27T10:00:00+09:00", None),
+            (
+                "merged",
+                "2026-03-29T10:00:00+09:00",
+                "2026-03-29T10:00:00+09:00",
+                "open",
+            ),
+            ("closed", None, "2026-03-29T10:00:00+09:00", "open"),
+            # since is inclusive, until is exclusive
+            (
+                "merged",
+                "2026-03-28T00:00:00+09:00",
+                "2026-03-28T00:00:00+09:00",
+                "merged",
+            ),
+            (
+                "merged",
+                "2026-03-29T00:00:00+09:00",
+                "2026-03-29T00:00:00+09:00",
+                "open",
+            ),
+        ],
+    )
+    def test_state_in_range(self, state, merged_at, closed_at, expected):
+        pr = _pull(state=state, merged_at=merged_at, closed_at=closed_at)
+        assert pr.state_in_range(SINCE, UNTIL) == expected
+
     def test_from_pull_request_classifies_merged(self):
         pr = _make_pr_mock(merged_at_dt=datetime(2026, 3, 28, 10, 0, tzinfo=JST))
         info = PullInfo.from_pull_request(pr)
@@ -248,6 +287,22 @@ class TestIssueInfo:
     def test_has_event_in_range(self, created_at, closed_at, expected):
         issue = _issue(created_at=created_at, closed_at=closed_at)
         assert issue.has_event_in_range(SINCE, UNTIL) is expected
+
+    @pytest.mark.parametrize(
+        "state,closed_at,expected",
+        [
+            ("open", None, "open"),
+            ("closed", "2026-03-28T10:00:00+09:00", "closed"),
+            ("closed", "2026-03-27T10:00:00+09:00", None),
+            ("closed", "2026-03-29T10:00:00+09:00", "open"),
+            # since is inclusive, until is exclusive
+            ("closed", "2026-03-28T00:00:00+09:00", "closed"),
+            ("closed", "2026-03-29T00:00:00+09:00", "open"),
+        ],
+    )
+    def test_state_in_range(self, state, closed_at, expected):
+        issue = _issue(state=state, closed_at=closed_at)
+        assert issue.state_in_range(SINCE, UNTIL) == expected
 
     def test_from_issue_extracts_labels_as_tuple(self):
         issue = MagicMock()

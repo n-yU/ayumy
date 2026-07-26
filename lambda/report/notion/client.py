@@ -12,19 +12,12 @@ from .. import (
     SessionActivity,
     get_version,
 )
-from ..domain import CommitInfo, PullInfo
+from ..domain import CommitInfo, PullInfo, in_range
 from ..github import GitHubActivity, RepoActivity
 from ..notice import Notice, NoticeSource
 from .blocks import bulleted_link, bulleted_text, heading_2
 
 logger = logging.getLogger(__name__)
-
-
-def _is_in_range(iso_timestamp: str | None, since: datetime, until: datetime) -> bool:
-    if not iso_timestamp:
-        return False
-    dt = datetime.fromisoformat(iso_timestamp)
-    return since <= dt < until
 
 
 class NotionClient:
@@ -90,23 +83,29 @@ class NotionClient:
         since: datetime,
         until: datetime,
     ) -> list[dict]:
-        """Per 'Spec: Page Body': Done = merged/closed PRs + closed issues; Todo = in-range open issues created in window; In Progress = remaining opens. Empty sections are omitted."""
+        """Per 'Spec: Page Body': Done = PRs / issues completed within the window; Todo = issues still open at `until` and created in window; In Progress = remaining opens. Items completed before the window and empty sections are omitted."""
         done: list[tuple[str, str, str]] = []
         in_progress: list[tuple[str, str, str]] = []
         todo: list[tuple[str, str, str]] = []
 
         for pr in repo_activity["pulls"]:
             label = pr.label(repo_name)
-            if pr.state == "merged" or pr.state == "closed":
+            state = pr.state_in_range(since, until)
+            if state is None:
+                continue
+            if state != "open":
                 done.append((label, pr.url, pr.done_prefix()))
             else:
                 in_progress.append((label, pr.url, ""))
 
         for issue in repo_activity["issues"]:
             label = issue.label(repo_name)
-            if issue.state == "closed":
+            state = issue.state_in_range(since, until)
+            if state is None:
+                continue
+            if state != "open":
                 done.append((label, issue.url, issue.done_prefix()))
-            elif _is_in_range(issue.created_at, since, until):
+            elif in_range(issue.created_at, since, until):
                 todo.append((label, issue.url, ""))
             else:
                 in_progress.append((label, issue.url, ""))
@@ -166,16 +165,16 @@ class NotionClient:
                 key=lambda c: datetime.fromisoformat(c.date),
             )
             candidates: list[datetime] = []
-            if _is_in_range(pr.created_at, since, until):
+            if in_range(pr.created_at, since, until):
                 candidates.append(datetime.fromisoformat(pr.created_at))
             if nested:
                 candidates.append(datetime.fromisoformat(nested[0].date))
-            if _is_in_range(pr.merged_at, since, until):
+            if in_range(pr.merged_at, since, until):
                 candidates.append(datetime.fromisoformat(pr.merged_at))
             if (
                 pr.state == "closed"
                 and not pr.merged_at
-                and _is_in_range(pr.closed_at, since, until)
+                and in_range(pr.closed_at, since, until)
             ):
                 candidates.append(datetime.fromisoformat(pr.closed_at))
             if not candidates:
@@ -194,7 +193,7 @@ class NotionClient:
                 )
             )
             # Unmerged-closed PR also gets a top-level close line
-            if pr.state == "closed" and _is_in_range(pr.closed_at, since, until):
+            if pr.state == "closed" and in_range(pr.closed_at, since, until):
                 entries.append(
                     (
                         datetime.fromisoformat(pr.closed_at),
@@ -209,7 +208,7 @@ class NotionClient:
 
         for issue in issues:
             label = issue.label(repo_name)
-            if _is_in_range(issue.created_at, since, until):
+            if in_range(issue.created_at, since, until):
                 entries.append(
                     (
                         datetime.fromisoformat(issue.created_at),
@@ -217,7 +216,7 @@ class NotionClient:
                         bulleted_link(label, issue.url, prefix="🟢 open: "),
                     )
                 )
-            if _is_in_range(issue.closed_at, since, until):
+            if in_range(issue.closed_at, since, until):
                 entries.append(
                     (
                         datetime.fromisoformat(issue.closed_at),
@@ -334,10 +333,19 @@ class NotionClient:
 
             repo_activity = activity.repos()[repo_name]
 
-            commits = len(repo_activity["commits"])
-            prs_merged = sum(1 for pr in repo_activity["pulls"] if pr.state == "merged")
+            # Counted on the same window basis as the page body so the properties match what the page lists
+            commits = sum(
+                1 for c in repo_activity["commits"] if c.is_in_range(since, until)
+            )
+            prs_merged = sum(
+                1
+                for pr in repo_activity["pulls"]
+                if pr.state_in_range(since, until) == "merged"
+            )
             issues_closed = sum(
-                1 for issue in repo_activity["issues"] if issue.state == "closed"
+                1
+                for issue in repo_activity["issues"]
+                if issue.state_in_range(since, until) == "closed"
             )
             claude_sessions = len(session_activity.get(repo_name, []))
 
