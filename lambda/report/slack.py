@@ -84,7 +84,7 @@ def _chunk_blocks(blocks: list[dict], limit: int = BLOCKS_MAX) -> list[list[dict
 def _pack_messages(
     groups: list[list[dict]], fallbacks: list[str], limit: int = BLOCKS_MAX
 ) -> list[tuple[list[dict], str]]:
-    """Joins groups with a divider and keeps each group whole, so one day's blocks never straddle two messages."""
+    """Keeps each group whole so one date's report never straddles two messages."""
     messages: list[tuple[list[dict], str]] = []
     current: list[dict] = []
     current_fallbacks: list[str] = []
@@ -279,7 +279,7 @@ class SlackClient:
                 kwargs["thread_ts"] = thread_ts
             response = self.client.chat_postMessage(**kwargs)
             if thread_ts is None:
-                # Track the latest top-level message so warnings thread under the one carrying the execution metrics
+                # Warnings thread under the final message, which carries the execution metrics
                 self.parent_ts = response.get("ts")
         except SlackClientError as e:
             # Broad within Slack SDK errors: best-effort notification must not abort the pipeline
