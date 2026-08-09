@@ -77,6 +77,10 @@ def _chunk_lines(lines: list[str], limit: int) -> list[str]:
     return chunks
 
 
+def _chunk_blocks(blocks: list[dict], limit: int = BLOCKS_MAX) -> list[list[dict]]:
+    return [blocks[i : i + limit] for i in range(0, len(blocks), limit)]
+
+
 def _pack_messages(
     groups: list[list[dict]], fallbacks: list[str], limit: int = BLOCKS_MAX
 ) -> list[tuple[list[dict], str]]:
@@ -258,7 +262,8 @@ class SlackClient:
             for chunk in _chunk_lines(lines, SECTION_TEXT_MAX - len(header) - 1):
                 blocks.append(_section_block(f"{header}\n{chunk}"))
         fallback = f"⚠️ {total} warning(s) emitted"
-        self._send(fallback, blocks, thread_ts=self.parent_ts)
+        for chunk in _chunk_blocks(blocks):
+            self._send(fallback, chunk, thread_ts=self.parent_ts)
 
     def _send(
         self,
@@ -273,7 +278,8 @@ class SlackClient:
             if thread_ts is not None:
                 kwargs["thread_ts"] = thread_ts
             response = self.client.chat_postMessage(**kwargs)
-            if self.parent_ts is None and thread_ts is None:
+            if thread_ts is None:
+                # Track the latest top-level message so warnings thread under the one carrying the execution metrics
                 self.parent_ts = response.get("ts")
         except SlackClientError as e:
             # Broad within Slack SDK errors: best-effort notification must not abort the pipeline

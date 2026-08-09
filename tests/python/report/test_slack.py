@@ -14,6 +14,7 @@ from report.slack import (
     BLOCKS_MAX,
     SECTION_TEXT_MAX,
     SlackClient,
+    _chunk_blocks,
     _context_block,
     _divider,
     _escape_mrkdwn,
@@ -290,6 +291,18 @@ class TestAppendGroup:
 
         assert client._groups == [[first], [second]]
         assert client._fallback_parts == ["a", "b"]
+
+
+class TestChunkBlocks:
+    def test_returns_single_chunk_within_limit(self):
+        blocks = [_section_block(str(i)) for i in range(3)]
+
+        assert _chunk_blocks(blocks, limit=3) == [blocks]
+
+    def test_splits_into_chunks_of_limit(self):
+        blocks = [_section_block(str(i)) for i in range(5)]
+
+        assert _chunk_blocks(blocks, limit=2) == [blocks[:2], blocks[2:4], blocks[4:]]
 
 
 class TestPackMessages:
@@ -664,10 +677,9 @@ class TestFlush:
 
         assert self.client.parent_ts == "1700000000.000100"
 
-    def test_parent_ts_not_overwritten_on_subsequent_sends(self):
+    def test_parent_ts_tracks_latest_top_level_message(self):
         self.client.notify_error(self.target, RuntimeError("first"))
         self.client.flush()
-        initial_ts = self.client.parent_ts
 
         self.client.client.chat_postMessage.return_value = {
             "ok": True,
@@ -676,7 +688,21 @@ class TestFlush:
         self.client.notify_error(self.target, RuntimeError("second"))
         self.client.flush()
 
-        assert self.client.parent_ts == initial_ts
+        assert self.client.parent_ts == "1800000000.000200"
+
+    def test_parent_ts_points_at_last_message_when_split(self):
+        timestamps = iter(["1700000000.000100", "1800000000.000200"])
+        self.client.client.chat_postMessage.side_effect = lambda **_: {
+            "ok": True,
+            "ts": next(timestamps),
+        }
+        for day in range(1, 32):
+            self.client.notify_no_activity(datetime(2026, 3, day, tzinfo=JST))
+
+        self.client.flush()
+
+        assert self.client.client.chat_postMessage.call_count == 2
+        assert self.client.parent_ts == "1800000000.000200"
 
     def test_sends_to_configured_channel(self):
         self.client.notify_error(self.target, RuntimeError("fail"))
@@ -822,6 +848,20 @@ class TestSendNoticeThread:
             text = block["text"]["text"]
             assert len(text) <= SECTION_TEXT_MAX
             assert text.startswith("*session*")
+
+    def test_splits_into_multiple_replies_over_block_limit(self):
+        notice = Notice()
+        # Each title nearly fills a section, so every entry lands in its own block
+        for i in range(BLOCKS_MAX + 5):
+            notice.add(NoticeSource.SESSION, "x" * 2850, key=f"k{i}")
+
+        self.client.send_notice_thread(notice)
+
+        sent = _all_send_kwargs(self.client)
+        assert len(sent) > 1
+        for kwargs in sent:
+            assert len(kwargs["blocks"]) <= BLOCKS_MAX
+            assert kwargs["thread_ts"] == "1700000000.000100"
 
     def test_truncates_single_line_exceeding_section_limit(self):
         notice = Notice()
