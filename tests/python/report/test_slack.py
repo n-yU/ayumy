@@ -11,12 +11,15 @@ from report import JST
 from report.cost import CostDisplay
 from report.notice import Notice, NoticeSource
 from report.slack import (
+    BLOCKS_MAX,
     SECTION_TEXT_MAX,
     SlackClient,
+    _chunk_blocks,
     _context_block,
     _divider,
     _escape_mrkdwn,
     _header_block,
+    _pack_messages,
     _section_block,
 )
 from report.summarizer import ValidationResult
@@ -30,7 +33,7 @@ def _make_client():
         "ts": "1700000000.000100",
     }
     client.channel = "C0TEST"
-    client._blocks = []
+    client._groups = []
     client._fallback_parts = []
     client.parent_ts = None
     return client
@@ -38,6 +41,10 @@ def _make_client():
 
 def _get_send_kwargs(client):
     return client.client.chat_postMessage.call_args.kwargs
+
+
+def _all_send_kwargs(client):
+    return [call.kwargs for call in client.client.chat_postMessage.call_args_list]
 
 
 def _blocks_text(blocks):
@@ -263,36 +270,71 @@ class TestBlockPrimitives:
         }
 
 
-class TestAppendWithDivider:
-    def test_appends_blocks_without_divider_when_buffer_empty(self):
+class TestAppendGroup:
+    def test_buffers_blocks_and_fallback_as_one_group(self):
         client = _make_client()
-        block = _section_block("first")
-
-        client._append_with_divider(block)
-
-        assert client._blocks == [block]
-
-    def test_prepends_divider_when_buffer_has_content(self):
-        client = _make_client()
-        first = _section_block("first")
-        second = _section_block("second")
-        client._blocks.append(first)
-
-        client._append_with_divider(second)
-
-        assert client._blocks == [first, _divider(), second]
-
-    def test_appends_multiple_blocks_after_divider(self):
-        client = _make_client()
-        client._blocks.append(_section_block("existing"))
         header = _header_block("📝 Daily Report (2026-03-28)")
         section = _section_block("body")
 
-        client._append_with_divider(header, section)
+        client._append_group([header, section], "1 page(s) created")
 
-        assert client._blocks[-3] == _divider()
-        assert client._blocks[-2] == header
-        assert client._blocks[-1] == section
+        assert client._groups == [[header, section]]
+        assert client._fallback_parts == ["1 page(s) created"]
+
+    def test_keeps_groups_separate(self):
+        client = _make_client()
+        first = _section_block("first")
+        second = _section_block("second")
+
+        client._append_group([first], "a")
+        client._append_group([second], "b")
+
+        assert client._groups == [[first], [second]]
+        assert client._fallback_parts == ["a", "b"]
+
+
+class TestChunkBlocks:
+    def test_returns_single_chunk_within_limit(self):
+        blocks = [_section_block(str(i)) for i in range(3)]
+
+        assert _chunk_blocks(blocks, limit=3) == [blocks]
+
+    def test_splits_into_chunks_of_limit(self):
+        blocks = [_section_block(str(i)) for i in range(5)]
+
+        assert _chunk_blocks(blocks, limit=2) == [blocks[:2], blocks[2:4], blocks[4:]]
+
+
+class TestPackMessages:
+    def test_returns_nothing_for_empty_buffer(self):
+        assert _pack_messages([], []) == []
+
+    def test_joins_groups_with_divider_without_leading_divider(self):
+        first = _section_block("first")
+        second = _section_block("second")
+
+        messages = _pack_messages([[first], [second]], ["a", "b"])
+
+        assert messages == [([first, _divider(), second], "a | b")]
+
+    def test_starts_new_message_when_limit_exceeded(self):
+        groups = [[_section_block(str(i))] for i in range(4)]
+        fallbacks = [str(i) for i in range(4)]
+
+        messages = _pack_messages(groups, fallbacks, limit=3)
+
+        assert [len(blocks) for blocks, _ in messages] == [3, 3]
+        assert [fallback for _, fallback in messages] == ["0 | 1", "2 | 3"]
+
+    def test_never_splits_a_group_across_messages(self):
+        pair = [_header_block("h"), _section_block("s")]
+        groups = [list(pair) for _ in range(3)]
+
+        messages = _pack_messages(groups, ["a", "b", "c"], limit=4)
+
+        assert [len(blocks) for blocks, _ in messages] == [2, 2, 2]
+        for blocks, _ in messages:
+            assert blocks == pair
 
 
 class TestNotifyNoActivity:
@@ -635,10 +677,9 @@ class TestFlush:
 
         assert self.client.parent_ts == "1700000000.000100"
 
-    def test_parent_ts_not_overwritten_on_subsequent_sends(self):
+    def test_parent_ts_tracks_latest_top_level_message(self):
         self.client.notify_error(self.target, RuntimeError("first"))
         self.client.flush()
-        initial_ts = self.client.parent_ts
 
         self.client.client.chat_postMessage.return_value = {
             "ok": True,
@@ -647,7 +688,21 @@ class TestFlush:
         self.client.notify_error(self.target, RuntimeError("second"))
         self.client.flush()
 
-        assert self.client.parent_ts == initial_ts
+        assert self.client.parent_ts == "1800000000.000200"
+
+    def test_parent_ts_points_at_last_message_when_split(self):
+        timestamps = iter(["1700000000.000100", "1800000000.000200"])
+        self.client.client.chat_postMessage.side_effect = lambda **_: {
+            "ok": True,
+            "ts": next(timestamps),
+        }
+        for day in range(1, 32):
+            self.client.notify_no_activity(datetime(2026, 3, day, tzinfo=JST))
+
+        self.client.flush()
+
+        assert self.client.client.chat_postMessage.call_count == 2
+        assert self.client.parent_ts == "1800000000.000200"
 
     def test_sends_to_configured_channel(self):
         self.client.notify_error(self.target, RuntimeError("fail"))
@@ -670,6 +725,54 @@ class TestFlush:
 
         with pytest.raises(RuntimeError, match="boom"):
             self.client.flush()
+
+    def test_splits_into_multiple_messages_over_block_limit(self):
+        for day in range(1, 32):
+            self.client.notify_no_activity(datetime(2026, 3, day, tzinfo=JST))
+        self.client.notify_metrics(10.0, 100.0, "0.2.1", memory_limit_mb=512)
+
+        self.client.flush()
+
+        sent = _all_send_kwargs(self.client)
+        assert len(sent) > 1
+        for kwargs in sent:
+            assert len(kwargs["blocks"]) <= BLOCKS_MAX
+            assert kwargs["blocks"][0]["type"] != "divider"
+        headers = [
+            block
+            for kwargs in sent
+            for block in kwargs["blocks"]
+            if block["type"] == "header"
+        ]
+        assert len(headers) == 31
+
+    def test_splits_fallback_text_per_message(self):
+        for day in range(1, 32):
+            self.client.notify_no_activity(datetime(2026, 3, day, tzinfo=JST))
+
+        self.client.flush()
+
+        sent = _all_send_kwargs(self.client)
+        assert len(sent) > 1
+        assert "2026-03-01" in sent[0]["text"]
+        assert "2026-03-31" not in sent[0]["text"]
+        assert "2026-03-31" in sent[-1]["text"]
+
+    def test_keeps_day_blocks_in_one_message(self):
+        for day in range(1, 32):
+            self.client.notify(
+                datetime(2026, 3, day, tzinfo=JST),
+                {"summary": "s", "repositories": [_repo("repo")]},
+                [("repo", "https://notion.so/p")],
+                session_only_repos=["other"],
+            )
+
+        self.client.flush()
+
+        for kwargs in _all_send_kwargs(self.client):
+            types = [block["type"] for block in kwargs["blocks"]]
+            assert types.count("header") == types.count("section")
+            assert types.count("header") == types.count("context")
 
 
 class TestSendNoticeThread:
@@ -745,6 +848,20 @@ class TestSendNoticeThread:
             text = block["text"]["text"]
             assert len(text) <= SECTION_TEXT_MAX
             assert text.startswith("*session*")
+
+    def test_splits_into_multiple_replies_over_block_limit(self):
+        notice = Notice()
+        # Each title nearly fills a section, so every entry lands in its own block
+        for i in range(BLOCKS_MAX + 5):
+            notice.add(NoticeSource.SESSION, "x" * 2850, key=f"k{i}")
+
+        self.client.send_notice_thread(notice)
+
+        sent = _all_send_kwargs(self.client)
+        assert len(sent) > 1
+        for kwargs in sent:
+            assert len(kwargs["blocks"]) <= BLOCKS_MAX
+            assert kwargs["thread_ts"] == "1700000000.000100"
 
     def test_truncates_single_line_exceeding_section_limit(self):
         notice = Notice()

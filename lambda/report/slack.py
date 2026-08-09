@@ -16,8 +16,8 @@ from .summarizer import ValidationResult
 
 logger = logging.getLogger(__name__)
 
-# Slack section text limit is 3000; cap below to leave room for headers and continuation prefixes
-SECTION_TEXT_MAX = 2900
+SECTION_TEXT_MAX = 2900  # Slack section text limit is 3000; cap below to leave room for headers and continuation prefixes
+BLOCKS_MAX = 50  # Slack API limit itself; no margin needed unlike SECTION_TEXT_MAX
 
 
 def _truncate_headline(headline: str, limit: int = CONFIG.slack.headline_max) -> str:
@@ -77,20 +77,46 @@ def _chunk_lines(lines: list[str], limit: int) -> list[str]:
     return chunks
 
 
+def _chunk_blocks(blocks: list[dict], limit: int = BLOCKS_MAX) -> list[list[dict]]:
+    return [blocks[i : i + limit] for i in range(0, len(blocks), limit)]
+
+
+def _pack_messages(
+    groups: list[list[dict]], fallbacks: list[str], limit: int = BLOCKS_MAX
+) -> list[tuple[list[dict], str]]:
+    """Keeps each group whole so one date's report never straddles two messages."""
+    messages: list[tuple[list[dict], str]] = []
+    current: list[dict] = []
+    current_fallbacks: list[str] = []
+    for blocks, fallback in zip(groups, fallbacks, strict=True):
+        added = len(blocks) + (1 if current else 0)
+        if current and len(current) + added > limit:
+            messages.append((current, " | ".join(current_fallbacks)))
+            current = list(blocks)
+            current_fallbacks = [fallback]
+        else:
+            if current:
+                current.append(_divider())
+            current.extend(blocks)
+            current_fallbacks.append(fallback)
+    if current:
+        messages.append((current, " | ".join(current_fallbacks)))
+    return messages
+
+
 class SlackClient:
     """Client for sending daily report notifications via Slack chat.postMessage."""
 
     def __init__(self, token: str, channel: str) -> None:
         self.client = WebClient(token=token)
         self.channel = channel
-        self._blocks: list[dict] = []
+        self._groups: list[list[dict]] = []
         self._fallback_parts: list[str] = []
         self.parent_ts: str | None = None
 
-    def _append_with_divider(self, *blocks: dict) -> None:
-        if self._blocks:
-            self._blocks.append(_divider())
-        self._blocks.extend(blocks)
+    def _append_group(self, blocks: list[dict], fallback: str) -> None:
+        self._groups.append(blocks)
+        self._fallback_parts.append(fallback)
 
     def _append_report_section(
         self,
@@ -106,8 +132,7 @@ class SlackClient:
             blocks.append(
                 _context_block(f"📓 Session-only: {', '.join(session_only_repos)}")
             )
-        self._append_with_divider(*blocks)
-        self._fallback_parts.append(f"{title}: {fallback_suffix}")
+        self._append_group(blocks, f"{title}: {fallback_suffix}")
 
     def notify(
         self,
@@ -209,15 +234,12 @@ class SlackClient:
                 f", {cost.monthly_call_count} calls{_mom_suffix(cost.call_count_change_pct)}"
             )
 
-        self._append_with_divider(_context_block("  |  ".join(parts)))
-        self._fallback_parts.append(fallback)
+        self._append_group([_context_block("  |  ".join(parts))], fallback)
 
     def flush(self) -> None:
-        if not self._blocks:
-            return
-        fallback = " | ".join(self._fallback_parts)
-        self._send(fallback, self._blocks)
-        self._blocks = []
+        for blocks, fallback in _pack_messages(self._groups, self._fallback_parts):
+            self._send(fallback, blocks)
+        self._groups = []
         self._fallback_parts = []
 
     def send_notice_thread(self, notice: Notice) -> None:
@@ -240,7 +262,8 @@ class SlackClient:
             for chunk in _chunk_lines(lines, SECTION_TEXT_MAX - len(header) - 1):
                 blocks.append(_section_block(f"{header}\n{chunk}"))
         fallback = f"⚠️ {total} warning(s) emitted"
-        self._send(fallback, blocks, thread_ts=self.parent_ts)
+        for chunk in _chunk_blocks(blocks):
+            self._send(fallback, chunk, thread_ts=self.parent_ts)
 
     def _send(
         self,
@@ -255,7 +278,8 @@ class SlackClient:
             if thread_ts is not None:
                 kwargs["thread_ts"] = thread_ts
             response = self.client.chat_postMessage(**kwargs)
-            if self.parent_ts is None and thread_ts is None:
+            if thread_ts is None:
+                # Warnings thread under the final message, which carries the execution metrics
                 self.parent_ts = response.get("ts")
         except SlackClientError as e:
             # Broad within Slack SDK errors: best-effort notification must not abort the pipeline

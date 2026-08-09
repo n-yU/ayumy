@@ -401,16 +401,23 @@ session-only の扱い（[Summary Generation](#summary-generation)）に応じ�
 - 対象日の全リポジトリが session-only の場合は session-only 専用の簡易通知を送る
 - 部分的 session-only の場合は通常の Daily Report 通知の下部に session-only リポジトリ名を context として付記する
 
+日付範囲を指定した一括実行では日数分の通知が 1 メッセージに積み上がるため、Slack の 1 メッセージあたりのブロック数上限を超える場合は複数のメッセージに分けて channel に連投する
+
+- 分割は日単位の境界でのみ行い、1 日分の通知が 2 つのメッセージにまたがらないようにする
+- 実行メトリクスは最後のメッセージに載る
+- Block Kit を解釈しないクライアント向けの代替テキストも同じ切れ目で分割する
+
 通知が失敗しても処理全体は正常終了とする（通知はベストエフォート）
 
 #### Warning Thread
-Classification Policy で warning に分類した失敗は 1 run 単位で集約クラスに蓄積し、上記の親メッセージ送信後にその `ts` を `thread_ts` として thread 返信として投稿する。運用者は CloudWatch の `logger.warning` 出力に加え、Slack の thread でも警告を把握できる
+Classification Policy で warning に分類した失敗は 1 run 単位で集約クラスに蓄積し、上記の親メッセージ送信後にその最後のメッセージの `ts` を `thread_ts` として thread 返信として投稿する。運用者は CloudWatch の `logger.warning` 出力に加え、Slack の thread でも警告を把握できる
 
 - 集約は明示的な `add()` 呼び出しで行い、logging.Handler 経由の自動収集はしない（第三者ライブラリの warning 混入を避けるため）
 - `add()` 内部で `logger.warning` を発火するため、各呼び出し箇所は 1 行で CloudWatch と aggregator の両方に届く
 - 発生元は限定的な値しか取らないため `StrEnum` で集約し、表記揺れを防ぐ
 - thread 投稿の本文は発生元ごとにグルーピングし、各 entry の件名と関連識別子（commit SHA、PR 番号、S3 key 等）を Block Kit で構造化する
 - 集約 warning が 0 件の run では thread 投稿しない
+- thread 投稿がブロック数上限を超える場合は複数の返信に分割する
 - thread 投稿の失敗は親通知の成功を壊さないよう独立して suppress する（ベストエフォート方針を継承）
 
 ### Cost Execution Log Persistence
