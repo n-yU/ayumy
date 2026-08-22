@@ -38,17 +38,17 @@ jobs:
       - name: Run Python tests with coverage
         run: |
           python -m pytest tests/python/ -v \
-            --cov=lambda --cov-report=term-missing --cov-report=xml:coverage-python.xml
+            --cov=lambda --cov-report=term-missing --cov-report=xml
 
       - name: Install bats and kcov
         run: sudo apt-get update && sudo apt-get install -y bats kcov
 
       - name: Run shell tests with coverage
         run: |
-          mkdir -p coverage-shell
+          mkdir -p tests/coverage-shell
           kcov --include-path=scripts,hooks,bin \
             --bash-parse-files-in-dir=scripts,hooks,bin \
-            coverage-shell bats tests/shell/
+            tests/coverage-shell bats tests/shell/
 
       - name: Report coverage summary
         if: always()

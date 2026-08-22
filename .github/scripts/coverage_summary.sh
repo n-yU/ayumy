@@ -5,8 +5,8 @@ read_rate() {
   python3 -c "import sys, xml.etree.ElementTree as ET; r=ET.parse(sys.argv[1]).getroot(); print(f\"{float(r.get('line-rate'))*100:.1f}%\t{r.get('lines-covered')}\t{r.get('lines-valid')}\")" "$1"
 }
 
-py_xml=coverage-python.xml
-sh_xml=$(find coverage-shell -name cobertura.xml -path '*bats*' 2>/dev/null | head -1 || true)
+py_xml=tests/coverage-python.xml
+sh_xml=$(find tests/coverage-shell -name cobertura.xml -path '*bats*' 2>/dev/null | head -1 || true)
 
 if [ -f "$py_xml" ]; then
   IFS=$'\t' read -r py_rate py_covered py_valid <<<"$(read_rate "$py_xml")"

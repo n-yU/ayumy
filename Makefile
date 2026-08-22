@@ -59,7 +59,7 @@ test-shell: ## Run shell tests via bats (override path via TARGET=...)
 
 test-cov: lambda-install ## Run Python tests with coverage measurement
 	.venv/bin/python -m pytest tests/python/ \
-		--cov=lambda --cov-report=term-missing --cov-report=xml:coverage-python.xml
+		--cov=lambda --cov-report=term-missing --cov-report=xml
 
 ##@ Lint & Format
 
