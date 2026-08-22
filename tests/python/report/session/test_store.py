@@ -221,3 +221,5 @@ class TestMarkReported:
         store.table.query.return_value = {"Items": []}
 
         store.mark_reported("2026-03-28")
+
+        store.table.update_item.assert_not_called()

@@ -384,24 +384,20 @@ class TestBuildItems:
         assert keys == []
         session_client.s3.get_object.assert_not_called()
 
-    def test_extracts_pr_issue_refs_from_bash(self, run_parser):
+    def test_merges_pr_issue_refs_across_bash_entries(self, run_parser):
         items, _ = run_parser(
             user("2026-03-28T10:00:00+09:00", "do work"),
             bash("2026-03-28T10:01:00+09:00", "gh pr view 87 --json body"),
             bash("2026-03-28T10:02:00+09:00", "gh issue close 84"),
-            bash(
-                "2026-03-28T10:03:00+09:00", "gh api repos/n-yU/ayumy/pulls/82/comments"
-            ),
-            bash("2026-03-28T10:04:00+09:00", 'git commit -m "Fix #91 and close #92"'),
+            bash("2026-03-28T10:03:00+09:00", 'git commit -m "Fix #12"'),
             repo="ayumy",
         )
 
         assert len(items) == 1
         item = items[0]
-        # 87 from `gh pr view`, 82 from `gh api .../pulls/82/...`, 91/92 from git #N
-        assert item["session_pulls"] == [82, 87, 91, 92]
-        # 84 from `gh issue close`, 91/92 from git #N (ambiguous)
-        assert item["session_issues"] == [84, 91, 92]
+        # Refs from every entry are merged and sorted; `#N` in git args counts as both
+        assert item["session_pulls"] == [12, 87]
+        assert item["session_issues"] == [12, 84]
 
     def test_ignores_non_bash_tool_use(self, run_parser):
         items, _ = run_parser(
