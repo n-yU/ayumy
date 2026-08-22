@@ -56,24 +56,27 @@ class TestFetchCommits:
         assert result[0].pull_numbers == (5, 9)
         repo.get_commit.assert_called_once_with("abc123")
 
-    def test_widens_query_one_day_each_side_for_utc_safety(self, github_client, repo):
+    @pytest.mark.parametrize(
+        ("until", "expected_range"),
+        [
+            pytest.param(UNTIL, "2026-03-27..2026-03-29", id="full_day"),
+            pytest.param(
+                datetime(2026, 3, 28, 15, 0, tzinfo=JST),
+                "2026-03-27..2026-03-28",
+                id="partial_day",
+            ),
+        ],
+    )
+    def test_widens_query_one_day_each_side_for_utc_safety(
+        self, github_client, repo, until, expected_range
+    ):
         github_client.g.search_commits.return_value = []
 
-        github_client.fetch_commits(repo, SINCE, UNTIL)
+        github_client.fetch_commits(repo, SINCE, until)
 
         query = github_client.g.search_commits.call_args[0][0]
         assert f"repo:{FULL_NAME}" in query
-        assert "author-date:2026-03-27..2026-03-29" in query
-
-    def test_widens_query_for_partial_day(self, github_client, repo):
-        github_client.g.search_commits.return_value = []
-
-        github_client.fetch_commits(
-            repo, SINCE, datetime(2026, 3, 28, 15, 0, tzinfo=JST)
-        )
-
-        query = github_client.g.search_commits.call_args[0][0]
-        assert "author-date:2026-03-27..2026-03-28" in query
+        assert f"author-date:{expected_range}" in query
 
     def test_filters_commits_outside_time_range(self, github_client, repo):
         github_client.g.search_commits.return_value = [
@@ -195,71 +198,73 @@ class TestFetchIssues:
 
 
 class TestFetchActivity:
+    @pytest.mark.parametrize(
+        ("search_count", "window_start", "now", "expected_sleep"),
+        [
+            pytest.param(
+                CONFIG.github.search_batch,
+                100,
+                105,
+                CONFIG.github.search_window_sec - 5,
+                id="sleeps_remaining_window_time",
+            ),
+            pytest.param(
+                CONFIG.github.search_batch, 100, 125, None, id="window_already_elapsed"
+            ),
+            pytest.param(0, 0.0, 500, None, id="first_request"),
+        ],
+    )
     @patch("report.github.client.time.sleep")
     @patch("report.github.client.time.time")
-    def test_sleeps_remaining_window_time(
-        self, mock_time, mock_sleep, github_client, activity_repo
+    def test_throttles_search_requests(
+        self,
+        mock_time,
+        mock_sleep,
+        github_client,
+        activity_repo,
+        search_count,
+        window_start,
+        now,
+        expected_sleep,
     ):
-        """Sleeps only the remaining window time when batch limit is hit."""
-        # Batch limit already reached, window opened at t=100, now t=105 → elapsed 5
-        github_client._search_count = CONFIG.github.search_batch
-        github_client._window_start = 100
-        mock_time.return_value = 105
+        github_client._search_count = search_count
+        github_client._window_start = window_start
+        mock_time.return_value = now
         github_client.g.search_commits.return_value = []
         activity_repo.get_pulls.return_value = []
         activity_repo.get_issues.return_value = []
 
         github_client.fetch_activity(SINCE, UNTIL, ["repo-0"])
 
-        mock_sleep.assert_called_once_with(CONFIG.github.search_window_sec - 5)
+        if expected_sleep is None:
+            mock_sleep.assert_not_called()
+        else:
+            mock_sleep.assert_called_once_with(expected_sleep)
+        # The window restarts at the request that opens it, not at client init
+        assert github_client._window_start == now
         assert github_client._search_count == 1
 
-    @patch("report.github.client.time.sleep")
-    @patch("report.github.client.time.time")
-    def test_skips_sleep_when_window_elapsed(
-        self, mock_time, mock_sleep, github_client, activity_repo
+
+class TestSearchByEvent:
+    @pytest.mark.parametrize(
+        ("method", "event", "expected_kind"),
+        [
+            pytest.param("_search_pulls_by_event", "merged", "is:pr", id="pull"),
+            pytest.param("_search_issues_by_event", "closed", "is:issue", id="issue"),
+        ],
+    )
+    def test_query_includes_kind_event_and_widened_range(
+        self, github_client, repo, method, event, expected_kind
     ):
-        """Skips sleep when enough time has passed since window start."""
-        github_client._search_count = CONFIG.github.search_batch
-        github_client._window_start = 100
-        mock_time.return_value = 125
-        github_client.g.search_commits.return_value = []
-        activity_repo.get_pulls.return_value = []
-        activity_repo.get_issues.return_value = []
-
-        github_client.fetch_activity(SINCE, UNTIL, ["repo-0"])
-
-        mock_sleep.assert_not_called()
-        assert github_client._search_count == 1
-
-    @patch("report.github.client.time.sleep")
-    @patch("report.github.client.time.time")
-    def test_window_starts_on_first_request(
-        self, mock_time, mock_sleep, github_client, activity_repo
-    ):
-        """Window starts when first search request is made, not at init."""
-        mock_time.return_value = 500
-        github_client.g.search_commits.return_value = []
-        activity_repo.get_pulls.return_value = []
-        activity_repo.get_issues.return_value = []
-
-        github_client.fetch_activity(SINCE, UNTIL, ["repo-0"])
-
-        assert github_client._window_start == 500
-        mock_sleep.assert_not_called()
-
-
-class TestSearchPullsByEvent:
-    def test_query_includes_kind_event_and_widened_range(self, github_client, repo):
         github_client.g.search_issues.return_value = []
 
-        github_client._search_pulls_by_event(repo, SINCE, UNTIL, "merged")
+        getattr(github_client, method)(repo, SINCE, UNTIL, event)
 
         query = github_client.g.search_issues.call_args[0][0]
         assert f"repo:{FULL_NAME}" in query
-        assert "is:pr" in query
+        assert expected_kind in query
         # Range starts at SINCE - 1day; UNTIL is the literal date
-        assert "merged:2026-03-27..2026-03-29" in query
+        assert f"{event}:2026-03-27..2026-03-29" in query
 
     def test_increments_search_throttle_counter(self, github_client, repo):
         github_client.g.search_issues.return_value = []
@@ -267,17 +272,6 @@ class TestSearchPullsByEvent:
         github_client._search_pulls_by_event(repo, SINCE, UNTIL, "created")
 
         assert github_client._search_count == 1
-
-
-class TestSearchIssuesByEvent:
-    def test_query_uses_issue_kind(self, github_client, repo):
-        github_client.g.search_issues.return_value = []
-
-        github_client._search_issues_by_event(repo, SINCE, UNTIL, "closed")
-
-        query = github_client.g.search_issues.call_args[0][0]
-        assert "is:issue" in query
-        assert "closed:2026-03-27..2026-03-29" in query
 
 
 class TestFetchPullsForCommit:
@@ -345,19 +339,19 @@ class TestPopulateCommitPullNumbers:
         assert commits[0].sha == full_sha
         assert commits[0].url == f"https://github.com/{FULL_NAME}/commit/{full_sha}"
 
-    def test_assigns_empty_list_on_404(self, github_client, repo):
-        repo.get_commit.side_effect = UnknownObjectException(404, "Not Found", {})
-
-        commits = [self._commit("aaa", [])]
-        github_client.populate_commit_pull_numbers("repo", commits)
-
-        assert commits[0].pull_numbers == ()
-
-    def test_assigns_empty_list_on_422(self, github_client, repo):
-        # Short SHA ambiguity / not-found is reported as 422 by GET /commits/{sha}
-        repo.get_commit.side_effect = GithubException(
-            422, {"message": "No commit found for SHA: aaa"}, {}
-        )
+    @pytest.mark.parametrize(
+        "error",
+        [
+            pytest.param(UnknownObjectException(404, "Not Found", {}), id="404"),
+            # Short SHA ambiguity / not-found is reported as 422 by GET /commits/{sha}
+            pytest.param(
+                GithubException(422, {"message": "No commit found for SHA: aaa"}, {}),
+                id="422",
+            ),
+        ],
+    )
+    def test_assigns_empty_list_on_missing_commit(self, github_client, repo, error):
+        repo.get_commit.side_effect = error
 
         commits = [self._commit("aaa", [])]
         github_client.populate_commit_pull_numbers("repo", commits)
@@ -416,29 +410,52 @@ class TestFetchPullsBackfill:
 
         assert result == []
 
-    def test_keeps_commit_derived_pull_without_in_range_event(
-        self, github_client, repo
+    @pytest.mark.parametrize(
+        ("number", "extra_kwargs"),
+        [
+            pytest.param(
+                99,
+                {"commits": [make_commit(sha="abc", pull_numbers=[99])]},
+                id="commit_derived",
+            ),
+            pytest.param(
+                77, {"commits": [], "session_numbers": [77]}, id="session_derived"
+            ),
+        ],
+    )
+    def test_keeps_derived_pull_without_in_range_event(
+        self, github_client, repo, number, extra_kwargs
     ):
-        """Commit-derived PRs are kept regardless of state-event timing."""
+        """PRs reached via commits or sessions are kept regardless of state-event timing."""
         github_client.g.search_issues.side_effect = [[], [], []]
         # PR opened weeks ago, no merged/closed yet
         repo.get_pull.return_value = make_pull_mock(
-            99, created_at=datetime(2026, 3, 1, 0, 0, tzinfo=JST)
+            number, created_at=datetime(2026, 3, 1, 0, 0, tzinfo=JST)
         )
 
-        commits = [make_commit(sha="abc", pull_numbers=[99])]
         result = github_client.fetch_pulls(
-            repo, SINCE, UNTIL, is_backfill=True, commits=commits
+            repo, SINCE, UNTIL, is_backfill=True, **extra_kwargs
         )
 
-        assert [r.number for r in result] == [99]
+        assert [r.number for r in result] == [number]
 
-    def test_skips_pull_not_found(self, github_client, repo):
-        github_client.g.search_issues.side_effect = [[make_number_mock(50)], [], []]
+    @pytest.mark.parametrize(
+        ("search_results", "extra_kwargs"),
+        [
+            pytest.param([[make_number_mock(50)], [], []], {}, id="search_derived"),
+            pytest.param(
+                [[], [], []], {"session_numbers": [999]}, id="session_derived"
+            ),
+        ],
+    )
+    def test_skips_pull_not_found(
+        self, github_client, repo, search_results, extra_kwargs
+    ):
+        github_client.g.search_issues.side_effect = search_results
         repo.get_pull.side_effect = UnknownObjectException(404, "Not Found", {})
 
         result = github_client.fetch_pulls(
-            repo, SINCE, UNTIL, is_backfill=True, commits=[]
+            repo, SINCE, UNTIL, is_backfill=True, commits=[], **extra_kwargs
         )
 
         assert result == []
@@ -449,21 +466,6 @@ class TestFetchPullsBackfill:
 
         with pytest.raises(RuntimeError):
             github_client.fetch_pulls(repo, SINCE, UNTIL, is_backfill=True, commits=[])
-
-    def test_keeps_session_derived_pull_without_in_range_event(
-        self, github_client, repo
-    ):
-        """Session-derived PRs are kept regardless of state-event timing."""
-        github_client.g.search_issues.side_effect = [[], [], []]
-        repo.get_pull.return_value = make_pull_mock(
-            77, created_at=datetime(2026, 2, 1, 0, 0, tzinfo=JST)
-        )
-
-        result = github_client.fetch_pulls(
-            repo, SINCE, UNTIL, is_backfill=True, commits=[], session_numbers=[77]
-        )
-
-        assert [r.number for r in result] == [77]
 
     def test_unions_session_with_search_and_dedups(self, github_client, repo):
         # Search→#10 (in range), session→#10, #20
@@ -479,16 +481,6 @@ class TestFetchPullsBackfill:
         # #10 was fetched once (event ∪ session uses sorted unique numbers)
         called = [c.args[0] for c in repo.get_pull.call_args_list]
         assert called == sorted(called) and len(called) == 2
-
-    def test_skips_session_pull_not_found(self, github_client, repo):
-        github_client.g.search_issues.side_effect = [[], [], []]
-        repo.get_pull.side_effect = UnknownObjectException(404, "Not Found", {})
-
-        result = github_client.fetch_pulls(
-            repo, SINCE, UNTIL, is_backfill=True, commits=[], session_numbers=[999]
-        )
-
-        assert result == []
 
 
 class TestFetchIssuesBackfill:
