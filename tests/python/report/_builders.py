@@ -8,6 +8,8 @@ from report.domain import CommitInfo, IssueInfo, PullInfo
 from report.github import GitHubActivity
 
 OWNER = "n-yU"
+REPO = "my-repo"
+REPO_FULL_NAME = f"{OWNER}/{REPO}"
 CREATED_AT = datetime(2026, 3, 28, 9, 0, tzinfo=JST)
 
 

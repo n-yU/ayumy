@@ -8,7 +8,12 @@ import pytest
 from report import JST
 from report.domain import CommitInfo, IssueInfo, PullInfo
 
-from ._builders import OWNER, make_commit_mock, make_issue_mock, make_pull_mock
+from ._builders import (
+    REPO_FULL_NAME,
+    make_commit_mock,
+    make_issue_mock,
+    make_pull_mock,
+)
 
 SINCE = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
 UNTIL = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
@@ -111,7 +116,7 @@ class TestCommitInfo:
         assert info.message == "Subject line"
         assert info.author == "alice"
         assert info.date == "2026-03-28T10:00:00+09:00"
-        assert info.url == f"https://github.com/{OWNER}/my-repo/commit/deadbeef"
+        assert info.url == f"https://github.com/{REPO_FULL_NAME}/commit/deadbeef"
         assert info.pull_numbers == (42, 43)
 
     def test_from_search_commit_defaults_pull_numbers_to_empty(self):

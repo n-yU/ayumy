@@ -10,7 +10,7 @@ from config import CONFIG
 from report import JST
 
 from .._builders import (
-    OWNER,
+    REPO_FULL_NAME,
     make_commit,
     make_commit_mock,
     make_issue_mock,
@@ -21,7 +21,6 @@ from .._builders import (
 # Default JST day window used across most tests
 SINCE = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
 UNTIL = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
-FULL_NAME = f"{OWNER}/my-repo"
 
 
 class TestFetchCommits:
@@ -41,7 +40,7 @@ class TestFetchCommits:
         assert result[0].sha == "abc123"
         assert result[0].message == "Fix bug"
         assert result[0].author == "user"
-        assert result[0].url == f"https://github.com/{FULL_NAME}/commit/abc123"
+        assert result[0].url == f"https://github.com/{REPO_FULL_NAME}/commit/abc123"
         assert result[0].pull_numbers == ()
 
     def test_populates_pull_numbers_from_associated_prs(self, github_client, repo):
@@ -75,7 +74,7 @@ class TestFetchCommits:
         github_client.fetch_commits(repo, SINCE, until)
 
         query = github_client.g.search_commits.call_args[0][0]
-        assert f"repo:{FULL_NAME}" in query
+        assert f"repo:{REPO_FULL_NAME}" in query
         assert f"author-date:{expected_range}" in query
 
     def test_filters_commits_outside_time_range(self, github_client, repo):
@@ -110,7 +109,7 @@ class TestFetchPulls:
         assert len(result) == 1
         assert result[0].state == "merged"
         assert result[0].draft is False
-        assert result[0].url == f"https://github.com/{FULL_NAME}/pull/1"
+        assert result[0].url == f"https://github.com/{REPO_FULL_NAME}/pull/1"
         assert result[0].created_at == "2026-03-27T09:00:00+09:00"
         assert result[0].merged_at == "2026-03-28T10:00:00+09:00"
         assert result[0].closed_at == "2026-03-28T10:00:00+09:00"
@@ -140,7 +139,7 @@ class TestFetchIssues:
 
         assert len(result) == 1
         assert result[0].number == 5
-        assert result[0].url == f"https://github.com/{FULL_NAME}/issues/5"
+        assert result[0].url == f"https://github.com/{REPO_FULL_NAME}/issues/5"
         assert result[0].created_at == "2026-03-28T10:00:00+09:00"
         assert result[0].closed_at is None
 
@@ -209,7 +208,7 @@ class TestSearchByEvent:
         getattr(github_client, method)(repo, SINCE, UNTIL, event)
 
         query = github_client.g.search_issues.call_args[0][0]
-        assert f"repo:{FULL_NAME}" in query
+        assert f"repo:{REPO_FULL_NAME}" in query
         assert expected_kind in query
         # Range starts at SINCE - 1day; UNTIL is the literal date
         assert f"{event}:2026-03-27..2026-03-29" in query
@@ -275,7 +274,9 @@ class TestPopulateCommitPullNumbers:
 
         repo.get_commit.assert_called_once_with("bbb2222")
         assert commits[0].sha == full_sha
-        assert commits[0].url == f"https://github.com/{FULL_NAME}/commit/{full_sha}"
+        assert (
+            commits[0].url == f"https://github.com/{REPO_FULL_NAME}/commit/{full_sha}"
+        )
 
     @pytest.mark.parametrize(
         "error",
