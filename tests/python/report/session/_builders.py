@@ -1,4 +1,4 @@
-"""Builders for session log entries used by tests/report/session/."""
+"""Parts for assembling session log JSONL fixtures used by tests/report/session/."""
 
 import json
 
