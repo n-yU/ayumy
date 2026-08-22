@@ -13,6 +13,9 @@ from report.session.parser import (
 
 from ._builders import SESSION_KEY, assistant, bash, tool_result, tool_use_block, user
 
+COMMIT_TS = "2026-03-28T10:05:00+09:00"
+PROJECT_CWD = "/Users/a/proj"
+
 
 class TestExpandHome:
     @pytest.mark.parametrize(
@@ -277,7 +280,60 @@ class TestBuildItems:
         assert item["start_time"] == "2026-03-28T10:00:00+09:00"
         assert item["end_time"] == "2026-03-28T10:06:00+09:00"
 
-    def test_extracts_commits_from_tool_result(self, run_parser):
+    @pytest.mark.parametrize(
+        ("content", "is_error", "expected"),
+        [
+            pytest.param(
+                "[feat/login a1b2c3d] Implement login flow\n 2 files changed",
+                False,
+                [("a1b2c3d", "Implement login flow")],
+                id="branch_commit",
+            ),
+            pytest.param(
+                "[main (root-commit) a1b2c3d] Initial commit\n 1 file changed",
+                False,
+                [("a1b2c3d", "Initial commit")],
+                id="root_commit",
+            ),
+            pytest.param(
+                "[detached HEAD e5f6a7b] Hotfix\n 1 file changed",
+                False,
+                [("e5f6a7b", "Hotfix")],
+                id="detached_head",
+            ),
+            pytest.param(
+                "check formatting... ok\nrunning linter... passed\n[main a1b2c3d] Fix formatting\n 2 files changed",
+                False,
+                [("a1b2c3d", "Fix formatting")],
+                id="after_hook_output",
+            ),
+            pytest.param(
+                "[main abc1234] First commit\n 1 file changed\n[main def5678] Second commit\n 2 files changed",
+                False,
+                [("abc1234", "First commit"), ("def5678", "Second commit")],
+                id="two_commits_in_one_result",
+            ),
+            pytest.param(
+                "[main abc1234] Some commit\n 1 file changed",
+                True,
+                [],
+                id="error_result",
+            ),
+        ],
+    )
+    def test_extracts_commits(self, run_parser, content, is_error, expected):
+        items, _ = run_parser(
+            user("2026-03-28T10:00:00+09:00", "work"),
+            tool_result(COMMIT_TS, content, is_error=is_error),
+        )
+
+        assert len(items) == 1
+        assert items[0]["session_commits"] == [
+            {"sha": sha, "message": message, "timestamp": COMMIT_TS}
+            for sha, message in expected
+        ]
+
+    def test_commit_timestamp_follows_its_tool_result(self, run_parser):
         items, _ = run_parser(
             user("2026-03-28T10:00:00+09:00", "Fix the bug"),
             tool_result(
@@ -290,100 +346,10 @@ class TestBuildItems:
             ),
         )
 
-        assert len(items) == 1
-        assert items[0]["session_commits"] == [
-            {
-                "sha": "a1b2c3d",
-                "message": "Implement login flow",
-                "timestamp": "2026-03-28T10:05:00+09:00",
-            },
-            {
-                "sha": "e5f6a7b",
-                "message": "Fix test failure",
-                "timestamp": "2026-03-28T10:10:00+09:00",
-            },
+        assert [c["timestamp"] for c in items[0]["session_commits"]] == [
+            "2026-03-28T10:05:00+09:00",
+            "2026-03-28T10:10:00+09:00",
         ]
-
-    def test_extracts_root_and_detached_head_commits(self, run_parser):
-        items, _ = run_parser(
-            user("2026-03-28T10:00:00+09:00", "Init repo"),
-            tool_result(
-                "2026-03-28T10:05:00+09:00",
-                "[main (root-commit) a1b2c3d] Initial commit\n 1 file changed",
-            ),
-            tool_result(
-                "2026-03-28T10:10:00+09:00",
-                "[detached HEAD e5f6a7b] Hotfix\n 1 file changed",
-            ),
-        )
-
-        assert len(items) == 1
-        assert items[0]["session_commits"] == [
-            {
-                "sha": "a1b2c3d",
-                "message": "Initial commit",
-                "timestamp": "2026-03-28T10:05:00+09:00",
-            },
-            {
-                "sha": "e5f6a7b",
-                "message": "Hotfix",
-                "timestamp": "2026-03-28T10:10:00+09:00",
-            },
-        ]
-
-    def test_extracts_commit_after_hook_output(self, run_parser):
-        items, _ = run_parser(
-            user("2026-03-28T10:00:00+09:00", "Commit with hooks"),
-            tool_result(
-                "2026-03-28T10:05:00+09:00",
-                "check formatting... ok\nrunning linter... passed\n[main a1b2c3d] Fix formatting\n 2 files changed",
-            ),
-        )
-
-        assert len(items) == 1
-        assert items[0]["session_commits"] == [
-            {
-                "sha": "a1b2c3d",
-                "message": "Fix formatting",
-                "timestamp": "2026-03-28T10:05:00+09:00",
-            },
-        ]
-
-    def test_extracts_multiple_commits_from_single_tool_result(self, run_parser):
-        items, _ = run_parser(
-            user("2026-03-28T10:00:00+09:00", "Run commands"),
-            tool_result(
-                "2026-03-28T10:05:00+09:00",
-                "[main abc1234] First commit\n 1 file changed\n[main def5678] Second commit\n 2 files changed",
-            ),
-        )
-
-        assert len(items) == 1
-        assert items[0]["session_commits"] == [
-            {
-                "sha": "abc1234",
-                "message": "First commit",
-                "timestamp": "2026-03-28T10:05:00+09:00",
-            },
-            {
-                "sha": "def5678",
-                "message": "Second commit",
-                "timestamp": "2026-03-28T10:05:00+09:00",
-            },
-        ]
-
-    def test_ignores_error_tool_results(self, run_parser):
-        items, _ = run_parser(
-            user("2026-03-28T10:00:00+09:00", "Try commit"),
-            tool_result(
-                "2026-03-28T10:05:00+09:00",
-                "[main abc1234] Some commit\n 1 file changed",
-                is_error=True,
-            ),
-        )
-
-        assert len(items) == 1
-        assert items[0]["session_commits"] == []
 
     def test_cross_midnight_commit_only_day(self, run_parser):
         # Day 1 has a user message; Day 2 has only a tool_result with a commit
@@ -487,56 +453,54 @@ class TestBuildItemsTypeViolations:
 class TestBuildItemsCwdFilter:
     """`cd <path>` to another repo must drop both commits and refs."""
 
-    def test_drops_commit_after_cd_to_other_repo(self, run_parser):
-        items, _ = run_parser(
-            user("2026-03-28T10:00:00+09:00", "work", cwd="/Users/a/proj"),
-            bash(
-                "2026-03-28T10:01:00+09:00",
+    @pytest.mark.parametrize(
+        ("command", "entry_cwd", "expected_shas"),
+        [
+            pytest.param(
                 "cd ~/other && git commit -m x",
-                tool_use_id="tu_x",
-                cwd="/Users/a/proj",
+                PROJECT_CWD,
+                [],
+                id="cd_to_other_repo",
             ),
-            tool_result(
-                "2026-03-28T10:02:00+09:00",
-                "[main abc1234] cross-repo commit\n 1 file",
-                tool_use_id="tu_x",
-                cwd="/Users/a/proj",
+            pytest.param(
+                "git commit -m x", PROJECT_CWD, ["abc1234"], id="within_project_cwd"
             ),
-        )
-        assert items[0]["session_commits"] == []
-
-    def test_keeps_commit_within_project_cwd(self, run_parser):
+            pytest.param(
+                "git commit -m x",
+                "/Users/a/other",
+                [],
+                id="entry_cwd_outside_project",
+            ),
+        ],
+    )
+    def test_filters_commits_by_cwd(
+        self, run_parser, command, entry_cwd, expected_shas
+    ):
         items, _ = run_parser(
-            user("2026-03-28T10:00:00+09:00", "work", cwd="/Users/a/proj"),
+            user("2026-03-28T10:00:00+09:00", "work", cwd=PROJECT_CWD),
             bash(
                 "2026-03-28T10:01:00+09:00",
-                "git commit -m x",
+                command,
                 tool_use_id="tu_x",
-                cwd="/Users/a/proj",
+                cwd=entry_cwd,
             ),
             tool_result(
                 "2026-03-28T10:02:00+09:00",
-                "[main abc1234] in-repo commit\n 1 file",
+                "[main abc1234] commit\n 1 file",
                 tool_use_id="tu_x",
-                cwd="/Users/a/proj",
+                cwd=entry_cwd,
             ),
         )
-        assert items[0]["session_commits"] == [
-            {
-                "sha": "abc1234",
-                "message": "in-repo commit",
-                "timestamp": "2026-03-28T10:02:00+09:00",
-            }
-        ]
+        assert [c["sha"] for c in items[0]["session_commits"]] == expected_shas
 
     def test_drops_refs_after_cd_to_other_repo(self, run_parser):
         items, _ = run_parser(
-            user("2026-03-28T10:00:00+09:00", "work", cwd="/Users/a/proj"),
+            user("2026-03-28T10:00:00+09:00", "work", cwd=PROJECT_CWD),
             bash(
                 "2026-03-28T10:01:00+09:00",
                 "cd ~/other && gh pr view 99",
                 tool_use_id="tu_x",
-                cwd="/Users/a/proj",
+                cwd=PROJECT_CWD,
             ),
         )
         assert items[0]["session_pulls"] == []
