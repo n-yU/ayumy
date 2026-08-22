@@ -1,34 +1,20 @@
 """Tests for SessionLogParser."""
 
-import json
 import logging
-from unittest.mock import MagicMock
 
 import pytest
 
 from report.session.parser import (
-    SessionLogParser,
     _effective_cwd,
     _expand_home,
     _extract_pr_issue_refs,
     _is_cross_repo,
 )
 
+from ._builders import SESSION_KEY, assistant, bash, tool_result, tool_use_block, user
 
-def _make_session_client():
-    client = MagicMock()
-    client.bucket = "bucket"
-    return client
-
-
-def _s3_body(text: str):
-    body = MagicMock()
-    body.read.return_value = text.encode("utf-8")
-    return {"Body": body}
-
-
-def _jsonl_lines(*entries):
-    return "\n".join(json.dumps(e) for e in entries)
+COMMIT_TS = "2026-03-28T10:05:00+09:00"
+PROJECT_CWD = "/Users/a/proj"
 
 
 class TestExpandHome:
@@ -253,29 +239,12 @@ class TestExtractPrIssueRefs:
 
 
 class TestBuildItems:
-    def test_groups_by_date(self):
-        parser = SessionLogParser()
-        client = _make_session_client()
-        client.list_session_objects.return_value = [
-            {"Key": "claude-sessions/proj/s1.jsonl"},
-        ]
-        client.read_repo_name.return_value = "my-repo"
-
-        lines = _jsonl_lines(
-            {
-                "type": "user",
-                "timestamp": "2026-03-28T23:30:00+09:00",
-                "message": {"content": "Day 1 message"},
-            },
-            {
-                "type": "user",
-                "timestamp": "2026-03-29T00:30:00+09:00",
-                "message": {"content": "Day 2 message"},
-            },
+    def test_groups_by_date(self, run_parser):
+        items, keys = run_parser(
+            user("2026-03-28T23:30:00+09:00", "Day 1 message"),
+            user("2026-03-29T00:30:00+09:00", "Day 2 message"),
+            repo="my-repo",
         )
-        client.s3.get_object.return_value = _s3_body(lines)
-
-        items, keys = parser.build_items(client)
 
         assert len(items) == 2
         dates = {item["date"] for item in items}
@@ -286,51 +255,23 @@ class TestBuildItems:
             assert item["repo"] == "my-repo"
             assert item["project"] == "proj"
 
-        assert keys == ["claude-sessions/proj/s1.jsonl"]
+        assert keys == [SESSION_KEY]
 
-    def test_aggregates_messages_and_tools(self):
-        parser = SessionLogParser()
-        client = _make_session_client()
-        client.list_session_objects.return_value = [
-            {"Key": "claude-sessions/proj/s1.jsonl"},
-        ]
-        client.read_repo_name.return_value = "repo"
-
-        lines = _jsonl_lines(
-            {
-                "type": "user",
-                "timestamp": "2026-03-28T10:00:00+09:00",
-                "message": {"content": "First message"},
-            },
-            {
-                "type": "assistant",
-                "timestamp": "2026-03-28T10:01:00+09:00",
-                "message": {
-                    "content": [
-                        {"type": "tool_use", "name": "Read"},
-                        {"type": "tool_use", "name": "Edit"},
-                    ]
-                },
-            },
-            {
-                "type": "user",
-                "timestamp": "2026-03-28T10:05:00+09:00",
-                "message": {"content": "Second message"},
-            },
-            {
-                "type": "assistant",
-                "timestamp": "2026-03-28T10:06:00+09:00",
-                "message": {
-                    "content": [
-                        {"type": "tool_use", "name": "Read"},
-                        {"type": "tool_use", "name": "Bash"},
-                    ]
-                },
-            },
+    def test_aggregates_messages_and_tools(self, run_parser):
+        items, _ = run_parser(
+            user("2026-03-28T10:00:00+09:00", "First message"),
+            assistant(
+                "2026-03-28T10:01:00+09:00",
+                tool_use_block("Read"),
+                tool_use_block("Edit"),
+            ),
+            user("2026-03-28T10:05:00+09:00", "Second message"),
+            assistant(
+                "2026-03-28T10:06:00+09:00",
+                tool_use_block("Read"),
+                tool_use_block("Bash"),
+            ),
         )
-        client.s3.get_object.return_value = _s3_body(lines)
-
-        items, keys = parser.build_items(client)
 
         assert len(items) == 1
         item = items[0]
@@ -339,286 +280,86 @@ class TestBuildItems:
         assert item["start_time"] == "2026-03-28T10:00:00+09:00"
         assert item["end_time"] == "2026-03-28T10:06:00+09:00"
 
-    def test_extracts_commits_from_tool_result(self):
-        parser = SessionLogParser()
-        client = _make_session_client()
-        client.list_session_objects.return_value = [
-            {"Key": "claude-sessions/proj/s1.jsonl"},
-        ]
-        client.read_repo_name.return_value = "repo"
-
-        lines = _jsonl_lines(
-            {
-                "type": "user",
-                "timestamp": "2026-03-28T10:00:00+09:00",
-                "message": {"content": "Fix the bug"},
-            },
-            {
-                "type": "user",
-                "timestamp": "2026-03-28T10:05:00+09:00",
-                "message": {
-                    "content": [
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": "toolu_123",
-                            "content": "[feat/login a1b2c3d] Implement login flow\n 2 files changed",
-                            "is_error": False,
-                        },
-                    ]
-                },
-            },
-            {
-                "type": "user",
-                "timestamp": "2026-03-28T10:10:00+09:00",
-                "message": {
-                    "content": [
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": "toolu_456",
-                            "content": "[feat/login e5f6a7b] Fix test failure\n 1 file changed",
-                            "is_error": False,
-                        },
-                    ]
-                },
-            },
+    @pytest.mark.parametrize(
+        ("content", "is_error", "expected"),
+        [
+            pytest.param(
+                "[feat/login a1b2c3d] Implement login flow\n 2 files changed",
+                False,
+                [("a1b2c3d", "Implement login flow")],
+                id="branch_commit",
+            ),
+            pytest.param(
+                "[main (root-commit) a1b2c3d] Initial commit\n 1 file changed",
+                False,
+                [("a1b2c3d", "Initial commit")],
+                id="root_commit",
+            ),
+            pytest.param(
+                "[detached HEAD e5f6a7b] Hotfix\n 1 file changed",
+                False,
+                [("e5f6a7b", "Hotfix")],
+                id="detached_head",
+            ),
+            pytest.param(
+                "check formatting... ok\nrunning linter... passed\n[main a1b2c3d] Fix formatting\n 2 files changed",
+                False,
+                [("a1b2c3d", "Fix formatting")],
+                id="after_hook_output",
+            ),
+            pytest.param(
+                "[main abc1234] First commit\n 1 file changed\n[main def5678] Second commit\n 2 files changed",
+                False,
+                [("abc1234", "First commit"), ("def5678", "Second commit")],
+                id="two_commits_in_one_result",
+            ),
+            pytest.param(
+                "[main abc1234] Some commit\n 1 file changed",
+                True,
+                [],
+                id="error_result",
+            ),
+        ],
+    )
+    def test_extracts_commits(self, run_parser, content, is_error, expected):
+        items, _ = run_parser(
+            user("2026-03-28T10:00:00+09:00", "work"),
+            tool_result(COMMIT_TS, content, is_error=is_error),
         )
-        client.s3.get_object.return_value = _s3_body(lines)
-
-        items, keys = parser.build_items(client)
 
         assert len(items) == 1
         assert items[0]["session_commits"] == [
-            {
-                "sha": "a1b2c3d",
-                "message": "Implement login flow",
-                "timestamp": "2026-03-28T10:05:00+09:00",
-            },
-            {
-                "sha": "e5f6a7b",
-                "message": "Fix test failure",
-                "timestamp": "2026-03-28T10:10:00+09:00",
-            },
+            {"sha": sha, "message": message, "timestamp": COMMIT_TS}
+            for sha, message in expected
         ]
 
-    def test_extracts_root_and_detached_head_commits(self):
-        parser = SessionLogParser()
-        client = _make_session_client()
-        client.list_session_objects.return_value = [
-            {"Key": "claude-sessions/proj/s1.jsonl"},
-        ]
-        client.read_repo_name.return_value = "repo"
-
-        lines = _jsonl_lines(
-            {
-                "type": "user",
-                "timestamp": "2026-03-28T10:00:00+09:00",
-                "message": {"content": "Init repo"},
-            },
-            {
-                "type": "user",
-                "timestamp": "2026-03-28T10:05:00+09:00",
-                "message": {
-                    "content": [
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": "toolu_root",
-                            "content": "[main (root-commit) a1b2c3d] Initial commit\n 1 file changed",
-                            "is_error": False,
-                        },
-                    ]
-                },
-            },
-            {
-                "type": "user",
-                "timestamp": "2026-03-28T10:10:00+09:00",
-                "message": {
-                    "content": [
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": "toolu_detach",
-                            "content": "[detached HEAD e5f6a7b] Hotfix\n 1 file changed",
-                            "is_error": False,
-                        },
-                    ]
-                },
-            },
+    def test_commit_timestamp_follows_its_tool_result(self, run_parser):
+        items, _ = run_parser(
+            user("2026-03-28T10:00:00+09:00", "Fix the bug"),
+            tool_result(
+                "2026-03-28T10:05:00+09:00",
+                "[feat/login a1b2c3d] Implement login flow\n 2 files changed",
+            ),
+            tool_result(
+                "2026-03-28T10:10:00+09:00",
+                "[feat/login e5f6a7b] Fix test failure\n 1 file changed",
+            ),
         )
-        client.s3.get_object.return_value = _s3_body(lines)
 
-        items, keys = parser.build_items(client)
-
-        assert len(items) == 1
-        assert items[0]["session_commits"] == [
-            {
-                "sha": "a1b2c3d",
-                "message": "Initial commit",
-                "timestamp": "2026-03-28T10:05:00+09:00",
-            },
-            {
-                "sha": "e5f6a7b",
-                "message": "Hotfix",
-                "timestamp": "2026-03-28T10:10:00+09:00",
-            },
+        assert [c["timestamp"] for c in items[0]["session_commits"]] == [
+            "2026-03-28T10:05:00+09:00",
+            "2026-03-28T10:10:00+09:00",
         ]
 
-    def test_extracts_commit_after_hook_output(self):
-        parser = SessionLogParser()
-        client = _make_session_client()
-        client.list_session_objects.return_value = [
-            {"Key": "claude-sessions/proj/s1.jsonl"},
-        ]
-        client.read_repo_name.return_value = "repo"
-
-        lines = _jsonl_lines(
-            {
-                "type": "user",
-                "timestamp": "2026-03-28T10:00:00+09:00",
-                "message": {"content": "Commit with hooks"},
-            },
-            {
-                "type": "user",
-                "timestamp": "2026-03-28T10:05:00+09:00",
-                "message": {
-                    "content": [
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": "toolu_hook",
-                            "content": "check formatting... ok\nrunning linter... passed\n[main a1b2c3d] Fix formatting\n 2 files changed",
-                            "is_error": False,
-                        },
-                    ]
-                },
-            },
-        )
-        client.s3.get_object.return_value = _s3_body(lines)
-
-        items, keys = parser.build_items(client)
-
-        assert len(items) == 1
-        assert items[0]["session_commits"] == [
-            {
-                "sha": "a1b2c3d",
-                "message": "Fix formatting",
-                "timestamp": "2026-03-28T10:05:00+09:00",
-            },
-        ]
-
-    def test_extracts_multiple_commits_from_single_tool_result(self):
-        parser = SessionLogParser()
-        client = _make_session_client()
-        client.list_session_objects.return_value = [
-            {"Key": "claude-sessions/proj/s1.jsonl"},
-        ]
-        client.read_repo_name.return_value = "repo"
-
-        lines = _jsonl_lines(
-            {
-                "type": "user",
-                "timestamp": "2026-03-28T10:00:00+09:00",
-                "message": {"content": "Run commands"},
-            },
-            {
-                "type": "user",
-                "timestamp": "2026-03-28T10:05:00+09:00",
-                "message": {
-                    "content": [
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": "toolu_multi",
-                            "content": "[main abc1234] First commit\n 1 file changed\n[main def5678] Second commit\n 2 files changed",
-                            "is_error": False,
-                        },
-                    ]
-                },
-            },
-        )
-        client.s3.get_object.return_value = _s3_body(lines)
-
-        items, keys = parser.build_items(client)
-
-        assert len(items) == 1
-        assert items[0]["session_commits"] == [
-            {
-                "sha": "abc1234",
-                "message": "First commit",
-                "timestamp": "2026-03-28T10:05:00+09:00",
-            },
-            {
-                "sha": "def5678",
-                "message": "Second commit",
-                "timestamp": "2026-03-28T10:05:00+09:00",
-            },
-        ]
-
-    def test_ignores_error_tool_results(self):
-        parser = SessionLogParser()
-        client = _make_session_client()
-        client.list_session_objects.return_value = [
-            {"Key": "claude-sessions/proj/s1.jsonl"},
-        ]
-        client.read_repo_name.return_value = "repo"
-
-        lines = _jsonl_lines(
-            {
-                "type": "user",
-                "timestamp": "2026-03-28T10:00:00+09:00",
-                "message": {"content": "Try commit"},
-            },
-            {
-                "type": "user",
-                "timestamp": "2026-03-28T10:05:00+09:00",
-                "message": {
-                    "content": [
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": "toolu_err",
-                            "content": "[main abc1234] Some commit\n 1 file changed",
-                            "is_error": True,
-                        },
-                    ]
-                },
-            },
-        )
-        client.s3.get_object.return_value = _s3_body(lines)
-
-        items, keys = parser.build_items(client)
-
-        assert len(items) == 1
-        assert items[0]["session_commits"] == []
-
-    def test_cross_midnight_commit_only_day(self):
-        parser = SessionLogParser()
-        client = _make_session_client()
-        client.list_session_objects.return_value = [
-            {"Key": "claude-sessions/proj/s1.jsonl"},
-        ]
-        client.read_repo_name.return_value = "repo"
-
+    def test_cross_midnight_commit_only_day(self, run_parser):
         # Day 1 has a user message; Day 2 has only a tool_result with a commit
-        lines = _jsonl_lines(
-            {
-                "type": "user",
-                "timestamp": "2026-03-28T23:50:00+09:00",
-                "message": {"content": "Fix the bug"},
-            },
-            {
-                "type": "user",
-                "timestamp": "2026-03-29T00:05:00+09:00",
-                "message": {
-                    "content": [
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": "toolu_abc",
-                            "content": "[main a1b2c3d] Apply fix\n 1 file changed",
-                            "is_error": False,
-                        },
-                    ]
-                },
-            },
+        items, keys = run_parser(
+            user("2026-03-28T23:50:00+09:00", "Fix the bug"),
+            tool_result(
+                "2026-03-29T00:05:00+09:00",
+                "[main a1b2c3d] Apply fix\n 1 file changed",
+            ),
         )
-        client.s3.get_object.return_value = _s3_body(lines)
-
-        items, keys = parser.build_items(client)
 
         assert len(items) == 2
         day1 = next(i for i in items if i["date"] == "2026-03-28")
@@ -634,162 +375,52 @@ class TestBuildItems:
                 "timestamp": "2026-03-29T00:05:00+09:00",
             },
         ]
-        assert keys == ["claude-sessions/proj/s1.jsonl"]
+        assert keys == [SESSION_KEY]
 
-    def test_skips_no_repo(self):
-        parser = SessionLogParser()
-        client = _make_session_client()
-        client.list_session_objects.return_value = [
-            {"Key": "claude-sessions/proj/s1.jsonl"},
-        ]
-        client.read_repo_name.return_value = None
-
-        items, keys = parser.build_items(client)
+    def test_skips_no_repo(self, run_parser, session_client):
+        items, keys = run_parser(repo=None)
 
         assert items == []
         assert keys == []
-        client.s3.get_object.assert_not_called()
+        session_client.s3.get_object.assert_not_called()
 
-    def test_extracts_pr_issue_refs_from_bash(self):
-        parser = SessionLogParser()
-        client = _make_session_client()
-        client.list_session_objects.return_value = [
-            {"Key": "claude-sessions/proj/s1.jsonl"},
-        ]
-        client.read_repo_name.return_value = "ayumy"
-
-        lines = _jsonl_lines(
-            {
-                "type": "user",
-                "timestamp": "2026-03-28T10:00:00+09:00",
-                "message": {"content": "do work"},
-            },
-            {
-                "type": "assistant",
-                "timestamp": "2026-03-28T10:01:00+09:00",
-                "message": {
-                    "content": [
-                        {
-                            "type": "tool_use",
-                            "name": "Bash",
-                            "input": {"command": "gh pr view 87 --json body"},
-                        },
-                    ]
-                },
-            },
-            {
-                "type": "assistant",
-                "timestamp": "2026-03-28T10:02:00+09:00",
-                "message": {
-                    "content": [
-                        {
-                            "type": "tool_use",
-                            "name": "Bash",
-                            "input": {"command": "gh issue close 84"},
-                        },
-                    ]
-                },
-            },
-            {
-                "type": "assistant",
-                "timestamp": "2026-03-28T10:03:00+09:00",
-                "message": {
-                    "content": [
-                        {
-                            "type": "tool_use",
-                            "name": "Bash",
-                            "input": {
-                                "command": "gh api repos/n-yU/ayumy/pulls/82/comments",
-                            },
-                        },
-                    ]
-                },
-            },
-            {
-                "type": "assistant",
-                "timestamp": "2026-03-28T10:04:00+09:00",
-                "message": {
-                    "content": [
-                        {
-                            "type": "tool_use",
-                            "name": "Bash",
-                            "input": {
-                                "command": 'git commit -m "Fix #91 and close #92"',
-                            },
-                        },
-                    ]
-                },
-            },
+    def test_merges_pr_issue_refs_across_bash_entries(self, run_parser):
+        items, _ = run_parser(
+            user("2026-03-28T10:00:00+09:00", "do work"),
+            bash("2026-03-28T10:01:00+09:00", "gh pr view 87 --json body"),
+            bash("2026-03-28T10:02:00+09:00", "gh issue close 84"),
+            bash("2026-03-28T10:03:00+09:00", 'git commit -m "Fix #12"'),
+            repo="ayumy",
         )
-        client.s3.get_object.return_value = _s3_body(lines)
-
-        items, _ = parser.build_items(client)
 
         assert len(items) == 1
         item = items[0]
-        # 87 from `gh pr view`, 82 from `gh api .../pulls/82/...`, 91/92 from git #N
-        assert item["session_pulls"] == [82, 87, 91, 92]
-        # 84 from `gh issue close`, 91/92 from git #N (ambiguous)
-        assert item["session_issues"] == [84, 91, 92]
+        # Refs from every entry are merged and sorted; `#N` in git args counts as both
+        assert item["session_pulls"] == [12, 87]
+        assert item["session_issues"] == [12, 84]
 
-    def test_ignores_non_bash_tool_use(self):
-        parser = SessionLogParser()
-        client = _make_session_client()
-        client.list_session_objects.return_value = [
-            {"Key": "claude-sessions/proj/s1.jsonl"},
-        ]
-        client.read_repo_name.return_value = "ayumy"
-
-        lines = _jsonl_lines(
-            {
-                "type": "user",
-                "timestamp": "2026-03-28T10:00:00+09:00",
-                "message": {"content": "look at #87"},
-            },
-            {
-                "type": "assistant",
-                "timestamp": "2026-03-28T10:01:00+09:00",
-                "message": {
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": "https://github.com/n-yU/ayumy/pull/87",
-                        },
-                        {
-                            "type": "tool_use",
-                            "name": "Read",
-                            "input": {"file_path": "/tmp/notes_42.md"},
-                        },
-                    ]
-                },
-            },
+    def test_ignores_non_bash_tool_use(self, run_parser):
+        items, _ = run_parser(
+            user("2026-03-28T10:00:00+09:00", "look at #87"),
+            assistant(
+                "2026-03-28T10:01:00+09:00",
+                {"type": "text", "text": "https://github.com/n-yU/ayumy/pull/87"},
+                tool_use_block("Read", file_path="/tmp/notes_42.md"),
+            ),
+            repo="ayumy",
         )
-        client.s3.get_object.return_value = _s3_body(lines)
-
-        items, _ = parser.build_items(client)
 
         assert len(items) == 1
         assert items[0]["session_pulls"] == []
         assert items[0]["session_issues"] == []
 
-    def test_skips_no_user_messages(self):
-        parser = SessionLogParser()
-        client = _make_session_client()
-        client.list_session_objects.return_value = [
-            {"Key": "claude-sessions/proj/s1.jsonl"},
-        ]
-        client.read_repo_name.return_value = "repo"
-
-        lines = _jsonl_lines(
-            {
-                "type": "assistant",
-                "timestamp": "2026-03-28T10:00:00+09:00",
-                "message": {"content": [{"type": "text", "text": "hello"}]},
-            },
+    def test_skips_no_user_messages(self, run_parser):
+        items, keys = run_parser(
+            assistant(
+                "2026-03-28T10:00:00+09:00",
+                {"type": "text", "text": "hello"},
+            ),
         )
-        client.s3.get_object.return_value = _s3_body(lines)
-
-        items, keys = parser.build_items(client)
 
         assert items == []
         assert keys == []
@@ -798,53 +429,17 @@ class TestBuildItems:
 class TestBuildItemsTypeViolations:
     """Session log spec violations surface as warnings instead of silent skips."""
 
-    def setup_method(self):
-        self.parser = SessionLogParser()
-        self.client = _make_session_client()
-        self.client.list_session_objects.return_value = [
-            {"Key": "claude-sessions/proj/s1.jsonl"},
-        ]
-        self.client.read_repo_name.return_value = "repo"
-
-    def test_non_string_cwd_logs_warning(self, caplog):
-        lines = _jsonl_lines(
-            {
-                "type": "user",
-                "timestamp": "2026-03-28T10:00:00+09:00",
-                "cwd": 123,
-                "message": {"content": "msg"},
-            },
-        )
-        self.client.s3.get_object.return_value = _s3_body(lines)
-
+    def test_non_string_cwd_logs_warning(self, run_parser, caplog):
         with caplog.at_level(logging.WARNING, logger="report.session.parser"):
-            self.parser.build_items(self.client)
+            run_parser(user("2026-03-28T10:00:00+09:00", "msg", cwd=123))
 
         warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
         assert warnings
         assert "cwd" in warnings[0].getMessage()
 
-    def test_non_string_bash_command_logs_warning(self, caplog):
-        lines = _jsonl_lines(
-            {
-                "type": "assistant",
-                "timestamp": "2026-03-28T10:00:00+09:00",
-                "message": {
-                    "content": [
-                        {
-                            "type": "tool_use",
-                            "id": "t1",
-                            "name": "Bash",
-                            "input": {"command": ["ls"]},
-                        }
-                    ]
-                },
-            },
-        )
-        self.client.s3.get_object.return_value = _s3_body(lines)
-
+    def test_non_string_bash_command_logs_warning(self, run_parser, caplog):
         with caplog.at_level(logging.WARNING, logger="report.session.parser"):
-            self.parser.build_items(self.client)
+            run_parser(bash("2026-03-28T10:00:00+09:00", ["ls"], tool_use_id="t1"))
 
         warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
         assert warnings
@@ -854,196 +449,85 @@ class TestBuildItemsTypeViolations:
 class TestBuildItemsCwdFilter:
     """`cd <path>` to another repo must drop both commits and refs."""
 
-    def setup_method(self):
-        self.parser = SessionLogParser()
-        self.client = _make_session_client()
-        self.client.list_session_objects.return_value = [
-            {"Key": "claude-sessions/proj/s1.jsonl"},
-        ]
-        self.client.read_repo_name.return_value = "repo"
-
-    def _run(self, *entries):
-        self.client.s3.get_object.return_value = _s3_body(_jsonl_lines(*entries))
-        items, _ = self.parser.build_items(self.client)
-        return items
-
-    def test_drops_commit_after_cd_to_other_repo(self):
-        items = self._run(
-            {
-                "type": "user",
-                "cwd": "/Users/a/proj",
-                "timestamp": "2026-03-28T10:00:00+09:00",
-                "message": {"content": "work"},
-            },
-            {
-                "type": "assistant",
-                "cwd": "/Users/a/proj",
-                "timestamp": "2026-03-28T10:01:00+09:00",
-                "message": {
-                    "content": [
-                        {
-                            "type": "tool_use",
-                            "id": "tu_x",
-                            "name": "Bash",
-                            "input": {"command": "cd ~/other && git commit -m x"},
-                        }
-                    ]
-                },
-            },
-            {
-                "type": "user",
-                "cwd": "/Users/a/proj",
-                "timestamp": "2026-03-28T10:02:00+09:00",
-                "message": {
-                    "content": [
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": "tu_x",
-                            "content": "[main abc1234] cross-repo commit\n 1 file",
-                            "is_error": False,
-                        }
-                    ]
-                },
-            },
+    @pytest.mark.parametrize(
+        ("command", "entry_cwd", "expected_shas"),
+        [
+            pytest.param(
+                "cd ~/other && git commit -m x",
+                PROJECT_CWD,
+                [],
+                id="cd_to_other_repo",
+            ),
+            pytest.param(
+                "git commit -m x", PROJECT_CWD, ["abc1234"], id="within_project_cwd"
+            ),
+            pytest.param(
+                "git commit -m x",
+                "/Users/a/other",
+                [],
+                id="entry_cwd_outside_project",
+            ),
+        ],
+    )
+    def test_filters_commits_by_cwd(
+        self, run_parser, command, entry_cwd, expected_shas
+    ):
+        items, _ = run_parser(
+            user("2026-03-28T10:00:00+09:00", "work", cwd=PROJECT_CWD),
+            bash(
+                "2026-03-28T10:01:00+09:00",
+                command,
+                tool_use_id="tu_x",
+                cwd=entry_cwd,
+            ),
+            tool_result(
+                "2026-03-28T10:02:00+09:00",
+                "[main abc1234] commit\n 1 file",
+                tool_use_id="tu_x",
+                cwd=entry_cwd,
+            ),
         )
-        assert items[0]["session_commits"] == []
+        assert [c["sha"] for c in items[0]["session_commits"]] == expected_shas
 
-    def test_keeps_commit_within_project_cwd(self):
-        items = self._run(
-            {
-                "type": "user",
-                "cwd": "/Users/a/proj",
-                "timestamp": "2026-03-28T10:00:00+09:00",
-                "message": {"content": "work"},
-            },
-            {
-                "type": "assistant",
-                "cwd": "/Users/a/proj",
-                "timestamp": "2026-03-28T10:01:00+09:00",
-                "message": {
-                    "content": [
-                        {
-                            "type": "tool_use",
-                            "id": "tu_x",
-                            "name": "Bash",
-                            "input": {"command": "git commit -m x"},
-                        }
-                    ]
-                },
-            },
-            {
-                "type": "user",
-                "cwd": "/Users/a/proj",
-                "timestamp": "2026-03-28T10:02:00+09:00",
-                "message": {
-                    "content": [
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": "tu_x",
-                            "content": "[main abc1234] in-repo commit\n 1 file",
-                            "is_error": False,
-                        }
-                    ]
-                },
-            },
-        )
-        assert items[0]["session_commits"] == [
-            {
-                "sha": "abc1234",
-                "message": "in-repo commit",
-                "timestamp": "2026-03-28T10:02:00+09:00",
-            }
-        ]
-
-    def test_drops_refs_after_cd_to_other_repo(self):
-        items = self._run(
-            {
-                "type": "user",
-                "cwd": "/Users/a/proj",
-                "timestamp": "2026-03-28T10:00:00+09:00",
-                "message": {"content": "work"},
-            },
-            {
-                "type": "assistant",
-                "cwd": "/Users/a/proj",
-                "timestamp": "2026-03-28T10:01:00+09:00",
-                "message": {
-                    "content": [
-                        {
-                            "type": "tool_use",
-                            "id": "tu_x",
-                            "name": "Bash",
-                            "input": {"command": "cd ~/other && gh pr view 99"},
-                        }
-                    ]
-                },
-            },
+    def test_drops_refs_after_cd_to_other_repo(self, run_parser):
+        items, _ = run_parser(
+            user("2026-03-28T10:00:00+09:00", "work", cwd=PROJECT_CWD),
+            bash(
+                "2026-03-28T10:01:00+09:00",
+                "cd ~/other && gh pr view 99",
+                tool_use_id="tu_x",
+                cwd=PROJECT_CWD,
+            ),
         )
         assert items[0]["session_pulls"] == []
 
-    def test_does_not_filter_when_project_cwd_missing(self):
+    def test_does_not_filter_when_project_cwd_missing(self, run_parser):
         # Legacy sessions without any cwd field must still record commits
-        items = self._run(
-            {
-                "type": "user",
-                "timestamp": "2026-03-28T10:00:00+09:00",
-                "message": {"content": "work"},
-            },
-            {
-                "type": "user",
-                "timestamp": "2026-03-28T10:02:00+09:00",
-                "message": {
-                    "content": [
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": "tu_x",
-                            "content": "[main abc1234] no cwd info\n 1 file",
-                            "is_error": False,
-                        }
-                    ]
-                },
-            },
+        items, _ = run_parser(
+            user("2026-03-28T10:00:00+09:00", "work"),
+            tool_result(
+                "2026-03-28T10:02:00+09:00",
+                "[main abc1234] no cwd info\n 1 file",
+                tool_use_id="tu_x",
+            ),
         )
         assert len(items[0]["session_commits"]) == 1
 
-    def test_drops_commit_when_entry_cwd_is_outside_project(self):
+    def test_drops_commit_when_entry_cwd_is_outside_project(self, run_parser):
         # A later entry whose own cwd is outside project_cwd must drop commits even without a leading `cd`
-        items = self._run(
-            {
-                "type": "user",
-                "cwd": "/Users/a/proj",
-                "timestamp": "2026-03-28T10:00:00+09:00",
-                "message": {"content": "work"},
-            },
-            {
-                "type": "assistant",
-                "cwd": "/Users/a/other",
-                "timestamp": "2026-03-28T10:01:00+09:00",
-                "message": {
-                    "content": [
-                        {
-                            "type": "tool_use",
-                            "id": "tu_x",
-                            "name": "Bash",
-                            "input": {"command": "git commit -m x"},
-                        }
-                    ]
-                },
-            },
-            {
-                "type": "user",
-                "cwd": "/Users/a/other",
-                "timestamp": "2026-03-28T10:02:00+09:00",
-                "message": {
-                    "content": [
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": "tu_x",
-                            "content": "[main abc1234] outside cwd\n 1 file",
-                            "is_error": False,
-                        }
-                    ]
-                },
-            },
+        items, _ = run_parser(
+            user("2026-03-28T10:00:00+09:00", "work", cwd="/Users/a/proj"),
+            bash(
+                "2026-03-28T10:01:00+09:00",
+                "git commit -m x",
+                tool_use_id="tu_x",
+                cwd="/Users/a/other",
+            ),
+            tool_result(
+                "2026-03-28T10:02:00+09:00",
+                "[main abc1234] outside cwd\n 1 file",
+                tool_use_id="tu_x",
+                cwd="/Users/a/other",
+            ),
         )
         assert items[0]["session_commits"] == []
