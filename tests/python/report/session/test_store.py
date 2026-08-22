@@ -1,35 +1,11 @@
 """Tests for SessionStore."""
 
-import json
 from datetime import date
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
-from report.session.store import SessionStore
-
-
-def _make_store():
-    with patch("report.session.store.boto3"):
-        store = SessionStore("table")
-    store.table = MagicMock()
-    return store
-
-
-def _make_session_client():
-    client = MagicMock()
-    client.bucket = "bucket"
-    return client
-
-
-def _s3_body(text: str):
-    body = MagicMock()
-    body.read.return_value = text.encode("utf-8")
-    return {"Body": body}
-
-
-def _jsonl_lines(*entries):
-    return "\n".join(json.dumps(e) for e in entries)
+from ._builders import SESSION_KEY, jsonl, user
 
 
 def _item(**overrides):
@@ -52,9 +28,7 @@ def _item(**overrides):
 
 
 class TestWriteItems:
-    def test_uses_update_item(self):
-        store = _make_store()
-
+    def test_uses_update_item(self, store):
         items = [
             {
                 "date": "2026-03-28",
@@ -82,32 +56,23 @@ class TestWriteItems:
 
 
 class TestIngest:
-    def test_returns_processed_keys(self):
-        store = _make_store()
-        client = _make_session_client()
-        client.list_session_objects.return_value = [
-            {"Key": "claude-sessions/proj/s1.jsonl"},
-        ]
-        client.read_repo_name.return_value = "repo"
+    def test_returns_processed_keys(self, store, session_client):
+        session_client.list_session_objects.return_value = [{"Key": SESSION_KEY}]
+        session_client.read_repo_name.return_value = "repo"
+        body = MagicMock()
+        body.read.return_value = jsonl(
+            user("2026-03-28T10:00:00+09:00", "Hello")
+        ).encode("utf-8")
+        session_client.s3.get_object.return_value = {"Body": body}
 
-        lines = _jsonl_lines(
-            {
-                "type": "user",
-                "timestamp": "2026-03-28T10:00:00+09:00",
-                "message": {"content": "Hello"},
-            },
-        )
-        client.s3.get_object.return_value = _s3_body(lines)
+        keys = store.ingest(session_client)
 
-        keys = store.ingest(client)
-
-        assert keys == ["claude-sessions/proj/s1.jsonl"]
+        assert keys == [SESSION_KEY]
         store.table.update_item.assert_called_once()
 
 
 class TestFetchSessions:
-    def test_returns_session_activity(self):
-        store = _make_store()
+    def test_returns_session_activity(self, store):
         store.table.query.return_value = {
             "Items": [
                 _item(
@@ -128,8 +93,7 @@ class TestFetchSessions:
         assert sessions[0]["session_id"] == "s1"
         assert sessions[0]["user_messages"] == ["Fix bug"]
 
-    def test_groups_by_repo(self):
-        store = _make_store()
+    def test_groups_by_repo(self, store):
         store.table.query.return_value = {
             "Items": [
                 _item(
@@ -153,16 +117,14 @@ class TestFetchSessions:
 
         assert set(activity.keys()) == {"repo-a", "repo-b"}
 
-    def test_returns_empty_for_no_data(self):
-        store = _make_store()
+    def test_returns_empty_for_no_data(self, store):
         store.table.query.return_value = {"Items": []}
 
         activity = store.fetch_sessions("2026-03-28")
 
         assert not activity
 
-    def test_sorts_sessions_by_start_time(self):
-        store = _make_store()
+    def test_sorts_sessions_by_start_time(self, store):
         store.table.query.return_value = {
             "Items": [
                 _item(
@@ -181,51 +143,32 @@ class TestFetchSessions:
         assert sessions[0]["user_messages"] == ["earlier"]
         assert sessions[1]["user_messages"] == ["later"]
 
-    def test_includes_session_commits(self):
-        store = _make_store()
-        store.table.query.return_value = {
-            "Items": [
-                _item(
-                    user_messages=["Fix bug"],
-                    tools_used=["Edit"],
-                    session_commits=[
-                        {
-                            "sha": "a1b2c3d",
-                            "message": "Fix the bug",
-                            "timestamp": "2026-03-28T10:30:00+09:00",
-                        },
-                    ],
-                ),
-            ],
-        }
-
-        activity = store.fetch_sessions("2026-03-28")
-
-        sessions = activity.get("repo")
-        assert sessions[0]["session_commits"] == [
+    def test_carries_session_refs_into_session_info(self, store):
+        commits = [
             {
                 "sha": "a1b2c3d",
                 "message": "Fix the bug",
                 "timestamp": "2026-03-28T10:30:00+09:00",
             },
         ]
-
-    def test_includes_session_pulls_and_issues(self):
-        store = _make_store()
         store.table.query.return_value = {
             "Items": [
-                _item(session_pulls=[87, 82], session_issues=[84]),
+                _item(
+                    session_commits=commits,
+                    session_pulls=[87, 82],
+                    session_issues=[84],
+                ),
             ],
         }
 
         activity = store.fetch_sessions("2026-03-28")
 
-        sessions = activity.get("repo")
-        assert sessions[0]["session_pulls"] == [87, 82]
-        assert sessions[0]["session_issues"] == [84]
+        session = activity.get("repo")[0]
+        assert session["session_commits"] == commits
+        assert session["session_pulls"] == [87, 82]
+        assert session["session_issues"] == [84]
 
-    def test_raises_when_session_keys_missing(self):
-        store = _make_store()
+    def test_raises_when_session_keys_missing(self, store):
         item = _item()
         del item["session_commits"]
         store.table.query.return_value = {"Items": [item]}
@@ -235,56 +178,31 @@ class TestFetchSessions:
 
 
 class TestScanBackfillDates:
-    def test_returns_unreported_dates(self):
-        store = _make_store()
-        store.table.scan.return_value = {
-            "Items": [
-                {"date": "2026-03-26"},
-                {"date": "2026-03-27"},
-            ],
-        }
+    @pytest.mark.parametrize(
+        ("scanned_dates", "expected"),
+        [
+            pytest.param(
+                ["2026-03-26", "2026-03-27"],
+                [date(2026, 3, 26), date(2026, 3, 27)],
+                id="unreported_dates",
+            ),
+            pytest.param(["2026-03-28"], [], id="primary_date_excluded"),
+            pytest.param(
+                ["2026-03-27", "2026-03-27"],
+                [date(2026, 3, 27)],
+                id="duplicates_merged",
+            ),
+            pytest.param([], [], id="all_reported"),
+        ],
+    )
+    def test_returns_past_dates_needing_report(self, store, scanned_dates, expected):
+        store.table.scan.return_value = {"Items": [{"date": d} for d in scanned_dates]}
 
-        dates = store.scan_backfill_dates(date(2026, 3, 28))
-
-        assert dates == [date(2026, 3, 26), date(2026, 3, 27)]
-
-    def test_excludes_primary_date(self):
-        store = _make_store()
-        store.table.scan.return_value = {
-            "Items": [
-                {"date": "2026-03-28"},
-            ],
-        }
-
-        dates = store.scan_backfill_dates(date(2026, 3, 28))
-
-        assert dates == []
-
-    def test_deduplicates_dates(self):
-        store = _make_store()
-        store.table.scan.return_value = {
-            "Items": [
-                {"date": "2026-03-27"},
-                {"date": "2026-03-27"},
-            ],
-        }
-
-        dates = store.scan_backfill_dates(date(2026, 3, 28))
-
-        assert dates == [date(2026, 3, 27)]
-
-    def test_returns_empty_when_all_reported(self):
-        store = _make_store()
-        store.table.scan.return_value = {"Items": []}
-
-        dates = store.scan_backfill_dates(date(2026, 3, 28))
-
-        assert dates == []
+        assert store.scan_backfill_dates(date(2026, 3, 28)) == expected
 
 
 class TestMarkReported:
-    def test_updates_all_items_for_date(self):
-        store = _make_store()
+    def test_updates_all_items_for_date(self, store):
         store.table.query.return_value = {
             "Items": [
                 {"date": "2026-03-28", "repo#session_id": "repo#s1"},
@@ -299,8 +217,7 @@ class TestMarkReported:
             assert c.kwargs["UpdateExpression"] == "SET reported_at = :ts"
             assert ":ts" in c.kwargs["ExpressionAttributeValues"]
 
-    def test_no_op_for_empty_date(self):
-        store = _make_store()
+    def test_no_op_for_empty_date(self, store):
         store.table.query.return_value = {"Items": []}
 
         store.mark_reported("2026-03-28")
