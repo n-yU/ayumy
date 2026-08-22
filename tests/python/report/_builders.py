@@ -19,7 +19,7 @@ def make_commit(
     *,
     date="2026-03-28T10:00:00+09:00",
     author="user",
-    repo="my-repo",
+    repo=REPO,
     url=None,
     pull_numbers=(),
 ):
@@ -44,7 +44,7 @@ def make_pull(
     labels=(),
     draft=False,
     url=None,
-    repo="my-repo",
+    repo=REPO,
     created_at="2026-03-28T09:00:00+09:00",
     merged_at="2026-03-28T10:00:00+09:00",
     closed_at="2026-03-28T10:00:00+09:00",
@@ -75,7 +75,7 @@ def make_issue(
     author="user",
     labels=(),
     url=None,
-    repo="my-repo",
+    repo=REPO,
     created_at="2026-03-28T09:00:00+09:00",
     closed_at=None,
     state_reason=None,
@@ -98,7 +98,7 @@ def make_issue(
 def make_session_entry(
     *,
     session_id="s1",
-    project="my-repo",
+    project=REPO,
     start="2026-03-28T10:00:00+09:00",
     end="2026-03-28T11:00:00+09:00",
     messages=("Fix bug",),
@@ -120,13 +120,13 @@ def make_session_entry(
     }
 
 
-def make_session(repo="my-repo", *, entries=None, **entry_kwargs):
+def make_session(repo=REPO, *, entries=None, **entry_kwargs):
     if entries is None:
         entries = [make_session_entry(project=repo, **entry_kwargs)]
     return SessionActivity({repo: entries})
 
 
-def make_github(repo="my-repo", *, commits=(), pulls=(), issues=()):
+def make_github(repo=REPO, *, commits=(), pulls=(), issues=()):
     return GitHubActivity(
         {
             repo: {
@@ -169,7 +169,7 @@ def make_commit_mock(
     message="Fix bug",
     date=MOCK_CREATED_AT,
     author="user",
-    repo="my-repo",
+    repo=REPO,
 ):
     commit = MagicMock()
     commit.sha = sha
@@ -191,7 +191,7 @@ def make_pull_mock(
     title="PR",
     labels=(),
     draft=False,
-    repo="my-repo",
+    repo=REPO,
     merge_commit_sha="merge-sha",
 ):
     pr = MagicMock()
@@ -221,7 +221,7 @@ def make_issue_mock(
     title="Issue",
     labels=(),
     pull_request=None,
-    repo="my-repo",
+    repo=REPO,
 ):
     issue = MagicMock()
     issue.number = number
