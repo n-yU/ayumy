@@ -10,7 +10,7 @@ from report.github import GitHubActivity
 OWNER = "n-yU"
 REPO = "my-repo"
 REPO_FULL_NAME = f"{OWNER}/{REPO}"
-CREATED_AT = datetime(2026, 3, 28, 9, 0, tzinfo=JST)
+MOCK_CREATED_AT = datetime(2026, 3, 28, 9, 0, tzinfo=JST)
 
 
 def make_commit(
@@ -141,7 +141,7 @@ def make_github(repo="my-repo", *, commits=(), pulls=(), issues=()):
 def make_stub(cls, **attrs):
     """Instantiate `cls` with `__init__` bypassed and set the given attributes.
 
-    Client classes open network sessions in `__init__`, which tests never want.
+    Client classes build their API client from credentials that tests do not hold.
     """
     obj = cls.__new__(cls)
     for name, value in attrs.items():
@@ -167,7 +167,7 @@ def make_commit_mock(
     sha="abc1234",
     *,
     message="Fix bug",
-    date=CREATED_AT,
+    date=MOCK_CREATED_AT,
     author="user",
     repo="my-repo",
 ):
@@ -183,7 +183,7 @@ def make_commit_mock(
 def make_pull_mock(
     number=1,
     *,
-    created_at=CREATED_AT,
+    created_at=MOCK_CREATED_AT,
     updated_at=None,
     merged_at=None,
     closed_at=None,
@@ -213,7 +213,7 @@ def make_pull_mock(
 def make_issue_mock(
     number=1,
     *,
-    created_at=CREATED_AT,
+    created_at=MOCK_CREATED_AT,
     updated_at=None,
     closed_at=None,
     state=None,
