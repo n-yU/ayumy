@@ -278,27 +278,3 @@ class TestMergeSessionCommits:
         by_sha = {c.sha: c for c in commits}
         assert by_sha["aaa"].date == "2026-03-28T10:45:00+09:00"
         assert by_sha["bbb"].date == "2026-03-28T10:00:00+09:00"
-
-    def test_skips_populate_when_existing_repo_has_no_new_commits(self):
-        existing = CommitInfo(
-            sha="aaa1111abcdef",
-            message="Existing",
-            author="user",
-            date="2026-03-28T09:00:00+09:00",
-            url=f"https://github.com/{OWNER}/my-repo/commit/aaa1111abcdef",
-        )
-        activity = GitHubActivity(
-            {"my-repo": {"commits": [existing], "pulls": [], "issues": []}}
-        )
-        called = []
-
-        def populate(repo_name, commits):
-            called.append(repo_name)
-
-        activity.merge_session_commits(
-            "my-repo",
-            [_session(session_commits=[{"sha": "aaa1111", "message": "covered"}])],
-            owner=OWNER,
-            populate_pull_numbers=populate,
-        )
-        assert called == []

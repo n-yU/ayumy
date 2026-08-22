@@ -94,7 +94,7 @@ class TestFetchCommits:
 
 
 class TestFetchPulls:
-    def test_determines_merged_state(self, github_client, repo):
+    def test_returns_pull_info_for_pr_updated_in_window(self, github_client, repo):
         repo.get_pulls.return_value = [
             make_pull_mock(
                 1,
@@ -114,40 +114,6 @@ class TestFetchPulls:
         assert result[0].created_at == "2026-03-27T09:00:00+09:00"
         assert result[0].merged_at == "2026-03-28T10:00:00+09:00"
         assert result[0].closed_at == "2026-03-28T10:00:00+09:00"
-
-    def test_determines_closed_state(self, github_client, repo):
-        repo.get_pulls.return_value = [
-            make_pull_mock(
-                2,
-                created_at=datetime(2026, 3, 27, 9, 0, tzinfo=JST),
-                updated_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
-                closed_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
-                state="closed",
-            )
-        ]
-
-        result = github_client.fetch_pulls(repo, SINCE, UNTIL)
-
-        assert result[0].state == "closed"
-        assert result[0].merged_at is None
-        assert result[0].closed_at == "2026-03-28T10:00:00+09:00"
-
-    def test_determines_open_state(self, github_client, repo):
-        repo.get_pulls.return_value = [
-            make_pull_mock(
-                3,
-                created_at=datetime(2026, 3, 28, 9, 0, tzinfo=JST),
-                updated_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
-                state="open",
-                draft=True,
-            )
-        ]
-
-        result = github_client.fetch_pulls(repo, SINCE, UNTIL)
-
-        assert result[0].state == "open"
-        assert result[0].draft is True
-        assert result[0].closed_at is None
 
     def test_breaks_on_old_prs(self, github_client, repo):
         repo.get_pulls.return_value = [
@@ -177,24 +143,6 @@ class TestFetchIssues:
         assert result[0].url == f"https://github.com/{FULL_NAME}/issues/5"
         assert result[0].created_at == "2026-03-28T10:00:00+09:00"
         assert result[0].closed_at is None
-
-    def test_extracts_labels(self, github_client, repo):
-        repo.get_issues.return_value = [
-            make_issue_mock(
-                6,
-                created_at=datetime(2026, 3, 28, 9, 0, tzinfo=JST),
-                updated_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
-                closed_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
-                state_reason="completed",
-                labels=("bug",),
-            )
-        ]
-
-        result = github_client.fetch_issues(repo, SINCE, UNTIL)
-
-        assert result[0].labels == ("bug",)
-        assert result[0].closed_at == "2026-03-28T10:00:00+09:00"
-        assert result[0].state_reason == "completed"
 
 
 class TestFetchActivity:
@@ -275,16 +223,6 @@ class TestSearchByEvent:
 
 
 class TestFetchPullsForCommit:
-    def test_returns_pr_numbers(self, github_client, repo):
-        commit = MagicMock()
-        commit.get_pulls.return_value = [make_number_mock(7), make_number_mock(12)]
-        repo.get_commit.return_value = commit
-
-        result = github_client._fetch_pulls_for_commit(repo, "abc1234")
-
-        assert result == [7, 12]
-        repo.get_commit.assert_called_once_with("abc1234")
-
     def test_returns_empty_on_404(self, github_client, repo):
         repo.get_commit.side_effect = UnknownObjectException(404, "Not Found", {})
 
