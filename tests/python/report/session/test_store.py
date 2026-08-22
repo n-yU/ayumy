@@ -1,11 +1,10 @@
 """Tests for SessionStore."""
 
 from datetime import date
-from unittest.mock import MagicMock
 
 import pytest
 
-from ._builders import SESSION_KEY, jsonl, user
+from ._builders import SESSION_KEY, user
 
 
 def _item(**overrides):
@@ -56,16 +55,10 @@ class TestWriteItems:
 
 
 class TestIngest:
-    def test_returns_processed_keys(self, store, session_client):
-        session_client.list_session_objects.return_value = [{"Key": SESSION_KEY}]
-        session_client.read_repo_name.return_value = "repo"
-        body = MagicMock()
-        body.read.return_value = jsonl(
-            user("2026-03-28T10:00:00+09:00", "Hello")
-        ).encode("utf-8")
-        session_client.s3.get_object.return_value = {"Body": body}
+    def test_returns_processed_keys(self, store, stub_session_log):
+        client = stub_session_log(user("2026-03-28T10:00:00+09:00", "Hello"))
 
-        keys = store.ingest(session_client)
+        keys = store.ingest(client)
 
         assert keys == [SESSION_KEY]
         store.table.update_item.assert_called_once()
