@@ -8,926 +8,518 @@ from github import GithubException, UnknownObjectException
 
 from config import CONFIG
 from report import JST
-from report.github import GitHubClient
-from report.notice import Notice
 
-from .._builders import make_commit
+from .._builders import (
+    REPO_FULL_NAME,
+    make_commit,
+    make_commit_mock,
+    make_issue_mock,
+    make_number_mock,
+    make_pull_mock,
+)
 
 # Default JST day window used across most tests
 SINCE = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
 UNTIL = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
 
 
-def _make_client():
-    client = GitHubClient.__new__(GitHubClient)
-    client.g = MagicMock()
-    client._search_count = 0
-    client._window_start = 0.0
-    client._notice = Notice()
-    return client
-
-
-def _make_pr_issue(number):
-    item = MagicMock()
-    item.number = number
-    return item
-
-
-def _make_commit_mock(
-    sha,
-    *,
-    message,
-    date,
-    author="user",
-    repo_full_name="n-yU/my-repo",
-    url=None,
-):
-    commit = MagicMock()
-    commit.sha = sha
-    commit.commit.message = message
-    commit.commit.author.name = author
-    commit.commit.author.date = date
-    commit.html_url = url or f"https://github.com/{repo_full_name}/commit/{sha}"
-    return commit
-
-
-def _make_pull(
-    number,
-    *,
-    created_at,
-    updated_at=None,
-    merged_at=None,
-    closed_at=None,
-    state=None,
-    title="PR",
-    labels=None,
-    draft=False,
-):
-    pr = MagicMock()
-    pr.number = number
-    pr.title = title
-    pr.created_at = created_at
-    pr.updated_at = updated_at if updated_at is not None else created_at
-    pr.merged_at = merged_at
-    pr.closed_at = closed_at
-    if state is None:
-        pr.state = "closed" if closed_at else "open"
-    else:
-        pr.state = state
-    pr.draft = draft
-    pr.html_url = f"https://github.com/n-yU/repo/pull/{number}"
-    pr.user.login = "user"
-    pr.labels = labels or []
-    return pr
-
-
-def _make_issue(
-    number,
-    *,
-    created_at,
-    updated_at=None,
-    closed_at=None,
-    state=None,
-    state_reason=None,
-    title="Issue",
-    labels=None,
-    pull_request=None,
-):
-    issue = MagicMock()
-    issue.number = number
-    issue.title = title
-    issue.created_at = created_at
-    issue.updated_at = updated_at if updated_at is not None else created_at
-    issue.closed_at = closed_at
-    issue.state = state or ("closed" if closed_at else "open")
-    issue.state_reason = state_reason
-    issue.html_url = f"https://github.com/n-yU/repo/issues/{number}"
-    issue.user.login = "user"
-    issue.labels = labels or []
-    issue.pull_request = pull_request
-    return issue
-
-
-def _make_activity_repo(client, *, name="repo", full_name="n-yU/repo"):
-    mock_user = MagicMock()
-    client.g.get_user.return_value = mock_user
-    mock_repo = MagicMock()
-    mock_repo.name = name
-    mock_repo.full_name = full_name
-    mock_user.get_repo.return_value = mock_repo
-    return mock_repo
-
-
 class TestFetchCommits:
-    def test_extracts_commit_info(self):
-        client = _make_client()
-        mock_commit = _make_commit_mock(
-            sha="abc123",
-            message="Fix bug\n\nDetailed description",
-            date=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
-        )
-
-        repo = MagicMock()
-        repo.full_name = "n-yU/my-repo"
-        client.g.search_commits.return_value = [mock_commit]
+    def test_extracts_commit_info(self, github_client, repo):
+        github_client.g.search_commits.return_value = [
+            make_commit_mock(
+                sha="abc123",
+                message="Fix bug\n\nDetailed description",
+                date=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
+            )
+        ]
         repo.get_commit.return_value.get_pulls.return_value = []
 
-        result = client.fetch_commits(repo, SINCE, UNTIL)
+        result = github_client.fetch_commits(repo, SINCE, UNTIL)
+
         assert len(result) == 1
         assert result[0].sha == "abc123"
         assert result[0].message == "Fix bug"
         assert result[0].author == "user"
-        assert result[0].url == "https://github.com/n-yU/my-repo/commit/abc123"
+        assert result[0].url == f"https://github.com/{REPO_FULL_NAME}/commit/abc123"
         assert result[0].pull_numbers == ()
 
-    def test_populates_pull_numbers_from_associated_prs(self):
-        client = _make_client()
-        mock_commit = _make_commit_mock(
-            sha="abc123",
-            message="Squash merge",
-            date=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
-        )
-
-        repo = MagicMock()
-        repo.full_name = "n-yU/my-repo"
-        client.g.search_commits.return_value = [mock_commit]
+    def test_populates_pull_numbers_from_associated_prs(self, github_client, repo):
+        github_client.g.search_commits.return_value = [make_commit_mock(sha="abc123")]
         repo.get_commit.return_value.get_pulls.return_value = [
-            _make_pr_issue(5),
-            _make_pr_issue(9),
+            make_number_mock(5),
+            make_number_mock(9),
         ]
 
-        result = client.fetch_commits(repo, SINCE, UNTIL)
+        result = github_client.fetch_commits(repo, SINCE, UNTIL)
+
         assert result[0].pull_numbers == (5, 9)
         repo.get_commit.assert_called_once_with("abc123")
 
-    def test_widens_query_one_day_each_side_for_utc_safety(self):
-        client = _make_client()
+    @pytest.mark.parametrize(
+        ("until", "expected_range"),
+        [
+            pytest.param(UNTIL, "2026-03-27..2026-03-29", id="full_day"),
+            pytest.param(
+                datetime(2026, 3, 28, 15, 0, tzinfo=JST),
+                "2026-03-27..2026-03-28",
+                id="partial_day",
+            ),
+        ],
+    )
+    def test_widens_query_one_day_each_side_for_utc_safety(
+        self, github_client, repo, until, expected_range
+    ):
+        github_client.g.search_commits.return_value = []
 
-        repo = MagicMock()
-        repo.full_name = "n-yU/my-repo"
-        client.g.search_commits.return_value = []
+        github_client.fetch_commits(repo, SINCE, until)
 
-        client.fetch_commits(repo, SINCE, UNTIL)
+        query = github_client.g.search_commits.call_args[0][0]
+        assert f"repo:{REPO_FULL_NAME}" in query
+        assert f"author-date:{expected_range}" in query
 
-        query = client.g.search_commits.call_args[0][0]
-        assert "repo:n-yU/my-repo" in query
-        assert "author-date:2026-03-27..2026-03-29" in query
-
-    def test_widens_query_for_partial_day(self):
-        client = _make_client()
-        partial_until = datetime(2026, 3, 28, 15, 0, tzinfo=JST)
-
-        repo = MagicMock()
-        repo.full_name = "n-yU/my-repo"
-        client.g.search_commits.return_value = []
-
-        client.fetch_commits(repo, SINCE, partial_until)
-
-        query = client.g.search_commits.call_args[0][0]
-        assert "author-date:2026-03-27..2026-03-28" in query
-
-    def test_filters_commits_outside_time_range(self):
-        client = _make_client()
-        partial_until = datetime(2026, 3, 28, 15, 0, tzinfo=JST)
-        in_range = _make_commit_mock(
-            sha="aaa",
-            message="Morning commit",
-            date=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
-        )
-        out_of_range = _make_commit_mock(
-            sha="bbb",
-            message="Evening commit",
-            date=datetime(2026, 3, 28, 18, 0, tzinfo=JST),
-        )
-
-        repo = MagicMock()
-        repo.full_name = "n-yU/my-repo"
-        client.g.search_commits.return_value = [in_range, out_of_range]
+    def test_filters_commits_outside_time_range(self, github_client, repo):
+        github_client.g.search_commits.return_value = [
+            make_commit_mock(sha="aaa", date=datetime(2026, 3, 28, 10, 0, tzinfo=JST)),
+            make_commit_mock(sha="bbb", date=datetime(2026, 3, 28, 18, 0, tzinfo=JST)),
+        ]
         repo.get_commit.return_value.get_pulls.return_value = []
 
-        result = client.fetch_commits(repo, SINCE, partial_until)
+        result = github_client.fetch_commits(
+            repo, SINCE, datetime(2026, 3, 28, 15, 0, tzinfo=JST)
+        )
+
         assert len(result) == 1
         assert result[0].sha == "aaa"
 
 
 class TestFetchPulls:
-    def test_determines_merged_state(self):
-        client = _make_client()
-        pr = _make_pull(
-            1,
-            title="Add feature",
-            created_at=datetime(2026, 3, 27, 9, 0, tzinfo=JST),
-            updated_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
-            merged_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
-            closed_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
-        )
+    def test_returns_pull_info_for_pr_updated_in_window(self, github_client, repo):
+        repo.get_pulls.return_value = [
+            make_pull_mock(
+                1,
+                title="Add feature",
+                created_at=datetime(2026, 3, 27, 9, 0, tzinfo=JST),
+                updated_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
+                merged_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
+            )
+        ]
 
-        repo = MagicMock()
-        repo.get_pulls.return_value = [pr]
+        result = github_client.fetch_pulls(repo, SINCE, UNTIL)
 
-        result = client.fetch_pulls(repo, SINCE, UNTIL)
         assert len(result) == 1
         assert result[0].state == "merged"
         assert result[0].draft is False
-        assert result[0].url == "https://github.com/n-yU/repo/pull/1"
+        assert result[0].url == f"https://github.com/{REPO_FULL_NAME}/pull/1"
         assert result[0].created_at == "2026-03-27T09:00:00+09:00"
         assert result[0].merged_at == "2026-03-28T10:00:00+09:00"
         assert result[0].closed_at == "2026-03-28T10:00:00+09:00"
 
-    def test_determines_closed_state(self):
-        client = _make_client()
-        pr = _make_pull(
-            2,
-            title="Rejected PR",
-            created_at=datetime(2026, 3, 27, 9, 0, tzinfo=JST),
-            updated_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
-            closed_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
-            state="closed",
-        )
+    def test_breaks_on_old_prs(self, github_client, repo):
+        repo.get_pulls.return_value = [
+            make_pull_mock(
+                99,
+                created_at=datetime(2026, 3, 26, 0, 0, tzinfo=JST),
+                updated_at=datetime(2026, 3, 27, 0, 0, tzinfo=JST),
+            )
+        ]
 
-        repo = MagicMock()
-        repo.get_pulls.return_value = [pr]
-
-        result = client.fetch_pulls(repo, SINCE, UNTIL)
-        assert result[0].state == "closed"
-        assert result[0].merged_at is None
-        assert result[0].closed_at == "2026-03-28T10:00:00+09:00"
-
-    def test_determines_open_state(self):
-        client = _make_client()
-        pr = _make_pull(
-            3,
-            title="WIP",
-            created_at=datetime(2026, 3, 28, 9, 0, tzinfo=JST),
-            updated_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
-            state="open",
-            draft=True,
-        )
-
-        repo = MagicMock()
-        repo.get_pulls.return_value = [pr]
-
-        result = client.fetch_pulls(repo, SINCE, UNTIL)
-        assert result[0].state == "open"
-        assert result[0].draft is True
-        assert result[0].closed_at is None
-
-    def test_breaks_on_old_prs(self):
-        client = _make_client()
-        old_pr = _make_pull(
-            99,
-            created_at=datetime(2026, 3, 26, 0, 0, tzinfo=JST),
-            updated_at=datetime(2026, 3, 27, 0, 0, tzinfo=JST),
-        )
-
-        repo = MagicMock()
-        repo.get_pulls.return_value = [old_pr]
-
-        result = client.fetch_pulls(repo, SINCE, UNTIL)
-        assert result == []
+        assert github_client.fetch_pulls(repo, SINCE, UNTIL) == []
 
 
 class TestFetchIssues:
-    def test_excludes_pull_requests(self):
-        client = _make_client()
-        issue = _make_issue(
-            5,
-            title="Bug report",
-            created_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
-            updated_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
-            state="open",
-        )
+    def test_excludes_pull_requests(self, github_client, repo):
         pr_as_issue = MagicMock()
         pr_as_issue.pull_request = MagicMock()
+        repo.get_issues.return_value = [
+            make_issue_mock(5, created_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST)),
+            pr_as_issue,
+        ]
 
-        repo = MagicMock()
-        repo.get_issues.return_value = [issue, pr_as_issue]
+        result = github_client.fetch_issues(repo, SINCE, UNTIL)
 
-        result = client.fetch_issues(repo, SINCE, UNTIL)
         assert len(result) == 1
         assert result[0].number == 5
-        assert result[0].url == "https://github.com/n-yU/repo/issues/5"
+        assert result[0].url == f"https://github.com/{REPO_FULL_NAME}/issues/5"
         assert result[0].created_at == "2026-03-28T10:00:00+09:00"
         assert result[0].closed_at is None
 
-    def test_extracts_labels(self):
-        client = _make_client()
-        label = MagicMock()
-        label.name = "bug"
-        issue = _make_issue(
-            6,
-            title="Issue",
-            created_at=datetime(2026, 3, 28, 9, 0, tzinfo=JST),
-            updated_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
-            closed_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
-            state_reason="completed",
-            labels=[label],
-        )
-
-        repo = MagicMock()
-        repo.get_issues.return_value = [issue]
-
-        result = client.fetch_issues(repo, SINCE, UNTIL)
-        assert result[0].labels == ("bug",)
-        assert result[0].closed_at == "2026-03-28T10:00:00+09:00"
-        assert result[0].state_reason == "completed"
-
 
 class TestFetchActivity:
+    @pytest.mark.parametrize(
+        ("search_count", "window_start", "now", "expected_sleep"),
+        [
+            pytest.param(
+                CONFIG.github.search_batch,
+                100,
+                105,
+                CONFIG.github.search_window_sec - 5,
+                id="sleeps_remaining_window_time",
+            ),
+            pytest.param(
+                CONFIG.github.search_batch, 100, 125, None, id="window_already_elapsed"
+            ),
+            pytest.param(0, 0.0, 500, None, id="first_request"),
+        ],
+    )
     @patch("report.github.client.time.sleep")
     @patch("report.github.client.time.time")
-    def test_sleeps_remaining_window_time(self, mock_time, mock_sleep):
-        """Sleeps only the remaining window time when batch limit is hit."""
-        client = _make_client()
-        # Simulate: already processed a batch, window started at t=100
-        client._search_count = CONFIG.github.search_batch
-        client._window_start = 100
-        # Current time: t=105 → elapsed=5, sleep=15
-        mock_time.return_value = 105
+    def test_throttles_search_requests(
+        self,
+        mock_time,
+        mock_sleep,
+        github_client,
+        activity_repo,
+        search_count,
+        window_start,
+        now,
+        expected_sleep,
+    ):
+        github_client._search_count = search_count
+        github_client._window_start = window_start
+        mock_time.return_value = now
+        github_client.g.search_commits.return_value = []
+        activity_repo.get_pulls.return_value = []
+        activity_repo.get_issues.return_value = []
 
-        mock_repo = _make_activity_repo(client)
-        client.g.search_commits.return_value = []
-        mock_repo.get_pulls.return_value = []
-        mock_repo.get_issues.return_value = []
+        github_client.fetch_activity(SINCE, UNTIL, ["repo-0"])
 
-        client.fetch_activity(SINCE, UNTIL, ["repo-0"])
-
-        mock_sleep.assert_called_once_with(CONFIG.github.search_window_sec - 5)
-        assert client._search_count == 1
-
-    @patch("report.github.client.time.sleep")
-    @patch("report.github.client.time.time")
-    def test_skips_sleep_when_window_elapsed(self, mock_time, mock_sleep):
-        """Skips sleep when enough time has passed since window start."""
-        client = _make_client()
-        # Simulate: already processed a batch, window started at t=100
-        client._search_count = CONFIG.github.search_batch
-        client._window_start = 100
-        # Current time: t=125 → elapsed=25 > 20s window
-        mock_time.return_value = 125
-
-        mock_repo = _make_activity_repo(client)
-        client.g.search_commits.return_value = []
-        mock_repo.get_pulls.return_value = []
-        mock_repo.get_issues.return_value = []
-
-        client.fetch_activity(SINCE, UNTIL, ["repo-0"])
-
-        mock_sleep.assert_not_called()
-        assert client._search_count == 1
-
-    @patch("report.github.client.time.sleep")
-    @patch("report.github.client.time.time")
-    def test_window_starts_on_first_request(self, mock_time, mock_sleep):
-        """Window starts when first search request is made, not at init."""
-        client = _make_client()
-        client._search_count = 0
-        client._window_start = 0.0
-        mock_time.return_value = 500
-
-        mock_repo = _make_activity_repo(client)
-        client.g.search_commits.return_value = []
-        mock_repo.get_pulls.return_value = []
-        mock_repo.get_issues.return_value = []
-
-        client.fetch_activity(SINCE, UNTIL, ["repo-0"])
-
-        # Window should be set to current time on first request
-        assert client._window_start == 500
-        mock_sleep.assert_not_called()
+        if expected_sleep is None:
+            mock_sleep.assert_not_called()
+        else:
+            mock_sleep.assert_called_once_with(expected_sleep)
+        # The window restarts at the request that opens it, not at client init
+        assert github_client._window_start == now
+        assert github_client._search_count == 1
 
 
-class TestSearchPullsByEvent:
-    def test_query_includes_kind_event_and_widened_range(self):
-        client = _make_client()
-        repo = MagicMock()
-        repo.full_name = "n-yU/repo"
-        client.g.search_issues.return_value = []
+class TestSearchByEvent:
+    @pytest.mark.parametrize(
+        ("method", "event", "expected_kind"),
+        [
+            pytest.param("_search_pulls_by_event", "merged", "is:pr", id="pull"),
+            pytest.param("_search_issues_by_event", "closed", "is:issue", id="issue"),
+        ],
+    )
+    def test_query_includes_kind_event_and_widened_range(
+        self, github_client, repo, method, event, expected_kind
+    ):
+        github_client.g.search_issues.return_value = []
 
-        client._search_pulls_by_event(repo, SINCE, UNTIL, "merged")
+        getattr(github_client, method)(repo, SINCE, UNTIL, event)
 
-        query = client.g.search_issues.call_args[0][0]
-        assert "repo:n-yU/repo" in query
-        assert "is:pr" in query
+        query = github_client.g.search_issues.call_args[0][0]
+        assert f"repo:{REPO_FULL_NAME}" in query
+        assert expected_kind in query
         # Range starts at SINCE - 1day; UNTIL is the literal date
-        assert "merged:2026-03-27..2026-03-29" in query
+        assert f"{event}:2026-03-27..2026-03-29" in query
 
-    def test_increments_search_throttle_counter(self):
-        client = _make_client()
-        repo = MagicMock()
-        repo.full_name = "n-yU/repo"
-        client.g.search_issues.return_value = []
+    def test_increments_search_throttle_counter(self, github_client, repo):
+        github_client.g.search_issues.return_value = []
 
-        client._search_pulls_by_event(repo, SINCE, UNTIL, "created")
-        assert client._search_count == 1
+        github_client._search_pulls_by_event(repo, SINCE, UNTIL, "created")
 
-
-class TestSearchIssuesByEvent:
-    def test_query_uses_issue_kind(self):
-        client = _make_client()
-        repo = MagicMock()
-        repo.full_name = "n-yU/repo"
-        client.g.search_issues.return_value = []
-
-        client._search_issues_by_event(repo, SINCE, UNTIL, "closed")
-
-        query = client.g.search_issues.call_args[0][0]
-        assert "is:issue" in query
-        assert "closed:2026-03-27..2026-03-29" in query
+        assert github_client._search_count == 1
 
 
 class TestFetchPullsForCommit:
-    def test_returns_pr_numbers(self):
-        client = _make_client()
-        repo = MagicMock()
-        commit = MagicMock()
-        pr1 = MagicMock()
-        pr1.number = 7
-        pr2 = MagicMock()
-        pr2.number = 12
-        commit.get_pulls.return_value = [pr1, pr2]
-        repo.get_commit.return_value = commit
-
-        result = client._fetch_pulls_for_commit(repo, "abc1234")
-
-        assert result == [7, 12]
-        repo.get_commit.assert_called_once_with("abc1234")
-
-    def test_returns_empty_on_404(self):
-        client = _make_client()
-        repo = MagicMock()
+    def test_returns_empty_on_404(self, github_client, repo):
         repo.get_commit.side_effect = UnknownObjectException(404, "Not Found", {})
 
-        result = client._fetch_pulls_for_commit(repo, "abc1234")
+        assert github_client._fetch_pulls_for_commit(repo, "abc1234") == []
 
-        assert result == []
-
-    def test_propagates_non_404_errors(self):
-        client = _make_client()
-        repo = MagicMock()
+    def test_propagates_non_404_errors(self, github_client, repo):
         repo.get_commit.side_effect = RuntimeError("transient failure")
 
         with pytest.raises(RuntimeError):
-            client._fetch_pulls_for_commit(repo, "abc1234")
+            github_client._fetch_pulls_for_commit(repo, "abc1234")
 
 
 class TestPopulateCommitPullNumbers:
-    def setup_method(self):
-        self.client = _make_client()
-        self.repo = MagicMock()
-        self.client.g.get_user.return_value.get_repo.return_value = self.repo
+    @pytest.fixture(autouse=True)
+    def _lookup_repo(self, github_client, repo):
+        github_client.g.get_user.return_value.get_repo.return_value = repo
 
     def _commit(self, sha, pull_numbers):
-        return make_commit(
-            sha=sha,
-            message="m",
-            author="u",
-            date="...",
-            url="...",
-            pull_numbers=pull_numbers,
-        )
+        return make_commit(sha=sha, pull_numbers=pull_numbers)
 
-    def test_skips_commits_with_existing_pull_numbers(self):
+    def test_skips_commits_with_existing_pull_numbers(self, github_client, repo):
         commits = [self._commit("aaa", [3]), self._commit("bbb", [7])]
-        self.client.populate_commit_pull_numbers("repo", commits)
 
-        self.repo.get_commit.assert_not_called()
+        github_client.populate_commit_pull_numbers("repo", commits)
+
+        repo.get_commit.assert_not_called()
         assert commits[0].pull_numbers == (3,)
         assert commits[1].pull_numbers == (7,)
 
-    def test_resolves_only_unresolved_commits(self):
-        commit_obj = MagicMock()
-        commit_obj.sha = "bbb"
-        commit_obj.html_url = "https://github.com/n-yU/repo/commit/bbb"
-        pr = MagicMock()
-        pr.number = 11
-        commit_obj.get_pulls.return_value = [pr]
-        self.repo.get_commit.return_value = commit_obj
+    def test_resolves_only_unresolved_commits(self, github_client, repo):
+        commit_obj = make_commit_mock(sha="bbb")
+        commit_obj.get_pulls.return_value = [make_number_mock(11)]
+        repo.get_commit.return_value = commit_obj
 
         commits = [self._commit("aaa", [3]), self._commit("bbb", [])]
-        self.client.populate_commit_pull_numbers("repo", commits)
+        github_client.populate_commit_pull_numbers("repo", commits)
 
-        self.repo.get_commit.assert_called_once_with("bbb")
+        repo.get_commit.assert_called_once_with("bbb")
         assert commits[0].pull_numbers == (3,)
         assert commits[1].pull_numbers == (11,)
 
-    def test_normalizes_short_sha_to_full(self):
+    def test_normalizes_short_sha_to_full(self, github_client, repo):
         full_sha = "bbb2222abcdef1234abcdef1234abcdef12345678"
-        full_url = f"https://github.com/n-yU/repo/commit/{full_sha}"
-        commit_obj = MagicMock()
-        commit_obj.sha = full_sha
-        commit_obj.html_url = full_url
+        commit_obj = make_commit_mock(sha=full_sha)
         commit_obj.get_pulls.return_value = []
-        self.repo.get_commit.return_value = commit_obj
+        repo.get_commit.return_value = commit_obj
 
         commits = [self._commit("bbb2222", [])]
-        self.client.populate_commit_pull_numbers("repo", commits)
+        github_client.populate_commit_pull_numbers("repo", commits)
 
-        self.repo.get_commit.assert_called_once_with("bbb2222")
+        repo.get_commit.assert_called_once_with("bbb2222")
         assert commits[0].sha == full_sha
-        assert commits[0].url == full_url
-
-    def test_assigns_empty_list_on_404(self):
-        self.repo.get_commit.side_effect = UnknownObjectException(
-            404,
-            "Not Found",
-            {},
+        assert (
+            commits[0].url == f"https://github.com/{REPO_FULL_NAME}/commit/{full_sha}"
         )
 
+    @pytest.mark.parametrize(
+        "error",
+        [
+            pytest.param(UnknownObjectException(404, "Not Found", {}), id="404"),
+            # Short SHA ambiguity / not-found is reported as 422 by GET /commits/{sha}
+            pytest.param(
+                GithubException(422, {"message": "No commit found for SHA: aaa"}, {}),
+                id="422",
+            ),
+        ],
+    )
+    def test_assigns_empty_list_on_missing_commit(self, github_client, repo, error):
+        repo.get_commit.side_effect = error
+
         commits = [self._commit("aaa", [])]
-        self.client.populate_commit_pull_numbers("repo", commits)
+        github_client.populate_commit_pull_numbers("repo", commits)
 
         assert commits[0].pull_numbers == ()
 
-    def test_assigns_empty_list_on_422(self):
-        # Short SHA ambiguity / not-found is reported as 422 by GET /commits/{sha}
-        self.repo.get_commit.side_effect = GithubException(
-            422,
-            {"message": "No commit found for SHA: aaa"},
-            {},
-        )
-
-        commits = [self._commit("aaa", [])]
-        self.client.populate_commit_pull_numbers("repo", commits)
-
-        assert commits[0].pull_numbers == ()
-
-    def test_propagates_other_github_errors(self):
-        self.repo.get_commit.side_effect = GithubException(
-            500,
-            {"message": "server error"},
-            {},
+    def test_propagates_other_github_errors(self, github_client, repo):
+        repo.get_commit.side_effect = GithubException(
+            500, {"message": "server error"}, {}
         )
 
         commits = [self._commit("aaa", [])]
         with pytest.raises(GithubException):
-            self.client.populate_commit_pull_numbers("repo", commits)
+            github_client.populate_commit_pull_numbers("repo", commits)
 
-    def test_skips_api_call_when_no_unresolved(self):
-        commits = [self._commit("aaa", [3])]
-        self.client.populate_commit_pull_numbers("repo", commits)
+    def test_skips_api_call_when_no_unresolved(self, github_client):
+        github_client.populate_commit_pull_numbers("repo", [self._commit("aaa", [3])])
 
-        self.client.g.get_user.assert_not_called()
+        github_client.g.get_user.assert_not_called()
 
 
 class TestFetchPullsBackfill:
-    def test_unions_search_events_and_commit_derived_pulls(self):
-        client = _make_client()
-        repo = MagicMock()
-        repo.full_name = "n-yU/repo"
-
+    def test_unions_search_events_and_commit_derived_pulls(self, github_client, repo):
         # Search returns: created→#1, merged→#2, closed→#3
-        client.g.search_issues.side_effect = [
-            [_make_pr_issue(1)],
-            [_make_pr_issue(2)],
-            [_make_pr_issue(3)],
+        github_client.g.search_issues.side_effect = [
+            [make_number_mock(1)],
+            [make_number_mock(2)],
+            [make_number_mock(3)],
         ]
-
-        # Each PR refetch returns a pull whose timestamps are in range
         in_range = datetime(2026, 3, 28, 12, 0, tzinfo=JST)
-        repo.get_pull.side_effect = lambda n: _make_pull(
-            n,
-            created_at=in_range,
-        )
+        repo.get_pull.side_effect = lambda n: make_pull_mock(n, created_at=in_range)
 
         # Commits already carry pull_numbers populated by fetch_commits
         commits = [
-            make_commit(
-                sha="deadbee",
-                message="",
-                author="",
-                date=in_range.isoformat(),
-                url="",
-                pull_numbers=[1, 4],
-            )
+            make_commit(sha="deadbee", date=in_range.isoformat(), pull_numbers=[1, 4])
         ]
-        result = client.fetch_pulls(
-            repo,
-            SINCE,
-            UNTIL,
-            is_backfill=True,
-            commits=commits,
+        result = github_client.fetch_pulls(
+            repo, SINCE, UNTIL, is_backfill=True, commits=commits
         )
 
-        numbers = sorted(r.number for r in result)
-        assert numbers == [1, 2, 3, 4]
+        assert sorted(r.number for r in result) == [1, 2, 3, 4]
         # Hybrid path no longer calls get_commit (data comes from pull_numbers)
         repo.get_commit.assert_not_called()
 
-    def test_post_filters_search_only_pulls_outside_range(self):
+    def test_post_filters_search_only_pulls_outside_range(self, github_client, repo):
         """Search-derived PRs without an in-range event are dropped."""
-        client = _make_client()
-        repo = MagicMock()
-        repo.full_name = "n-yU/repo"
-
-        client.g.search_issues.side_effect = [
-            [_make_pr_issue(10)],  # created
-            [],  # merged
-            [],  # closed
-        ]
+        github_client.g.search_issues.side_effect = [[make_number_mock(10)], [], []]
         # PR #10 was created on a different day (search widens window by 1 day)
-        out_of_range = datetime(2026, 3, 27, 23, 0, tzinfo=JST)
-        repo.get_pull.return_value = _make_pull(10, created_at=out_of_range)
-
-        result = client.fetch_pulls(
-            repo,
-            SINCE,
-            UNTIL,
-            is_backfill=True,
-            commits=[],
+        repo.get_pull.return_value = make_pull_mock(
+            10, created_at=datetime(2026, 3, 27, 23, 0, tzinfo=JST)
         )
+
+        result = github_client.fetch_pulls(
+            repo, SINCE, UNTIL, is_backfill=True, commits=[]
+        )
+
         assert result == []
 
-    def test_keeps_commit_derived_pull_without_in_range_event(self):
-        """Commit-derived PRs are kept regardless of state-event timing."""
-        client = _make_client()
-        repo = MagicMock()
-        repo.full_name = "n-yU/repo"
-
-        client.g.search_issues.side_effect = [[], [], []]
+    @pytest.mark.parametrize(
+        ("number", "extra_kwargs"),
+        [
+            pytest.param(
+                99,
+                {"commits": [make_commit(sha="abc", pull_numbers=[99])]},
+                id="commit_derived",
+            ),
+            pytest.param(
+                77, {"commits": [], "session_numbers": [77]}, id="session_derived"
+            ),
+        ],
+    )
+    def test_keeps_derived_pull_without_in_range_event(
+        self, github_client, repo, number, extra_kwargs
+    ):
+        """PRs reached via commits or sessions are kept regardless of state-event timing."""
+        github_client.g.search_issues.side_effect = [[], [], []]
         # PR opened weeks ago, no merged/closed yet
-        repo.get_pull.return_value = _make_pull(
-            99,
-            created_at=datetime(2026, 3, 1, 0, 0, tzinfo=JST),
+        repo.get_pull.return_value = make_pull_mock(
+            number, created_at=datetime(2026, 3, 1, 0, 0, tzinfo=JST)
         )
 
-        commits = [
-            make_commit(
-                sha="abc",
-                message="",
-                author="",
-                date="",
-                url="",
-                pull_numbers=[99],
-            )
-        ]
-        result = client.fetch_pulls(
-            repo,
-            SINCE,
-            UNTIL,
-            is_backfill=True,
-            commits=commits,
+        result = github_client.fetch_pulls(
+            repo, SINCE, UNTIL, is_backfill=True, **extra_kwargs
         )
-        assert [r.number for r in result] == [99]
 
-    def test_skips_pull_not_found(self):
-        client = _make_client()
-        repo = MagicMock()
-        repo.full_name = "n-yU/repo"
+        assert [r.number for r in result] == [number]
 
-        client.g.search_issues.side_effect = [
-            [_make_pr_issue(50)],
-            [],
-            [],
-        ]
+    @pytest.mark.parametrize(
+        ("search_results", "extra_kwargs"),
+        [
+            pytest.param([[make_number_mock(50)], [], []], {}, id="search_derived"),
+            pytest.param(
+                [[], [], []], {"session_numbers": [999]}, id="session_derived"
+            ),
+        ],
+    )
+    def test_skips_pull_not_found(
+        self, github_client, repo, search_results, extra_kwargs
+    ):
+        github_client.g.search_issues.side_effect = search_results
         repo.get_pull.side_effect = UnknownObjectException(404, "Not Found", {})
 
-        result = client.fetch_pulls(
-            repo,
-            SINCE,
-            UNTIL,
-            is_backfill=True,
-            commits=[],
+        result = github_client.fetch_pulls(
+            repo, SINCE, UNTIL, is_backfill=True, commits=[], **extra_kwargs
         )
+
         assert result == []
 
-    def test_propagates_non_404_pull_fetch_errors(self):
-        client = _make_client()
-        repo = MagicMock()
-        repo.full_name = "n-yU/repo"
-
-        client.g.search_issues.side_effect = [
-            [_make_pr_issue(50)],
-            [],
-            [],
-        ]
+    def test_propagates_non_404_pull_fetch_errors(self, github_client, repo):
+        github_client.g.search_issues.side_effect = [[make_number_mock(50)], [], []]
         repo.get_pull.side_effect = RuntimeError("transient failure")
 
         with pytest.raises(RuntimeError):
-            client.fetch_pulls(
-                repo,
-                SINCE,
-                UNTIL,
-                is_backfill=True,
-                commits=[],
-            )
+            github_client.fetch_pulls(repo, SINCE, UNTIL, is_backfill=True, commits=[])
 
-    def test_keeps_session_derived_pull_without_in_range_event(self):
-        """Session-derived PRs are kept regardless of state-event timing."""
-        client = _make_client()
-        repo = MagicMock()
-        repo.full_name = "n-yU/repo"
-
-        client.g.search_issues.side_effect = [[], [], []]
-        repo.get_pull.return_value = _make_pull(
-            77,
-            created_at=datetime(2026, 2, 1, 0, 0, tzinfo=JST),
-        )
-
-        result = client.fetch_pulls(
-            repo,
-            SINCE,
-            UNTIL,
-            is_backfill=True,
-            commits=[],
-            session_numbers=[77],
-        )
-        assert [r.number for r in result] == [77]
-
-    def test_unions_session_with_search_and_dedups(self):
-        client = _make_client()
-        repo = MagicMock()
-        repo.full_name = "n-yU/repo"
-
+    def test_unions_session_with_search_and_dedups(self, github_client, repo):
         # Search→#10 (in range), session→#10, #20
         in_range = datetime(2026, 3, 28, 12, 0, tzinfo=JST)
-        client.g.search_issues.side_effect = [
-            [_make_pr_issue(10)],
-            [],
-            [],
-        ]
-        repo.get_pull.side_effect = lambda n: _make_pull(
-            n,
-            created_at=in_range,
+        github_client.g.search_issues.side_effect = [[make_number_mock(10)], [], []]
+        repo.get_pull.side_effect = lambda n: make_pull_mock(n, created_at=in_range)
+
+        result = github_client.fetch_pulls(
+            repo, SINCE, UNTIL, is_backfill=True, commits=[], session_numbers=[10, 20]
         )
 
-        result = client.fetch_pulls(
-            repo,
-            SINCE,
-            UNTIL,
-            is_backfill=True,
-            commits=[],
-            session_numbers=[10, 20],
-        )
         assert sorted(r.number for r in result) == [10, 20]
         # #10 was fetched once (event ∪ session uses sorted unique numbers)
         called = [c.args[0] for c in repo.get_pull.call_args_list]
         assert called == sorted(called) and len(called) == 2
 
-    def test_skips_session_pull_not_found(self):
-        client = _make_client()
-        repo = MagicMock()
-        repo.full_name = "n-yU/repo"
-
-        client.g.search_issues.side_effect = [[], [], []]
-        repo.get_pull.side_effect = UnknownObjectException(404, "Not Found", {})
-
-        result = client.fetch_pulls(
-            repo,
-            SINCE,
-            UNTIL,
-            is_backfill=True,
-            commits=[],
-            session_numbers=[999],
-        )
-        assert result == []
-
 
 class TestFetchIssuesBackfill:
-    def test_unions_created_and_closed_search(self):
-        client = _make_client()
-        repo = MagicMock()
-        repo.full_name = "n-yU/repo"
-
+    def test_unions_created_and_closed_search(self, github_client, repo):
         in_range = datetime(2026, 3, 28, 12, 0, tzinfo=JST)
-        i_created = _make_issue(1, created_at=in_range)
-        i_closed = _make_issue(
-            2,
-            created_at=datetime(2026, 3, 1, 0, 0, tzinfo=JST),
-            closed_at=in_range,
-            state_reason="completed",
-        )
-        client.g.search_issues.side_effect = [
-            [i_created],
-            [i_closed],
+        github_client.g.search_issues.side_effect = [
+            [make_issue_mock(1, created_at=in_range)],
+            [
+                make_issue_mock(
+                    2,
+                    created_at=datetime(2026, 3, 1, 0, 0, tzinfo=JST),
+                    closed_at=in_range,
+                    state_reason="completed",
+                )
+            ],
         ]
 
-        result = client.fetch_issues(
-            repo,
-            SINCE,
-            UNTIL,
-            is_backfill=True,
-        )
+        result = github_client.fetch_issues(repo, SINCE, UNTIL, is_backfill=True)
+
         assert sorted(r.number for r in result) == [1, 2]
         assert result[1].state_reason == "completed"
 
-    def test_post_filters_issue_outside_range(self):
-        client = _make_client()
-        repo = MagicMock()
-        repo.full_name = "n-yU/repo"
-
+    def test_post_filters_issue_outside_range(self, github_client, repo):
         # Returned by search but actually outside JST window
-        out_of_range = datetime(2026, 3, 27, 22, 0, tzinfo=JST)
-        client.g.search_issues.side_effect = [
-            [_make_issue(5, created_at=out_of_range)],
+        github_client.g.search_issues.side_effect = [
+            [make_issue_mock(5, created_at=datetime(2026, 3, 27, 22, 0, tzinfo=JST))],
             [],
         ]
 
-        result = client.fetch_issues(repo, SINCE, UNTIL, is_backfill=True)
+        result = github_client.fetch_issues(repo, SINCE, UNTIL, is_backfill=True)
+
         assert result == []
 
-    def test_keeps_session_derived_issue_without_in_range_event(self):
+    def test_keeps_session_derived_issue_without_in_range_event(
+        self, github_client, repo
+    ):
         """Session-derived issues are kept regardless of state-event timing."""
-        client = _make_client()
-        repo = MagicMock()
-        repo.full_name = "n-yU/repo"
-
-        client.g.search_issues.side_effect = [[], []]
-        repo.get_issue.return_value = _make_issue(
-            42,
-            created_at=datetime(2026, 2, 1, 0, 0, tzinfo=JST),
+        github_client.g.search_issues.side_effect = [[], []]
+        repo.get_issue.return_value = make_issue_mock(
+            42, created_at=datetime(2026, 2, 1, 0, 0, tzinfo=JST)
         )
 
-        result = client.fetch_issues(
-            repo,
-            SINCE,
-            UNTIL,
-            is_backfill=True,
-            session_numbers=[42],
+        result = github_client.fetch_issues(
+            repo, SINCE, UNTIL, is_backfill=True, session_numbers=[42]
         )
+
         assert [r.number for r in result] == [42]
 
-    def test_skips_session_number_resolving_to_pr(self):
+    def test_skips_session_number_resolving_to_pr(self, github_client, repo):
         """Session #N may resolve to a PR; PRs must be filtered out."""
-        client = _make_client()
-        repo = MagicMock()
-        repo.full_name = "n-yU/repo"
-
-        client.g.search_issues.side_effect = [[], []]
-        repo.get_issue.return_value = _make_issue(
+        github_client.g.search_issues.side_effect = [[], []]
+        repo.get_issue.return_value = make_issue_mock(
             87,
             created_at=datetime(2026, 2, 1, 0, 0, tzinfo=JST),
             pull_request=MagicMock(),
         )
 
-        result = client.fetch_issues(
-            repo,
-            SINCE,
-            UNTIL,
-            is_backfill=True,
-            session_numbers=[87],
+        result = github_client.fetch_issues(
+            repo, SINCE, UNTIL, is_backfill=True, session_numbers=[87]
         )
+
         assert result == []
 
-    def test_skips_session_issue_not_found(self):
-        client = _make_client()
-        repo = MagicMock()
-        repo.full_name = "n-yU/repo"
-
-        client.g.search_issues.side_effect = [[], []]
+    def test_skips_session_issue_not_found(self, github_client, repo):
+        github_client.g.search_issues.side_effect = [[], []]
         repo.get_issue.side_effect = UnknownObjectException(404, "Not Found", {})
 
-        result = client.fetch_issues(
-            repo,
-            SINCE,
-            UNTIL,
-            is_backfill=True,
-            session_numbers=[999],
+        result = github_client.fetch_issues(
+            repo, SINCE, UNTIL, is_backfill=True, session_numbers=[999]
         )
+
         assert result == []
 
-    def test_does_not_refetch_session_number_already_in_search(self):
+    def test_does_not_refetch_session_number_already_in_search(
+        self, github_client, repo
+    ):
         """Numbers covered by Search are reused; get_issue is only called for new ones."""
-        client = _make_client()
-        repo = MagicMock()
-        repo.full_name = "n-yU/repo"
-
-        in_range = datetime(2026, 3, 28, 12, 0, tzinfo=JST)
-        client.g.search_issues.side_effect = [
-            [_make_issue(10, created_at=in_range)],
+        github_client.g.search_issues.side_effect = [
+            [make_issue_mock(10, created_at=datetime(2026, 3, 28, 12, 0, tzinfo=JST))],
             [],
         ]
 
-        result = client.fetch_issues(
-            repo,
-            SINCE,
-            UNTIL,
-            is_backfill=True,
-            session_numbers=[10],
+        result = github_client.fetch_issues(
+            repo, SINCE, UNTIL, is_backfill=True, session_numbers=[10]
         )
+
         assert [r.number for r in result] == [10]
         repo.get_issue.assert_not_called()
 
 
 class TestFetchActivityBackfill:
-    def test_propagates_is_backfill_flag(self):
-        client = _make_client()
-
-        mock_user = MagicMock()
-        client.g.get_user.return_value = mock_user
-        mock_repo = MagicMock()
-        mock_repo.name = "repo"
-        mock_repo.full_name = "n-yU/repo"
-        mock_user.get_repo.return_value = mock_repo
-
-        client.g.search_commits.return_value = []
+    def test_propagates_is_backfill_flag(self, github_client, activity_repo):
+        github_client.g.search_commits.return_value = []
         # Hybrid path uses search_issues, not get_pulls/get_issues
-        client.g.search_issues.return_value = []
+        github_client.g.search_issues.return_value = []
 
-        client.fetch_activity(SINCE, UNTIL, ["repo"], is_backfill=True)
+        github_client.fetch_activity(SINCE, UNTIL, ["repo"], is_backfill=True)
 
         # Default updated_at path must NOT be invoked under backfill
-        mock_repo.get_pulls.assert_not_called()
-        mock_repo.get_issues.assert_not_called()
+        activity_repo.get_pulls.assert_not_called()
+        activity_repo.get_issues.assert_not_called()
         # 5 search calls expected (created/merged/closed PR + created/closed issue)
-        assert client.g.search_issues.call_count == 5
+        assert github_client.g.search_issues.call_count == 5
