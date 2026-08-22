@@ -2,12 +2,13 @@
 
 import dataclasses
 from datetime import datetime
-from unittest.mock import MagicMock
 
 import pytest
 
 from report import JST
 from report.domain import CommitInfo, IssueInfo, PullInfo
+
+from ._builders import OWNER, make_commit_mock, make_issue_mock, make_pull_mock
 
 SINCE = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
 UNTIL = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
@@ -59,12 +60,6 @@ def _issue(**overrides):
     return IssueInfo(**base)
 
 
-def _label_mock(name):
-    label = MagicMock()
-    label.name = name
-    return label
-
-
 def _make_pr_mock(
     *,
     pr_state="open",
@@ -72,19 +67,14 @@ def _make_pr_mock(
     closed_at_dt=None,
     label_names=(),
 ):
-    pr = MagicMock()
-    pr.number = 42
-    pr.title = "PR title"
-    pr.state = pr_state
-    pr.user.login = "user"
-    pr.labels = [_label_mock(n) for n in label_names]
-    pr.draft = False
-    pr.html_url = "https://github.com/n-yU/my-repo/pull/42"
-    pr.created_at = datetime(2026, 3, 28, 9, 0, tzinfo=JST)
-    pr.merged_at = merged_at_dt
-    pr.closed_at = closed_at_dt if closed_at_dt is not None else merged_at_dt
-    pr.merge_commit_sha = "merge-sha"
-    return pr
+    return make_pull_mock(
+        42,
+        title="PR title",
+        state=pr_state,
+        merged_at=merged_at_dt,
+        closed_at=closed_at_dt,
+        labels=label_names,
+    )
 
 
 class TestCommitInfo:
@@ -108,12 +98,12 @@ class TestCommitInfo:
         assert _commit(date=date_str).is_in_range(SINCE, UNTIL) is expected
 
     def test_from_search_commit_extracts_first_message_line(self):
-        commit = MagicMock()
-        commit.sha = "deadbeef"
-        commit.commit.message = "Subject line\n\nBody paragraph"
-        commit.commit.author.name = "alice"
-        commit.commit.author.date = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
-        commit.html_url = "https://github.com/n-yU/my-repo/commit/deadbeef"
+        commit = make_commit_mock(
+            sha="deadbeef",
+            message="Subject line\n\nBody paragraph",
+            author="alice",
+            date=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
+        )
 
         info = CommitInfo.from_search_commit(commit, pull_numbers=[42, 43])
 
@@ -121,18 +111,11 @@ class TestCommitInfo:
         assert info.message == "Subject line"
         assert info.author == "alice"
         assert info.date == "2026-03-28T10:00:00+09:00"
-        assert info.url == "https://github.com/n-yU/my-repo/commit/deadbeef"
+        assert info.url == f"https://github.com/{OWNER}/my-repo/commit/deadbeef"
         assert info.pull_numbers == (42, 43)
 
     def test_from_search_commit_defaults_pull_numbers_to_empty(self):
-        commit = MagicMock()
-        commit.sha = "deadbeef"
-        commit.commit.message = "Subject"
-        commit.commit.author.name = "alice"
-        commit.commit.author.date = datetime(2026, 3, 28, 10, 0, tzinfo=JST)
-        commit.html_url = "https://example/commit/deadbeef"
-
-        info = CommitInfo.from_search_commit(commit)
+        info = CommitInfo.from_search_commit(make_commit_mock())
 
         assert info.pull_numbers == ()
 
@@ -305,16 +288,7 @@ class TestIssueInfo:
         assert issue.state_in_range(SINCE, UNTIL) == expected
 
     def test_from_issue_extracts_labels_as_tuple(self):
-        issue = MagicMock()
-        issue.number = 7
-        issue.title = "Bug"
-        issue.state = "open"
-        issue.user.login = "user"
-        issue.labels = [_label_mock("bug"), _label_mock("priority:high")]
-        issue.html_url = "https://github.com/n-yU/my-repo/issues/7"
-        issue.created_at = datetime(2026, 3, 28, 9, 0, tzinfo=JST)
-        issue.closed_at = None
-        issue.state_reason = None
+        issue = make_issue_mock(7, labels=("bug", "priority:high"))
 
         info = IssueInfo.from_issue(issue)
 
@@ -323,16 +297,11 @@ class TestIssueInfo:
         assert info.state == "open"
 
     def test_from_issue_serializes_closed_at(self):
-        issue = MagicMock()
-        issue.number = 7
-        issue.title = "Bug"
-        issue.state = "closed"
-        issue.user.login = "user"
-        issue.labels = []
-        issue.html_url = "https://github.com/n-yU/my-repo/issues/7"
-        issue.created_at = datetime(2026, 3, 28, 9, 0, tzinfo=JST)
-        issue.closed_at = datetime(2026, 3, 28, 11, 0, tzinfo=JST)
-        issue.state_reason = "not_planned"
+        issue = make_issue_mock(
+            7,
+            closed_at=datetime(2026, 3, 28, 11, 0, tzinfo=JST),
+            state_reason="not_planned",
+        )
 
         info = IssueInfo.from_issue(issue)
 
