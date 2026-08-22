@@ -1,10 +1,14 @@
 """Builders and assert helpers for tests/report/."""
 
-from report import SessionActivity
+from datetime import datetime
+from unittest.mock import MagicMock
+
+from report import JST, SessionActivity
 from report.domain import CommitInfo, IssueInfo, PullInfo
 from report.github import GitHubActivity
 
 OWNER = "n-yU"
+CREATED_AT = datetime(2026, 3, 28, 9, 0, tzinfo=JST)
 
 
 def make_commit(
@@ -130,6 +134,106 @@ def make_github(repo="my-repo", *, commits=(), pulls=(), issues=()):
             }
         }
     )
+
+
+def make_stub(cls, **attrs):
+    """Instantiate `cls` with `__init__` bypassed and set the given attributes.
+
+    Client classes open network sessions in `__init__`, which tests never want.
+    """
+    obj = cls.__new__(cls)
+    for name, value in attrs.items():
+        setattr(obj, name, value)
+    return obj
+
+
+def make_label_mock(name):
+    label = MagicMock()
+    # `name` is consumed by MagicMock's constructor, so it has to be assigned afterwards
+    label.name = name
+    return label
+
+
+def make_number_mock(number):
+    """Build the minimal stand-in for objects the API returns only to expose their number."""
+    item = MagicMock()
+    item.number = number
+    return item
+
+
+def make_commit_mock(
+    sha="abc1234",
+    *,
+    message="Fix bug",
+    date=CREATED_AT,
+    author="user",
+    repo="my-repo",
+):
+    commit = MagicMock()
+    commit.sha = sha
+    commit.commit.message = message
+    commit.commit.author.name = author
+    commit.commit.author.date = date
+    commit.html_url = f"https://github.com/{OWNER}/{repo}/commit/{sha}"
+    return commit
+
+
+def make_pull_mock(
+    number=1,
+    *,
+    created_at=CREATED_AT,
+    updated_at=None,
+    merged_at=None,
+    closed_at=None,
+    state=None,
+    title="PR",
+    labels=(),
+    draft=False,
+    repo="my-repo",
+    merge_commit_sha="merge-sha",
+):
+    pr = MagicMock()
+    pr.number = number
+    pr.title = title
+    pr.created_at = created_at
+    pr.updated_at = updated_at if updated_at is not None else created_at
+    pr.merged_at = merged_at
+    pr.closed_at = closed_at if closed_at is not None else merged_at
+    pr.state = state if state is not None else ("closed" if closed_at else "open")
+    pr.draft = draft
+    pr.html_url = f"https://github.com/{OWNER}/{repo}/pull/{number}"
+    pr.user.login = "user"
+    pr.labels = [make_label_mock(n) for n in labels]
+    pr.merge_commit_sha = merge_commit_sha
+    return pr
+
+
+def make_issue_mock(
+    number=1,
+    *,
+    created_at=CREATED_AT,
+    updated_at=None,
+    closed_at=None,
+    state=None,
+    state_reason=None,
+    title="Issue",
+    labels=(),
+    pull_request=None,
+    repo="my-repo",
+):
+    issue = MagicMock()
+    issue.number = number
+    issue.title = title
+    issue.created_at = created_at
+    issue.updated_at = updated_at if updated_at is not None else created_at
+    issue.closed_at = closed_at
+    issue.state = state if state is not None else ("closed" if closed_at else "open")
+    issue.state_reason = state_reason
+    issue.html_url = f"https://github.com/{OWNER}/{repo}/issues/{number}"
+    issue.user.login = "user"
+    issue.labels = [make_label_mock(n) for n in labels]
+    issue.pull_request = pull_request
+    return issue
 
 
 def assert_published(clients):
