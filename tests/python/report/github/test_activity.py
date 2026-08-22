@@ -3,10 +3,11 @@
 from datetime import datetime as dt
 
 from report import JST
-from report.domain import CommitInfo, IssueInfo, PullInfo
+from report.domain import CommitInfo
 from report.github import GitHubActivity
 
-OWNER = "n-yU"
+from .._builders import OWNER, make_commit, make_issue, make_pull, make_session_entry
+
 SINCE = dt(2026, 3, 28, 0, 0, tzinfo=JST)
 UNTIL = dt(2026, 3, 29, 0, 0, tzinfo=JST)
 
@@ -16,39 +17,25 @@ def _session(
     start="2026-03-28T10:00:00+09:00",
     session_commits=(),
 ):
-    return {
-        "session_id": "s1",
-        "project": "my-repo",
-        "start_time": start,
-        "end_time": start,
-        "user_messages": [],
-        "tools_used": [],
-        "session_commits": list(session_commits),
-        "session_pulls": [],
-        "session_issues": [],
-    }
-
-
-def _commit(message, sha="abc1234", date="2026-03-28T10:00:00+09:00"):
-    return CommitInfo(
-        sha=sha,
-        message=message,
-        author="user",
-        date=date,
-        url=f"https://github.com/n-yU/repo/commit/{sha}",
+    return make_session_entry(
+        start=start,
+        end=start,
+        messages=(),
+        tools=(),
+        session_commits=session_commits,
     )
 
 
+def _commit(message, sha="abc1234", date="2026-03-28T10:00:00+09:00"):
+    return make_commit(sha=sha, message=message, date=date)
+
+
 def _pull(number, title, state, *, labels=(), merged_at=None, closed_at=None):
-    return PullInfo(
-        number=number,
-        title=title,
-        state=state,
-        author="user",
-        labels=tuple(labels),
-        draft=False,
-        url=f"https://github.com/n-yU/repo/pull/{number}",
-        created_at="2026-03-28T09:00:00+09:00",
+    return make_pull(
+        number,
+        title,
+        state,
+        labels=labels,
         merged_at=merged_at,
         closed_at=closed_at or merged_at,
         merge_commit_sha=None,
@@ -56,17 +43,7 @@ def _pull(number, title, state, *, labels=(), merged_at=None, closed_at=None):
 
 
 def _issue(number, title, state, *, labels=(), closed_at=None):
-    return IssueInfo(
-        number=number,
-        title=title,
-        state=state,
-        author="user",
-        labels=tuple(labels),
-        url=f"https://github.com/n-yU/repo/issues/{number}",
-        created_at="2026-03-28T09:00:00+09:00",
-        closed_at=closed_at,
-        state_reason=None,
-    )
+    return make_issue(number, title, state, labels=labels, closed_at=closed_at)
 
 
 class TestGitHubActivityFormat:
