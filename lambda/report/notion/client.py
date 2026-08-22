@@ -311,7 +311,7 @@ class NotionClient:
         activity: GitHubActivity,
         session_activity: SessionActivity,
     ) -> list[tuple[str, str]]:
-        """Create one report page per repository, archiving same-date pages first to ensure re-runs stay idempotent."""
+        """Create a report page for each summarized repository that has fetched activity, archiving same-date pages first to ensure re-runs stay idempotent."""
         archived = self._archive_existing_pages(target_date)
         if archived:
             date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")

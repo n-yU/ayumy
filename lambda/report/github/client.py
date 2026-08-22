@@ -189,7 +189,7 @@ class GitHubClient:
         until: datetime,
         event: str,
     ) -> list[Issue]:
-        """Search PRs whose `event` fell inside the window; `search_issues` returns Issue objects even for PR queries, so callers fetch full PR fields via `repo.get_pull(number)` when needed."""
+        """Search PRs by state `event`; `search_issues` returns Issue objects even for PR queries, so callers fetch full PR fields via `repo.get_pull(number)` when needed."""
         query = self._build_search_query(repo, since, until, "pr", event)
         self._search_throttle()
         return list(self.g.search_issues(query))
@@ -242,7 +242,7 @@ class GitHubClient:
         repo_name: str,
         commits: list[CommitInfo],
     ) -> None:
-        """Fill in `pull_numbers` on commits that do not have them yet.
+        """Resolve associated PRs for commits lacking them, replacing each with its full SHA and URL from the API response.
 
         Assumes commits all belong to `repo_name` (cross-repo filtered upstream in store.py).
         404/422 are tolerated as safety nets for force-deleted or ambiguous SHAs.
