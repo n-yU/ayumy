@@ -43,7 +43,7 @@ class CostStore:
         self._run_spend_usd = 0.0
 
     def start_record(self, target_date: date, usage: SummaryUsage) -> None:
-        """`model` and pricing are snapshotted onto the row so later config changes do not affect historical spend."""
+        """Record one Claude API call; `model` and pricing are snapshotted onto the row so later config changes do not affect historical spend."""
         executed_at_utc = datetime.now(UTC)
         executed_date_jst = executed_at_utc.astimezone(JST).date()
         year_month = executed_date_jst.strftime("%Y-%m")

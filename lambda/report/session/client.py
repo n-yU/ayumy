@@ -32,7 +32,10 @@ class SessionClient:
         return objects
 
     def read_repo_name(self, project: str) -> str | None:
-        """Missing `.ayumy_repo` is treated as intentional absence; content validation failure is logged as warning."""
+        """Read the repository name recorded for `project`.
+
+        Missing `.ayumy_repo` is treated as intentional absence; content validation failure is logged as warning.
+        """
         key = f"claude-sessions/{project}/.ayumy_repo"
         try:
             resp = self.s3.get_object(Bucket=self.bucket, Key=key)
@@ -51,7 +54,10 @@ class SessionClient:
         return None
 
     def delete_sessions(self, keys: list[str]) -> int:
-        """Per-key failures are logged as warning; caller (pipeline) decides whether to retry on the next run."""
+        """Delete the given session objects and return how many were removed.
+
+        Per-key failures are logged as warning; caller (pipeline) decides whether to retry on the next run.
+        """
         if not keys:
             return 0
 

@@ -86,7 +86,9 @@ class GitHubClient:
         commits: list[CommitInfo] | None = None,
         session_numbers: list[int] | None = None,
     ) -> list[PullInfo]:
-        """Default path filters by `updated_at`.
+        """Fetch PRs in `repo` active within the window.
+
+        Default path filters by `updated_at`.
         Backfill path (Spec: Hybrid Backfill Fetch) unions Search-by-event with PRs from `commits` and `session_numbers` to recover PRs whose `updated_at` has drifted out.
         """
         if is_backfill:
@@ -116,7 +118,9 @@ class GitHubClient:
         is_backfill: bool = False,
         session_numbers: list[int] | None = None,
     ) -> list[IssueInfo]:
-        """Default path filters by `updated_at`.
+        """Fetch issues in `repo` active within the window.
+
+        Default path filters by `updated_at`.
         Backfill path (Spec: Hybrid Backfill Fetch) unions Search-by-event with `session_numbers` to recover issues whose `updated_at` has drifted out.
         """
         if is_backfill:
@@ -185,7 +189,7 @@ class GitHubClient:
         until: datetime,
         event: str,
     ) -> list[Issue]:
-        """`search_issues` returns Issue objects even for PR queries; callers fetch full PR fields via `repo.get_pull(number)` when needed."""
+        """Search PRs whose `event` fell inside the window; `search_issues` returns Issue objects even for PR queries, so callers fetch full PR fields via `repo.get_pull(number)` when needed."""
         query = self._build_search_query(repo, since, until, "pr", event)
         self._search_throttle()
         return list(self.g.search_issues(query))
@@ -219,7 +223,7 @@ class GitHubClient:
         repo: Repository,
         sha: str,
     ) -> list[int]:
-        """Returns empty list on 404; other API errors propagate."""
+        """Return the numbers of PRs associated with `sha`, empty on 404; other API errors propagate."""
         try:
             commit = repo.get_commit(sha)
             return [pr.number for pr in commit.get_pulls()]
@@ -238,7 +242,9 @@ class GitHubClient:
         repo_name: str,
         commits: list[CommitInfo],
     ) -> None:
-        """Assumes commits all belong to `repo_name` (cross-repo filtered upstream in store.py).
+        """Fill in `pull_numbers` on commits that do not have them yet.
+
+        Assumes commits all belong to `repo_name` (cross-repo filtered upstream in store.py).
         404/422 are tolerated as safety nets for force-deleted or ambiguous SHAs.
         """
         unresolved_indices = [i for i, c in enumerate(commits) if not c.pull_numbers]
@@ -277,7 +283,10 @@ class GitHubClient:
         commits: list[CommitInfo],
         session_numbers: list[int],
     ) -> list[PullInfo]:
-        """Commit/session-derived numbers bypass the date filter (activity proven by commit/session touch); reuses pull_numbers populated by `fetch_commits` to avoid duplicate API calls."""
+        """Union Search-by-event PRs with those derived from commits and sessions.
+
+        Commit/session-derived numbers bypass the date filter (activity proven by commit/session touch); reuses pull_numbers populated by `fetch_commits` to avoid duplicate API calls.
+        """
         event_numbers: set[int] = set()
         for event in _PULL_EVENTS:
             for item in self._search_pulls_by_event(repo, since, until, event):
@@ -318,7 +327,10 @@ class GitHubClient:
         until: datetime,
         session_numbers: list[int],
     ) -> list[IssueInfo]:
-        """Session-derived numbers may resolve to PRs (PR/Issue numbering is shared); fetched via `get_issue` and skipped when `pull_request` is set."""
+        """Union Search-by-event issues with those derived from sessions.
+
+        Session-derived numbers may resolve to PRs (PR/Issue numbering is shared); fetched via `get_issue` and skipped when `pull_request` is set.
+        """
         seen: dict[int, Issue] = {}
         for event in _ISSUE_EVENTS:
             for item in self._search_issues_by_event(repo, since, until, event):

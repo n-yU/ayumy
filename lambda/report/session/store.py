@@ -23,7 +23,7 @@ class SessionStore:
         self.parser = parser or SessionLogParser(notice)
 
     def ingest(self, session_client) -> list[str]:
-        """Existing attributes such as `reported_at` are preserved on re-ingestion."""
+        """Write session metadata parsed from S3 and return the consumed S3 keys; existing attributes such as `reported_at` are preserved on re-ingestion."""
         items, keys = self.parser.build_items(session_client)
         self._write_items(items)
         return keys

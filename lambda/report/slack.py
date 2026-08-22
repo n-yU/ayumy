@@ -27,7 +27,7 @@ def _truncate_headline(headline: str, limit: int = CONFIG.slack.headline_max) ->
 
 
 def _escape_mrkdwn(text: str) -> str:
-    """All Slack mrkdwn specials (`<!channel>`, `<@U...>`, `<url|text>`) start with `<`, so HTML-entity-escaping `&`/`<`/`>` is sufficient to disable them."""
+    """Disable mrkdwn markup in `text`; all Slack specials (`<!channel>`, `<@U...>`, `<url|text>`) start with `<`, so HTML-entity-escaping `&`/`<`/`>` is sufficient."""
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
@@ -51,14 +51,14 @@ def _context_block(text: str) -> dict:
 
 
 def _mom_suffix(change: float | None) -> str:
-    """Returns empty string when `change` is None so callers can drop the whole `(MoM ...)` fragment for uncomputable periods."""
+    """Render the `(MoM ...)` fragment, returning empty string when `change` is None so callers can drop it for uncomputable periods."""
     if change is None:
         return ""
     return f" (MoM {change:+.0f}%)"
 
 
 def _chunk_lines(lines: list[str], limit: int) -> list[str]:
-    """Truncates any single line longer than `limit` so each chunk stays within Slack's section text limit."""
+    """Split `lines` into chunks of at most `limit` characters, truncating any single line longer than `limit` so each chunk stays within Slack's section text limit."""
     chunks: list[str] = []
     current: list[str] = []
     used = 0
@@ -84,7 +84,7 @@ def _chunk_blocks(blocks: list[dict], limit: int = BLOCKS_MAX) -> list[list[dict
 def _pack_messages(
     groups: list[list[dict]], fallbacks: list[str], limit: int = BLOCKS_MAX
 ) -> list[tuple[list[dict], str]]:
-    """Keeps each group whole so one date's report never straddles two messages."""
+    """Pack block groups into messages of at most `limit` blocks, keeping each group whole so one date's report never straddles two messages."""
     messages: list[tuple[list[dict], str]] = []
     current: list[dict] = []
     current_fallbacks: list[str] = []
@@ -141,7 +141,10 @@ class SlackClient:
         pages: list[tuple[str, str]],
         session_only_repos: list[str] | None = None,
     ) -> None:
-        """`session_only_repos` are repos that had Claude Code sessions but no GitHub activity; they were excluded from the Claude summary input and get surfaced here as a context row."""
+        """Queue the daily report section for `target_date`.
+
+        `session_only_repos` are repos that had Claude Code sessions but no GitHub activity; they were excluded from the Claude summary input and get surfaced here as a context row.
+        """
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
 
         if pages:
@@ -208,7 +211,7 @@ class SlackClient:
         memory_limit_mb: int | None = None,
         timeout_seconds: int | None = None,
     ) -> None:
-        """`memory_limit_mb` / `timeout_seconds` are None from CLI; ratios against limits are then omitted from the rendered text."""
+        """Queue the execution metrics section; `memory_limit_mb` / `timeout_seconds` are None from CLI, and ratios against limits are then omitted from the rendered text."""
         if timeout_seconds is not None:
             elapsed_pct = elapsed / timeout_seconds * 100
             elapsed_text = f"{elapsed:.1f} / {timeout_seconds}s ({elapsed_pct:.0f}%)"
