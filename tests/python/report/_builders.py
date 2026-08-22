@@ -201,7 +201,8 @@ def make_pull_mock(
     pr.updated_at = updated_at if updated_at is not None else created_at
     pr.merged_at = merged_at
     pr.closed_at = closed_at if closed_at is not None else merged_at
-    pr.state = state if state is not None else ("closed" if closed_at else "open")
+    # A merged PR is closed on GitHub, so derive the state after the merged_at fallback
+    pr.state = state if state is not None else ("closed" if pr.closed_at else "open")
     pr.draft = draft
     pr.html_url = f"https://github.com/{OWNER}/{repo}/pull/{number}"
     pr.user.login = "user"
