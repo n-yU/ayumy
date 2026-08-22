@@ -50,7 +50,10 @@ def _first_positional_int(segment: str) -> int | None:
 
 
 def _expand_home(path: str, project_cwd: str | None) -> str:
-    """Lambda's runtime user differs from session author, so `Path.expanduser` would resolve to the wrong home."""
+    """Resolve a leading `~` against the session author's home inferred from `project_cwd`.
+
+    Lambda's runtime user differs from session author, so `Path.expanduser` would resolve to the wrong home.
+    """
     if path != "~" and not path.startswith("~/"):
         return path
     if project_cwd:
@@ -93,7 +96,10 @@ def _is_cross_repo(effective_cwd: str | None, project_cwd: str | None) -> bool:
 
 
 def _extract_pr_issue_refs(command: str) -> tuple[set[int], set[int]]:
-    """`#N` inside `git` args is ambiguous between PR and Issue; placed in both sets, fetcher reconciles via 404 or `pull_request` attribute."""
+    """Extract the PR and Issue numbers referenced by a Bash command.
+
+    `#N` inside `git` args is ambiguous between PR and Issue; placed in both sets, fetcher reconciles via 404 or `pull_request` attribute.
+    """
     pulls: set[int] = set()
     issues: set[int] = set()
 

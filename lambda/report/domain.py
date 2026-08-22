@@ -42,7 +42,7 @@ class CommitInfo:
         return self.sha[: self.SHA_PREFIX_LEN]
 
     def label(self) -> str:
-        """For status / timeline rows."""
+        """Return the short SHA and message used in status / timeline rows."""
         return f"{self.short_sha}: {self.message}"
 
     def is_in_range(self, since: datetime, until: datetime) -> bool:
@@ -54,7 +54,7 @@ class CommitInfo:
         commit: Commit,
         pull_numbers: Iterable[int] = (),
     ) -> CommitInfo:
-        """`pull_numbers` is supplied separately because resolving associated PRs requires an extra API call."""
+        """Build a CommitInfo from a Search API commit; `pull_numbers` is supplied separately because resolving associated PRs requires an extra API call."""
         return cls(
             sha=commit.sha,
             message=commit.commit.message.split("\n")[0],
@@ -85,7 +85,7 @@ class PullInfo:
     merge_commit_sha: str | None
 
     def label(self, repo_name: str) -> str:
-        """For status / timeline rows."""
+        """Return the qualified PR number and title used in status / timeline rows."""
         return f"{repo_name}#{self.number}: {self.title}"
 
     def done_prefix(self) -> str:
@@ -153,7 +153,7 @@ class IssueInfo:
     state_reason: str | None
 
     def label(self, repo_name: str) -> str:
-        """For status / timeline rows."""
+        """Return the qualified issue number and title used in status / timeline rows."""
         return f"{repo_name}#{self.number}: {self.title}"
 
     def done_prefix(self) -> str:

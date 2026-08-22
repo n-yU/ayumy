@@ -287,7 +287,7 @@ class NotionClient:
         return page["url"]
 
     def _archive_existing_pages(self, target_date: datetime) -> int:
-        """Ensures re-runs stay idempotent."""
+        """Archive every page already recorded for `target_date` so re-runs stay idempotent."""
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
         # No pagination: daily page count won't exceed Notion's default page size (100)
         results = self.client.data_sources.query(
@@ -311,7 +311,7 @@ class NotionClient:
         activity: GitHubActivity,
         session_activity: SessionActivity,
     ) -> list[tuple[str, str]]:
-        """Archives same-date pages first to ensure re-runs stay idempotent."""
+        """Create a report page for each summarized repository that has fetched activity, archiving same-date pages first to ensure re-runs stay idempotent."""
         archived = self._archive_existing_pages(target_date)
         if archived:
             date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")

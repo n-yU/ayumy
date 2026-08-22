@@ -94,7 +94,7 @@ class SummaryClient:
         self._notice = notice or Notice()
 
     def _build_tool_schema(self) -> dict:
-        """`tags` enum bars the model from emitting values outside the code-defined allowlist."""
+        """Build the tool definition the model fills in; the `tags` enum bars it from emitting values outside the code-defined allowlist."""
         return {
             "name": TOOL_NAME,
             "description": "日次の開発アクティビティ要約を構造化された形で提出する",

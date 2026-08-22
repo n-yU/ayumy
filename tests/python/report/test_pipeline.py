@@ -580,7 +580,7 @@ class TestRun:
         store.fetch_sessions.assert_any_call("2026-03-28")
 
     def test_target_date_uses_backfill_fetch(self, run_patches):
-        """target_date 指定時は Hybrid 経路（is_backfill=True）になる"""
+        """An explicit target_date takes the Hybrid path (is_backfill=True)."""
         target_since = datetime(2026, 3, 25, 0, 0, tzinfo=JST)
         target_until = datetime(2026, 3, 26, 0, 0, tzinfo=JST)
         run_patches["get_target_date_range"].return_value = (target_since, target_until)
@@ -592,7 +592,7 @@ class TestRun:
             assert call.kwargs.get("is_backfill") is True
 
     def test_scan_backfill_dates_use_hybrid_but_primary_does_not(self, run_patches):
-        """scan_backfill_dates 由来の日付のみ is_backfill=True、primary は False"""
+        """Only dates from scan_backfill_dates get is_backfill=True; the primary date does not."""
         store = run_patches["SessionStore"].return_value
         store.scan_backfill_dates.return_value = [
             date(2026, 3, 26),

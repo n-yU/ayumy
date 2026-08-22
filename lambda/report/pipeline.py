@@ -42,7 +42,10 @@ def process_date(
     *,
     is_backfill: bool = False,
 ) -> None:
-    """When `is_backfill=True`, switches to Hybrid PR/Issue fetch (Spec: Hybrid Backfill Fetch) to recover items whose `updated_at` has drifted out of the window."""
+    """Generate and publish the report for a single date window.
+
+    When `is_backfill=True`, switches to Hybrid PR/Issue fetch (Spec: Hybrid Backfill Fetch) to recover items whose `updated_at` has drifted out of the window.
+    """
     logger.info("Processing: %s ~ %s", since.isoformat(), until.isoformat())
 
     session_pulls: dict[str, list[int]] = {}
@@ -138,7 +141,9 @@ def run(
     memory_limit_mb: int | None = None,
     timeout_seconds: int | None = None,
 ) -> None:
-    """`target_date` (`YYYY-MM-DD` or `YYYY-MM-DD..YYYY-MM-DD`) takes precedence and processes every given date as a backfill;
+    """Run the report generation for every date this invocation covers.
+
+    `target_date` (`YYYY-MM-DD` or `YYYY-MM-DD..YYYY-MM-DD`) takes precedence and processes every given date as a backfill;
     otherwise processes the prior day (scheduled) or today's partial window (`source="manual"`) plus unreported backfill dates.
     `memory_limit_mb` / `timeout_seconds` are None from the CLI.
     """
