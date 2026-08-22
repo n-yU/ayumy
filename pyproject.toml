@@ -16,9 +16,23 @@ target-version = "py312"
 line-length = 88
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "B", "UP"]
-# Line length is enforced by the formatter; lint should not flag strings the formatter cannot wrap.
-ignore = ["E501"]
+select = ["E", "F", "W", "I", "B", "UP", "D"]
+ignore = [
+    # Line length is enforced by the formatter; lint should not flag strings the formatter cannot wrap.
+    "E501",
+    # Whether a docstring exists is left to the author; only the format of the ones written is enforced.
+    "D100",
+    "D101",
+    "D102",
+    "D103",
+    "D104",
+    "D105",
+    "D106",
+    "D107",
+]
 
 [tool.ruff.lint.isort]
 known-first-party = ["config", "report"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
