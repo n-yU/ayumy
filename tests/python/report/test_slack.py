@@ -29,6 +29,7 @@ from ._builders import TARGET_DATE, make_stub
 CHANNEL = "C0TEST"
 FIRST_TS = "1700000000.000100"
 SECOND_TS = "1800000000.000200"
+REPLY_TS = "1900000000.000300"
 PAGE_URL = "https://notion.so/p"
 VERSION = "0.2.1"
 DAYS_IN_MARCH = 31
@@ -732,7 +733,7 @@ class TestSendNoticeThread:
         notice.add(NoticeSource.SESSION, "Malformed JSONL line skipped", key="x")
         threaded_client.client.chat_postMessage.return_value = {
             "ok": True,
-            "ts": "1900000000.000300",
+            "ts": REPLY_TS,
         }
         threaded_client.send_notice_thread(notice)
 
