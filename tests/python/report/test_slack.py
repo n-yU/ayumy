@@ -198,8 +198,7 @@ class TestNotify:
         slack_client.flush()
 
         page_text = _get_send_kwargs(slack_client)["blocks"][1]["text"]["text"]
-        # Only one rendered line (page link + headline), no stray newlines
-        # from the headline itself.
+        # A newline inside the headline would break the one-line-per-repo layout
         assert page_text.count("\n") == 0
         assert "first line second line third line" in page_text
 
