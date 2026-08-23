@@ -84,8 +84,7 @@ teardown() {
 # --- AYUMY_S3_BUCKET normalization ---
 
 @test "sync_session.sh: bucket name strips s3:// prefix" {
-  local proj_dir="$PROJECTS_DIR/myproj"
-  mkdir -p "$proj_dir"
+  make_project
   echo '{}' > "$proj_dir/sess1.jsonl"
   AYUMY_S3_BUCKET="s3://my-bkt" run "$SCRIPT" --project myproj
   [ "$status" -eq 0 ]
@@ -93,8 +92,7 @@ teardown() {
 }
 
 @test "sync_session.sh: bucket name strips trailing slashes" {
-  local proj_dir="$PROJECTS_DIR/myproj"
-  mkdir -p "$proj_dir"
+  make_project
   echo '{}' > "$proj_dir/sess1.jsonl"
   AYUMY_S3_BUCKET="my-bkt///" run "$SCRIPT" --project myproj
   [ "$status" -eq 0 ]
@@ -122,8 +120,7 @@ teardown() {
 # --- find_changed_sessions / sync_project return codes ---
 
 @test "sync_session.sh: no marker uploads all JSONL files and writes marker" {
-  local proj_dir="$PROJECTS_DIR/myproj"
-  mkdir -p "$proj_dir"
+  make_project
   echo '{}' > "$proj_dir/a.jsonl"
   echo '{}' > "$proj_dir/b.jsonl"
   run "$SCRIPT" --project myproj
@@ -135,8 +132,7 @@ teardown() {
 }
 
 @test "sync_session.sh: marker present uploads only newer JSONL" {
-  local proj_dir="$PROJECTS_DIR/myproj"
-  mkdir -p "$proj_dir"
+  make_project
   echo '{}' > "$proj_dir/old.jsonl"
   touch -t 202001010000 "$proj_dir/old.jsonl"
   touch -t 202401010000 "$proj_dir/.ayumy_last_sync"
@@ -148,8 +144,7 @@ teardown() {
 }
 
 @test "sync_session.sh: no changes logs 'no changes' and exits 0" {
-  local proj_dir="$PROJECTS_DIR/myproj"
-  mkdir -p "$proj_dir"
+  make_project
   echo '{}' > "$proj_dir/x.jsonl"
   touch -t 202001010000 "$proj_dir/x.jsonl"
   touch -t 202401010000 "$proj_dir/.ayumy_last_sync"
@@ -160,8 +155,7 @@ teardown() {
 }
 
 @test "sync_session.sh: s3 cp failure surfaces as exit 2" {
-  local proj_dir="$PROJECTS_DIR/myproj"
-  mkdir -p "$proj_dir"
+  make_project
   echo '{}' > "$proj_dir/a.jsonl"
   AWS_STUB_S3_EXIT=1 run "$SCRIPT" --project myproj
   [ "$status" -eq 2 ]
@@ -169,8 +163,7 @@ teardown() {
 }
 
 @test "sync_session.sh: .ayumy_repo metadata is uploaded alongside JSONL when present" {
-  local proj_dir="$PROJECTS_DIR/myproj"
-  mkdir -p "$proj_dir"
+  make_project
   echo '{}' > "$proj_dir/a.jsonl"
   echo 'my-repo' > "$proj_dir/.ayumy_repo"
   run "$SCRIPT" --project myproj
@@ -180,8 +173,7 @@ teardown() {
 }
 
 @test "sync_session.sh: .ayumy_repo upload failure surfaces as exit 2" {
-  local proj_dir="$PROJECTS_DIR/myproj"
-  mkdir -p "$proj_dir"
+  make_project
   echo '{}' > "$proj_dir/a.jsonl"
   echo 'my-repo' > "$proj_dir/.ayumy_repo"
   AWS_STUB_S3_FAIL_PATTERN=".ayumy_repo" run "$SCRIPT" --project myproj
