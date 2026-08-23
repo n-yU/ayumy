@@ -55,17 +55,6 @@ def threaded_client(slack_client):
     return slack_client
 
 
-@pytest.fixture
-def cost():
-    return CostDisplay(
-        current_run_spend_usd=0.0340,
-        monthly_spend_usd=1.23,
-        spend_change_pct=8.0,
-        monthly_call_count=12,
-        call_count_change_pct=5.0,
-    )
-
-
 def _get_send_kwargs(client):
     return client.client.chat_postMessage.call_args.kwargs
 
@@ -92,6 +81,16 @@ def _queue_every_day(client):
     """Queue one section per day of March, enough groups to exceed the per-message block limit."""
     for day in range(1, DAYS_IN_MARCH + 1):
         client.notify_no_activity(datetime(2026, 3, day, tzinfo=JST))
+
+
+def _cost(spend_change_pct=8.0, call_count_change_pct=5.0):
+    return CostDisplay(
+        current_run_spend_usd=0.0340,
+        monthly_spend_usd=1.23,
+        spend_change_pct=spend_change_pct,
+        monthly_call_count=12,
+        call_count_change_pct=call_count_change_pct,
+    )
 
 
 def _invalid_tags_result():
@@ -345,60 +344,62 @@ class TestNotifySessionOnly:
 
 
 class TestNotifyMetrics:
-    def test_sends_metrics_with_memory_limit(self, slack_client):
-        slack_client.notify_metrics(12.5, 128.0, VERSION, memory_limit_mb=256)
+    @pytest.mark.parametrize(
+        "elapsed,peak_memory,limits,expected,absent",
+        [
+            pytest.param(
+                12.5,
+                128.0,
+                {"memory_limit_mb": 256},
+                ["⏱️ 12.5s", "💾 128 / 256 MB (50%)"],
+                (),
+                id="memory_ratio",
+            ),
+            pytest.param(
+                5.3,
+                64.0,
+                {},
+                ["⏱️ 5.3s", "💾 64 MB"],
+                ("%",),
+                id="no_limits",
+            ),
+            pytest.param(
+                45.0,
+                100.0,
+                {"memory_limit_mb": 512, "timeout_seconds": 300},
+                ["⏱️ 45.0 / 300s (15%)"],
+                (),
+                id="timeout_ratio",
+            ),
+            pytest.param(
+                45.0,
+                100.0,
+                {"memory_limit_mb": 512},
+                ["⏱️ 45.0s"],
+                ("/ 300s",),
+                id="no_timeout",
+            ),
+            pytest.param(
+                45.0,
+                128.0,
+                {"memory_limit_mb": 256, "timeout_seconds": 300},
+                [f"🔖 v{VERSION}", "⏱️ 45.0 / 300s (15%)", "💾 128 / 256 MB (50%)"],
+                (),
+                id="all_fields",
+            ),
+        ],
+    )
+    def test_renders_metrics_caption(
+        self, slack_client, elapsed, peak_memory, limits, expected, absent
+    ):
+        slack_client.notify_metrics(elapsed, peak_memory, VERSION, **limits)
         slack_client.flush()
 
         text = _blocks_text(_get_send_kwargs(slack_client)["blocks"])
-        assert "12.5s" in text
-        assert "128 / 256 MB" in text
-        assert "50%" in text
-
-    def test_sends_metrics_without_memory_limit(self, slack_client):
-        slack_client.notify_metrics(5.3, 64.0, VERSION)
-        slack_client.flush()
-
-        text = _blocks_text(_get_send_kwargs(slack_client)["blocks"])
-        assert "5.3s" in text
-        assert "64 MB" in text
-        # No percent indicator when neither memory nor timeout limits are set
-        assert "%" not in text
-
-    def test_includes_version(self, slack_client):
-        slack_client.notify_metrics(10.0, 100.0, VERSION, memory_limit_mb=512)
-        slack_client.flush()
-
-        text = _blocks_text(_get_send_kwargs(slack_client)["blocks"])
-        assert f"🔖 v{VERSION}" in text
-
-    def test_includes_timeout_when_provided(self, slack_client):
-        slack_client.notify_metrics(
-            45.0, 100.0, VERSION, memory_limit_mb=512, timeout_seconds=300
-        )
-        slack_client.flush()
-
-        text = _blocks_text(_get_send_kwargs(slack_client)["blocks"])
-        assert "45.0 / 300s" in text
-        assert "15%" in text
-
-    def test_omits_timeout_when_not_provided(self, slack_client):
-        slack_client.notify_metrics(45.0, 100.0, VERSION, memory_limit_mb=512)
-        slack_client.flush()
-
-        text = _blocks_text(_get_send_kwargs(slack_client)["blocks"])
-        assert "45.0s" in text
-        assert "/ 300s" not in text
-
-    def test_includes_all_fields_together(self, slack_client):
-        slack_client.notify_metrics(
-            45.0, 128.0, VERSION, memory_limit_mb=256, timeout_seconds=300
-        )
-        slack_client.flush()
-
-        text = _blocks_text(_get_send_kwargs(slack_client)["blocks"])
-        assert f"🔖 v{VERSION}" in text
-        assert "⏱️ 45.0 / 300s (15%)" in text
-        assert "💾 128 / 256 MB (50%)" in text
+        for fragment in expected:
+            assert fragment in text
+        for fragment in absent:
+            assert fragment not in text
 
     def test_fallback_text_includes_version_and_timeout(self, slack_client):
         slack_client.notify_metrics(
@@ -414,47 +415,47 @@ class TestNotifyMetrics:
 
 
 class TestNotifyMetricsWithCost:
-    def test_block_contains_cost_metrics(self, slack_client, cost):
+    @pytest.mark.parametrize(
+        "spend_change_pct,call_count_change_pct,expected,absent",
+        [
+            pytest.param(
+                8.0,
+                5.0,
+                ["🧾 $0.0340", "💰 MTD $1.23 (MoM +8%)", "🔁 12 calls (MoM +5%)"],
+                (),
+                id="distinct_changes",
+            ),
+            pytest.param(
+                0.0,
+                0.0,
+                ["💰 MTD $1.23 (MoM +0%)", "🔁 12 calls (MoM +0%)"],
+                (),
+                id="zero_change",
+            ),
+            pytest.param(
+                None,
+                None,
+                ["💰 MTD $1.23", "🔁 12 calls"],
+                ("MoM",),
+                id="uncomputable_change",
+            ),
+        ],
+    )
+    def test_renders_cost_caption(
+        self, slack_client, spend_change_pct, call_count_change_pct, expected, absent
+    ):
+        cost = _cost(spend_change_pct, call_count_change_pct)
         slack_client.notify_metrics(1.0, 100.0, VERSION, cost=cost)
         slack_client.flush()
 
         text = _blocks_text(_get_send_kwargs(slack_client)["blocks"])
-        assert "🧾 $0.0340" in text
-        assert "💰 MTD $1.23 (MoM +8%)" in text
-        assert "🔁 12 calls (MoM +5%)" in text
+        for fragment in expected:
+            assert fragment in text
+        for fragment in absent:
+            assert fragment not in text
 
-    def test_none_change_pct_omits_mom_fragment(self, slack_client):
-        cost = CostDisplay(
-            current_run_spend_usd=0.0340,
-            monthly_spend_usd=1.23,
-            spend_change_pct=None,
-            monthly_call_count=12,
-            call_count_change_pct=None,
-        )
-        slack_client.notify_metrics(1.0, 100.0, VERSION, cost=cost)
-        slack_client.flush()
-
-        text = _blocks_text(_get_send_kwargs(slack_client)["blocks"])
-        assert "MoM" not in text
-        assert "MTD $1.23" in text
-        assert "12 calls" in text
-
-    def test_zero_change_pct_still_rendered(self, slack_client):
-        cost = CostDisplay(
-            current_run_spend_usd=0.0340,
-            monthly_spend_usd=1.23,
-            spend_change_pct=0.0,
-            monthly_call_count=12,
-            call_count_change_pct=0.0,
-        )
-        slack_client.notify_metrics(1.0, 100.0, VERSION, cost=cost)
-        slack_client.flush()
-
-        text = _blocks_text(_get_send_kwargs(slack_client)["blocks"])
-        assert "MoM +0%" in text
-
-    def test_metrics_and_cost_share_single_context_block(self, slack_client, cost):
-        slack_client.notify_metrics(1.0, 100.0, VERSION, cost=cost)
+    def test_metrics_and_cost_share_single_context_block(self, slack_client):
+        slack_client.notify_metrics(1.0, 100.0, VERSION, cost=_cost())
         slack_client.flush()
 
         blocks = _get_send_kwargs(slack_client)["blocks"]
@@ -465,8 +466,8 @@ class TestNotifyMetricsWithCost:
         assert "🧾 $0.0340" in caption
         assert "💰 MTD" in caption
 
-    def test_fallback_text_includes_cost(self, slack_client, cost):
-        slack_client.notify_metrics(1.0, 100.0, VERSION, cost=cost)
+    def test_fallback_text_includes_cost(self, slack_client):
+        slack_client.notify_metrics(1.0, 100.0, VERSION, cost=_cost())
         slack_client.flush()
 
         fallback = _get_send_kwargs(slack_client)["text"]
