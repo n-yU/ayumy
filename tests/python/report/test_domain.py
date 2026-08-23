@@ -10,13 +10,12 @@ from report.domain import CommitInfo, IssueInfo, PullInfo
 
 from ._builders import (
     REPO_FULL_NAME,
+    SINCE,
+    UNTIL,
     make_commit_mock,
     make_issue_mock,
     make_pull_mock,
 )
-
-SINCE = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
-UNTIL = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
 
 
 def _commit(**overrides):
