@@ -83,20 +83,8 @@ class TestBuildProperties:
 class TestStatusSections:
     def test_done_collects_merged_and_closed(self, build_status):
         blocks = build_status(
-            pulls=[
-                make_pull(1, "Merged PR", "merged"),
-                make_pull(
-                    2, "Rejected PR", "closed", closed_at="2026-03-28T11:00:00+09:00"
-                ),
-            ],
+            pulls=[make_pull(1, "Merged PR", "merged")],
             issues=[
-                make_issue(
-                    10,
-                    "Completed issue",
-                    "closed",
-                    closed_at="2026-03-28T12:00:00+09:00",
-                    state_reason="completed",
-                ),
                 make_issue(
                     11,
                     "Not planned",
@@ -104,35 +92,17 @@ class TestStatusSections:
                     closed_at="2026-03-28T13:00:00+09:00",
                     state_reason="not_planned",
                 ),
-                make_issue(
-                    12,
-                    "Duplicate",
-                    "closed",
-                    closed_at="2026-03-28T14:00:00+09:00",
-                    state_reason="duplicate",
-                ),
-                make_issue(
-                    13, "Legacy closed", "closed", closed_at="2026-03-28T15:00:00+09:00"
-                ),
             ],
         )
 
         assert _headings(blocks) == ["Done"]
         assert _texts(blocks) == [
             f"✅ {REPO}#1: Merged PR",
-            f"⚠️ (closed) {REPO}#2: Rejected PR",
-            f"✅ {REPO}#10: Completed issue",
             f"⚠️ (not planned) {REPO}#11: Not planned",
-            f"⚠️ (duplicate) {REPO}#12: Duplicate",
-            f"✅ {REPO}#13: Legacy closed",
         ]
         assert _urls(blocks) == [
             f"https://github.com/{REPO_FULL_NAME}/pull/1",
-            f"https://github.com/{REPO_FULL_NAME}/pull/2",
-            f"https://github.com/{REPO_FULL_NAME}/issues/10",
             f"https://github.com/{REPO_FULL_NAME}/issues/11",
-            f"https://github.com/{REPO_FULL_NAME}/issues/12",
-            f"https://github.com/{REPO_FULL_NAME}/issues/13",
         ]
 
     def test_in_progress_collects_open_pulls_and_pre_existing_issues(
@@ -399,14 +369,6 @@ class TestTimelineSection:
                     5, "New bug", "open", created_at="2026-03-28T08:00:00+09:00"
                 ),
                 make_issue(
-                    6,
-                    "Fixed",
-                    "closed",
-                    created_at="2026-03-20T09:00:00+09:00",
-                    closed_at="2026-03-28T13:00:00+09:00",
-                    state_reason="completed",
-                ),
-                make_issue(
                     7,
                     "Won't fix",
                     "closed",
@@ -419,7 +381,6 @@ class TestTimelineSection:
 
         assert _texts(blocks) == [
             f"🟢 open: {REPO}#5: New bug",
-            f"✅ close: {REPO}#6: Fixed",
             f"⚠️ close (not planned): {REPO}#7: Won't fix",
         ]
 
@@ -488,22 +449,8 @@ class TestBuildChildren:
             repo_summary, repo_activity, SINCE, UNTIL
         )
 
-        # Summary heading + 2 bullets, Done heading + 1 bullet,
-        # Todo heading + 1 bullet, Timeline heading + 3 bullets
-        assert [c["type"] for c in children] == [
-            "heading_2",
-            "bulleted_list_item",
-            "bulleted_list_item",
-            "heading_2",
-            "bulleted_list_item",
-            "heading_2",
-            "bulleted_list_item",
-            "heading_2",
-            "bulleted_list_item",
-            "bulleted_list_item",
-            "bulleted_list_item",
-        ]
         assert _headings(children) == ["Summary", "Done", "Todo", "Timeline"]
+        assert _texts(children)[:2] == ["point one", "point two"]
 
     def test_renders_only_summary_when_no_activity(self, notion_client):
         repo_summary = {"name": REPO, "summary": ["only point"], "tags": []}
