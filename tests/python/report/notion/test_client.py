@@ -273,8 +273,8 @@ class TestTimelineSection:
         ]
 
     def test_sorts_nested_commits_by_instant_across_timezones(self, build_timeline):
-        # ISO string order would put +00:00 first, but 10:00+09:00 (= 01:00 UTC)
-        # actually precedes 09:00+00:00 (= 18:00 JST)
+        # ISO string order would put +00:00 first,
+        # but 10:00+09:00 (= 01:00 UTC) precedes 09:00+00:00 (= 18:00 JST)
         blocks = build_timeline(
             commits=[
                 make_commit(
