@@ -11,6 +11,14 @@ OWNER = "n-yU"
 REPO = "my-repo"
 REPO_FULL_NAME = f"{OWNER}/{REPO}"
 MOCK_CREATED_AT = datetime(2026, 3, 28, 9, 0, tzinfo=JST)
+CREATED_AT = MOCK_CREATED_AT.isoformat()
+COMPLETED_AT = datetime(2026, 3, 28, 10, 0, tzinfo=JST).isoformat()
+
+SINCE = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+UNTIL = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+
+# Marks a completion field left to the value that matches `state`
+_DERIVED = object()
 
 
 def make_commit(
@@ -45,11 +53,20 @@ def make_pull(
     draft=False,
     url=None,
     repo=REPO,
-    created_at="2026-03-28T09:00:00+09:00",
-    merged_at="2026-03-28T10:00:00+09:00",
-    closed_at="2026-03-28T10:00:00+09:00",
-    merge_commit_sha="deadbeef",
+    created_at=CREATED_AT,
+    merged_at=_DERIVED,
+    closed_at=_DERIVED,
+    merge_commit_sha=_DERIVED,
 ):
+    """Build a PullInfo whose completion fields default to the values `state` implies."""
+    if merged_at is _DERIVED:
+        merged_at = COMPLETED_AT if state == "merged" else None
+    if closed_at is _DERIVED:
+        # GitHub closes a PR at the moment it merges
+        closed_at = merged_at or (COMPLETED_AT if state == "closed" else None)
+    if merge_commit_sha is _DERIVED:
+        merge_commit_sha = "deadbeef" if state == "merged" else None
+
     return PullInfo(
         number=number,
         title=title,
@@ -76,10 +93,14 @@ def make_issue(
     labels=(),
     url=None,
     repo=REPO,
-    created_at="2026-03-28T09:00:00+09:00",
-    closed_at=None,
+    created_at=CREATED_AT,
+    closed_at=_DERIVED,
     state_reason=None,
 ):
+    """Build an IssueInfo whose close timestamp defaults to the value `state` implies."""
+    if closed_at is _DERIVED:
+        closed_at = COMPLETED_AT if state == "closed" else None
+
     return IssueInfo(
         number=number,
         title=title,
@@ -126,15 +147,17 @@ def make_session(repo=REPO, *, entries=None, **entry_kwargs):
     return SessionActivity({repo: entries})
 
 
+def make_repo_activity(*, commits=(), pulls=(), issues=()):
+    return {
+        "commits": list(commits),
+        "pulls": list(pulls),
+        "issues": list(issues),
+    }
+
+
 def make_github(repo=REPO, *, commits=(), pulls=(), issues=()):
     return GitHubActivity(
-        {
-            repo: {
-                "commits": list(commits),
-                "pulls": list(pulls),
-                "issues": list(issues),
-            }
-        }
+        {repo: make_repo_activity(commits=commits, pulls=pulls, issues=issues)}
     )
 
 

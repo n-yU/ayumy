@@ -1,15 +1,17 @@
 """Tests for GitHubActivity formatting and session-commit merging."""
 
-from datetime import datetime as dt
-
-from report import JST
 from report.domain import CommitInfo
 from report.github import GitHubActivity
 
-from .._builders import OWNER, make_commit, make_issue, make_pull, make_session_entry
-
-SINCE = dt(2026, 3, 28, 0, 0, tzinfo=JST)
-UNTIL = dt(2026, 3, 29, 0, 0, tzinfo=JST)
+from .._builders import (
+    OWNER,
+    SINCE,
+    UNTIL,
+    make_commit,
+    make_issue,
+    make_pull,
+    make_session_entry,
+)
 
 
 def _session(
@@ -30,22 +32,6 @@ def _commit(message, sha="abc1234", date="2026-03-28T10:00:00+09:00"):
     return make_commit(sha=sha, message=message, date=date)
 
 
-def _pull(number, title, state, *, labels=(), merged_at=None, closed_at=None):
-    return make_pull(
-        number,
-        title,
-        state,
-        labels=labels,
-        merged_at=merged_at,
-        closed_at=closed_at or merged_at,
-        merge_commit_sha=None,
-    )
-
-
-def _issue(number, title, state, *, labels=(), closed_at=None):
-    return make_issue(number, title, state, labels=labels, closed_at=closed_at)
-
-
 class TestGitHubActivityFormat:
     def test_empty_activity(self):
         activity = GitHubActivity({})
@@ -59,7 +45,7 @@ class TestGitHubActivityFormat:
             "my-repo": {
                 "commits": [_commit("Fix bug")],
                 "pulls": [
-                    _pull(
+                    make_pull(
                         1,
                         "Add feature",
                         "merged",
@@ -68,7 +54,7 @@ class TestGitHubActivityFormat:
                     )
                 ],
                 "issues": [
-                    _issue(
+                    make_issue(
                         2, "Bug report", "closed", closed_at="2026-03-28T11:00:00+09:00"
                     )
                 ],
@@ -93,10 +79,14 @@ class TestGitHubActivityFormat:
             "my-repo": {
                 "commits": [_commit("Yesterday", date="2026-03-27T10:00:00+09:00")],
                 "pulls": [
-                    _pull(1, "Merged", "merged", merged_at="2026-03-27T10:00:00+09:00")
+                    make_pull(
+                        1, "Merged", "merged", merged_at="2026-03-27T10:00:00+09:00"
+                    )
                 ],
                 "issues": [
-                    _issue(2, "Closed", "closed", closed_at="2026-03-27T11:00:00+09:00")
+                    make_issue(
+                        2, "Closed", "closed", closed_at="2026-03-27T11:00:00+09:00"
+                    )
                 ],
             },
         }
@@ -108,10 +98,14 @@ class TestGitHubActivityFormat:
             "my-repo": {
                 "commits": [],
                 "pulls": [
-                    _pull(1, "Merged", "merged", merged_at="2026-03-29T10:00:00+09:00")
+                    make_pull(
+                        1, "Merged", "merged", merged_at="2026-03-29T10:00:00+09:00"
+                    )
                 ],
                 "issues": [
-                    _issue(2, "Closed", "closed", closed_at="2026-03-29T11:00:00+09:00")
+                    make_issue(
+                        2, "Closed", "closed", closed_at="2026-03-29T11:00:00+09:00"
+                    )
                 ],
             },
         }
