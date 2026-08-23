@@ -94,6 +94,12 @@ def _queue_every_day(client):
         client.notify_no_activity(datetime(2026, 3, day, tzinfo=JST))
 
 
+def _invalid_tags_result():
+    result = ValidationResult()
+    result.invalid_tags = {"repo": ["BadTag"]}
+    return result
+
+
 def _repo(name, summary=None):
     return {
         "name": name,
@@ -145,20 +151,6 @@ class TestNotify:
 
         text = _blocks_text(_get_send_kwargs(slack_client)["blocks"])
         assert "📓 Session-only: notes-repo" in text
-
-    def test_block_structure(self, slack_client):
-        report = {"repositories": [_repo("repo", ["h"])]}
-        slack_client.notify(
-            TARGET_DATE, report, [("repo", PAGE_URL)], session_only_repos=["notes-repo"]
-        )
-        slack_client.flush()
-
-        blocks = _get_send_kwargs(slack_client)["blocks"]
-        assert blocks[0]["type"] == "header"
-        assert blocks[1]["type"] == "section"  # page links with headlines
-        assert "text" in blocks[1]
-        assert "fields" not in blocks[1]
-        assert blocks[2]["type"] == "context"  # session-only
 
     def test_page_line_omits_dash_when_no_headline(self, slack_client):
         report = {"repositories": [_repo("repo")]}
@@ -339,15 +331,6 @@ class TestNotifyNoActivity:
         assert "No activity" in text
         assert kwargs["text"]
 
-    def test_block_structure(self, slack_client):
-        slack_client.notify_no_activity(TARGET_DATE)
-        slack_client.flush()
-
-        blocks = _get_send_kwargs(slack_client)["blocks"]
-        assert blocks[0]["type"] == "header"
-        assert "💤" in blocks[0]["text"]["text"]
-        assert blocks[1]["type"] == "section"
-
 
 class TestNotifySessionOnly:
     def test_sends_session_only_message(self, slack_client):
@@ -359,15 +342,6 @@ class TestNotifySessionOnly:
         assert "2026-03-28" in text
         assert "Session-only: repo-a, repo-b" in text
         assert kwargs["text"]
-
-    def test_block_structure(self, slack_client):
-        slack_client.notify_session_only(TARGET_DATE, ["repo-a"])
-        slack_client.flush()
-
-        blocks = _get_send_kwargs(slack_client)["blocks"]
-        assert blocks[0]["type"] == "header"
-        assert "📓" in blocks[0]["text"]["text"]
-        assert blocks[1]["type"] == "section"
 
 
 class TestNotifyMetrics:
@@ -389,13 +363,6 @@ class TestNotifyMetrics:
         assert "64 MB" in text
         # No percent indicator when neither memory nor timeout limits are set
         assert "%" not in text
-
-    def test_block_structure(self, slack_client):
-        slack_client.notify_metrics(10.0, 100.0, VERSION, memory_limit_mb=512)
-        slack_client.flush()
-
-        blocks = _get_send_kwargs(slack_client)["blocks"]
-        assert blocks[0]["type"] == "context"
 
     def test_includes_version(self, slack_client):
         slack_client.notify_metrics(10.0, 100.0, VERSION, memory_limit_mb=512)
@@ -518,24 +485,11 @@ class TestNotifyMetricsWithCost:
 
 class TestNotifyValidationErrors:
     def test_sends_invalid_tags(self, slack_client):
-        result = ValidationResult()
-        result.invalid_tags = {"repo": ["BadTag"]}
-        slack_client.notify_validation_errors(TARGET_DATE, result)
+        slack_client.notify_validation_errors(TARGET_DATE, _invalid_tags_result())
         slack_client.flush()
 
         text = _blocks_text(_get_send_kwargs(slack_client)["blocks"])
         assert "BadTag" in text
-
-    def test_block_structure(self, slack_client):
-        result = ValidationResult()
-        result.invalid_tags = {"repo": ["BadTag"]}
-        slack_client.notify_validation_errors(TARGET_DATE, result)
-        slack_client.flush()
-
-        blocks = _get_send_kwargs(slack_client)["blocks"]
-        assert blocks[0]["type"] == "header"
-        assert "⚠️" in blocks[0]["text"]["text"]
-        assert blocks[1]["type"] == "section"
 
 
 class TestNotifyError:
@@ -546,14 +500,71 @@ class TestNotifyError:
         text = _blocks_text(_get_send_kwargs(slack_client)["blocks"])
         assert "something went wrong" in text
 
-    def test_block_structure(self, slack_client):
-        slack_client.notify_error(TARGET_DATE, RuntimeError("fail"))
+
+class TestBlockStructure:
+    @pytest.mark.parametrize(
+        "queue,expected_types,expected_emoji",
+        [
+            pytest.param(
+                lambda c: c.notify(
+                    TARGET_DATE,
+                    {"repositories": [_repo("repo", ["h"])]},
+                    [("repo", PAGE_URL)],
+                    session_only_repos=["notes-repo"],
+                ),
+                ["header", "section", "context"],
+                "📝",
+                id="report",
+            ),
+            pytest.param(
+                lambda c: c.notify_no_activity(TARGET_DATE),
+                ["header", "section"],
+                "💤",
+                id="no_activity",
+            ),
+            pytest.param(
+                lambda c: c.notify_session_only(TARGET_DATE, ["repo-a"]),
+                ["header", "section"],
+                "📓",
+                id="session_only",
+            ),
+            pytest.param(
+                lambda c: c.notify_validation_errors(
+                    TARGET_DATE, _invalid_tags_result()
+                ),
+                ["header", "section"],
+                "⚠️",
+                id="validation_errors",
+            ),
+            pytest.param(
+                lambda c: c.notify_error(TARGET_DATE, RuntimeError("fail")),
+                ["header", "section"],
+                "❌",
+                id="error",
+            ),
+            pytest.param(
+                lambda c: c.notify_metrics(10.0, 100.0, VERSION, memory_limit_mb=512),
+                ["context"],
+                None,
+                id="metrics",
+            ),
+        ],
+    )
+    def test_matches_notification_kind(
+        self, slack_client, queue, expected_types, expected_emoji
+    ):
+        queue(slack_client)
         slack_client.flush()
 
         blocks = _get_send_kwargs(slack_client)["blocks"]
-        assert blocks[0]["type"] == "header"
-        assert "❌" in blocks[0]["text"]["text"]
-        assert blocks[1]["type"] == "section"
+        assert [b["type"] for b in blocks] == expected_types
+        if expected_emoji is not None:
+            assert expected_emoji in blocks[0]["text"]["text"]
+        for block in blocks:
+            if block["type"] == "section":
+                # Bodies are a single mrkdwn text, never the field columns Slack also allows
+                assert "text" in block
+                assert "fields" not in block
 
 
 class TestFlush:
