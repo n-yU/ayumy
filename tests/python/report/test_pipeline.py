@@ -47,13 +47,12 @@ def _stub_summary(clients, repos, *, usage=_STUB_USAGE, pages=()):
 
 
 def _stub_date_range(run_patches, day):
-    """Point the window at the given March day and return it, as an explicit --date would."""
+    """Point the window at the given March day, as an explicit --date would."""
     since = datetime(2026, 3, day, tzinfo=JST)
     run_patches["get_target_date_range"].return_value = (
         since,
         since + timedelta(days=1),
     )
-    return since
 
 
 def _fail_on_nth_fetch(store, n, message):
