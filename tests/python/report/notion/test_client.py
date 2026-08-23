@@ -11,6 +11,7 @@ from .._builders import (
     REPO,
     REPO_FULL_NAME,
     SINCE,
+    TARGET_DATE,
     UNTIL,
     make_commit,
     make_github,
@@ -19,7 +20,6 @@ from .._builders import (
     make_repo_activity,
 )
 
-TARGET_DATE = SINCE  # A report covers the day its window starts on
 REPORT = {"repositories": [{"name": REPO, "summary": [], "tags": []}]}
 
 

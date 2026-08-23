@@ -16,6 +16,7 @@ COMPLETED_AT = datetime(2026, 3, 28, 10, 0, tzinfo=JST).isoformat()
 
 SINCE = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
 UNTIL = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+TARGET_DATE = SINCE  # A report covers the day its window starts on
 
 # Marks a completion field left to the value that matches `state`
 _DERIVED = object()
