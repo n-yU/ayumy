@@ -56,54 +56,56 @@ def test_linked_text_builds_linked_items():
     ]
 
 
-class TestBulletedLink:
-    def test_builds_block_without_prefix_or_children(self):
-        assert bulleted_link("repo#1: title", URL) == {
-            "object": "block",
-            "type": "bulleted_list_item",
-            "bulleted_list_item": {
-                "rich_text": [
-                    {
-                        "type": "text",
-                        "text": {"content": "repo#1: title", "link": {"url": URL}},
-                    }
-                ],
-            },
-        }
-
-    def test_prefix_prepends_plain_text(self):
-        rich_text = bulleted_link("repo#1: title", URL, prefix="✅ ")[
-            "bulleted_list_item"
-        ]["rich_text"]
-        assert rich_text[0] == {"type": "text", "text": {"content": "✅ "}}
-        assert rich_text[1]["text"]["link"] == {"url": URL}
-
-    def test_children_attached_when_provided(self):
-        child = bulleted_link("inner", "https://example.com/inner")
-        result = bulleted_link("outer", URL, children=[child])
-        assert result["bulleted_list_item"]["children"] == [child]
-
-    @pytest.mark.parametrize("children", [None, []], ids=["none", "empty"])
-    def test_children_omitted_when_absent(self, children):
-        result = bulleted_link("outer", URL, children=children)
-        assert "children" not in result["bulleted_list_item"]
+def test_bulleted_link_builds_block_without_prefix_or_children():
+    assert bulleted_link("repo#1: title", URL) == {
+        "object": "block",
+        "type": "bulleted_list_item",
+        "bulleted_list_item": {
+            "rich_text": [
+                {
+                    "type": "text",
+                    "text": {"content": "repo#1: title", "link": {"url": URL}},
+                }
+            ],
+        },
+    }
 
 
-class TestBulletedText:
-    def test_builds_block_from_plain_text(self):
-        assert bulleted_text("hello") == {
-            "object": "block",
-            "type": "bulleted_list_item",
-            "bulleted_list_item": {
-                "rich_text": [{"type": "text", "text": {"content": "hello"}}],
-            },
-        }
+def test_bulleted_link_prepends_prefix_as_plain_text():
+    rich_text = bulleted_link("repo#1: title", URL, prefix="✅ ")["bulleted_list_item"][
+        "rich_text"
+    ]
+    assert rich_text[0] == {"type": "text", "text": {"content": "✅ "}}
+    assert rich_text[1]["text"]["link"] == {"url": URL}
 
-    def test_chunks_text_over_limit(self):
-        rich_text = bulleted_text("a" * (RICH_TEXT_LIMIT + 50))["bulleted_list_item"][
-            "rich_text"
-        ]
-        assert [len(rt["text"]["content"]) for rt in rich_text] == [RICH_TEXT_LIMIT, 50]
+
+def test_bulleted_link_attaches_children_when_provided():
+    child = bulleted_link("inner", "https://example.com/inner")
+    result = bulleted_link("outer", URL, children=[child])
+    assert result["bulleted_list_item"]["children"] == [child]
+
+
+@pytest.mark.parametrize("children", [None, []], ids=["none", "empty"])
+def test_bulleted_link_omits_children_when_absent(children):
+    result = bulleted_link("outer", URL, children=children)
+    assert "children" not in result["bulleted_list_item"]
+
+
+def test_bulleted_text_builds_block_from_plain_text():
+    assert bulleted_text("hello") == {
+        "object": "block",
+        "type": "bulleted_list_item",
+        "bulleted_list_item": {
+            "rich_text": [{"type": "text", "text": {"content": "hello"}}],
+        },
+    }
+
+
+def test_bulleted_text_chunks_text_over_limit():
+    rich_text = bulleted_text("a" * (RICH_TEXT_LIMIT + 50))["bulleted_list_item"][
+        "rich_text"
+    ]
+    assert [len(rt["text"]["content"]) for rt in rich_text] == [RICH_TEXT_LIMIT, 50]
 
 
 def test_heading_2_builds_block_from_plain_text():
