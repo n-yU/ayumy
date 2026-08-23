@@ -65,9 +65,7 @@ teardown() {
 # --- single-repo install (default mode) ---
 
 @test "setup_hooks.sh: installs new pre-push symlink into a fresh repo" {
-  local repo="$TMPDIR_TEST/repo"
-  mkdir -p "$repo/.git/hooks"
-  export GIT_STUB_GIT_DIR="$repo/.git"
+  make_git_repo
   run "$SCRIPT"
   [ "$status" -eq 0 ]
   [[ "$output" == *"installed"* ]]
@@ -76,21 +74,17 @@ teardown() {
 }
 
 @test "setup_hooks.sh: idempotent when symlink already points to HOOK_SOURCE" {
-  local repo="$TMPDIR_TEST/repo"
-  mkdir -p "$repo/.git/hooks"
+  make_git_repo
   ln -s "$HOOK_SOURCE" "$repo/.git/hooks/pre-push"
-  export GIT_STUB_GIT_DIR="$repo/.git"
   run "$SCRIPT"
   [ "$status" -eq 0 ]
   [[ "$output" == *"already installed"* ]]
 }
 
 @test "setup_hooks.sh: pre-existing non-symlink hook is skipped without --force" {
-  local repo="$TMPDIR_TEST/repo"
-  mkdir -p "$repo/.git/hooks"
+  make_git_repo
   echo "#!/bin/sh" > "$repo/.git/hooks/pre-push"
   chmod +x "$repo/.git/hooks/pre-push"
-  export GIT_STUB_GIT_DIR="$repo/.git"
   run "$SCRIPT"
   # install_hook returns 1 (skip); the wrapper treats rc=1 as non-fatal.
   [ "$status" -eq 0 ]
@@ -99,10 +93,8 @@ teardown() {
 }
 
 @test "setup_hooks.sh: --force overwrites existing hook" {
-  local repo="$TMPDIR_TEST/repo"
-  mkdir -p "$repo/.git/hooks"
+  make_git_repo
   echo "#!/bin/sh" > "$repo/.git/hooks/pre-push"
-  export GIT_STUB_GIT_DIR="$repo/.git"
   run "$SCRIPT" --force
   [ "$status" -eq 0 ]
   [ -L "$repo/.git/hooks/pre-push" ]
@@ -128,10 +120,8 @@ teardown() {
 # --- legacy post-commit cleanup ---
 
 @test "setup_hooks.sh: removes legacy post-commit symlink pointing to ayumy" {
-  local repo="$TMPDIR_TEST/repo"
-  mkdir -p "$repo/.git/hooks"
+  make_git_repo
   ln -s "$LEGACY_HOOK_SOURCE" "$repo/.git/hooks/post-commit"
-  export GIT_STUB_GIT_DIR="$repo/.git"
   run "$SCRIPT"
   [ "$status" -eq 0 ]
   [[ "$output" == *"removed legacy"* ]]
@@ -139,10 +129,8 @@ teardown() {
 }
 
 @test "setup_hooks.sh: leaves unrelated post-commit symlink intact" {
-  local repo="$TMPDIR_TEST/repo"
-  mkdir -p "$repo/.git/hooks"
+  make_git_repo
   ln -s "/some/unrelated/path" "$repo/.git/hooks/post-commit"
-  export GIT_STUB_GIT_DIR="$repo/.git"
   run "$SCRIPT"
   [ "$status" -eq 0 ]
   [[ "$output" != *"removed legacy"* ]]
