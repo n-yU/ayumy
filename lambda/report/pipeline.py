@@ -44,7 +44,8 @@ def process_date(
 ) -> None:
     """Generate and publish the report for a single date window.
 
-    When `is_backfill=True`, switches to Hybrid PR/Issue fetch (Spec: Hybrid Backfill Fetch) to recover items whose `updated_at` has drifted out of the window.
+    When `is_backfill=True`, switches to Hybrid PR/Issue fetch (Spec: Hybrid Backfill Fetch) to recover items whose `updated_at` has drifted out of the window,
+    and marks the Slack report header as a backfill.
     """
     logger.info("Processing: %s ~ %s", since.isoformat(), until.isoformat())
 
