@@ -402,7 +402,7 @@ session-only の扱い（[Summary Generation](#summary-generation)）に応じ�
 - 部分的 session-only の場合は通常の Daily Report 通知の下部に session-only リポジトリ名を context として付記する
 
 #### Run Origin Labels
-Daily Report のヘッダー末尾には実行の由来を示すラベルを付ける。手動実行では `[manual]`、未報告日の補完では `[backfill]` を並べ、両方に該当する場合は `[manual] [backfill]` となる。定期実行の当日分は無印とし、通常運用時の見た目を変えない
+Daily Report のヘッダー末尾には実行の由来を示すラベルを付ける。手動実行では `[manual]`、未報告日の補完では `[backfill]` を並べ、両方に該当する場合は `[manual] [backfill]` となる。定期実行で補完対象でない日を処理した場合は無印とし、通常運用時の見た目を変えない
 
 - Daily Report のヘッダーを持つ通知すべてに同じ規則で付ける
 - `[backfill]` は GitHub の取得経路を切り替える判定（[Hybrid Backfill Fetch](#hybrid-backfill-fetch)）をそのまま流用する。日付を明示指定した手動実行は指定日すべてが補完扱いとなるため、当日を指定した場合も付く

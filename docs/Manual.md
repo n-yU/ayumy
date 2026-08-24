@@ -99,7 +99,7 @@ Notion への書き込み完了後、以下の情報が Slack に届く。アク
 | `[manual]` | `ayumy sync --report` による手動実行 |
 | `[backfill]` | 過去日のレポート（`--date` 指定、または未報告日の自動検出） |
 
-日次の定期実行で当日分が生成された通知にはラベルが付かない。両方に該当する場合は `[manual] [backfill]` と並ぶ
+日次の定期実行で通常どおり生成された通知にはラベルが付かない。両方に該当する場合は `[manual] [backfill]` と並ぶ
 
 Claude Code で作業したが commit / push まで進まなかったリポジトリは Notion ページが作成されず、Slack 通知にリポジトリ名だけが表示される
 

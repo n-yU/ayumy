@@ -51,7 +51,7 @@ def _context_block(text: str) -> dict:
 
 
 def _run_labels(is_manual: bool, is_backfill: bool) -> str:
-    """Render the header suffix marking how the report was triggered, empty for a scheduled same-day run so routine notifications keep their usual look."""
+    """Render the header suffix marking how the report was triggered, empty for a routine scheduled run so its notifications keep their usual look."""
     labels = []
     if is_manual:
         labels.append("[manual]")
