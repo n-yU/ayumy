@@ -248,7 +248,8 @@ def run(
     except Exception as e:
         # Broad: pipeline final fallback, ensures any uncaught failure reaches Slack
         if not getattr(e, "_notified", False):
-            slack_client.notify_error(since, e)
+            # Every explicitly requested date is processed as a backfill, and `since` is the first of them
+            slack_client.notify_error(since, e, is_backfill=bool(target_date))
         raise
     finally:
         elapsed = time.monotonic() - start

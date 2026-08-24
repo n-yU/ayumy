@@ -433,7 +433,17 @@ class TestRun:
 
         # Ingestion failure surfaces to the final fallback and Slack notification
         slack_client.notify_error.assert_called_once()
+        assert slack_client.notify_error.call_args.kwargs["is_backfill"] is False
         session_store.scan_backfill_dates.assert_not_called()
+
+    def test_target_date_failure_notifies_as_backfill(
+        self, session_store, slack_client
+    ):
+        session_store.ingest.side_effect = RuntimeError("DynamoDB error")
+        with pytest.raises(RuntimeError, match="DynamoDB error"):
+            run(source="manual", target_date="2026-03-25")
+
+        assert slack_client.notify_error.call_args.kwargs["is_backfill"] is True
 
     def test_target_date_per_day_failure_logged_as_warning(
         self, run_patches, session_store, slack_client, caplog
