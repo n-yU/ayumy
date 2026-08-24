@@ -18,9 +18,8 @@ Ayumy の構築後の日常運用ガイド。基本的な操作・Notion レポ�
   - [CloudWatch Logs の確認](#cloudwatch-logs-の確認)
 
 ## Overview
-- git push と日次の定期実行を起点に、GitHub アクティビティと Claude Code セッションを集約して Notion にレポートを書き込む
+- git push と日次の定期実行を起点に、GitHub アクティビティと Claude Code セッションを集約して Notion にレポートを書き込む。レポート生成は `ayumy sync --report` でも起動できる
 - クライアントマシンと AWS Lambda の 2 フェーズで動作し、運用者が普段触れるのはクライアントマシン側のみ
-- Lambda の処理は EventBridge による日次実行と `ayumy sync --report` 経由の手動実行で起動する
 - クライアント側のスクリプト（`scripts/`, `hooks/`, `bin/ayumy`）は macOS のみサポート
 
 ## Daily Operations
@@ -50,7 +49,7 @@ push を伴わずにセッションだけ転送したい場合、または hook 
 | `ayumy sync --report --date 2026-03-25` | 指定日のレポートを生成・再生成 |
 | `ayumy sync --report --date 2026-03-01..2026-03-05` | 日付範囲を一括生成 |
 
-`--report` 指定時の Lambda 呼び出しは非同期のため、コマンド自体はすぐ完了する。実行結果は Slack 通知で確認する。実行方式別の対象期間は [Spec: GitHub Activity Fetch](Spec.md#github-activity-fetch) と [Spec: Lambda Execution Modes](Spec.md#lambda-execution-modes) を参照
+`--report` 指定時の Lambda 呼び出しは非同期のため、コマンド自体はすぐ完了する。実行結果は Slack 通知で確認する。実行方式別の対象期間は [Spec: GitHub Activity Fetch](Spec.md#github-activity-fetch) を参照
 
 ## Config
 - 使用する Claude モデルなど各種設定は [lambda/config/config.yml](../lambda/config/config.yml) で変更できる
@@ -84,14 +83,7 @@ ayumy setup-hooks --all <repositories-dir>   # 直下のリポジトリに一括
 push 時の転送失敗で push が中止される場合、AWS の認証切れであることが多い。`aws login` で認証を更新してから再度 push する。S3 に未転送の JSONL はソース側に残るため、認証復旧後の次回転送でリトライされる
 
 ### 過去日レポートの再生成
-過去日のレポートを再生成したい場合は `--date` を指定して手動実行する
-
-```bash
-ayumy sync --report --date 2026-03-25              # 単日
-ayumy sync --report --date 2026-03-01..2026-03-05  # 日付範囲
-```
-
-セッションは DynamoDB に永続化されているため再転送は不要。Notion 側は同日の既存ページをアーカイブしてから再作成する
+[手動レポート生成](#手動レポート生成) の `--date` 指定で再生成する。セッションは DynamoDB に永続化されているため再転送は不要。Notion 側は同日の既存ページをアーカイブしてから再作成する
 
 ### Slack 通知の読み方
 Notion への書き込み完了後、以下の情報が Slack に届く。アクティビティが 0 件の日や処理中にエラーが出た場合も内容を反映した通知が届く
@@ -99,6 +91,15 @@ Notion への書き込み完了後、以下の情報が Slack に届く。アク
 - リポジトリごとの Notion ページリンク
 - 実行メトリクス: バージョン、経過時間、ピークメモリ
 - Claude API コスト: 今回の実行の利用金額、当月累計、当月の Claude API 呼び出し回数。月次項目には前月同期間との差分（`MoM ±X%`）を並記し、前月データが無く計算できない項目では `(MoM ...)` を表示しない
+
+見出しの末尾には、その通知がどの実行によるものかを示すラベルが付く
+
+| Label | Meaning |
+|---|---|
+| `[manual]` | `ayumy sync --report` による手動実行 |
+| `[backfill]` | 過去日のレポート（`--date` 指定、または未報告日の自動検出） |
+
+日次の定期実行で当日分が生成された通知にはラベルが付かない。両方に該当する場合は `[manual] [backfill]` と並ぶ
 
 Claude Code で作業したが commit / push まで進まなかったリポジトリは Notion ページが作成されず、Slack 通知にリポジトリ名だけが表示される
 

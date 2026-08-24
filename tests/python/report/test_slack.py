@@ -41,12 +41,20 @@ def slack_client():
         SlackClient,
         client=MagicMock(),
         channel=CHANNEL,
+        is_manual=False,
         _groups=[],
         _fallback_parts=[],
         parent_ts=None,
     )
     client.client.chat_postMessage.return_value = {"ok": True, "ts": FIRST_TS}
     return client
+
+
+@pytest.fixture
+def manual_client(slack_client):
+    """Return a client for a manual run, the state that adds `[manual]` to report headers."""
+    slack_client.is_manual = True
+    return slack_client
 
 
 @pytest.fixture
@@ -500,6 +508,77 @@ class TestNotifyError:
 
         text = _blocks_text(_get_send_kwargs(slack_client)["blocks"])
         assert "something went wrong" in text
+
+
+class TestRunLabels:
+    @pytest.mark.parametrize(
+        "is_manual,is_backfill,expected",
+        [
+            pytest.param(False, False, "💤 Daily Report (2026-03-28)", id="scheduled"),
+            pytest.param(
+                True, False, "💤 Daily Report (2026-03-28) [manual]", id="manual"
+            ),
+            pytest.param(
+                False, True, "💤 Daily Report (2026-03-28) [backfill]", id="backfill"
+            ),
+            pytest.param(
+                True,
+                True,
+                "💤 Daily Report (2026-03-28) [manual] [backfill]",
+                id="manual-backfill",
+            ),
+        ],
+    )
+    def test_header_marks_run_origin(
+        self, slack_client, is_manual, is_backfill, expected
+    ):
+        slack_client.is_manual = is_manual
+        slack_client.notify_no_activity(TARGET_DATE, is_backfill=is_backfill)
+        slack_client.flush()
+
+        kwargs = _get_send_kwargs(slack_client)
+        assert kwargs["blocks"][0]["text"]["text"] == expected
+        assert kwargs["text"].startswith(expected)
+
+    @pytest.mark.parametrize(
+        "queue",
+        [
+            pytest.param(
+                lambda c: c.notify(
+                    TARGET_DATE, {"repositories": []}, [], is_backfill=True
+                ),
+                id="report",
+            ),
+            pytest.param(
+                lambda c: c.notify_no_activity(TARGET_DATE, is_backfill=True),
+                id="no-activity",
+            ),
+            pytest.param(
+                lambda c: c.notify_session_only(
+                    TARGET_DATE, ["repo"], is_backfill=True
+                ),
+                id="session-only",
+            ),
+            pytest.param(
+                lambda c: c.notify_validation_errors(
+                    TARGET_DATE, _invalid_tags_result(), is_backfill=True
+                ),
+                id="validation-errors",
+            ),
+            pytest.param(
+                lambda c: c.notify_error(
+                    TARGET_DATE, RuntimeError("boom"), is_backfill=True
+                ),
+                id="error",
+            ),
+        ],
+    )
+    def test_every_notification_type_is_labeled(self, manual_client, queue):
+        queue(manual_client)
+        manual_client.flush()
+
+        header = _get_send_kwargs(manual_client)["blocks"][0]["text"]["text"]
+        assert header.endswith("[manual] [backfill]")
 
 
 class TestBlockStructure:
