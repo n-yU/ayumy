@@ -55,6 +55,22 @@ def _stub_date_range(run_patches, day):
     )
 
 
+def _arrange_report_with_invalid_tags(clients):
+    """Drive the path that publishes a report and reports invalid tags alongside it."""
+    _stub_fetch_activity(
+        clients, make_github("repo", commits=[make_commit(sha="abc", repo="repo")])
+    )
+    _stub_summary(clients, [_repo("repo", tags=("BadTag",))])
+    invalid = ValidationResult()
+    invalid.invalid_tags = {"repo": ["BadTag"]}
+    clients["summary_client"].validate_report.return_value = invalid
+
+
+def _arrange_no_activity(clients):
+    """Drive the paths that skip the summary; whether they end in the no-activity or session-only notification depends on the sessions passed in."""
+    _stub_fetch_activity(clients, GitHubActivity({}))
+
+
 def _fail_on_nth_fetch(store, n, message):
     """Raise from the `n`-th fetch_sessions call so the surrounding dates still succeed."""
     calls = 0
@@ -122,22 +138,43 @@ class TestProcessDate:
 
         pipeline_clients["slack_client"].notify_validation_errors.assert_called_once()
 
-    def test_forwards_backfill_flag_to_slack(self, pipeline_clients):
-        _stub_fetch_activity(
-            pipeline_clients,
-            make_github("repo", commits=[make_commit(sha="abc", repo="repo")]),
-        )
-        _stub_summary(pipeline_clients, [_repo("repo", tags=("BadTag",))])
-        invalid = ValidationResult()
-        invalid.invalid_tags = {"repo": ["BadTag"]}
-        pipeline_clients["summary_client"].validate_report.return_value = invalid
-        process_date(
-            SINCE, UNTIL, make_session("repo"), **pipeline_clients, is_backfill=True
-        )
+    @pytest.mark.parametrize(
+        "arrange,session,notification",
+        [
+            pytest.param(
+                _arrange_report_with_invalid_tags,
+                lambda: make_session("repo"),
+                "notify",
+                id="report",
+            ),
+            pytest.param(
+                _arrange_report_with_invalid_tags,
+                lambda: make_session("repo"),
+                "notify_validation_errors",
+                id="validation-errors",
+            ),
+            pytest.param(
+                _arrange_no_activity,
+                lambda: SessionActivity({}),
+                "notify_no_activity",
+                id="no-activity",
+            ),
+            pytest.param(
+                _arrange_no_activity,
+                lambda: make_session("repo-a"),
+                "notify_session_only",
+                id="session-only",
+            ),
+        ],
+    )
+    def test_forwards_backfill_flag_to_slack(
+        self, pipeline_clients, arrange, session, notification
+    ):
+        arrange(pipeline_clients)
+        process_date(SINCE, UNTIL, session(), **pipeline_clients, is_backfill=True)
 
-        slack = pipeline_clients["slack_client"]
-        assert slack.notify.call_args.kwargs["is_backfill"] is True
-        assert slack.notify_validation_errors.call_args.kwargs["is_backfill"] is True
+        notify = getattr(pipeline_clients["slack_client"], notification)
+        assert notify.call_args.kwargs["is_backfill"] is True
 
     def test_invokes_session_commit_merge_per_repo(self, pipeline_clients):
         # Stub fetch_activity so we can observe merge_session_commits on the real container
