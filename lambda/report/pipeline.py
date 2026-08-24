@@ -44,7 +44,8 @@ def process_date(
 ) -> None:
     """Generate and publish the report for a single date window.
 
-    When `is_backfill=True`, switches to Hybrid PR/Issue fetch (Spec: Hybrid Backfill Fetch) to recover items whose `updated_at` has drifted out of the window.
+    When `is_backfill=True`, switches to Hybrid PR/Issue fetch (Spec: Hybrid Backfill Fetch) to recover items whose `updated_at` has drifted out of the window,
+    and marks the Slack report header as a backfill.
     """
     logger.info("Processing: %s ~ %s", since.isoformat(), until.isoformat())
 
@@ -81,7 +82,7 @@ def process_date(
 
     if not session_activity and not github_activity:
         logger.info("No activity, skipping")
-        slack_client.notify_no_activity(since)
+        slack_client.notify_no_activity(since, is_backfill=is_backfill)
         return
 
     session_only_repos = sorted(
@@ -98,7 +99,9 @@ def process_date(
             "All repos are session-only, skipping Claude summary: %s",
             session_only_repos,
         )
-        slack_client.notify_session_only(since, session_only_repos)
+        slack_client.notify_session_only(
+            since, session_only_repos, is_backfill=is_backfill
+        )
         return
 
     report, usage = summary_client.generate_summary(
@@ -117,7 +120,9 @@ def process_date(
 
     validation = summary_client.validate_report(report)
     if validation:
-        slack_client.notify_validation_errors(since, validation)
+        slack_client.notify_validation_errors(
+            since, validation, is_backfill=is_backfill
+        )
 
     pages = notion_client.create_report_pages(
         since,
@@ -131,7 +136,11 @@ def process_date(
         logger.info("Created Notion page: %s -> %s", name, url)
 
     slack_client.notify(
-        since, report, pages, session_only_repos=session_only_repos or None
+        since,
+        report,
+        pages,
+        session_only_repos=session_only_repos or None,
+        is_backfill=is_backfill,
     )
 
 
@@ -154,6 +163,7 @@ def run(
     slack_client = SlackClient(
         token=require_env("SLACK_BOT_TOKEN"),
         channel=require_env("SLACK_CHANNEL"),
+        is_manual=source == "manual",
     )
     notice = Notice()
     cost_store: CostStore | None = None
@@ -238,7 +248,8 @@ def run(
     except Exception as e:
         # Broad: pipeline final fallback, ensures any uncaught failure reaches Slack
         if not getattr(e, "_notified", False):
-            slack_client.notify_error(since, e)
+            # Every explicitly requested date is processed as a backfill, and `since` is the first of them
+            slack_client.notify_error(since, e, is_backfill=bool(target_date))
         raise
     finally:
         elapsed = time.monotonic() - start

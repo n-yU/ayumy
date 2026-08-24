@@ -1,4 +1,4 @@
-# Ayumy: Spec
+# Spec
 Ayumy の全要件を記す。アーキテクチャ・データフロー・外部 API 連携・Notion DB スキーマ・コスト見積もりを含む
 
 - [Overview](#overview)
@@ -387,9 +387,9 @@ session ログはあるが GitHub アクティビティが対象日に存在し�
 Claude API の応答構造が想定を逸脱した場合、要約生成は原因を含む `ValueError` を投げ、[Classification Policy](#classification-policy) に沿って当該日のレポート生成を失敗させる。自動再試行は挟まず、運用者が `ayumy sync --report` で明示的に再実行する。検証範囲は必須項目と型に限定する
 
 ### Slack Notification
-Notion への書き込み完了後、Slack Web API の `chat.postMessage` で指定チャンネルに通知を送信する
+Notion への書き込み完了後、Slack Web API の `chat.postMessage` で指定チャンネルに通知を送信する。通知が失敗しても処理全体は正常終了とする（通知はベストエフォート）
 
-通知内容
+#### Notification Content
 - Notion ページへのリンク（リポジトリごとに 1 行）。Claude API が生成した summary 箇条書きの先頭項目がある場合は 1 文サマリとしてリンクの後ろに付加する
 - 実行メトリクス: ayumy バージョン、経過時間（Lambda 実行時は timeout との比率）、ピークメモリ（Lambda 実行時は memory limit との比率）
 - Claude API コスト: 今回の実行の利用金額、当月累計・前月同期間比、当月の Claude API 呼び出し回数・前月同期間比。実行メトリクスと同じ context block に統合して 1 行で表示する。前月データが無く比率を計算できない項目は `(MoM ...)` 部分を丸ごと省略する（永続化された履歴の詳細は [Cost Execution Log Persistence](#cost-execution-log-persistence)）
@@ -401,13 +401,19 @@ session-only の扱い（[Summary Generation](#summary-generation)）に応じ�
 - 対象日の全リポジトリが session-only の場合は session-only 専用の簡易通知を送る
 - 部分的 session-only の場合は通常の Daily Report 通知の下部に session-only リポジトリ名を context として付記する
 
+#### Run Origin Labels
+Daily Report のヘッダー末尾には実行の由来を示すラベルを付ける。手動実行では `[manual]`、未報告日の補完では `[backfill]` を並べ、両方に該当する場合は `[manual] [backfill]` となる。定期実行で補完対象でない日を処理した場合は無印とし、通常運用時の見た目を変えない
+
+- Daily Report のヘッダーを持つ通知すべてに同じ規則で付ける
+- `[backfill]` は GitHub の取得経路を切り替える判定（[Hybrid Backfill Fetch](#hybrid-backfill-fetch)）をそのまま流用する。日付を明示指定した手動実行は指定日すべてが補完扱いとなるため、当日を指定した場合も付く
+- ヘッダーは代替テキストにも流用されるため、プッシュ通知のプレビュー段階でも由来を判別できる
+
+#### Message Splitting
 日付範囲を指定した一括実行では日数分の通知が 1 メッセージに積み上がるため、Slack の 1 メッセージあたりのブロック数上限を超える場合は複数のメッセージに分けて channel に連投する
 
 - 分割は日単位の境界でのみ行い、1 日分の通知が 2 つのメッセージにまたがらないようにする
 - 実行メトリクスは最後のメッセージに載る
 - Block Kit を解釈しないクライアント向けの代替テキストも同じ切れ目で分割する
-
-通知が失敗しても処理全体は正常終了とする（通知はベストエフォート）
 
 #### Warning Thread
 Classification Policy で warning に分類した失敗は 1 run 単位で集約クラスに蓄積し、上記の親メッセージ送信後にその最後のメッセージの `ts` を `thread_ts` として thread 返信として投稿する。運用者は CloudWatch の `logger.warning` 出力に加え、Slack の thread でも警告を把握できる

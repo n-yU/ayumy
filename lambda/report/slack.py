@@ -50,6 +50,16 @@ def _context_block(text: str) -> dict:
     return {"type": "context", "elements": [{"type": "mrkdwn", "text": text}]}
 
 
+def _run_labels(is_manual: bool, is_backfill: bool) -> str:
+    """Render the header suffix marking how the report was triggered, empty for a routine scheduled run so its notifications keep their usual look."""
+    labels = []
+    if is_manual:
+        labels.append("[manual]")
+    if is_backfill:
+        labels.append("[backfill]")
+    return "".join(f" {label}" for label in labels)
+
+
 def _mom_suffix(change: float | None) -> str:
     """Render the `(MoM ...)` fragment, returning empty string when `change` is None so callers can drop it for uncomputable periods."""
     if change is None:
@@ -107,9 +117,10 @@ def _pack_messages(
 class SlackClient:
     """Client for sending daily report notifications via Slack chat.postMessage."""
 
-    def __init__(self, token: str, channel: str) -> None:
+    def __init__(self, token: str, channel: str, *, is_manual: bool = False) -> None:
         self.client = WebClient(token=token)
         self.channel = channel
+        self.is_manual = is_manual
         self._groups: list[list[dict]] = []
         self._fallback_parts: list[str] = []
         self.parent_ts: str | None = None
@@ -125,8 +136,12 @@ class SlackClient:
         body_text: str,
         fallback_suffix: str,
         session_only_repos: list[str] | None = None,
+        is_backfill: bool = False,
     ) -> None:
-        title = f"{emoji} Daily Report ({date_str})"
+        title = (
+            f"{emoji} Daily Report ({date_str})"
+            f"{_run_labels(self.is_manual, is_backfill)}"
+        )
         blocks = [_header_block(title), _section_block(body_text)]
         if session_only_repos:
             blocks.append(
@@ -140,6 +155,8 @@ class SlackClient:
         report: ReportSummary,
         pages: list[tuple[str, str]],
         session_only_repos: list[str] | None = None,
+        *,
+        is_backfill: bool = False,
     ) -> None:
         """Queue the daily report section for `target_date`.
 
@@ -165,6 +182,7 @@ class SlackClient:
                 "\n".join(page_lines),
                 f"{len(pages)} page(s) created",
                 session_only_repos=session_only_repos,
+                is_backfill=is_backfill,
             )
         else:
             self._append_report_section(
@@ -173,34 +191,57 @@ class SlackClient:
                 "No pages created",
                 "No pages created",
                 session_only_repos=session_only_repos,
+                is_backfill=is_backfill,
             )
 
-    def notify_no_activity(self, target_date: datetime) -> None:
+    def notify_no_activity(
+        self, target_date: datetime, *, is_backfill: bool = False
+    ) -> None:
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
-        self._append_report_section("💤", date_str, "No activity", "No activity")
+        self._append_report_section(
+            "💤", date_str, "No activity", "No activity", is_backfill=is_backfill
+        )
 
     def notify_session_only(
-        self, target_date: datetime, session_only_repos: list[str]
+        self,
+        target_date: datetime,
+        session_only_repos: list[str],
+        *,
+        is_backfill: bool = False,
     ) -> None:
         """Send when every repo on this date is session-only; Claude summary is skipped and no Notion pages exist."""
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
         repos_text = ", ".join(session_only_repos)
         body = f"Session-only: {repos_text}"
-        self._append_report_section("📓", date_str, body, f"Session-only: {repos_text}")
+        self._append_report_section(
+            "📓",
+            date_str,
+            body,
+            f"Session-only: {repos_text}",
+            is_backfill=is_backfill,
+        )
 
     def notify_validation_errors(
         self,
         target_date: datetime,
         result: ValidationResult,
+        *,
+        is_backfill: bool = False,
     ) -> None:
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
         lines = [f"• {name}: tags={tags}" for name, tags in result.invalid_tags.items()]
         body = f"Invalid tags detected\n{'\n'.join(lines)}"
-        self._append_report_section("⚠️", date_str, body, "Invalid tags detected")
+        self._append_report_section(
+            "⚠️", date_str, body, "Invalid tags detected", is_backfill=is_backfill
+        )
 
-    def notify_error(self, target_date: datetime, error: Exception) -> None:
+    def notify_error(
+        self, target_date: datetime, error: Exception, *, is_backfill: bool = False
+    ) -> None:
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
-        self._append_report_section("❌", date_str, str(error), str(error))
+        self._append_report_section(
+            "❌", date_str, str(error), str(error), is_backfill=is_backfill
+        )
 
     def notify_metrics(
         self,

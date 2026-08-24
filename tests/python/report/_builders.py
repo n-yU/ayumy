@@ -276,4 +276,6 @@ def assert_skipped(clients, since):
     clients["notion_client"].create_report_pages.assert_not_called()
     clients["slack_client"].notify.assert_not_called()
     clients["slack_client"].notify_validation_errors.assert_not_called()
-    clients["slack_client"].notify_no_activity.assert_called_once_with(since)
+    clients["slack_client"].notify_no_activity.assert_called_once_with(
+        since, is_backfill=False
+    )
