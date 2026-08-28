@@ -95,14 +95,14 @@ teardown() {
   [[ "$output" == *"not a Git repository"* ]]
 }
 
-@test "setup_hooks.sh: .git as file (worktree/submodule layout) is rejected" {
-  local repo="$TMPDIR_TEST/repo"
-  mkdir -p "$repo"
-  echo "gitdir: /some/where" > "$repo/.git"
-  export GIT_STUB_GIT_DIR="$repo/.git"
+@test "setup_hooks.sh: installs into the hooks dir Git reports, not the worktree gitdir" {
+  local common="$TMPDIR_TEST/main/.git"
+  mkdir -p "$common/hooks" "$common/worktrees/wt/hooks"
+  export GIT_STUB_HOOKS_DIR="$common/hooks"
   run "$SCRIPT"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"unsupported Git layout"* ]]
+  [ "$status" -eq 0 ]
+  [ -L "$common/hooks/pre-push" ]
+  [ ! -e "$common/worktrees/wt/hooks/pre-push" ]
 }
 
 # --- legacy post-commit cleanup ---

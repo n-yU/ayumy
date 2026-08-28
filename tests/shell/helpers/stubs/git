@@ -13,12 +13,12 @@ case "${1:-}" in
         fi
         exit "${GIT_STUB_TOPLEVEL_EXIT:-1}"
         ;;
-      --git-dir)
-        if [[ -n "${GIT_STUB_GIT_DIR:-}" ]]; then
-          echo "$GIT_STUB_GIT_DIR"
+      --git-path)
+        if [[ -n "${GIT_STUB_HOOKS_DIR:-}" ]]; then
+          echo "$GIT_STUB_HOOKS_DIR"
           exit 0
         fi
-        exit "${GIT_STUB_GIT_DIR_EXIT:-1}"
+        exit "${GIT_STUB_HOOKS_DIR_EXIT:-1}"
         ;;
     esac
     ;;

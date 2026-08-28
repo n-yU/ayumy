@@ -40,10 +40,9 @@ remove_legacy_post_commit() {
   return 0
 }
 
-# Arguments: $1 = path to .git directory
+# Arguments: $1 = path to the hooks directory Git reads
 install_hook() {
-  local git_dir="$1"
-  local hook_dir="$git_dir/hooks"
+  local hook_dir="$1"
   local hook_path="$hook_dir/pre-push"
 
   remove_legacy_post_commit "$hook_dir" || true
@@ -98,19 +97,15 @@ if [[ ! -f "$HOOK_SOURCE" || ! -x "$HOOK_SOURCE" ]]; then
   exit 1
 fi
 
-git_dir="$(git rev-parse --git-dir 2>/dev/null)" || {
+# A linked worktree keeps its hooks in the common dir, so ask Git for the path instead of deriving it.
+hook_dir="$(git rev-parse --git-path hooks 2>/dev/null)" || {
   echo "ayumy setup-hooks: not a Git repository" >&2
   exit 1
 }
-# Worktrees and submodules use a .git file instead of a directory; not supported.
-if [[ ! -d "$git_dir" ]]; then
-  echo "ayumy setup-hooks: unsupported Git layout (.git is not a directory): $git_dir" >&2
-  exit 1
-fi
-# Normalize to absolute path.
-git_dir="$(cd "$git_dir" && pwd)"
+# Normalize to absolute path via the parent, since the hooks directory itself may not exist yet.
+hook_dir="$(cd "$(dirname "$hook_dir")" && pwd)/$(basename "$hook_dir")"
 rc=0
-install_hook "$git_dir" || rc=$?
+install_hook "$hook_dir" || rc=$?
 # Exit with error code for real failures; skip (rc=1) is non-fatal.
 if [[ "$rc" -ge 2 ]]; then
   exit "$rc"
