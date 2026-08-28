@@ -68,4 +68,4 @@
 3. 環境変数を設定（`~/.zshrc` 等に追加）
    - `AYUMY_S3_BUCKET`: 「4. AWS SAM」の Outputs の `SessionBucketName`
    - `AYUMY_LAMBDA_FUNCTION`: 「4. AWS SAM」の Outputs の `ReportFunctionName`
-4. 対象リポジトリに hook を設置: `ayumy setup-hooks --all <repositories-dir>`
+4. hook を設置: 対象リポジトリごとに、そのリポジトリで `ayumy setup-hooks` を実行する

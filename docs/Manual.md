@@ -70,12 +70,7 @@ push を伴わずにセッションだけ転送したい場合、または hook 
 
 ## Troubleshooting
 ### pre-push hook の再設置
-リポジトリで hook が動いていない、または別パスから設置し直したい場合は `ayumy setup-hooks` で再設置する
-
-```bash
-ayumy setup-hooks                            # 現在のリポジトリに設置
-ayumy setup-hooks --all <repositories-dir>   # 直下のリポジトリに一括設置
-```
+リポジトリで hook が動いていない、または別パスから設置し直したい場合は、そのリポジトリで `ayumy setup-hooks` を実行して再設置する
 
 `ayumy setup-hooks` は過去に同コマンドで設置された旧 `post-commit` symlink を併せて除去する。手動 `ln` で別パス表記により設置された legacy hook は対象外で、手で削除する
 

@@ -224,11 +224,10 @@ hook はリポジトリパスからプロジェクト名を解決し、`sync_ses
 
 hook の配布方法（`ayumy setup-hooks` コマンドで設置）
 
-- **単体設置**: 対象リポジトリで `ayumy setup-hooks` を実行
-- **一括設置**: `ayumy setup-hooks --all <dir>` で指定ディレクトリ直下のリポジトリに設置
+- **コマンド設置**: 対象リポジトリで `ayumy setup-hooks` を実行
 - **手動設置**: `ln -s {AYUMY_REPO}/hooks/pre-push {REPO}/.git/hooks/pre-push`
 
-`ayumy setup-hooks` は過去に同コマンドが作成した旧 `post-commit` symlink（`readlink` の target が `ayumy/hooks/post-commit` の絶対パスと一致するもの）の除去も担当する。手動 `ln` で別パス表記により設置された legacy hook は対象外で、ユーザー側で削除する必要がある。`--all` の対象は `.git` ディレクトリを持つ通常のリポジトリのみ。Git worktree やサブモジュール（`.git` がファイルのケース）は対象外
+`ayumy setup-hooks` は過去に同コマンドが作成した旧 `post-commit` symlink（`readlink` の target が `ayumy/hooks/post-commit` の絶対パスと一致するもの）の除去も担当する。手動 `ln` で別パス表記により設置された legacy hook は対象外で、ユーザー側で削除する必要がある。設置できるのは `.git` ディレクトリを持つ通常のリポジトリのみ。Git worktree やサブモジュール（`.git` がファイルのケース）は対象外
 
 ### Manual Sync
 push せずに作業を中断する場合や、hook で転送されなかったセッションを補完する
