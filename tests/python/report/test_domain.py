@@ -138,9 +138,9 @@ class TestCommitInfo:
 
 
 class TestPullInfo:
-    def test_label_renders_repo_number_title(self):
+    def test_label_renders_number_and_title(self):
         pr = _pull(number=42, title="Add feature")
-        assert pr.label("my-repo") == "my-repo#42: Add feature"
+        assert pr.label() == "#42: Add feature"
 
     def test_done_prefix_for_merged(self):
         assert _pull(state="merged").done_prefix() == "✅ "
@@ -234,9 +234,9 @@ class TestPullInfo:
 
 
 class TestIssueInfo:
-    def test_label_renders_repo_number_title(self):
+    def test_label_renders_number_and_title(self):
         issue = _issue(number=7, title="Bug report")
-        assert issue.label("my-repo") == "my-repo#7: Bug report"
+        assert issue.label() == "#7: Bug report"
 
     @pytest.mark.parametrize(
         "state_reason,expected",

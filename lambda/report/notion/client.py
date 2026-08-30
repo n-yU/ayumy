@@ -78,18 +78,17 @@ class NotionClient:
 
     def _build_status_sections(
         self,
-        repo_name: str,
         repo_activity: RepoActivity,
         since: datetime,
         until: datetime,
     ) -> list[dict]:
-        """Per 'Spec: Page Body': Done = PRs / issues completed within the window; Todo = issues still open at `until` and created in window; In Progress = remaining opens. Items completed before the window and empty sections are omitted."""
+        """Per 'Spec: Page Body': Done = PRs / issues completed within the window; TODO = issues still open at `until` and created in window; In Progress = remaining opens. Items completed before the window and empty sections are omitted."""
         done: list[tuple[str, str, str]] = []
         in_progress: list[tuple[str, str, str]] = []
         todo: list[tuple[str, str, str]] = []
 
         for pr in repo_activity["pulls"]:
-            label = pr.label(repo_name)
+            label = pr.label()
             state = pr.state_in_range(since, until)
             if state is None:
                 continue
@@ -99,7 +98,7 @@ class NotionClient:
                 in_progress.append((label, pr.url, ""))
 
         for issue in repo_activity["issues"]:
-            label = issue.label(repo_name)
+            label = issue.label()
             state = issue.state_in_range(since, until)
             if state is None:
                 continue
@@ -114,7 +113,7 @@ class NotionClient:
         for heading, items in (
             ("Done", done),
             ("In Progress", in_progress),
-            ("Todo", todo),
+            ("TODO", todo),
         ):
             if not items:
                 continue
@@ -126,7 +125,6 @@ class NotionClient:
 
     def _build_timeline_section(
         self,
-        repo_name: str,
         repo_activity: RepoActivity,
         since: datetime,
         until: datetime,
@@ -185,7 +183,7 @@ class NotionClient:
                     min(candidates),
                     0,
                     bulleted_link(
-                        pr.label(repo_name),
+                        pr.label(),
                         pr.url,
                         prefix="🔀 ",
                         children=children or None,
@@ -199,7 +197,7 @@ class NotionClient:
                         datetime.fromisoformat(pr.closed_at),
                         1,
                         bulleted_link(
-                            pr.label(repo_name),
+                            pr.label(),
                             pr.url,
                             prefix="⚠️ close: ",
                         ),
@@ -207,7 +205,7 @@ class NotionClient:
                 )
 
         for issue in issues:
-            label = issue.label(repo_name)
+            label = issue.label()
             if in_range(issue.created_at, since, until):
                 entries.append(
                     (
@@ -249,13 +247,8 @@ class NotionClient:
         for item in repo_summary["summary"]:
             children.append(bulleted_text(item))
 
-        repo_name = repo_summary["name"]
-        children.extend(
-            self._build_status_sections(repo_name, repo_activity, since, until)
-        )
-        children.extend(
-            self._build_timeline_section(repo_name, repo_activity, since, until)
-        )
+        children.extend(self._build_status_sections(repo_activity, since, until))
+        children.extend(self._build_timeline_section(repo_activity, since, until))
 
         return children
 

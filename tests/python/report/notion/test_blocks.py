@@ -48,23 +48,23 @@ def test_linked_text_repeats_link_on_every_chunk():
 
 
 def test_linked_text_builds_linked_items():
-    assert _linked("repo#1: title") == [
+    assert _linked("#1: title") == [
         {
             "type": "text",
-            "text": {"content": "repo#1: title", "link": {"url": URL}},
+            "text": {"content": "#1: title", "link": {"url": URL}},
         }
     ]
 
 
 def test_bulleted_link_builds_block_without_prefix_or_children():
-    assert bulleted_link("repo#1: title", URL) == {
+    assert bulleted_link("#1: title", URL) == {
         "object": "block",
         "type": "bulleted_list_item",
         "bulleted_list_item": {
             "rich_text": [
                 {
                     "type": "text",
-                    "text": {"content": "repo#1: title", "link": {"url": URL}},
+                    "text": {"content": "#1: title", "link": {"url": URL}},
                 }
             ],
         },
@@ -72,7 +72,7 @@ def test_bulleted_link_builds_block_without_prefix_or_children():
 
 
 def test_bulleted_link_prepends_prefix_as_plain_text():
-    rich_text = bulleted_link("repo#1: title", URL, prefix="✅ ")["bulleted_list_item"][
+    rich_text = bulleted_link("#1: title", URL, prefix="✅ ")["bulleted_list_item"][
         "rich_text"
     ]
     assert rich_text[0] == {"type": "text", "text": {"content": "✅ "}}

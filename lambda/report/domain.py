@@ -84,9 +84,9 @@ class PullInfo:
     closed_at: str | None
     merge_commit_sha: str | None
 
-    def label(self, repo_name: str) -> str:
-        """Return the qualified PR number and title used in status / timeline rows."""
-        return f"{repo_name}#{self.number}: {self.title}"
+    def label(self) -> str:
+        """Return the PR number and title used in status / timeline rows."""
+        return f"#{self.number}: {self.title}"
 
     def done_prefix(self) -> str:
         """`closed` (unmerged) PRs are flagged as irregular."""
@@ -152,9 +152,9 @@ class IssueInfo:
     closed_at: str | None
     state_reason: str | None
 
-    def label(self, repo_name: str) -> str:
-        """Return the qualified issue number and title used in status / timeline rows."""
-        return f"{repo_name}#{self.number}: {self.title}"
+    def label(self) -> str:
+        """Return the issue number and title used in status / timeline rows."""
+        return f"#{self.number}: {self.title}"
 
     def done_prefix(self) -> str:
         """`not_planned` / `duplicate` are flagged; legacy `state_reason=None` is regular Done."""

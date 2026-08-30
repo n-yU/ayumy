@@ -63,7 +63,7 @@ push を伴わずにセッションだけ転送したい場合、または hook 
 
 ### ページ本文
 - **Summary** — Claude API が生成したリポジトリの作業要点（2〜5 項目）
-- **Done / In Progress / Todo** — PR / Issue をステータス別に列挙。Done に載るのは対象日にマージ・クローズされたものだけで、別の日に完了したものはそちらの日のページに載る。該当が無いセクションは表示しない
+- **Done / In Progress / TODO** — PR / Issue をステータス別に列挙。Done に載るのは対象日にマージ・クローズされたものだけで、別の日に完了したものはそちらの日のページに載る。該当が無いセクションは表示しない
 - **Timeline** — 対象日の作業を時系列で並べる。PR ブロックは `🔀` を冒頭に置き、配下にその PR の commit をネストする。merge commit や直接 commit、Issue の open / close は最上位に `🔸` / `🟢` / `✅` などの prefix 付きで並ぶ
 
 ステータス振り分けやイレギュラーな完了（unmerged close / not_planned / duplicate）の prefix 規則は [Spec: Page Body](Spec.md#page-body) を参照
