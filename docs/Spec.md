@@ -40,7 +40,7 @@ Ayumy の全要件を記す。アーキテクチャ・データフロー・外�
 - [Future Extensions](#future-extensions)
 
 ## Overview
-GitHub 上の日次開発アクティビティ（Commit, Pull Request, Issue）と Claude Code での会話記録を自動収集するシステム。集めた内容は Claude API で自然言語に要約し、Notion データベースに記録する。対象リポジトリは S3 上の session ログから特定する
+GitHub 上の日次開発アクティビティ（Commit, Pull Request, Issue）と Claude Code での会話記録を自動収集するシステム。集めた内容は Claude API が自然言語で要約し、Notion データベースに記録する。対象リポジトリは S3 上の session ログから特定する
 
 ## Goals
 - 日々の開発作業を自動的に記録・蓄積する
@@ -50,7 +50,7 @@ GitHub 上の日次開発アクティビティ（Commit, Pull Request, Issue）�
 
 ## System Components
 ### Architecture
-本システムは実行される場所で 2 段階に分かれる
+本システムは動作する場所によって 2 段階に分かれる
 
 - [Stage 1: Session Log Transfer](#stage-1-session-log-transfer) — クライアントマシンで動き、session ログを S3 バケットへ送る
 - [Stage 2: Data Integration, Summarization, and Notion Writing](#stage-2-data-integration-summarization-and-notion-writing) — AWS Lambda で動き、S3 の session ログを DynamoDB に取り込んでレポートを生成する
