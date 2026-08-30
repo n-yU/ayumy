@@ -125,3 +125,100 @@ teardown() {
   [ -L "$repo/.git/hooks/post-commit" ]
   [ "$(readlink "$repo/.git/hooks/post-commit")" = "/some/unrelated/path" ]
 }
+
+# --- Notion icon setup ---
+
+# Run the script from a throwaway ayumy root so the tests never append to the tracked config.
+# Sets fake_script and fake_config.
+make_fake_root() {
+  local fake_root="$TMPDIR_TEST/fake-ayumy"
+  mkdir -p "$fake_root/scripts" "$fake_root/hooks" "$fake_root/lambda/config"
+  cp "$SCRIPT" "$fake_root/scripts/setup_hooks.sh"
+  printf '#!/usr/bin/env bash\n' > "$fake_root/hooks/pre-push"
+  chmod +x "$fake_root/hooks/pre-push"
+  fake_script="$fake_root/scripts/setup_hooks.sh"
+  fake_config="$fake_root/lambda/config/config.yml"
+  cat > "$fake_config" <<'YAML'
+notion:
+  default_icon: {name: document, color: gray}
+  repository_icons:
+    already-set: {name: walk, color: blue}
+YAML
+}
+
+# Arguments: $@ = answers fed to the prompts, one per line
+run_setup_with_answers() {
+  local answers=""
+  local line
+  for line in "$@"; do
+    answers+="$line"$'\n'
+  done
+  run bash -c "printf '%s' \"\$1\" | '$fake_script'" _ "$answers"
+}
+
+@test "setup_hooks.sh: records the answered icon for a repository with no entry" {
+  make_git_repo
+  make_fake_root
+  export GIT_STUB_REMOTE_URL="git@github.com:n-yU/fresh-repo.git"
+
+  run_setup_with_answers "person walking" "green"
+  [ "$status" -eq 0 ]
+  grep -q "^    fresh-repo: {name: person walking, color: green}$" "$fake_config"
+}
+
+@test "setup_hooks.sh: defaults the icon color when the answer is blank" {
+  make_git_repo
+  make_fake_root
+  export GIT_STUB_REMOTE_URL="git@github.com:n-yU/fresh-repo.git"
+
+  run_setup_with_answers "rocket" ""
+  [ "$status" -eq 0 ]
+  grep -q "^    fresh-repo: {name: rocket, color: gray}$" "$fake_config"
+}
+
+@test "setup_hooks.sh: leaves an already configured repository untouched" {
+  make_git_repo
+  make_fake_root
+  export GIT_STUB_REMOTE_URL="git@github.com:n-yU/already-set.git"
+  local before
+  before="$(cat "$fake_config")"
+
+  run_setup_with_answers
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"already configured"* ]]
+  [ "$(cat "$fake_config")" = "$before" ]
+}
+
+@test "setup_hooks.sh: rejects an empty icon name" {
+  make_git_repo
+  make_fake_root
+  export GIT_STUB_REMOTE_URL="git@github.com:n-yU/fresh-repo.git"
+
+  run_setup_with_answers "" ""
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"icon name is required"* ]]
+  ! grep -q "fresh-repo" "$fake_config"
+}
+
+@test "setup_hooks.sh: rejects an unknown icon color" {
+  make_git_repo
+  make_fake_root
+  export GIT_STUB_REMOTE_URL="git@github.com:n-yU/fresh-repo.git"
+
+  run_setup_with_answers "rocket" "chartreuse"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"unknown color"* ]]
+  ! grep -q "fresh-repo" "$fake_config"
+}
+
+@test "setup_hooks.sh: skips icon setup when the repository has no origin remote" {
+  make_git_repo
+  make_fake_root
+  local before
+  before="$(cat "$fake_config")"
+
+  run_setup_with_answers
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"no origin remote"* ]]
+  [ "$(cat "$fake_config")" = "$before" ]
+}

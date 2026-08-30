@@ -69,3 +69,5 @@
    - `AYUMY_S3_BUCKET`: 「4. AWS SAM」の Outputs の `SessionBucketName`
    - `AYUMY_LAMBDA_FUNCTION`: 「4. AWS SAM」の Outputs の `ReportFunctionName`
 4. hook を設置: 対象のリポジトリごとに `ayumy setup-hooks` を実行する
+   - Notion ページのアイコンを尋ねられるので、Notion のアイコンピッカー上の名前と色を答える
+   - 答えた内容は `lambda/config/config.yml` に追記される。`make lambda-deploy` を実行すると反映される

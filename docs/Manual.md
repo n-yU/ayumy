@@ -61,6 +61,9 @@ push を伴わずにセッションだけ転送したい場合、または hook 
 ### ページプロパティ
 日付・リポジトリ名・タグ・Commits / Merged / Closed / Sessions の件数などが Properties に入る。プロパティの一覧は [Spec: Database Properties](Spec.md#database-properties) を参照
 
+### ページアイコン
+ページのアイコンはリポジトリごとに設定できる。`ayumy setup-hooks` の実行時に尋ねられ、後から変えたい場合は `lambda/config/config.yml` の `notion.repository_icons` を書き換える。いずれも `make lambda-deploy` を実行するまで反映されない
+
 ### ページ本文
 - **Summary** — Claude API が生成したリポジトリの作業要点（2〜5 項目）
 - **Done / In Progress / TODO** — PR / Issue をステータス別に列挙。Done に載るのは対象日にマージ・クローズされたものだけで、別の日に完了したものはそちらの日のページに載る。該当が無いセクションは表示しない
