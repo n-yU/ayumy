@@ -14,6 +14,11 @@ case "${1:-}" in
         exit "${GIT_STUB_TOPLEVEL_EXIT:-1}"
         ;;
       --git-path)
+        # Only hooks is emulated; fail loud so a different query does not silently pass.
+        if [[ "${3:-}" != "hooks" ]]; then
+          echo "git stub: unsupported --git-path argument: ${3:-<none>}" >&2
+          exit 1
+        fi
         if [[ -n "${GIT_STUB_HOOKS_DIR:-}" ]]; then
           echo "$GIT_STUB_HOOKS_DIR"
           exit 0
