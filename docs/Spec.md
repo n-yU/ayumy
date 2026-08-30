@@ -291,7 +291,7 @@ PR/Issue の `updated_at` 経路は対象日以降に状態が更新されると
 
 通常運用（前日定期実行・手動当日実行）では影響軽微なため `updated_at` 経路を維持する。`target_date` 指定時、またはバックフィル検出（[Session Log Read](#session-log-read)）で見つかった未レポート日に対しては Hybrid 経路に切り替える
 
-どちらも `GET /search/issues` のレンジクエリで状態遷移したものを集め、DynamoDB に記録された番号（[Session Write to DynamoDB](#session-write-to-dynamodb)）を合わせて 1 つのリストにまとめる
+どちらも `GET /search/issues` のレンジクエリで状態遷移したものを集め、そこに下表の番号を合わせて 1 つのリストにまとめる。`session_pulls` / `session_issues` は DynamoDB から読む（[Session Write to DynamoDB](#session-write-to-dynamodb)）
 
 | Activity | Search Query | Additional Numbers | Individual Fetch |
 |---|---|---|---|
