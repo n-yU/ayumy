@@ -185,7 +185,7 @@ JSONL の各エントリは Claude Code が生成するデータの観測に基�
 
 </details>
 
-Claude Code が生成するため、タイムスタンプのフォーマットは安定しており、パース時に防御的な例外処理（`ValueError` の catch 等）は行わない
+Claude Code が生成するため、タイムスタンプのフォーマットは安定しており、パース失敗を想定した防御的な例外処理は行わない
 
 転送対象のセッションは、マーカーファイル（`.ayumy_last_sync`）との mtime 比較で決定する
 
@@ -286,11 +286,11 @@ Search API の secondary rate limit に対応するため、一定時間ウィ�
 #### Hybrid Backfill Fetch
 PR/Issue の `updated_at` 経路は対象日以降に状態が更新されると `updated_at` がウィンドウから外れて取得対象から漏れる。例えば T 日に open された PR が T+1 日に merge された場合、T 日の再生成では PR が取得できず Timeline に PR ブロックが現れない
 
-通常運用（前日定期実行・手動当日実行）では影響軽微なため `updated_at` 経路を維持する。`target_date` 指定時、または `scan_backfill_dates` で検出された未レポート日に対しては Hybrid 経路に切り替える
+通常運用（前日定期実行・手動当日実行）では影響軽微なため `updated_at` 経路を維持する。`target_date` 指定時、またはバックフィル検出（[Session Log Read](#session-log-read)）で見つかった未レポート日に対しては Hybrid 経路に切り替える
 
 | Activity | Fetch Path |
 |---|---|
-| Pull Requests | `GET /search/issues` を `is:pr` + `created:`/`merged:`/`closed:` のレンジクエリで3回呼び出し、状態遷移した PR を取得する。さらに `fetch_commits` で各コミットに付与済みの関連 PR 番号を再利用し、対象日にコミットだけがあった PR も補足する。これに DynamoDB の `session_pulls`（[Session Write to DynamoDB](#session-write-to-dynamodb)）を加えて PR 番号で union し、各番号を `GET /repos/{owner}/{repo}/pulls/{N}` で個別取得する |
+| Pull Requests | `GET /search/issues` を `is:pr` + `created:`/`merged:`/`closed:` のレンジクエリで3回呼び出し、状態遷移した PR を取得する。さらに commit 取得時に付与済みの関連 PR 番号を再利用し、対象日にコミットだけがあった PR も補足する。これに DynamoDB の `session_pulls`（[Session Write to DynamoDB](#session-write-to-dynamodb)）を加えて PR 番号で union し、各番号を `GET /repos/{owner}/{repo}/pulls/{N}` で個別取得する |
 | Issues | `GET /search/issues` を `is:issue` + `created:`/`closed:` のレンジクエリで2回呼び出し、状態遷移した Issue を取得する。これに DynamoDB の `session_issues`（[Session Write to DynamoDB](#session-write-to-dynamodb)）を加えて Issue 番号で union する。session 由来の番号のみで Search に含まれないものは `GET /repos/{owner}/{repo}/issues/{N}` で個別取得し、PR を返した場合（`pull_request` 属性が設定）は除外する |
 
 Search クエリの日付範囲は UTC/JST の境界ずれを吸収するため広めに取り、取得後に `created_at` / `merged_at` / `closed_at` のいずれかが `[since, until)` に入るものへ絞り込む。commit 由来 PR は対象日にコミットが存在する事実、session 由来 PR/Issue は session で対象日に touch された事実をもって採用するため、いずれもこの絞り込みの対象外とする。削除済み PR/Issue は 404 となるためスキップする
@@ -340,7 +340,7 @@ DynamoDB の `ayumy-sessions` テーブルから対象日付をパーティシ�
 レポート生成後の動作
 
 - 対象日付の全アイテムの `reported_at` を現在時刻に更新する
-- これにより `scan_backfill_dates` が同じ日を再検出しなくなる
+- これによりバックフィル検出（[Session Log Read](#session-log-read)）が同じ日を再び拾わなくなる
 
 ### Summary Generation
 使用モデル: `claude-sonnet-4-6`
@@ -391,7 +391,7 @@ session ログはあるが GitHub アクティビティが対象日に存在し�
 - session-only 発生時は Slack 通知に反映する（[Slack Notification](#slack-notification)）
 - session store 側の "reported" スタンプは通常通り打つ。翌日以降 push で追いつけば `updated_at > reported_at` の backfill 判定でレポート生成が再走する
 
-Claude API の応答構造が想定を逸脱した場合、要約生成は原因を含む `ValueError` を投げ、[Classification Policy](#classification-policy) に沿って当該日のレポート生成を失敗させる。自動再試行は挟まず、運用者が `ayumy sync --report` で明示的に再実行する。検証範囲は必須項目と型に限定する
+Claude API の応答構造が想定を逸脱した場合、要約生成は原因を含む例外を投げ、[Classification Policy](#classification-policy) に沿って当該日のレポート生成を失敗させる。自動再試行は挟まず、運用者が `ayumy sync --report` で明示的に再実行する。検証範囲は必須項目と型に限定する
 
 ### Slack Notification
 Notion への書き込み完了後、Slack Web API の `chat.postMessage` で指定チャンネルに通知を送信する。通知が失敗しても処理全体は正常終了とする（通知はベストエフォート）
@@ -458,7 +458,7 @@ Claude API 呼び出しのコスト管理として、要約生成のたびに 1 
 
 `year_month` と SK の日付部分は **実行時刻の JST** を基準に決まる（対象レポート日ではない）。理由は backfill 実行のコストも「支払いが発生した実行月」に含めることで、Anthropic の請求サイクルと Slack 表示（当月累計）を一致させるため
 
-書き込みは generate_summary 成功時に PutItem で全 attribute を 1 度書き込む。1 行 = 1 回の Claude API 呼び出しに対応するため、Slack に表示する月次「Claude API 呼び出し回数」は当月・前月同期間の行数をそのまま集計すればよい
+書き込みは要約生成（[Summary Generation](#summary-generation)）の成功時に PutItem で全 attribute を 1 度書き込む。1 行 = 1 回の Claude API 呼び出しに対応するため、Slack に表示する月次「Claude API 呼び出し回数」は当月・前月同期間の行数をそのまま集計すればよい
 
 `model` と単価を行ごとに保持することで、期中でモデル差し替えや pricing 改定が起きても実行時点の値を遡って再解釈しない。過去分は無期限に保持し、TTL は設定しない
 
