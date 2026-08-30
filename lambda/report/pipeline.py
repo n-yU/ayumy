@@ -140,6 +140,7 @@ def process_date(
         report,
         pages,
         session_only_repos=session_only_repos or None,
+        owner=github_client.owner,
         is_backfill=is_backfill,
     )
 
