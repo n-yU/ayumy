@@ -138,7 +138,7 @@ class TestCommitInfo:
 
 
 class TestPullInfo:
-    def test_label_renders_repo_number_title(self):
+    def test_label_renders_number_and_title(self):
         pr = _pull(number=42, title="Add feature")
         assert pr.label() == "#42: Add feature"
 
@@ -234,7 +234,7 @@ class TestPullInfo:
 
 
 class TestIssueInfo:
-    def test_label_renders_repo_number_title(self):
+    def test_label_renders_number_and_title(self):
         issue = _issue(number=7, title="Bug report")
         assert issue.label() == "#7: Bug report"
 
