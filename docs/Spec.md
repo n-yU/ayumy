@@ -40,7 +40,7 @@ Ayumy の全要件を記す。アーキテクチャ・データフロー・外�
 - [Future Extensions](#future-extensions)
 
 ## Overview
-GitHub 上の日次開発アクティビティ（Commit, Pull Request, Issue）と Claude Code での会話記録を自動収集し、Claude API で自然言語の要約を生成したうえで、Notion データベースに記録するシステム。対象リポジトリは S3 上の session ログから特定する
+GitHub 上の日次開発アクティビティ（Commit, Pull Request, Issue）と Claude Code での会話記録を自動収集するシステム。集めた内容は Claude API で自然言語に要約し、Notion データベースに記録する。対象リポジトリは S3 上の session ログから特定する
 
 ## Goals
 - 日々の開発作業を自動的に記録・蓄積する
@@ -277,9 +277,9 @@ ayumy sync --report --date 2026-03-01..2026-03-05               # 日付範囲�
 | Pull Requests | `GET /repos/{owner}/{repo}/pulls` | `state=all`, `sort=updated`, 前日以降 |
 | Issues | `GET /repos/{owner}/{repo}/issues` | `since`, `state=all`, PR を除外 |
 
-Commits は Search Commits API を使用する。GitHub Search の date 比較は UTC 解釈であり JST 1 日分が連続する 2 つの UTC 日付にまたがるため、検索範囲を JST 境界より広く取り、取得後にタイムゾーン対応の `since <= author_date < until` で絞り込む。これにより手動実行時の部分日（当日 00:00 〜 現在時刻）にも対応する。squash merge で `author-date` が書き換えられた commit は検出できないため、session JSONL の `tool_result` から抽出した commit 情報で補完する（[Session Write to DynamoDB](#session-write-to-dynamodb) 参照）
+Commits は Search Commits API を使用する。GitHub Search の date 比較は UTC 解釈のため、JST の 1 日分は連続する 2 つの UTC 日付にまたがる。検索範囲を JST 境界より広く取り、取得後にタイムゾーン対応の `since <= author_date < until` で絞り込む。これにより手動実行時の部分日（当日 00:00 〜 現在時刻）にも対応する。squash merge で `author-date` が書き換えられた commit は Search では検出できない。これらは session JSONL の `tool_result` から抽出した commit 情報で補完する（[Session Write to DynamoDB](#session-write-to-dynamodb)）
 
-各 commit には紐づく PR 番号も付与する。Notion Timeline で commit を親 PR ブロック配下にネストする際の参照キーとして利用するほか、Hybrid 経路の PR 取得（[Hybrid Backfill Fetch](#hybrid-backfill-fetch)）でも再利用する
+各 commit には紐づく PR 番号も付与する。この番号は Notion Timeline で commit を親 PR ブロック配下にネストする際の参照キーになる。Hybrid 経路の PR 取得（[Hybrid Backfill Fetch](#hybrid-backfill-fetch)）でも再利用する
 
 Search API の secondary rate limit に対応するため、一定時間ウィンドウ内でのリクエスト数を制御する throttle 処理を行う
 
@@ -288,12 +288,19 @@ PR/Issue の `updated_at` 経路は対象日以降に状態が更新されると
 
 通常運用（前日定期実行・手動当日実行）では影響軽微なため `updated_at` 経路を維持する。`target_date` 指定時、またはバックフィル検出（[Session Log Read](#session-log-read)）で見つかった未レポート日に対しては Hybrid 経路に切り替える
 
-| Activity | Fetch Path |
-|---|---|
-| Pull Requests | `GET /search/issues` を `is:pr` + `created:`/`merged:`/`closed:` のレンジクエリで3回呼び出し、状態遷移した PR を取得する。さらに commit 取得時に付与済みの関連 PR 番号を再利用し、対象日に commit だけがあった PR も補足する。これに DynamoDB の `session_pulls`（[Session Write to DynamoDB](#session-write-to-dynamodb)）を合わせて PR 番号を 1 つのリストにまとめ、各番号を `GET /repos/{owner}/{repo}/pulls/{N}` で個別取得する |
-| Issues | `GET /search/issues` を `is:issue` + `created:`/`closed:` のレンジクエリで2回呼び出し、状態遷移した Issue を取得する。これに DynamoDB の `session_issues`（[Session Write to DynamoDB](#session-write-to-dynamodb)）を合わせて Issue 番号を 1 つのリストにまとめる。session 由来の番号のみで Search に含まれないものは `GET /repos/{owner}/{repo}/issues/{N}` で個別取得し、PR を返した場合（`pull_request` 属性が設定）は除外する |
+どちらも `GET /search/issues` のレンジクエリで状態遷移したものを集め、DynamoDB に記録された番号（[Session Write to DynamoDB](#session-write-to-dynamodb)）を合わせて 1 つのリストにまとめる
 
-Search クエリの日付範囲は UTC/JST の境界ずれを吸収するため広めに取り、取得後に `created_at` / `merged_at` / `closed_at` のいずれかが `[since, until)` に入るものへ絞り込む。commit 由来 PR は対象日に commit が存在する事実、session 由来 PR/Issue は session 中に対象日に操作された事実をもって採用するため、いずれもこの絞り込みの対象外とする。削除済み PR/Issue は 404 となるためスキップする
+| Activity | Search Query | Additional Numbers | Individual Fetch |
+|---|---|---|---|
+| Pull Requests | `is:pr` + `created:` / `merged:` / `closed:` を 3 回 | commit に付与済みの関連 PR 番号と `session_pulls` | 全番号を `GET /repos/{owner}/{repo}/pulls/{N}` で取得 |
+| Issues | `is:issue` + `created:` / `closed:` を 2 回 | `session_issues` | Search に含まれない番号のみ `GET /repos/{owner}/{repo}/issues/{N}` で取得し、PR が返ったものは除外 |
+
+Search クエリの日付範囲は UTC/JST の境界ずれを吸収するため広めに取り、取得後に `created_at` / `merged_at` / `closed_at` のいずれかが `[since, until)` に入るものへ絞り込む。削除済み PR/Issue は 404 となるためスキップする
+
+次の 2 つは別の根拠で採用するため、この絞り込みの対象外とする
+
+- commit 由来 PR — 対象日に commit が存在する事実をもって採用する
+- session 由来 PR/Issue — session 中に対象日に操作された事実をもって採用する
 
 Hybrid 経路の Search 呼び出しは commit 取得の Search 呼び出しと共通の throttle で管理する
 
@@ -351,7 +358,7 @@ GitHub アクティビティと Claude Code session ログの両方をコンテ�
 - **Claude Code での作業**: 上記の要点の中に Claude Code session での相談・実装方針の検討内容も含めて構わない
 - PR/Issue のステータス別一覧と時系列のイベントは Notion 本文の生成時にプログラムで組み立てるため、Claude API の出力には含めない
 
-番号と識別子の書き方はシステムプロンプト（[lambda/report/prompts/summary_system.txt](../lambda/report/prompts/summary_system.txt)）で指定し、そちらを single source of truth とする。装飾として使わせる記法は [Page Body の Summary](#summary) が解釈するものに揃える
+番号と識別子の書き方は [システムプロンプト](../lambda/report/prompts/summary_system.txt) で指定し、そちらを single source of truth とする。装飾として使わせる記法は [Page Body の Summary](#summary) が解釈するものに揃える
 
 出力がルールから外れた場合の後処理は設けない。種別の前置を機械的に削ると「その PR #155 では」のような自然な文まで削ることになり、表示が冗長になる程度の実害と釣り合わない
 
@@ -416,14 +423,14 @@ Daily Report のヘッダー末尾には実行の由来を示すラベルを付�
 - ヘッダーは代替テキストにも流用されるため、プッシュ通知のプレビュー段階でも由来を判別できる
 
 #### Message Splitting
-日付範囲を指定した一括実行では日数分の通知が 1 メッセージに積み上がるため、Slack の 1 メッセージあたりのブロック数上限を超える場合は複数のメッセージに分けて channel に連投する
+日付範囲を指定した一括実行では、日数分の通知が 1 メッセージに積み上がる。Slack の 1 メッセージあたりのブロック数上限を超える場合は、複数のメッセージに分けて channel に連投する
 
 - 分割は日単位の境界でのみ行い、1 日分の通知が 2 つのメッセージにまたがらないようにする
 - 実行メトリクスは最後のメッセージに載る
 - Block Kit を解釈しないクライアント向けの代替テキストも同じ切れ目で分割する
 
 #### Warning Thread
-Classification Policy で warning に分類した失敗は 1 run 単位で集約クラスに蓄積し、上記の親メッセージ送信後にその最後のメッセージの `ts` を `thread_ts` として thread 返信として投稿する。運用者は CloudWatch の `logger.warning` 出力に加え、Slack の thread でも警告を把握できる
+Classification Policy で warning に分類した失敗は 1 run 単位で集約する。上記の親メッセージを送信した後、その最後のメッセージの `ts` を `thread_ts` に指定して thread 返信として投稿する。運用者は CloudWatch の `logger.warning` 出力に加え、Slack の thread でも警告を把握できる
 
 - 集約は明示的な `add()` 呼び出しで行い、logging.Handler 経由の自動収集はしない（第三者ライブラリの warning 混入を避けるため）
 - `add()` 内部で `logger.warning` を発火するため、各呼び出し箇所は 1 行で CloudWatch と aggregator の両方に届く
@@ -462,7 +469,7 @@ Claude API 呼び出しのコスト管理として、要約生成のたびに 1 
 
 `model` と単価を行ごとに保持することで、期中でモデル差し替えや pricing 改定が起きても実行時点の値を遡って再解釈しない。過去分は無期限に保持し、TTL は設定しない
 
-Slack 通知に表示する月次メトリクスは、当月・前月同期間の各行を Query で取得したうえでアプリケーション側で集計する（DynamoDB は SUM / COUNT 相当の集計関数を提供しないため）
+DynamoDB は SUM / COUNT 相当の集計関数を提供しない。Slack 通知に表示する月次メトリクスは、当月・前月同期間の各行を Query で取得したうえでアプリケーション側で集計する
 
 ### Processed JSONL Cleanup
 DynamoDB への書き込みが正常に完了した後、処理した JSONL ファイルを S3 から削除する。削除対象は `ingest` で処理したオブジェクトキーに限定し、処理中に到着した遅延ファイルが誤って削除されるのを防ぐ。session データは DynamoDB に永続化されているため、JSONL の保持は不要
@@ -509,7 +516,7 @@ GitHub アイテムへのリンクは PR / Issue が `#xx: Title`、commit が `
 上記以外の記法は記号のまま表示される。書かせない側の担保は [Summary Generation](#summary-generation) の生成ルールに持たせる
 
 #### Status Sections
-ステータスは取得時点の state ではなく、完了時刻（PR は merge、マージされず close された PR と Issue は close）が対象日ウィンドウ内かで振り分ける。対象日より前に完了したアイテムは、session 内での言及や close 後の更新で取得対象に入っただけであるためいずれのセクションにも載せない
+ステータスは取得時点の state ではなく、完了時刻が対象日ウィンドウ内かで振り分ける。完了時刻は PR なら merge、マージされず close された PR と Issue なら close の時刻を指す。対象日より前に完了したアイテムは、session 内での言及や close 後の更新で取得対象に入っただけであるためいずれのセクションにも載せない
 
 - Done: 対象日に完了した PR / Issue
 - In Progress: 対象日終了時点で未完了の PR（draft 含む）、対象日より前に作成された未完了 Issue
@@ -595,7 +602,13 @@ Lambda 関数の環境変数として設定する。機密情報は AWS Secrets 
   - 環境依存値と secret は環境変数 / Secrets Manager 経由で扱い、config.yml には持ち込まない
 
 ### Deployment
-AWS SAM（[template.yaml](../template.yaml)）で Lambda 関数、EventBridge Scheduler、IAM ロール、S3 バケット、DynamoDB テーブルを管理する
+AWS SAM（[template.yaml](../template.yaml)）で以下のリソースを管理する
+
+- Lambda 関数
+- EventBridge Scheduler
+- IAM ロール
+- S3 バケット
+- DynamoDB テーブル
 
 ```bash
 make lambda-deploy
