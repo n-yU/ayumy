@@ -7,14 +7,14 @@ Ayumy の全要件を記す。アーキテクチャ・データフロー・外�
   - [Architecture](#architecture)
   - [External Services and APIs](#external-services-and-apis)
   - [Directory Structure](#directory-structure)
-- [Phase 1: Session Log Transfer](#phase-1-session-log-transfer)
-  - [Phase 1 Overview](#phase-1-overview)
+- [Stage 1: Session Log Transfer](#stage-1-session-log-transfer)
+  - [Stage 1 Overview](#stage-1-overview)
   - [Data Source](#data-source)
   - [Transfer Script](#transfer-script)
   - [Pre-push Hook](#pre-push-hook)
   - [Manual Sync](#manual-sync)
   - [Security Notes](#security-notes)
-- [Phase 2: Data Integration, Summarization, and Notion Writing](#phase-2-data-integration-summarization-and-notion-writing)
+- [Stage 2: Data Integration, Summarization, and Notion Writing](#stage-2-data-integration-summarization-and-notion-writing)
   - [GitHub Activity Fetch](#github-activity-fetch)
   - [Session Log Read](#session-log-read)
   - [Session Write to DynamoDB](#session-write-to-dynamodb)
@@ -50,7 +50,10 @@ GitHub 上の日次開発アクティビティ（Commit, Pull Request, Issue）�
 
 ## System Components
 ### Architecture
-本システムは2フェーズで構成される。session ログは S3 バケット、session メタデータは DynamoDB に保管し、レポート生成は AWS Lambda で実行する
+本システムは実行される場所で 2 段階に分かれる
+
+- [Stage 1: Session Log Transfer](#stage-1-session-log-transfer) — クライアントマシンで動き、session ログを S3 バケットへ送る
+- [Stage 2: Data Integration, Summarization, and Notion Writing](#stage-2-data-integration-summarization-and-notion-writing) — AWS Lambda で動き、S3 の session ログを DynamoDB に取り込んでレポートを生成する
 
 ```mermaid
 flowchart TB
@@ -128,8 +131,8 @@ s3://{bucket}/
 
 実行ログは CloudWatch Logs に出力する
 
-## Phase 1: Session Log Transfer
-### Phase 1 Overview
+## Stage 1: Session Log Transfer
+### Stage 1 Overview
 Claude Code session の JSONL を S3 バケットに転送する。クライアント側のスクリプト（`scripts/`, `hooks/`, `bin/ayumy`）は macOS のみサポートする
 
 - **自動転送（pre-push hook）**: push を契機に、当該プロジェクトの未同期 session を同期転送。失敗時は push を中止する
@@ -254,7 +257,7 @@ ayumy sync --report --date 2026-03-01..2026-03-05               # 日付範囲�
 - S3 のサーバーサイド暗号化（SSE-S3）を有効化する
 - 必要に応じて特定プロジェクトを除外するフィルタリング機能を設ける
 
-## Phase 2: Data Integration, Summarization, and Notion Writing
+## Stage 2: Data Integration, Summarization, and Notion Writing
 ### GitHub Activity Fetch
 対象期間は実行方式によって異なる
 

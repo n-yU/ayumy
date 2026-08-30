@@ -7,7 +7,7 @@ GitHub 上の日次開発アクティビティ（Commit, PR, Issue）と Claude 
 - クライアント側のスクリプト（`scripts/`, `hooks/`, `bin/ayumy`）は macOS のみサポート
 
 ## Architecture
-S3 + DynamoDB + AWS Lambda を使用した2フェーズ構成
+S3 + DynamoDB + AWS Lambda を使用した 2 段階構成
 
 ```mermaid
 flowchart TB

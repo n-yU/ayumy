@@ -19,7 +19,7 @@ Ayumy の構築後の日常運用ガイド。基本的な操作・Notion レポ�
 
 ## Overview
 - git push と日次の定期実行を起点に、GitHub アクティビティと Claude Code session を集約して Notion にレポートを書き込む。レポート生成は `ayumy sync --report` でも起動できる
-- クライアントマシンと AWS Lambda の 2 フェーズで動作し、運用者が普段触れるのはクライアントマシン側のみ
+- クライアントマシンと AWS Lambda の 2 段階で動作し、運用者が普段触れるのはクライアントマシン側のみ
 - クライアント側のスクリプト（`scripts/`, `hooks/`, `bin/ayumy`）は macOS のみサポート
 
 ## Daily Operations
