@@ -96,7 +96,7 @@ configure_icon() {
   echo "[ayumy] Notion page icon for $repo_name (name as shown in the Notion icon picker)"
   read -r -p "  icon name: " name || true
   if [[ -z "$name" ]]; then
-    echo "[ayumy] icon name is required; rerun 'ayumy setup-hooks' to set it" >&2
+    echo "[ayumy] icon name is required; rerun 'ayumy setup-hooks' or add the entry to $CONFIG_FILE by hand" >&2
     return 1
   fi
 
@@ -105,7 +105,7 @@ configure_icon() {
   case " $ICON_COLORS " in
     *" $color "*) ;;
     *)
-      echo "[ayumy] unknown color '$color'; rerun 'ayumy setup-hooks' to set it" >&2
+      echo "[ayumy] unknown color '$color'; rerun 'ayumy setup-hooks' or add the entry to $CONFIG_FILE by hand" >&2
       return 1
       ;;
   esac
