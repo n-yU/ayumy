@@ -40,7 +40,7 @@ Ayumy の全要件を記す。アーキテクチャ・データフロー・外�
 - [Future Extensions](#future-extensions)
 
 ## Overview
-GitHub 上の日次開発アクティビティ（Commit, Pull Request, Issue）と Claude Code での会話記録を自動収集し、Claude API で自然言語の要約を生成したうえで、Notion データベースに記録するシステム。対象リポジトリは S3 上のセッションログから特定する
+GitHub 上の日次開発アクティビティ（Commit, Pull Request, Issue）と Claude Code での会話記録を自動収集し、Claude API で自然言語の要約を生成したうえで、Notion データベースに記録するシステム。対象リポジトリは S3 上のsession ログから特定する
 
 ## Goals
 - 日々の開発作業を自動的に記録・蓄積する
@@ -50,7 +50,7 @@ GitHub 上の日次開発アクティビティ（Commit, Pull Request, Issue）�
 
 ## System Components
 ### Architecture
-本システムは2フェーズで構成される。セッションログは S3 バケットに保管し、レポート生成は AWS Lambda で実行する。セッションメタデータは DynamoDB に集約する
+本システムは2フェーズで構成される。session ログは S3 バケット、session メタデータは DynamoDB に保管し、レポート生成は AWS Lambda で実行する
 
 ```mermaid
 flowchart TB
@@ -94,13 +94,13 @@ S3 上のオブジェクトキー構造は [Directory Structure](#directory-stru
 | Anthropic API | 自然言語による要約生成 | API Key |
 | Notion API | 作業記録の書き込み | Internal Integration Token |
 | Slack Web API | 完了通知 | Bot User OAuth Token |
-| AWS S3 | セッションログの保管 | AWS 認証情報（IAM ユーザー / プロファイル） |
-| Amazon DynamoDB | セッションメタデータの集約 | IAM ロール |
+| AWS S3 | session ログの保管 | AWS 認証情報（IAM ユーザー / プロファイル） |
+| Amazon DynamoDB | session メタデータの集約 | IAM ロール |
 | AWS Lambda | レポート生成の実行環境 | IAM ロール |
 | Amazon EventBridge Scheduler | 日次の定期実行 | — |
 
 ### Directory Structure
-**ayumy リポジトリ（GitHub）** — スクリプトと設定のみ。セッションデータは含まない
+**ayumy リポジトリ（GitHub）** — スクリプトと設定のみで、session データは含まない
 
 ```
 ayumy/
@@ -130,9 +130,9 @@ s3://{bucket}/
 
 ## Phase 1: Session Log Transfer
 ### Phase 1 Overview
-Claude Code セッションの JSONL を S3 バケットに転送する。クライアント側のスクリプト（`scripts/`, `hooks/`, `bin/ayumy`）は macOS のみサポートする
+Claude Code session の JSONL を S3 バケットに転送する。クライアント側のスクリプト（`scripts/`, `hooks/`, `bin/ayumy`）は macOS のみサポートする
 
-- **自動転送（pre-push hook）**: push を契機に、当該プロジェクトの未同期セッションを同期転送。失敗時は push を中止する
+- **自動転送（pre-push hook）**: push を契機に、当該プロジェクトの未同期 session を同期転送。失敗時は push を中止する
 - **手動転送（`ayumy sync`）**: push せずに作業を中断する場合など、任意のタイミングで実行
 - **手動転送＋レポート生成（`ayumy sync --report`）**: S3 への転送後に Lambda を呼び出してレポート生成まで実行
 
@@ -142,8 +142,8 @@ Claude Code セッションの JSONL を S3 バケットに転送する。クラ
 Claude Code は会話を `~/.claude/projects/` 以下にローカル保存している
 
 - 各プロジェクトがディレクトリとして存在（パスのスラッシュがダッシュに置換された名前）
-- 個別セッションは JSONL ファイル（`{session-id}.jsonl`）として保存
-- メタデータ（セッション ID、タイムスタンプ、ブランチ等）は JSONL の各エントリに埋め込まれている
+- 個別 session は JSONL ファイル（`{session-id}.jsonl`）として保存
+- メタデータ（session ID、タイムスタンプ、ブランチ等）は JSONL の各エントリに埋め込まれている
 - 外部インデックスファイルは存在しない
 
 JSONL の各エントリは Claude Code が生成するデータの観測に基づく構造を持つ（公式仕様は存在しない）
@@ -155,7 +155,7 @@ JSONL の各エントリは Claude Code が生成するデータの観測に基�
 |---|---|---|
 | `type` | String | エントリ種別（`"user"`, `"assistant"`, `"summary"` 等） |
 | `timestamp` | String | ISO 8601 形式のタイムスタンプ（例: `"2026-03-28T10:00:00+09:00"`）。常に存在するが、不正な値は観測されていない |
-| `cwd` | String | エントリ発生時の作業ディレクトリ絶対パス。`type=user` / `type=assistant` の各エントリに付与される。session 抽出時に project の作業ディレクトリの根拠として用い、Bash tool_use 内の `cd` による cross-repo 判定の基準にする（[Session Write to DynamoDB](#session-write-to-dynamodb)） |
+| `cwd` | String | エントリ発生時の作業ディレクトリ絶対パス。`type=user` / `type=assistant` の各エントリに付与される。session 抽出時に project の作業ディレクトリの根拠として用い、Bash tool_use 内の `cd` で別リポジトリへ移動したかどうかを判定する基準にする（[Session Write to DynamoDB](#session-write-to-dynamodb)） |
 | `message.content` | String / List | 文字列またはブロックのリスト。`type=user` は通常文字列だが `tool_result` を含むリストの場合もある |
 
 `type=assistant` の `message.content` リスト内のブロック
@@ -165,29 +165,29 @@ JSONL の各エントリは Claude Code が生成するデータの観測に基�
 | `type` | String | ブロック種別（`"text"`, `"tool_use"` 等） |
 | `name` | String | `type=tool_use` の場合のツール名 |
 | `id` | String | `type=tool_use` の識別子。後続の `type=user` ブロックの `tool_use_id` から参照され、tool_use と tool_result を突き合わせる |
-| `input.command` | String | `name="Bash"` の場合の実行コマンド文字列。冒頭の `cd <path>` を解釈して per-tool_use の effective cwd を求める（[Session Write to DynamoDB](#session-write-to-dynamodb)） |
+| `input.command` | String | `name="Bash"` の場合の実行コマンド文字列。冒頭の `cd <path>` を解釈し、その tool_use における `cd` 反映後の作業ディレクトリを求める（[Session Write to DynamoDB](#session-write-to-dynamodb)） |
 
 `type=user` の `message.content` がリストの場合のブロック
 
 | Field | Type | Description |
 |---|---|---|
 | `type` | String | ブロック種別（`"tool_result"` 等） |
-| `tool_use_id` | String | 対応する assistant の `tool_use.id`。cross-repo 判定で対応する tool_use の effective cwd を引くために使う（[Session Write to DynamoDB](#session-write-to-dynamodb)） |
+| `tool_use_id` | String | 対応する assistant の `tool_use.id`。別リポジトリでの実行かどうかの判定で、対応する tool_use の `cd` 反映後の作業ディレクトリを引くために使う（[Session Write to DynamoDB](#session-write-to-dynamodb)） |
 | `content` | String | ツール実行結果のテキスト |
 | `is_error` | Boolean | エラー結果かどうか |
 
-`tool_result` の `content` に `[... <short-sha>] <message>` 形式の行が含まれる場合、git commit の実行結果として SHA とコミットメッセージを抽出する
+`tool_result` の `content` に `[... <short-sha>] <message>` 形式の行が含まれる場合、git commit の実行結果として SHA と commit message を抽出する
 
-- 1つの `tool_result` に複数のコミット行が含まれる場合は全て抽出する
+- 1つの `tool_result` に複数の commit 行が含まれる場合は全て抽出する
 - pre-commit hook の出力が先行する場合にも対応する（行単位でパターンを検索）
 - 通常の `[branch sha]` 形式に加え、`[branch (root-commit) sha]` や `[detached HEAD sha]` にも対応する
-- これにより squash merge で GitHub API から取得できないコミットを補完する
+- これにより squash merge で GitHub API から取得できない commit を補完する
 
 </details>
 
 Claude Code が生成するため、タイムスタンプのフォーマットは安定しており、パース失敗を想定した防御的な例外処理は行わない
 
-転送対象のセッションは、マーカーファイル（`.ayumy_last_sync`）との mtime 比較で決定する
+転送対象の session は、マーカーファイル（`.ayumy_last_sync`）との mtime 比較で決定する
 
 - マーカーが存在しない場合（初回）は全 JSONL を対象とする
 - スキャン前に一時マーカー（`.ayumy_last_sync.tmp`）を作成し、転送成功後に `mv` で本マーカーに昇格させる
@@ -202,15 +202,15 @@ sync_session.sh [--project <project-name>] [--all] [--report] [--date DATE]
 
 | Option | Behavior |
 |---|---|
-| `--project <name>` | 指定プロジェクトの差分セッションのみ転送。`<name>` は `~/.claude/projects/` 以下のディレクトリ名（例: `-Users-username-Documents-github-repo`） |
-| `--all` | 全プロジェクトから差分セッションを一括転送 |
+| `--project <name>` | 指定プロジェクトの差分 sessionのみ転送。`<name>` は `~/.claude/projects/` 以下のディレクトリ名（例: `-Users-username-Documents-github-repo`） |
+| `--all` | 全プロジェクトから差分 sessionを一括転送 |
 | `--report` | S3 転送後に Lambda 関数を呼び出してレポート生成を実行 |
 | `--date DATE` | 指定日または日付範囲のレポートを生成・再生成（`--report` 必須）。`YYYY-MM-DD` または `YYYY-MM-DD..YYYY-MM-DD` 形式 |
 | 引数なし | カレントディレクトリに対応するプロジェクトを自動判定 |
 
 要件
 
-- **環境変数 `AYUMY_S3_BUCKET`**: セッションログの保管先 S3 バケット名
+- **環境変数 `AYUMY_S3_BUCKET`**: session ログの保管先 S3 バケット名
 - **AWS 認証情報**: AWS CLI が使用可能な状態であること（`~/.aws/credentials` または環境変数）
 - **冪等性**: `aws s3 cp` による上書きで同じ JSONL の複数回転送でも問題ない
 
@@ -234,7 +234,7 @@ hook の配布方法（`ayumy setup-hooks` コマンドで設置）
 設置先は Git に hook の参照先を問い合わせて決めるため、通常のリポジトリに加えて worktree やサブモジュールでも同じ手順で設置できる。worktree で実行した場合は共通ディレクトリに設置され、同じリポジトリのすべての worktree に効く
 
 ### Manual Sync
-push せずに作業を中断する場合や、hook で転送されなかったセッションを補完する
+push せずに作業を中断する場合や、hook で転送されなかった session を補完する
 
 ```bash
 ayumy sync                                                      # current directory のプロジェクトを同期
@@ -269,7 +269,7 @@ ayumy sync --report --date 2026-03-01..2026-03-05               # 日付範囲�
 - `target_date` は `YYYY-MM-DD` または `YYYY-MM-DD..YYYY-MM-DD` 形式。範囲指定時は各日付に対して順にレポートを生成する
 - `target_date` 指定時は backfill（未レポート日の自動検出）をスキップし、指定された日付のみを処理する
 
-対象リポジトリは S3 上のセッションログから特定する。各プロジェクトディレクトリの `.ayumy_repo` メタデータファイルからリポジトリ名を読み取り、そのリポジトリのみ `GET /repos/{owner}/{repo}` で取得する
+対象リポジトリは S3 上のsession ログから特定する。各プロジェクトディレクトリの `.ayumy_repo` メタデータファイルからリポジトリ名を読み取り、そのリポジトリのみ `GET /repos/{owner}/{repo}` で取得する
 
 | Activity | Endpoint | Filter |
 |---|---|---|
@@ -277,7 +277,7 @@ ayumy sync --report --date 2026-03-01..2026-03-05               # 日付範囲�
 | Pull Requests | `GET /repos/{owner}/{repo}/pulls` | `state=all`, `sort=updated`, 前日以降 |
 | Issues | `GET /repos/{owner}/{repo}/issues` | `since`, `state=all`, PR を除外 |
 
-Commits は Search Commits API を使用する。GitHub Search の date 比較は UTC 解釈であり JST 1 日分が連続する 2 つの UTC 日付にまたがるため、検索範囲を JST 境界より広く取り、取得後にタイムゾーン対応の `since <= author_date < until` で絞り込む。これにより手動実行時の部分日（当日 00:00 〜 現在時刻）にも対応する。squash merge で `author-date` が書き換えられた commit は検出できないため、セッション JSONL の `tool_result` から抽出した commit 情報で補完する（[Session Write to DynamoDB](#session-write-to-dynamodb) 参照）
+Commits は Search Commits API を使用する。GitHub Search の date 比較は UTC 解釈であり JST 1 日分が連続する 2 つの UTC 日付にまたがるため、検索範囲を JST 境界より広く取り、取得後にタイムゾーン対応の `since <= author_date < until` で絞り込む。これにより手動実行時の部分日（当日 00:00 〜 現在時刻）にも対応する。squash merge で `author-date` が書き換えられた commit は検出できないため、session JSONL の `tool_result` から抽出した commit 情報で補完する（[Session Write to DynamoDB](#session-write-to-dynamodb) 参照）
 
 各 commit には紐づく PR 番号も付与する。Notion Timeline で commit を親 PR ブロック配下にネストする際の参照キーとして利用するほか、Hybrid 経路の PR 取得（[Hybrid Backfill Fetch](#hybrid-backfill-fetch)）でも再利用する
 
@@ -290,20 +290,20 @@ PR/Issue の `updated_at` 経路は対象日以降に状態が更新されると
 
 | Activity | Fetch Path |
 |---|---|
-| Pull Requests | `GET /search/issues` を `is:pr` + `created:`/`merged:`/`closed:` のレンジクエリで3回呼び出し、状態遷移した PR を取得する。さらに commit 取得時に付与済みの関連 PR 番号を再利用し、対象日にコミットだけがあった PR も補足する。これに DynamoDB の `session_pulls`（[Session Write to DynamoDB](#session-write-to-dynamodb)）を加えて PR 番号で union し、各番号を `GET /repos/{owner}/{repo}/pulls/{N}` で個別取得する |
-| Issues | `GET /search/issues` を `is:issue` + `created:`/`closed:` のレンジクエリで2回呼び出し、状態遷移した Issue を取得する。これに DynamoDB の `session_issues`（[Session Write to DynamoDB](#session-write-to-dynamodb)）を加えて Issue 番号で union する。session 由来の番号のみで Search に含まれないものは `GET /repos/{owner}/{repo}/issues/{N}` で個別取得し、PR を返した場合（`pull_request` 属性が設定）は除外する |
+| Pull Requests | `GET /search/issues` を `is:pr` + `created:`/`merged:`/`closed:` のレンジクエリで3回呼び出し、状態遷移した PR を取得する。さらに commit 取得時に付与済みの関連 PR 番号を再利用し、対象日に commit だけがあった PR も補足する。これに DynamoDB の `session_pulls`（[Session Write to DynamoDB](#session-write-to-dynamodb)）を合わせて PR 番号を 1 つのリストにまとめ、各番号を `GET /repos/{owner}/{repo}/pulls/{N}` で個別取得する |
+| Issues | `GET /search/issues` を `is:issue` + `created:`/`closed:` のレンジクエリで2回呼び出し、状態遷移した Issue を取得する。これに DynamoDB の `session_issues`（[Session Write to DynamoDB](#session-write-to-dynamodb)）を合わせて Issue 番号を 1 つのリストにまとめる。session 由来の番号のみで Search に含まれないものは `GET /repos/{owner}/{repo}/issues/{N}` で個別取得し、PR を返した場合（`pull_request` 属性が設定）は除外する |
 
-Search クエリの日付範囲は UTC/JST の境界ずれを吸収するため広めに取り、取得後に `created_at` / `merged_at` / `closed_at` のいずれかが `[since, until)` に入るものへ絞り込む。commit 由来 PR は対象日にコミットが存在する事実、session 由来 PR/Issue は session で対象日に touch された事実をもって採用するため、いずれもこの絞り込みの対象外とする。削除済み PR/Issue は 404 となるためスキップする
+Search クエリの日付範囲は UTC/JST の境界ずれを吸収するため広めに取り、取得後に `created_at` / `merged_at` / `closed_at` のいずれかが `[since, until)` に入るものへ絞り込む。commit 由来 PR は対象日に commit が存在する事実、session 由来 PR/Issue は session 中に対象日に操作された事実をもって採用するため、いずれもこの絞り込みの対象外とする。削除済み PR/Issue は 404 となるためスキップする
 
 Hybrid 経路の Search 呼び出しは commit 取得の Search 呼び出しと共通の throttle で管理する
 
 ### Session Log Read
-DynamoDB の `ayumy-sessions` テーブルから対象日付をパーティションキーとして Query し、セッションメタデータを取得する。結果をリポジトリ別にグルーピングし、各リポジトリ内のセッションを `start_time` 順にソートする
+DynamoDB の `ayumy-sessions` テーブルから対象日付をパーティションキーとして Query し、session メタデータを取得する。結果をリポジトリ別にグルーピングし、各リポジトリ内の session を `start_time` 順にソートする
 
-バックフィル検出は DynamoDB の Scan で行う。`reported_at` が未設定、または `updated_at > reported_at` のアイテムが存在する過去日付を対象とする（最大3日分）。セッションが更新された場合は `updated_at` が `reported_at` を超えるため、自動的に再生成対象となる
+バックフィル検出は DynamoDB の Scan で行う。`reported_at` が未設定、または `updated_at > reported_at` のアイテムが存在する過去日付を対象とする（最大3日分）。更新された session は `updated_at` が `reported_at` を超えるため、自動的に再生成対象となる
 
 ### Session Write to DynamoDB
-レポート生成の前処理として、S3 上の未アーカイブ JSONL をパースし、セッションメタデータを DynamoDB に書き込む。日付フィルタなしで全エントリを処理し、JST 日付ごとにグルーピングする
+レポート生成の前処理として、S3 上の未アーカイブ JSONL をパースし、session メタデータを DynamoDB に書き込む。日付フィルタなしで全エントリを処理し、JST 日付ごとにグルーピングする
 
 テーブル名は `ayumy-sessions`、オンデマンドモードかつ PITR 有効
 
@@ -313,14 +313,14 @@ DynamoDB の `ayumy-sessions` テーブルから対象日付をパーティシ�
 | Key | Attribute | Type | Description |
 |---|---|---|---|
 | PK | `date` | String | JST 日付（`YYYY-MM-DD`） |
-| SK | `repo#session_id` | String | リポジトリ名 + セッション ID |
+| SK | `repo#session_id` | String | リポジトリ名 + session ID |
 | | `repo` | String | リポジトリ名 |
 | | `project` | String | プロジェクトディレクトリ名 |
 | | `start_time` | String | ISO 8601 |
 | | `end_time` | String | ISO 8601 |
 | | `user_messages` | List | ユーザーメッセージ |
 | | `tools_used` | List | 使用ツール |
-| | `session_commits` | List | セッション中の git commit 結果（`[{sha, message, timestamp}]`、未検出時は空リスト） |
+| | `session_commits` | List | session 中の git commit 結果（`[{sha, message, timestamp}]`、未検出時は空リスト） |
 | | `session_pulls` | List | session 中の Bash tool 操作で言及された PR 番号のソート済みリスト（未検出時は空リスト） |
 | | `session_issues` | List | session 中の Bash tool 操作で言及された Issue 番号のソート済みリスト（未検出時は空リスト） |
 | | `updated_at` | String | ISO 8601、書き込み・更新時刻 |
@@ -345,10 +345,10 @@ DynamoDB の `ayumy-sessions` テーブルから対象日付をパーティシ�
 ### Summary Generation
 使用モデル: `claude-sonnet-4-6`
 
-GitHub アクティビティと Claude Code セッションログの両方をコンテキストとして渡し、リポジトリごとの要約を生成する。GitHub アクティビティは Notion 本文と同じ対象日基準で絞り、対象日に完了していないアイテムを完了として渡さない。文体は常体で統一し、ですます調は使用しない
+GitHub アクティビティと Claude Code session ログの両方をコンテキストとして渡し、リポジトリごとの要約を生成する。GitHub アクティビティは Notion 本文と同じ対象日基準で絞り、対象日に完了していないアイテムを完了として渡さない。文体は常体で統一し、ですます調は使用しない
 
 - **リポジトリ別の要点**: 各リポジトリで行われた作業の要点を 2〜5 項目の箇条書きで記述する。最初の項目はそのリポジトリの最重要の要点として単独でも通じる内容にする（Slack 通知ではこの項目を 1 文サマリとして流用する）
-- **Claude Code での作業**: 上記の要点の中に Claude Code セッションでの相談・実装方針の検討内容も含めて構わない
+- **Claude Code での作業**: 上記の要点の中に Claude Code session での相談・実装方針の検討内容も含めて構わない
 - PR/Issue のステータス別一覧と時系列のイベントは Notion 本文の生成時にプログラムで組み立てるため、Claude API の出力には含めない
 
 番号と識別子の書き方はシステムプロンプト（[lambda/report/prompts/summary_system.txt](../lambda/report/prompts/summary_system.txt)）で指定し、そちらを single source of truth とする。装飾として使わせる記法は [Page Body の Summary](#summary) が解釈するものに揃える
@@ -384,7 +384,7 @@ GitHub アクティビティと Claude Code セッションログの両方をコ
 
 出力にはリポジトリごとの作業要点（箇条書き）とタグの提案を含める
 
-session ログはあるが GitHub アクティビティが対象日に存在しないリポジトリ（以下 session-only）は Claude API 入力から除外する。Notion ページを作成しない現状仕様（[Database Properties](#database-properties)）で捨てられる要約分の API コスト発生を抑えるため
+対象日に GitHub アクティビティがなく session ログだけがあるリポジトリ（以下 session-only）は Claude API 入力から除外する。Notion ページを作成しない現状仕様（[Database Properties](#database-properties)）で捨てられる要約分の API コスト発生を抑えるため
 
 - 判定は session 由来 commit を GitHub アクティビティにマージした後の状態で行う
 - 対象日の全リポジトリが session-only の場合は Claude API 呼び出し自体を skip し、コスト記録も残さない
@@ -465,7 +465,7 @@ Claude API 呼び出しのコスト管理として、要約生成のたびに 1 
 Slack 通知に表示する月次メトリクスは、当月・前月同期間の各行を Query で取得したうえでアプリケーション側で集計する（DynamoDB は SUM / COUNT 相当の集計関数を提供しないため）
 
 ### Processed JSONL Cleanup
-DynamoDB への書き込みが正常に完了した後、処理した JSONL ファイルを S3 から削除する。削除対象は `ingest` で処理したオブジェクトキーに限定し、処理中に到着した遅延ファイルが誤って削除されるのを防ぐ。セッションデータは DynamoDB に永続化されているため、JSONL の保持は不要
+DynamoDB への書き込みが正常に完了した後、処理した JSONL ファイルを S3 から削除する。削除対象は `ingest` で処理したオブジェクトキーに限定し、処理中に到着した遅延ファイルが誤って削除されるのを防ぐ。session データは DynamoDB に永続化されているため、JSONL の保持は不要
 
 ## Notion Database Specification
 ### Database Properties
@@ -477,10 +477,10 @@ Date × Repository 単位でページを作成する。1日に複数ページが
 | Date | Date | 対象日 | `2025-03-01` |
 | Repository | Select | リポジトリ名 | `ayumy` |
 | Tags | Multi-select | 作業内容の分類タグ | `feature`, `refactor` |
-| Commits | Number | 対象日のコミット数 | `5` |
+| Commits | Number | 対象日の commit 数 | `5` |
 | Merged | Number | 対象日にマージした PR 数 | `2` |
 | Closed | Number | 対象日にクローズした Issue 数 | `1` |
-| Sessions | Number | リポジトリのセッション数 | `3` |
+| Sessions | Number | リポジトリの session 数 | `3` |
 | Version | Text | レポート生成時の ayumy バージョン | `0.2.0` |
 
 ページには絵文字ではなく Notion 組み込みのアイコンを設定し、データベースの一覧でリポジトリを見分けられるようにする。アイコンと色はリポジトリごとに [lambda/config/config.yml](../lambda/config/config.yml) の `notion` セクションで指定し、エントリの無いリポジトリには既定のアイコンを当てる。名前は Notion のアイコンピッカー上の表示名を受け付け、実在しない名前は API がエラーを返す
@@ -498,7 +498,7 @@ Notion ページの本文は Summary、ステータス別セクション、Timel
 [heading_2]            TODO（該当がある場合のみ）
 [bulleted_list_item]   対象日に新規作成された Issue（バックログ）
 [heading_2]            Timeline（該当がある場合のみ）
-[bulleted_list_item]   PR ブロック親 + 配下 commit を `children` でネスト、merge commit / 直接 commit / Issue open / close / unmerged PR close を最上位に時系列で interleave
+[bulleted_list_item]   PR ブロック親 + 配下 commit を `children` でネスト、merge commit / 直接 commit / Issue open / close / unmerged PR close を最上位に時系列で混ぜて配置
 ```
 
 GitHub アイテムへのリンクは PR / Issue が `#xx: Title`、commit が `{sha-prefix}: {commit message}` の形式とし、それぞれ GitHub URL でリンク化する。ページはリポジトリ単位で作られ、リポジトリ名は Repository プロパティと Name タイトルに出るため、本文の各行では省く
@@ -509,7 +509,7 @@ GitHub アイテムへのリンクは PR / Issue が `#xx: Title`、commit が `
 上記以外の記法は記号のまま表示される。書かせない側の担保は [Summary Generation](#summary-generation) の生成ルールに持たせる
 
 #### Status Sections
-ステータスは取得時点の state ではなく、完了時刻（PR は merge、マージされず close された PR と Issue は close）が対象日ウィンドウ内かで振り分ける。対象日より前に完了したアイテムは、セッション内での言及や close 後の更新で取得対象に入っただけであるためいずれのセクションにも載せない
+ステータスは取得時点の state ではなく、完了時刻（PR は merge、マージされず close された PR と Issue は close）が対象日ウィンドウ内かで振り分ける。対象日より前に完了したアイテムは、session 内での言及や close 後の更新で取得対象に入っただけであるためいずれのセクションにも載せない
 
 - Done: 対象日に完了した PR / Issue
 - In Progress: 対象日終了時点で未完了の PR（draft 含む）、対象日より前に作成された未完了 Issue
@@ -533,7 +533,7 @@ Timeline は `bulleted_list_item` のネスト構造で表現する。PR 親エ�
 - Issue close（not_planned / duplicate）: `⚠️ close (理由): #xx: Title`
 - merge せず close された PR: `⚠️ close: #xx: Title`（PR 親エントリとは別に top-level に配置）
 
-並び順は対象日ウィンドウ内における最初の活動時刻を基準に、PR ブロックと他のトップレベル要素を時系列で interleave する。PR ブロックの並び順キーは PR open（in range の場合）・最初の配下 commit・merge 時刻のうち最も早いものを採る。同時刻のタイブレークは PR 親エントリ → 同じ時刻の merge commit の順とする
+並び順は対象日ウィンドウ内における最初の活動時刻を基準に、PR ブロックと他のトップレベル要素を時系列で混ぜて並べる。PR ブロックの並び順キーは PR open（in range の場合）・最初の配下 commit・merge 時刻のうち最も早いものを採る。同時刻のタイブレークは PR 親エントリ → 同じ時刻の merge commit の順とする
 
 ### Tag Classification
 タグは Claude API の要約生成時に自動判定させる。タグ名と判定基準（description）はコード側（[lambda/report/tags.py](../lambda/report/tags.py)）で single source of truth として管理する。Notion DB の multi-select オプションには description フィールドがないため、コード側に置いたうえで Claude API のシステムプロンプトに注入する
@@ -566,8 +566,8 @@ Lambda 関数の環境変数として設定する。機密情報は AWS Secrets 
 
 | Variable | Description |
 |---|---|
-| `AYUMY_S3_BUCKET` | セッションログの保管先 S3 バケット名 |
-| `AYUMY_DYNAMO_TABLE` | セッションメタデータの DynamoDB テーブル名 |
+| `AYUMY_S3_BUCKET` | session ログの保管先 S3 バケット名 |
+| `AYUMY_DYNAMO_TABLE` | session メタデータの DynamoDB テーブル名 |
 | `AYUMY_COST_TABLE` | Claude API コスト実行ログの DynamoDB テーブル名 |
 | `AYUMY_LAMBDA_TIMEOUT` | Lambda 関数の timeout 秒数（template.yaml の `LambdaTimeoutSeconds` パラメータと連動） |
 | `NOTION_DATABASE_ID` | 書き込み先の Notion データベース ID |
@@ -657,7 +657,7 @@ Lambda 側で発生する失敗は以下の 3 区分で扱う。`logger.warning`
 | 1ヶ月 | ~$1.5 |
 | 1年 | ~$18 |
 
-※ セッションログが大量にある日はトークン数が増加する。上記は平均的な開発日の見積もり
+※ 大量の session ログがある日はトークン数が増加する。上記は平均的な開発日の見積もり
 
 **AWS**
 
@@ -671,7 +671,7 @@ Lambda 側で発生する失敗は以下の 3 区分で扱う。`logger.warning`
 </details>
 
 ### Storage Management
-- セッションログは S3 経由で DynamoDB に永続化し、クライアントマシンのディスクを消費しない
+- session ログは S3 経由で DynamoDB に永続化し、クライアントマシンのディスクを消費しない
 - DynamoDB 書き込み後に S3 上の JSONL は削除されるため、S3 ストレージの増加は一時的
 - 実行ログは CloudWatch Logs に出力し、保持期間を設定して管理する
 

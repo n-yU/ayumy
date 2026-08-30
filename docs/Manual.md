@@ -18,7 +18,7 @@ Ayumy の構築後の日常運用ガイド。基本的な操作・Notion レポ�
   - [CloudWatch Logs の確認](#cloudwatch-logs-の確認)
 
 ## Overview
-- git push と日次の定期実行を起点に、GitHub アクティビティと Claude Code セッションを集約して Notion にレポートを書き込む。レポート生成は `ayumy sync --report` でも起動できる
+- git push と日次の定期実行を起点に、GitHub アクティビティと Claude Code session を集約して Notion にレポートを書き込む。レポート生成は `ayumy sync --report` でも起動できる
 - クライアントマシンと AWS Lambda の 2 フェーズで動作し、運用者が普段触れるのはクライアントマシン側のみ
 - クライアント側のスクリプト（`scripts/`, `hooks/`, `bin/ayumy`）は macOS のみサポート
 
@@ -26,12 +26,12 @@ Ayumy の構築後の日常運用ガイド。基本的な操作・Notion レポ�
 各コマンドは `--help` (または `-h`) で使い方を確認できる
 
 ### pre-push hook による自動転送
-- `ayumy setup-hooks` で設置した pre-push hook が、各リポジトリの push を契機に未同期セッションを S3 に転送する
+- `ayumy setup-hooks` で設置した pre-push hook が、各リポジトリの push を契機に未同期 session を S3 に転送する
 - 転送はフォアグラウンドで実行され、失敗時は非ゼロ終了で push を中止する。AWS 認証切れなどの障害は push 時点で顕在化する
 - 対応する Claude session が存在しないリポジトリでは hook は何もせず通常通り push を通す
 
 ### 手動同期
-push を伴わずにセッションだけ転送したい場合、または hook を経由しないタイミングで同期したい場合に使う
+push を伴わずに session だけ転送したい場合、または hook を経由しないタイミングで同期したい場合に使う
 
 | Command | Behavior |
 |---|---|
@@ -40,7 +40,7 @@ push を伴わずにセッションだけ転送したい場合、または hook 
 | `ayumy sync --project <name>` | 特定プロジェクト（`~/.claude/projects/` 配下のディレクトリ名）を同期 |
 
 ### 手動レポート生成
-セッション転送に続けてレポート生成まで走らせたい場合や、既存日付のレポートを再生成したい場合に使う
+session 転送に続けてレポート生成まで走らせたい場合や、既存日付のレポートを再生成したい場合に使う
 
 | Command | Behavior |
 |---|---|
@@ -81,7 +81,7 @@ hook が動いていない、または別パスから設置し直したい場合
 push 時の転送失敗で push が中止される場合、AWS の認証切れであることが多い。`aws login` で認証を更新してから再度 push する。S3 に未転送の JSONL はソース側に残るため、認証復旧後の次回転送でリトライされる
 
 ### 過去日レポートの再生成
-[手動レポート生成](#手動レポート生成) の `--date` 指定で再生成する。セッションは DynamoDB に永続化されているため再転送は不要。Notion 側は同日の既存ページをアーカイブしてから再作成する
+[手動レポート生成](#手動レポート生成) の `--date` 指定で再生成する。session は DynamoDB に永続化されているため再転送は不要。Notion 側は同日の既存ページをアーカイブしてから再作成する
 
 ### Slack 通知の読み方
 Notion への書き込み完了後、以下の情報が Slack に届く。アクティビティが 0 件の日や処理中にエラーが出た場合も内容を反映した通知が届く

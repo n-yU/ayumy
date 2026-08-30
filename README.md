@@ -1,7 +1,7 @@
 # Ayumy
 *Traces of daily craft, woven by AI*
 
-GitHub 上の日次開発アクティビティ（Commit, PR, Issue）と Claude Code のセッションログを自動収集し、Claude API で自然言語の要約を生成して Notion データベースに記録するシステム
+GitHub 上の日次開発アクティビティ（Commit, PR, Issue）と Claude Code の session ログを自動収集し、Claude API で自然言語の要約を生成して Notion データベースに記録するシステム
 
 - セットアップ方法は [Setup.md](./docs/Setup.md)、基本的な使い方は [Manual.md](./docs/Manual.md) を参照
 - クライアント側のスクリプト（`scripts/`, `hooks/`, `bin/ayumy`）は macOS のみサポート
@@ -46,8 +46,8 @@ flowchart TB
 | Technology | Purpose |
 |---|---|
 | AWS Lambda | レポート生成の実行環境 |
-| AWS S3 | セッションログの保管 |
-| Amazon DynamoDB | セッションメタデータと Claude API コスト履歴の集約 |
+| AWS S3 | session ログの保管 |
+| Amazon DynamoDB | session メタデータと Claude API コスト履歴の集約 |
 | Amazon EventBridge Scheduler | 日次の定期実行 |
 | Python 3.12 | メインスクリプト（`requests`, `anthropic`, `PyGithub`） |
 | GitHub API (REST) | 開発アクティビティの取得 |
@@ -74,4 +74,4 @@ Anthropic API と AWS の費用が発生する（GitHub API・Notion API は無�
 | Anthropic API | ~$1.5/月 |
 | AWS（Lambda, S3, Secrets Manager 等） | ~$0.5/月 |
 
-※ 平均的な開発日の見積もり。セッションログが大量にある日はトークン数が増加する
+※ 平均的な開発日の見積もり。session ログが大量にある日はトークン数が増加する
