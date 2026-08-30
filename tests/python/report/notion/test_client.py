@@ -553,6 +553,12 @@ class TestArchiveExistingPages:
             _queried_page("page2", "other-repo", 0),
         ) == {REPO: 3, "other-repo": 1}
 
+    def test_carries_the_highest_count_when_a_repository_has_duplicates(self, archiver):
+        assert archiver(
+            _queried_page("page1", REPO, 4),
+            _queried_page("page2", REPO, 1),
+        ) == {REPO: 5}
+
     def test_counts_pages_predating_the_property_as_never_rebuilt(self, archiver):
         assert archiver(_queried_page("page1", REPO, None)) == {REPO: 1}
 

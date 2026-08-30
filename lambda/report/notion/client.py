@@ -322,7 +322,10 @@ class NotionClient:
         for page in existing:
             repo_name = _queried_repository(page)
             if repo_name is not None:
-                regens_by_repo[repo_name] = _queried_regens(page) + 1
+                # Duplicated rows would otherwise let the query order decide what gets carried
+                regens_by_repo[repo_name] = max(
+                    regens_by_repo.get(repo_name, 0), _queried_regens(page) + 1
+                )
             self.client.pages.update(page_id=page["id"], archived=True)
 
         if existing:
