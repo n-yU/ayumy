@@ -316,19 +316,19 @@ class NotionClient:
             data_source_id=self.data_source_id,
             filter={"property": "Date", "date": {"equals": date_str}},
         )
-        pages = results["results"]
+        existing = results["results"]
 
-        regens: dict[str, int] = {}
-        for page in pages:
+        regens_by_repo: dict[str, int] = {}
+        for page in existing:
             repo_name = _queried_repository(page)
             if repo_name is not None:
-                regens[repo_name] = _queried_regens(page) + 1
+                regens_by_repo[repo_name] = _queried_regens(page) + 1
             self.client.pages.update(page_id=page["id"], archived=True)
 
-        if pages:
-            logger.info("Archived %d existing page(s) for %s", len(pages), date_str)
+        if existing:
+            logger.info("Archived %d existing page(s) for %s", len(existing), date_str)
 
-        return regens
+        return regens_by_repo
 
     def create_report_pages(
         self,
@@ -340,7 +340,7 @@ class NotionClient:
         session_activity: SessionActivity,
     ) -> list[tuple[str, str]]:
         """Create a report page for each summarized repository that has fetched activity, archiving same-date pages first to ensure re-runs stay idempotent."""
-        regens = self._archive_existing_pages(target_date)
+        regens_by_repo = self._archive_existing_pages(target_date)
         pages: list[tuple[str, str]] = []
 
         for repo_summary in report["repositories"]:
@@ -383,7 +383,7 @@ class NotionClient:
                 prs_merged,
                 issues_closed,
                 claude_sessions,
-                regens.get(repo_name, 0),
+                regens_by_repo.get(repo_name, 0),
             )
             pages.append((repo_name, url))
 
