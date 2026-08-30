@@ -203,6 +203,7 @@ def run(
         notion_client = NotionClient(
             require_env("NOTION_SECRET"),
             require_env("NOTION_DATABASE_ID"),
+            github_client.owner,
             notice=notice,
         )
         notion_client.init_data_source()

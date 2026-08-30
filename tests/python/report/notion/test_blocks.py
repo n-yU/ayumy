@@ -11,11 +11,21 @@ from report.notion.blocks import (
     linked_text,
 )
 
+from .._builders import OWNER, REPO
+
 URL = "https://example.com/1"
 
 
 def _linked(text: str) -> list[dict]:
     return linked_text(text, URL)
+
+
+def _bulleted_text(text: str) -> dict:
+    return bulleted_text(text, OWNER, REPO)
+
+
+def _issue_url(number: str) -> str:
+    return f"https://github.com/{OWNER}/{REPO}/issues/{number}"
 
 
 @pytest.mark.parametrize(
@@ -92,7 +102,7 @@ def test_bulleted_link_omits_children_when_absent(children):
 
 
 def test_bulleted_text_builds_block_from_plain_text():
-    assert bulleted_text("hello") == {
+    assert _bulleted_text("hello") == {
         "object": "block",
         "type": "bulleted_list_item",
         "bulleted_list_item": {
@@ -102,10 +112,42 @@ def test_bulleted_text_builds_block_from_plain_text():
 
 
 def test_bulleted_text_chunks_text_over_limit():
-    rich_text = bulleted_text("a" * (RICH_TEXT_LIMIT + 50))["bulleted_list_item"][
+    rich_text = _bulleted_text("a" * (RICH_TEXT_LIMIT + 50))["bulleted_list_item"][
         "rich_text"
     ]
     assert [len(rt["text"]["content"]) for rt in rich_text] == [RICH_TEXT_LIMIT, 50]
+
+
+def test_bulleted_text_annotates_code_and_bold_spans():
+    rich_text = _bulleted_text("`a.py` と **重要**")["bulleted_list_item"]["rich_text"]
+    assert rich_text == [
+        {
+            "type": "text",
+            "text": {"content": "a.py"},
+            "annotations": {"code": True},
+        },
+        {"type": "text", "text": {"content": " と "}},
+        {
+            "type": "text",
+            "text": {"content": "重要"},
+            "annotations": {"bold": True},
+        },
+    ]
+
+
+def test_bulleted_text_links_number_reference():
+    rich_text = _bulleted_text("マージ #155")["bulleted_list_item"]["rich_text"]
+    assert rich_text[-1] == {
+        "type": "text",
+        "text": {"content": "#155", "link": {"url": _issue_url("155")}},
+    }
+
+
+def test_bulleted_text_chunks_and_relinks_long_reference_segment():
+    long_repo = "r" * (RICH_TEXT_LIMIT + 10)
+    rich_text = _bulleted_text(f"{long_repo}#7")["bulleted_list_item"]["rich_text"]
+    url = f"https://github.com/{OWNER}/{long_repo}/issues/7"
+    assert [rt["text"]["link"] for rt in rich_text] == [{"url": url}] * 2
 
 
 def test_heading_2_builds_block_from_plain_text():

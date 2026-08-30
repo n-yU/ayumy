@@ -7,7 +7,7 @@ import pytest
 from report.notice import Notice
 from report.notion import NotionClient
 
-from .._builders import SINCE, UNTIL, make_repo_activity, make_stub
+from .._builders import OWNER, SINCE, UNTIL, make_repo_activity, make_stub
 
 
 @pytest.fixture
@@ -16,6 +16,7 @@ def notion_client():
         NotionClient,
         client=MagicMock(),
         database_id="db-id",
+        owner=OWNER,
         _data_source_id=None,
         _notice=Notice(),
     )

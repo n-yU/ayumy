@@ -493,6 +493,14 @@ Notion ページの本文は Summary、ステータス別セクション、Timel
 [bulleted_list_item]   PR ブロック親 + 配下 commit を `children` でネスト、merge commit / 直接 commit / Issue open / close / unmerged PR close を最上位に時系列で interleave
 ```
 
+GitHub アイテムへのリンクは PR / Issue が `#xx: Title`、commit が `{sha-prefix}: {commit message}` の形式とし、それぞれ GitHub URL でリンク化する。ページはリポジトリ単位で作られ、リポジトリ名は Repository プロパティと Name タイトルに出るため、本文の各行では省く
+
+#### Summary
+各項目は Claude が生成した文字列をそのまま載せず、インラインコード・太字・番号参照の 3 種の記法を解釈して rich_text に展開する。バッククォートで囲まれた範囲を先に取り出し、その内側の記法は解釈しない。番号参照はリポジトリ名を伴わなければページのリポジトリ、伴えばそのリポジトリへリンクし、表示するテキストは書かれたまま残す
+
+上記以外の記法は記号のまま表示される。書かせない側の担保は [Summary Generation](#summary-generation) の生成ルールに持たせる
+
+#### Status Sections
 ステータスは取得時点の state ではなく、完了時刻（PR は merge、マージされず close された PR と Issue は close）が対象日ウィンドウ内かで振り分ける。対象日より前に完了したアイテムは、セッション内での言及や close 後の更新で取得対象に入っただけであるためいずれのセクションにも載せない
 
 - Done: 対象日に完了した PR / Issue
@@ -505,6 +513,7 @@ Done セクションの各項目には状態を示す prefix を付ける。通�
 - `not_planned` で close された Issue: `⚠️ (not planned) `
 - `duplicate` で close された Issue: `⚠️ (duplicate) `
 
+#### Timeline
 Timeline は `bulleted_list_item` のネスト構造で表現する。PR 親エントリは進行中・merged を問わず `🔀 #xx: Title` の形式で表示し、その PR に紐づく非 merge commit を `children` フィールドにネストする。merge commit（PR の `merge_commit_sha` と一致する commit）は PR 配下にネストせず最上位に配置し、`🔸 sha: message` の形式で表示する。これは「PR の `close` 行は merge commit の存在で自明」という規則を反映するため、merge commit 自体が PR close のマーカーとして機能する
 
 最上位に置く要素の種類と表記は以下の通り
@@ -517,8 +526,6 @@ Timeline は `bulleted_list_item` のネスト構造で表現する。PR 親エ�
 - merge せず close された PR: `⚠️ close: #xx: Title`（PR 親エントリとは別に top-level に配置）
 
 並び順は対象日ウィンドウ内における最初の活動時刻を基準に、PR ブロックと他のトップレベル要素を時系列で interleave する。PR ブロックの並び順キーは PR open（in range の場合）・最初の配下 commit・merge 時刻のうち最も早いものを採る。同時刻のタイブレークは PR 親エントリ → 同じ時刻の merge commit の順とする
-
-GitHub アイテムへのリンクは PR/Issue が `#xx: Title`、commit が `{sha-prefix}: {commit message}` の形式とし、それぞれ GitHub URL でリンク化する。ページはリポジトリ単位で作られ、リポジトリ名は Repository プロパティと Name タイトルに出るため、本文の各行では省く
 
 ### Tag Classification
 タグは Claude API の要約生成時に自動判定させる。タグ名と判定基準（description）はコード側（[lambda/report/tags.py](../lambda/report/tags.py)）で single source of truth として管理する。Notion DB の multi-select オプションには description フィールドがないため、コード側に置いたうえで Claude API のシステムプロンプトに注入する
