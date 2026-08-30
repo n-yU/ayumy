@@ -64,7 +64,9 @@ class TestBuildProperties:
             "summary": ["要点1", "要点2"],
             "tags": ["CI/CD", "Testing"],
         }
-        props = notion_client._build_properties(TARGET_DATE, repo_summary, 5, 2, 1, 3)
+        props = notion_client._build_properties(
+            TARGET_DATE, repo_summary, 5, 2, 1, 3, 4
+        )
 
         assert props["Name"]["title"][0]["text"]["content"] == f"26-03-28: {REPO}"
         assert props["Date"]["date"]["start"] == "2026-03-28"
@@ -77,6 +79,7 @@ class TestBuildProperties:
         assert props["Merged"]["number"] == 2
         assert props["Closed"]["number"] == 1
         assert props["Sessions"]["number"] == 3
+        assert props["Regens"]["number"] == 4
         assert re.fullmatch(
             r"\d+\.\d+\.\d+", props["Version"]["rich_text"][0]["text"]["content"]
         )
@@ -505,16 +508,65 @@ class TestCreatePage:
             0,
             0,
             0,
+            0,
         )
 
         kwargs = notion_client.client.pages.create.call_args.kwargs
         assert kwargs["icon"] == _page_icon(REPO)
 
 
+def _queried_page(page_id: str, repo: str | None, regens: int | None) -> dict:
+    properties: dict = {"Regens": {"number": regens}}
+    if repo is not None:
+        properties["Repository"] = {"select": {"name": repo}}
+    return {"id": page_id, "properties": properties}
+
+
+@pytest.fixture
+def archiver(notion_client):
+    """Return a client whose data source query yields the given already-recorded pages."""
+
+    def _archive(*pages):
+        notion_client._data_source_id = "ds-id"
+        notion_client.client.data_sources.query.return_value = {"results": list(pages)}
+        return notion_client._archive_existing_pages(TARGET_DATE)
+
+    return _archive
+
+
+class TestArchiveExistingPages:
+    def test_archives_every_page_recorded_for_the_date(self, archiver, notion_client):
+        archiver(
+            _queried_page("page1", REPO, 0),
+            _queried_page("page2", "other-repo", 0),
+        )
+
+        archived = [
+            call.kwargs["page_id"]
+            for call in notion_client.client.pages.update.call_args_list
+        ]
+        assert archived == ["page1", "page2"]
+
+    def test_increments_the_count_carried_from_each_repository(self, archiver):
+        assert archiver(
+            _queried_page("page1", REPO, 2),
+            _queried_page("page2", "other-repo", 0),
+        ) == {REPO: 3, "other-repo": 1}
+
+    def test_counts_pages_predating_the_property_as_never_rebuilt(self, archiver):
+        assert archiver(_queried_page("page1", REPO, None)) == {REPO: 1}
+
+    def test_skips_pages_without_a_repository(self, archiver):
+        assert archiver(_queried_page("page1", None, 3)) == {}
+
+    def test_carries_nothing_when_the_date_has_no_pages(self, archiver):
+        assert archiver() == {}
+
+
 @pytest.fixture
 def page_creator(notion_client):
     """Return a client whose Notion-facing page calls are stubbed out."""
-    notion_client._archive_existing_pages = MagicMock(return_value=0)
+    notion_client._archive_existing_pages = MagicMock(return_value={})
     notion_client.create_page = MagicMock(return_value="https://notion.so/page1")
     return notion_client
 
@@ -576,3 +628,23 @@ class TestCreateReportPagesWiring:
         args = page_creator.create_page.call_args[0]
         # Signature: ..., since, until, commits, prs_merged, issues_closed, sessions
         assert args[5:9] == (1, 1, 1, 0)
+
+    def test_records_the_count_carried_from_the_archived_page(self, page_creator):
+        page_creator._archive_existing_pages.return_value = {REPO: 3}
+
+        page_creator.create_report_pages(
+            TARGET_DATE, SINCE, UNTIL, REPORT, make_github(), SessionActivity({})
+        )
+
+        assert page_creator.create_page.call_args[0][9] == 3
+
+    def test_records_a_first_build_for_repositories_without_an_archived_page(
+        self, page_creator
+    ):
+        page_creator._archive_existing_pages.return_value = {"other-repo": 5}
+
+        page_creator.create_report_pages(
+            TARGET_DATE, SINCE, UNTIL, REPORT, make_github(), SessionActivity({})
+        )
+
+        assert page_creator.create_page.call_args[0][9] == 0
