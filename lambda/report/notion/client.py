@@ -24,10 +24,11 @@ class NotionClient:
     """Client for writing daily report pages to a Notion database."""
 
     def __init__(
-        self, token: str, database_id: str, notice: Notice | None = None
+        self, token: str, database_id: str, owner: str, notice: Notice | None = None
     ) -> None:
         self.client = Client(auth=token)
         self.database_id = database_id
+        self.owner = owner  # Resolves number references in summaries to GitHub URLs
         self._data_source_id: str | None = None
         self._notice = notice or Notice()
 
@@ -245,7 +246,7 @@ class NotionClient:
 
         children.append(heading_2("Summary"))
         for item in repo_summary["summary"]:
-            children.append(bulleted_text(item))
+            children.append(bulleted_text(item, self.owner, repo_summary["name"]))
 
         children.extend(self._build_status_sections(repo_activity, since, until))
         children.extend(self._build_timeline_section(repo_activity, since, until))

@@ -452,6 +452,18 @@ class TestBuildChildren:
         assert _headings(children) == ["Summary", "Done", "TODO", "Timeline"]
         assert _texts(children)[:2] == ["point one", "point two"]
 
+    def test_summary_number_reference_links_to_page_repository(self, notion_client):
+        repo_summary = {"name": REPO, "summary": ["マージ #155"], "tags": []}
+
+        children = notion_client._build_children(
+            repo_summary, make_repo_activity(), SINCE, UNTIL
+        )
+
+        rich_text = children[1]["bulleted_list_item"]["rich_text"]
+        assert rich_text[-1]["text"]["link"] == {
+            "url": f"https://github.com/{REPO_FULL_NAME}/issues/155"
+        }
+
     def test_renders_only_summary_when_no_activity(self, notion_client):
         repo_summary = {"name": REPO, "summary": ["only point"], "tags": []}
 

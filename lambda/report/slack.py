@@ -11,6 +11,7 @@ from config import CONFIG
 
 from . import JST, ReportSummary
 from .cost import CostDisplay
+from .inline import parse_inline
 from .notice import Notice
 from .summarizer import ValidationResult
 
@@ -27,8 +28,27 @@ def _truncate_headline(headline: str, limit: int = CONFIG.slack.headline_max) ->
 
 
 def _escape_mrkdwn(text: str) -> str:
-    """Disable mrkdwn markup in `text`; all Slack specials (`<!channel>`, `<@U...>`, `<url|text>`) start with `<`, so HTML-entity-escaping `&`/`<`/`>` is sufficient."""
+    """Neutralize the Slack special sequences (`<!channel>`, `<@U...>`, `<url|text>`) in `text`; they all start with `<`, so HTML-entity-escaping `&`/`<`/`>` is sufficient."""
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _to_mrkdwn(text: str, owner: str, repo: str) -> str:
+    """Render the inline notation of a summary line as mrkdwn.
+
+    Escaping runs first so Slack specials in the generated text stay neutralized.
+    Backticks pass through unchanged because they already mean inline code in mrkdwn.
+    """
+    parts = []
+    for segment in parse_inline(_escape_mrkdwn(text), owner, repo):
+        if segment.code:
+            parts.append(f"`{segment.text}`")
+        elif segment.bold:
+            parts.append(f"*{segment.text}*")
+        elif segment.url:
+            parts.append(f"<{segment.url}|{segment.text}>")
+        else:
+            parts.append(segment.text)
+    return "".join(parts)
 
 
 def _divider() -> dict:
@@ -156,11 +176,13 @@ class SlackClient:
         pages: list[tuple[str, str]],
         session_only_repos: list[str] | None = None,
         *,
+        owner: str,
         is_backfill: bool = False,
     ) -> None:
         """Queue the daily report section for `target_date`.
 
         `session_only_repos` are repos that had Claude Code sessions but no GitHub activity; they were excluded from the Claude summary input and get surfaced here as a context row.
+        `owner` resolves the number references in each headline to GitHub URLs.
         """
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
 
@@ -172,7 +194,7 @@ class SlackClient:
                 raw_headline = repo["summary"][0] if repo and repo["summary"] else ""
                 # Collapse newlines so a multi-line headline cannot break the one-line-per-repo layout of the Slack section.
                 raw_headline = raw_headline.replace("\n", " ").replace("\r", " ")
-                headline = _escape_mrkdwn(_truncate_headline(raw_headline))
+                headline = _to_mrkdwn(_truncate_headline(raw_headline), owner, name)
                 link = f"<{url}|{date_str}: {name}>"
                 page_lines.append(f"{link} — {headline}" if headline else link)
 

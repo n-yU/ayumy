@@ -7,24 +7,12 @@ import pytest
 from slack_sdk.errors import SlackApiError
 
 from config import CONFIG
-from report import JST
+from report import JST, slack
 from report.cost import CostDisplay
 from report.notice import Notice, NoticeSource
-from report.slack import (
-    BLOCKS_MAX,
-    SECTION_TEXT_MAX,
-    SlackClient,
-    _chunk_blocks,
-    _context_block,
-    _divider,
-    _escape_mrkdwn,
-    _header_block,
-    _pack_messages,
-    _section_block,
-)
 from report.summarizer import ValidationResult
 
-from ._builders import TARGET_DATE, make_stub
+from ._builders import OWNER, TARGET_DATE, make_stub
 
 CHANNEL = "C0TEST"
 FIRST_TS = "1700000000.000100"
@@ -36,9 +24,9 @@ DAYS_IN_MARCH = 31
 
 
 @pytest.fixture
-def slack_client():
-    client = make_stub(
-        SlackClient,
+def client():
+    stub = make_stub(
+        slack.SlackClient,
         client=MagicMock(),
         channel=CHANNEL,
         is_manual=False,
@@ -46,22 +34,22 @@ def slack_client():
         _fallback_parts=[],
         parent_ts=None,
     )
-    client.client.chat_postMessage.return_value = {"ok": True, "ts": FIRST_TS}
+    stub.client.chat_postMessage.return_value = {"ok": True, "ts": FIRST_TS}
+    return stub
+
+
+@pytest.fixture
+def manual_client(client):
+    """Return a client for a manual run, the state that adds `[manual]` to report headers."""
+    client.is_manual = True
     return client
 
 
 @pytest.fixture
-def manual_client(slack_client):
-    """Return a client for a manual run, the state that adds `[manual]` to report headers."""
-    slack_client.is_manual = True
-    return slack_client
-
-
-@pytest.fixture
-def threaded_client(slack_client):
+def threaded_client(client):
     """Return a client that already has a parent message, the state notice replies require."""
-    slack_client.parent_ts = FIRST_TS
-    return slack_client
+    client.parent_ts = FIRST_TS
+    return client
 
 
 def _get_send_kwargs(client):
@@ -120,13 +108,13 @@ def _repo(name, summary=None):
 
 
 class TestNotify:
-    def test_sends_report_with_pages(self, slack_client):
+    def test_sends_report_with_pages(self, client):
         report = {"repositories": [_repo("my-repo", ["主要な作業を実施"])]}
         pages = [("my-repo", "https://notion.so/page1")]
-        slack_client.notify(TARGET_DATE, report, pages)
-        slack_client.flush()
+        client.notify(TARGET_DATE, report, pages, owner=OWNER)
+        client.flush()
 
-        kwargs = _get_send_kwargs(slack_client)
+        kwargs = _get_send_kwargs(client)
         text = _blocks_text(kwargs["blocks"])
         assert "2026-03-28" in text
         assert (
@@ -134,41 +122,49 @@ class TestNotify:
         )
         assert kwargs["text"]  # fallback text exists
 
-    def test_sends_no_pages_message(self, slack_client):
-        slack_client.notify(TARGET_DATE, {"repositories": []}, [])
-        slack_client.flush()
+    def test_sends_no_pages_message(self, client):
+        client.notify(TARGET_DATE, {"repositories": []}, [], owner=OWNER)
+        client.flush()
 
-        text = _blocks_text(_get_send_kwargs(slack_client)["blocks"])
+        text = _blocks_text(_get_send_kwargs(client)["blocks"])
         assert "No pages created" in text
 
-    def test_includes_session_only_repos(self, slack_client):
+    def test_includes_session_only_repos(self, client):
         report = {"repositories": [_repo("repo", ["headline"])]}
-        slack_client.notify(
-            TARGET_DATE, report, [("repo", PAGE_URL)], session_only_repos=["notes-repo"]
+        client.notify(
+            TARGET_DATE,
+            report,
+            [("repo", PAGE_URL)],
+            session_only_repos=["notes-repo"],
+            owner=OWNER,
         )
-        slack_client.flush()
+        client.flush()
 
-        text = _blocks_text(_get_send_kwargs(slack_client)["blocks"])
+        text = _blocks_text(_get_send_kwargs(client)["blocks"])
         assert "📓 Session-only: notes-repo" in text
 
-    def test_session_only_repos_with_no_pages(self, slack_client):
-        slack_client.notify(
-            TARGET_DATE, {"repositories": []}, [], session_only_repos=["notes-repo"]
+    def test_session_only_repos_with_no_pages(self, client):
+        client.notify(
+            TARGET_DATE,
+            {"repositories": []},
+            [],
+            session_only_repos=["notes-repo"],
+            owner=OWNER,
         )
-        slack_client.flush()
+        client.flush()
 
-        text = _blocks_text(_get_send_kwargs(slack_client)["blocks"])
+        text = _blocks_text(_get_send_kwargs(client)["blocks"])
         assert "📓 Session-only: notes-repo" in text
 
-    def test_page_line_omits_dash_when_no_headline(self, slack_client):
+    def test_page_line_omits_dash_when_no_headline(self, client):
         report = {"repositories": [_repo("repo")]}
-        slack_client.notify(TARGET_DATE, report, [("repo", PAGE_URL)])
-        slack_client.flush()
+        client.notify(TARGET_DATE, report, [("repo", PAGE_URL)], owner=OWNER)
+        client.flush()
 
-        blocks = _get_send_kwargs(slack_client)["blocks"]
+        blocks = _get_send_kwargs(client)["blocks"]
         assert blocks[1]["text"]["text"] == f"<{PAGE_URL}|2026-03-28: repo>"
 
-    def test_multiple_pages_listed_with_headlines(self, slack_client):
+    def test_multiple_pages_listed_with_headlines(self, client):
         report = {
             "repositories": [
                 _repo("a", ["first headline"]),
@@ -179,45 +175,54 @@ class TestNotify:
             ("a", "https://notion.so/a"),
             ("b", "https://notion.so/b"),
         ]
-        slack_client.notify(TARGET_DATE, report, pages)
-        slack_client.flush()
+        client.notify(TARGET_DATE, report, pages, owner=OWNER)
+        client.flush()
 
-        page_text = _get_send_kwargs(slack_client)["blocks"][1]["text"]["text"]
+        page_text = _get_send_kwargs(client)["blocks"][1]["text"]["text"]
         lines = page_text.split("\n")
         assert len(lines) == 2
         assert "a> — first headline" in lines[0]
         assert "b> — second headline" in lines[1]
 
-    def test_long_headline_is_truncated(self, slack_client):
+    def test_long_headline_is_truncated(self, client):
         long_headline = "あ" * (CONFIG.slack.headline_max + 50)
         report = {"repositories": [_repo("repo", [long_headline])]}
-        slack_client.notify(TARGET_DATE, report, [("repo", PAGE_URL)])
-        slack_client.flush()
+        client.notify(TARGET_DATE, report, [("repo", PAGE_URL)], owner=OWNER)
+        client.flush()
 
-        page_text = _get_send_kwargs(slack_client)["blocks"][1]["text"]["text"]
+        page_text = _get_send_kwargs(client)["blocks"][1]["text"]["text"]
         # headline portion after " — " should be truncated to CONFIG.slack.headline_max
         headline_part = page_text.split(" — ", 1)[1]
         assert len(headline_part) == CONFIG.slack.headline_max
         assert headline_part.endswith("…")
 
-    def test_headline_newlines_are_collapsed(self, slack_client):
+    def test_headline_newlines_are_collapsed(self, client):
         headline = "first line\nsecond line\rthird line"
         report = {"repositories": [_repo("repo", [headline])]}
-        slack_client.notify(TARGET_DATE, report, [("repo", PAGE_URL)])
-        slack_client.flush()
+        client.notify(TARGET_DATE, report, [("repo", PAGE_URL)], owner=OWNER)
+        client.flush()
 
-        page_text = _get_send_kwargs(slack_client)["blocks"][1]["text"]["text"]
+        page_text = _get_send_kwargs(client)["blocks"][1]["text"]["text"]
         # A newline inside the headline would break the one-line-per-repo layout
         assert page_text.count("\n") == 0
         assert "first line second line third line" in page_text
 
-    def test_headline_special_chars_are_escaped(self, slack_client):
+    def test_headline_number_reference_links_to_page_repository(self, client):
+        report = {"repositories": [_repo("repo", ["マージ #155"])]}
+        client.notify(TARGET_DATE, report, [("repo", PAGE_URL)], owner=OWNER)
+        client.flush()
+
+        page_text = _get_send_kwargs(client)["blocks"][1]["text"]["text"]
+        url = f"https://github.com/{OWNER}/repo/issues/155"
+        assert page_text.endswith(f"— マージ <{url}|#155>")
+
+    def test_headline_special_chars_are_escaped(self, client):
         headline = "fix <!channel> & <T> generic leak"
         report = {"repositories": [_repo("repo", [headline])]}
-        slack_client.notify(TARGET_DATE, report, [("repo", PAGE_URL)])
-        slack_client.flush()
+        client.notify(TARGET_DATE, report, [("repo", PAGE_URL)], owner=OWNER)
+        client.flush()
 
-        page_text = _get_send_kwargs(slack_client)["blocks"][1]["text"]["text"]
+        page_text = _get_send_kwargs(client)["blocks"][1]["text"]["text"]
         headline_part = page_text.split(" — ", 1)[1]
         # Raw special sequences must not reach Slack as-is
         assert "<!channel>" not in headline_part
@@ -230,20 +235,38 @@ class TestNotify:
 
 class TestEscapeMrkdwn:
     def test_escapes_ampersand_and_angle_brackets(self):
-        assert _escape_mrkdwn("a & b") == "a &amp; b"
-        assert _escape_mrkdwn("<!channel>") == "&lt;!channel&gt;"
-        assert _escape_mrkdwn("<@U123>") == "&lt;@U123&gt;"
+        assert slack._escape_mrkdwn("a & b") == "a &amp; b"
+        assert slack._escape_mrkdwn("<!channel>") == "&lt;!channel&gt;"
+        assert slack._escape_mrkdwn("<@U123>") == "&lt;@U123&gt;"
 
     def test_passes_plain_text_through(self):
-        assert _escape_mrkdwn("plain text 日本語") == "plain text 日本語"
+        assert slack._escape_mrkdwn("plain text 日本語") == "plain text 日本語"
+
+
+class TestToMrkdwn:
+    def _convert(self, text):
+        return slack._to_mrkdwn(text, OWNER, "my-repo")
+
+    def test_keeps_backticks_as_mrkdwn_inline_code(self):
+        assert self._convert("`a.py` を追加") == "`a.py` を追加"
+
+    def test_converts_double_asterisk_bold_to_single(self):
+        assert self._convert("**重要** な変更") == "*重要* な変更"
+
+    def test_links_number_reference(self):
+        url = f"https://github.com/{OWNER}/my-repo/issues/155"
+        assert self._convert("マージ #155") == f"マージ <{url}|#155>"
+
+    def test_escapes_slack_specials_before_converting(self):
+        assert self._convert("<!channel> **注意**") == "&lt;!channel&gt; *注意*"
 
 
 class TestBlockPrimitives:
     def test_divider(self):
-        assert _divider() == {"type": "divider"}
+        assert slack._divider() == {"type": "divider"}
 
     def test_header_block(self):
-        assert _header_block("📝 Daily Report (2026-03-28)") == {
+        assert slack._header_block("📝 Daily Report (2026-03-28)") == {
             "type": "header",
             "text": {
                 "type": "plain_text",
@@ -252,75 +275,79 @@ class TestBlockPrimitives:
         }
 
     def test_section_block(self):
-        assert _section_block("hello") == {
+        assert slack._section_block("hello") == {
             "type": "section",
             "text": {"type": "mrkdwn", "text": "hello"},
         }
 
     def test_context_block(self):
-        assert _context_block("ctx") == {
+        assert slack._context_block("ctx") == {
             "type": "context",
             "elements": [{"type": "mrkdwn", "text": "ctx"}],
         }
 
 
 class TestAppendGroup:
-    def test_buffers_blocks_and_fallback_as_one_group(self, slack_client):
-        header = _header_block("📝 Daily Report (2026-03-28)")
-        section = _section_block("body")
-        slack_client._append_group([header, section], "1 page(s) created")
+    def test_buffers_blocks_and_fallback_as_one_group(self, client):
+        header = slack._header_block("📝 Daily Report (2026-03-28)")
+        section = slack._section_block("body")
+        client._append_group([header, section], "1 page(s) created")
 
-        assert slack_client._groups == [[header, section]]
-        assert slack_client._fallback_parts == ["1 page(s) created"]
+        assert client._groups == [[header, section]]
+        assert client._fallback_parts == ["1 page(s) created"]
 
-    def test_keeps_groups_separate(self, slack_client):
-        first = _section_block("first")
-        second = _section_block("second")
-        slack_client._append_group([first], "a")
-        slack_client._append_group([second], "b")
+    def test_keeps_groups_separate(self, client):
+        first = slack._section_block("first")
+        second = slack._section_block("second")
+        client._append_group([first], "a")
+        client._append_group([second], "b")
 
-        assert slack_client._groups == [[first], [second]]
-        assert slack_client._fallback_parts == ["a", "b"]
+        assert client._groups == [[first], [second]]
+        assert client._fallback_parts == ["a", "b"]
 
 
 class TestChunkBlocks:
     def test_returns_single_chunk_within_limit(self):
-        blocks = [_section_block(str(i)) for i in range(3)]
+        blocks = [slack._section_block(str(i)) for i in range(3)]
 
-        assert _chunk_blocks(blocks, limit=3) == [blocks]
+        assert slack._chunk_blocks(blocks, limit=3) == [blocks]
 
     def test_splits_into_chunks_of_limit(self):
-        blocks = [_section_block(str(i)) for i in range(5)]
+        blocks = [slack._section_block(str(i)) for i in range(5)]
 
-        assert _chunk_blocks(blocks, limit=2) == [blocks[:2], blocks[2:4], blocks[4:]]
+        assert slack._chunk_blocks(blocks, limit=2) == [
+            blocks[:2],
+            blocks[2:4],
+            blocks[4:],
+        ]
 
 
 class TestPackMessages:
     def test_returns_nothing_for_empty_buffer(self):
-        assert _pack_messages([], []) == []
+        assert slack._pack_messages([], []) == []
 
     def test_joins_groups_with_divider_without_leading_divider(self):
-        first = _section_block("first")
-        second = _section_block("second")
+        first = slack._section_block("first")
+        second = slack._section_block("second")
 
-        messages = _pack_messages([[first], [second]], ["a", "b"])
+        messages = slack._pack_messages([[first], [second]], ["a", "b"])
 
-        assert messages == [([first, _divider(), second], "a | b")]
+        assert messages == [([first, slack._divider(), second], "a | b")]
 
     def test_starts_new_message_when_limit_exceeded(self):
-        groups = [[_section_block(str(i))] for i in range(4)]
+        groups = [[slack._section_block(str(i))] for i in range(4)]
         fallbacks = [str(i) for i in range(4)]
 
-        messages = _pack_messages(groups, fallbacks, limit=3)
+        messages = slack._pack_messages(groups, fallbacks, limit=3)
 
         assert [len(blocks) for blocks, _ in messages] == [3, 3]
         assert [fallback for _, fallback in messages] == ["0 | 1", "2 | 3"]
 
     def test_never_splits_a_group_across_messages(self):
-        pair = [_header_block("h"), _section_block("s")]
+        pair = [slack._header_block("h"), slack._section_block("s")]
         groups = [list(pair) for _ in range(3)]
 
-        messages = _pack_messages(groups, ["a", "b", "c"], limit=4)
+        messages = slack._pack_messages(groups, ["a", "b", "c"], limit=4)
 
         assert [len(blocks) for blocks, _ in messages] == [2, 2, 2]
         for blocks, _ in messages:
@@ -328,11 +355,11 @@ class TestPackMessages:
 
 
 class TestNotifyNoActivity:
-    def test_sends_no_activity_message(self, slack_client):
-        slack_client.notify_no_activity(TARGET_DATE)
-        slack_client.flush()
+    def test_sends_no_activity_message(self, client):
+        client.notify_no_activity(TARGET_DATE)
+        client.flush()
 
-        kwargs = _get_send_kwargs(slack_client)
+        kwargs = _get_send_kwargs(client)
         text = _blocks_text(kwargs["blocks"])
         assert "2026-03-28" in text
         assert "No activity" in text
@@ -340,11 +367,11 @@ class TestNotifyNoActivity:
 
 
 class TestNotifySessionOnly:
-    def test_sends_session_only_message(self, slack_client):
-        slack_client.notify_session_only(TARGET_DATE, ["repo-a", "repo-b"])
-        slack_client.flush()
+    def test_sends_session_only_message(self, client):
+        client.notify_session_only(TARGET_DATE, ["repo-a", "repo-b"])
+        client.flush()
 
-        kwargs = _get_send_kwargs(slack_client)
+        kwargs = _get_send_kwargs(client)
         text = _blocks_text(kwargs["blocks"])
         assert "2026-03-28" in text
         assert "Session-only: repo-a, repo-b" in text
@@ -398,25 +425,25 @@ class TestNotifyMetrics:
         ],
     )
     def test_renders_metrics_caption(
-        self, slack_client, elapsed, peak_memory, limits, expected, absent
+        self, client, elapsed, peak_memory, limits, expected, absent
     ):
-        slack_client.notify_metrics(elapsed, peak_memory, VERSION, **limits)
-        slack_client.flush()
+        client.notify_metrics(elapsed, peak_memory, VERSION, **limits)
+        client.flush()
 
-        text = _blocks_text(_get_send_kwargs(slack_client)["blocks"])
+        text = _blocks_text(_get_send_kwargs(client)["blocks"])
         for fragment in expected:
             assert fragment in text
         for fragment in absent:
             assert fragment not in text
 
-    def test_fallback_text_includes_version_and_timeout(self, slack_client):
-        slack_client.notify_metrics(
+    def test_fallback_text_includes_version_and_timeout(self, client):
+        client.notify_metrics(
             45.0, 128.0, VERSION, memory_limit_mb=256, timeout_seconds=300
         )
-        slack_client.flush()
+        client.flush()
 
         # `text` kwarg passed to chat_postMessage() carries the fallback string
-        fallback = _get_send_kwargs(slack_client)["text"]
+        fallback = _get_send_kwargs(client)["text"]
         assert f"v{VERSION}" in fallback
         assert "45.0 / 300s (15%)" in fallback
         assert "128 / 256 MB (50%)" in fallback
@@ -450,23 +477,23 @@ class TestNotifyMetricsWithCost:
         ],
     )
     def test_renders_cost_caption(
-        self, slack_client, spend_change_pct, call_count_change_pct, expected, absent
+        self, client, spend_change_pct, call_count_change_pct, expected, absent
     ):
         cost = _cost(spend_change_pct, call_count_change_pct)
-        slack_client.notify_metrics(1.0, 100.0, VERSION, cost=cost)
-        slack_client.flush()
+        client.notify_metrics(1.0, 100.0, VERSION, cost=cost)
+        client.flush()
 
-        text = _blocks_text(_get_send_kwargs(slack_client)["blocks"])
+        text = _blocks_text(_get_send_kwargs(client)["blocks"])
         for fragment in expected:
             assert fragment in text
         for fragment in absent:
             assert fragment not in text
 
-    def test_metrics_and_cost_share_single_context_block(self, slack_client):
-        slack_client.notify_metrics(1.0, 100.0, VERSION, cost=_cost())
-        slack_client.flush()
+    def test_metrics_and_cost_share_single_context_block(self, client):
+        client.notify_metrics(1.0, 100.0, VERSION, cost=_cost())
+        client.flush()
 
-        blocks = _get_send_kwargs(slack_client)["blocks"]
+        blocks = _get_send_kwargs(client)["blocks"]
         assert [b["type"] for b in blocks] == ["context"]
         # All metrics and cost fields share the same caption line
         caption = blocks[0]["elements"][0]["text"]
@@ -474,39 +501,39 @@ class TestNotifyMetricsWithCost:
         assert "🧾 $0.0340" in caption
         assert "💰 MTD" in caption
 
-    def test_fallback_text_includes_cost(self, slack_client):
-        slack_client.notify_metrics(1.0, 100.0, VERSION, cost=_cost())
-        slack_client.flush()
+    def test_fallback_text_includes_cost(self, client):
+        client.notify_metrics(1.0, 100.0, VERSION, cost=_cost())
+        client.flush()
 
-        fallback = _get_send_kwargs(slack_client)["text"]
+        fallback = _get_send_kwargs(client)["text"]
         assert "run $0.0340" in fallback
         assert "MTD $1.23 (MoM +8%)" in fallback
 
-    def test_cost_is_omitted_when_none(self, slack_client):
-        slack_client.notify_metrics(1.0, 100.0, VERSION)
-        slack_client.flush()
+    def test_cost_is_omitted_when_none(self, client):
+        client.notify_metrics(1.0, 100.0, VERSION)
+        client.flush()
 
-        text = _blocks_text(_get_send_kwargs(slack_client)["blocks"])
+        text = _blocks_text(_get_send_kwargs(client)["blocks"])
         assert "🧾" not in text
         assert "💰" not in text
         assert "🔁" not in text
 
 
 class TestNotifyValidationErrors:
-    def test_sends_invalid_tags(self, slack_client):
-        slack_client.notify_validation_errors(TARGET_DATE, _invalid_tags_result())
-        slack_client.flush()
+    def test_sends_invalid_tags(self, client):
+        client.notify_validation_errors(TARGET_DATE, _invalid_tags_result())
+        client.flush()
 
-        text = _blocks_text(_get_send_kwargs(slack_client)["blocks"])
+        text = _blocks_text(_get_send_kwargs(client)["blocks"])
         assert "BadTag" in text
 
 
 class TestNotifyError:
-    def test_sends_error_message(self, slack_client):
-        slack_client.notify_error(TARGET_DATE, RuntimeError("something went wrong"))
-        slack_client.flush()
+    def test_sends_error_message(self, client):
+        client.notify_error(TARGET_DATE, RuntimeError("something went wrong"))
+        client.flush()
 
-        text = _blocks_text(_get_send_kwargs(slack_client)["blocks"])
+        text = _blocks_text(_get_send_kwargs(client)["blocks"])
         assert "something went wrong" in text
 
 
@@ -529,14 +556,12 @@ class TestRunLabels:
             ),
         ],
     )
-    def test_header_marks_run_origin(
-        self, slack_client, is_manual, is_backfill, expected
-    ):
-        slack_client.is_manual = is_manual
-        slack_client.notify_no_activity(TARGET_DATE, is_backfill=is_backfill)
-        slack_client.flush()
+    def test_header_marks_run_origin(self, client, is_manual, is_backfill, expected):
+        client.is_manual = is_manual
+        client.notify_no_activity(TARGET_DATE, is_backfill=is_backfill)
+        client.flush()
 
-        kwargs = _get_send_kwargs(slack_client)
+        kwargs = _get_send_kwargs(client)
         assert kwargs["blocks"][0]["text"]["text"] == expected
         assert kwargs["text"].startswith(expected)
 
@@ -545,7 +570,7 @@ class TestRunLabels:
         [
             pytest.param(
                 lambda c: c.notify(
-                    TARGET_DATE, {"repositories": []}, [], is_backfill=True
+                    TARGET_DATE, {"repositories": []}, [], owner=OWNER, is_backfill=True
                 ),
                 id="report",
             ),
@@ -591,6 +616,7 @@ class TestBlockStructure:
                     {"repositories": [_repo("repo", ["h"])]},
                     [("repo", PAGE_URL)],
                     session_only_repos=["notes-repo"],
+                    owner=OWNER,
                 ),
                 ["header", "section", "context"],
                 "📝",
@@ -631,12 +657,12 @@ class TestBlockStructure:
         ],
     )
     def test_matches_notification_kind(
-        self, slack_client, queue, expected_types, expected_emoji
+        self, client, queue, expected_types, expected_emoji
     ):
-        queue(slack_client)
-        slack_client.flush()
+        queue(client)
+        client.flush()
 
-        blocks = _get_send_kwargs(slack_client)["blocks"]
+        blocks = _get_send_kwargs(client)["blocks"]
         assert [b["type"] for b in blocks] == expected_types
         if expected_emoji is not None:
             assert expected_emoji in blocks[0]["text"]["text"]
@@ -648,93 +674,93 @@ class TestBlockStructure:
 
 
 class TestFlush:
-    def test_sends_combined_message(self, slack_client):
+    def test_sends_combined_message(self, client):
         report = {"summary": "summary", "repositories": []}
-        slack_client.notify(TARGET_DATE, report, [("repo", PAGE_URL)])
-        slack_client.notify_metrics(10.0, 100.0, VERSION, memory_limit_mb=512)
-        slack_client.flush()
+        client.notify(TARGET_DATE, report, [("repo", PAGE_URL)], owner=OWNER)
+        client.notify_metrics(10.0, 100.0, VERSION, memory_limit_mb=512)
+        client.flush()
 
         # Single send call
-        assert slack_client.client.chat_postMessage.call_count == 1
-        blocks = _get_send_kwargs(slack_client)["blocks"]
+        assert client.client.chat_postMessage.call_count == 1
+        blocks = _get_send_kwargs(client)["blocks"]
         text = _blocks_text(blocks)
         assert "Daily Report" in text
         assert "10.0s" in text
         # Divider between sections
         assert any(b["type"] == "divider" for b in blocks)
 
-    def test_does_not_send_when_empty(self, slack_client):
-        slack_client.flush()
+    def test_does_not_send_when_empty(self, client):
+        client.flush()
 
-        slack_client.client.chat_postMessage.assert_not_called()
+        client.client.chat_postMessage.assert_not_called()
 
-    def test_clears_buffer_after_flush(self, slack_client):
-        slack_client.notify_error(TARGET_DATE, RuntimeError("fail"))
-        slack_client.flush()
-        slack_client.flush()
+    def test_clears_buffer_after_flush(self, client):
+        client.notify_error(TARGET_DATE, RuntimeError("fail"))
+        client.flush()
+        client.flush()
 
-        assert slack_client.client.chat_postMessage.call_count == 1
+        assert client.client.chat_postMessage.call_count == 1
 
-    def test_captures_parent_ts_after_send(self, slack_client):
-        slack_client.notify_error(TARGET_DATE, RuntimeError("fail"))
-        slack_client.flush()
+    def test_captures_parent_ts_after_send(self, client):
+        client.notify_error(TARGET_DATE, RuntimeError("fail"))
+        client.flush()
 
-        assert slack_client.parent_ts == FIRST_TS
+        assert client.parent_ts == FIRST_TS
 
-    def test_parent_ts_tracks_latest_top_level_message(self, slack_client):
-        slack_client.notify_error(TARGET_DATE, RuntimeError("first"))
-        slack_client.flush()
+    def test_parent_ts_tracks_latest_top_level_message(self, client):
+        client.notify_error(TARGET_DATE, RuntimeError("first"))
+        client.flush()
 
-        slack_client.client.chat_postMessage.return_value = {
+        client.client.chat_postMessage.return_value = {
             "ok": True,
             "ts": SECOND_TS,
         }
-        slack_client.notify_error(TARGET_DATE, RuntimeError("second"))
-        slack_client.flush()
+        client.notify_error(TARGET_DATE, RuntimeError("second"))
+        client.flush()
 
-        assert slack_client.parent_ts == SECOND_TS
+        assert client.parent_ts == SECOND_TS
 
-    def test_parent_ts_points_at_last_message_when_split(self, slack_client):
+    def test_parent_ts_points_at_last_message_when_split(self, client):
         timestamps = iter([FIRST_TS, SECOND_TS])
-        slack_client.client.chat_postMessage.side_effect = lambda **_: {
+        client.client.chat_postMessage.side_effect = lambda **_: {
             "ok": True,
             "ts": next(timestamps),
         }
-        _queue_every_day(slack_client)
-        slack_client.flush()
+        _queue_every_day(client)
+        client.flush()
 
-        assert slack_client.client.chat_postMessage.call_count == 2
-        assert slack_client.parent_ts == SECOND_TS
+        assert client.client.chat_postMessage.call_count == 2
+        assert client.parent_ts == SECOND_TS
 
-    def test_sends_to_configured_channel(self, slack_client):
-        slack_client.notify_error(TARGET_DATE, RuntimeError("fail"))
-        slack_client.flush()
+    def test_sends_to_configured_channel(self, client):
+        client.notify_error(TARGET_DATE, RuntimeError("fail"))
+        client.flush()
 
-        assert _get_send_kwargs(slack_client)["channel"] == CHANNEL
+        assert _get_send_kwargs(client)["channel"] == CHANNEL
 
-    def test_suppresses_slack_sdk_errors(self, slack_client):
-        slack_client.client.chat_postMessage.side_effect = SlackApiError(
+    def test_suppresses_slack_sdk_errors(self, client):
+        client.client.chat_postMessage.side_effect = SlackApiError(
             "rate_limited", response={"error": "rate_limited"}
         )
-        slack_client.notify_error(TARGET_DATE, RuntimeError("fail"))
-        slack_client.flush()
+        client.notify_error(TARGET_DATE, RuntimeError("fail"))
+        client.flush()
 
-    def test_propagates_unrelated_errors(self, slack_client):
-        slack_client.client.chat_postMessage.side_effect = RuntimeError("boom")
-        slack_client.notify_error(TARGET_DATE, RuntimeError("fail"))
+    def test_propagates_unrelated_errors(self, client):
+        client.client.chat_postMessage.side_effect = RuntimeError("boom")
+        client.notify_error(TARGET_DATE, RuntimeError("fail"))
 
         with pytest.raises(RuntimeError, match="boom"):
-            slack_client.flush()
+            client.flush()
 
-    def test_splits_into_multiple_messages_over_block_limit(self, slack_client):
-        _queue_every_day(slack_client)
-        slack_client.notify_metrics(10.0, 100.0, VERSION, memory_limit_mb=512)
-        slack_client.flush()
+    def test_splits_into_multiple_messages_over_block_limit(self, client):
+        _queue_every_day(client)
+        client.notify_metrics(10.0, 100.0, VERSION, memory_limit_mb=512)
+        client.flush()
 
-        sent = _all_send_kwargs(slack_client)
+        sent = _all_send_kwargs(client)
         assert len(sent) > 1
         for kwargs in sent:
-            assert len(kwargs["blocks"]) <= BLOCKS_MAX
+            assert len(kwargs["blocks"]) <= slack.BLOCKS_MAX
             assert kwargs["blocks"][0]["type"] != "divider"
         headers = [
             block
@@ -744,27 +770,28 @@ class TestFlush:
         ]
         assert len(headers) == DAYS_IN_MARCH
 
-    def test_splits_fallback_text_per_message(self, slack_client):
-        _queue_every_day(slack_client)
-        slack_client.flush()
+    def test_splits_fallback_text_per_message(self, client):
+        _queue_every_day(client)
+        client.flush()
 
-        sent = _all_send_kwargs(slack_client)
+        sent = _all_send_kwargs(client)
         assert len(sent) > 1
         assert "2026-03-01" in sent[0]["text"]
         assert "2026-03-31" not in sent[0]["text"]
         assert "2026-03-31" in sent[-1]["text"]
 
-    def test_keeps_day_blocks_in_one_message(self, slack_client):
+    def test_keeps_day_blocks_in_one_message(self, client):
         for day in range(1, DAYS_IN_MARCH + 1):
-            slack_client.notify(
+            client.notify(
                 datetime(2026, 3, day, tzinfo=JST),
                 {"summary": "s", "repositories": [_repo("repo")]},
                 [("repo", PAGE_URL)],
                 session_only_repos=["other"],
+                owner=OWNER,
             )
-        slack_client.flush()
+        client.flush()
 
-        for kwargs in _all_send_kwargs(slack_client):
+        for kwargs in _all_send_kwargs(client):
             types = [block["type"] for block in kwargs["blocks"]]
             assert types.count("header") == types.count("section")
             assert types.count("header") == types.count("context")
@@ -831,20 +858,20 @@ class TestSendNoticeThread:
         assert len(section_blocks) >= 2
         for block in section_blocks:
             text = block["text"]["text"]
-            assert len(text) <= SECTION_TEXT_MAX
+            assert len(text) <= slack.SECTION_TEXT_MAX
             assert text.startswith("*session*")
 
     def test_splits_into_multiple_replies_over_block_limit(self, threaded_client):
         notice = Notice()
         # Each title nearly fills a section, so every entry lands in its own block
-        for i in range(BLOCKS_MAX + 5):
+        for i in range(slack.BLOCKS_MAX + 5):
             notice.add(NoticeSource.SESSION, "x" * 2850, key=f"k{i}")
         threaded_client.send_notice_thread(notice)
 
         sent = _all_send_kwargs(threaded_client)
         assert len(sent) > 1
         for kwargs in sent:
-            assert len(kwargs["blocks"]) <= BLOCKS_MAX
+            assert len(kwargs["blocks"]) <= slack.BLOCKS_MAX
             assert kwargs["thread_ts"] == FIRST_TS
 
     def test_truncates_single_line_exceeding_section_limit(self, threaded_client):
@@ -857,5 +884,5 @@ class TestSendNoticeThread:
         section_blocks = [b for b in blocks if b["type"] == "section"]
         assert len(section_blocks) == 1
         text = section_blocks[0]["text"]["text"]
-        assert len(text) <= SECTION_TEXT_MAX
+        assert len(text) <= slack.SECTION_TEXT_MAX
         assert text.endswith("…")

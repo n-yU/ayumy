@@ -1,5 +1,7 @@
 """Notion block primitives: low-level rich_text / block dict builders."""
 
+from ..inline import Segment, parse_inline
+
 RICH_TEXT_LIMIT = 2000  # Notion's rich_text per-item char limit
 
 
@@ -8,6 +10,21 @@ def chunk_rich_text(text: str) -> list[dict]:
         {"type": "text", "text": {"content": text[i : i + RICH_TEXT_LIMIT]}}
         for i in range(0, len(text), RICH_TEXT_LIMIT)
     ]
+
+
+def _segment_rich_text(segment: Segment) -> list[dict]:
+    items = chunk_rich_text(segment.text)
+    for item in items:
+        if segment.url:
+            item["text"]["link"] = {"url": segment.url}
+        annotations = {}
+        if segment.code:
+            annotations["code"] = True
+        if segment.bold:
+            annotations["bold"] = True
+        if annotations:
+            item["annotations"] = annotations
+    return items
 
 
 def linked_text(content: str, url: str) -> list[dict]:
@@ -40,11 +57,14 @@ def bulleted_link(
     }
 
 
-def bulleted_text(text: str) -> dict:
+def bulleted_text(text: str, owner: str, repo: str) -> dict:
+    rich_text: list[dict] = []
+    for segment in parse_inline(text, owner, repo):
+        rich_text.extend(_segment_rich_text(segment))
     return {
         "object": "block",
         "type": "bulleted_list_item",
-        "bulleted_list_item": {"rich_text": chunk_rich_text(text)},
+        "bulleted_list_item": {"rich_text": rich_text},
     }
 
 
