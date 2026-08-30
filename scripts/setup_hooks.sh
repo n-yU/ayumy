@@ -12,14 +12,11 @@ usage() {
   cat >&"$dest" <<'USAGE'
 Usage: ayumy setup-hooks [options]
 
-Install the pre-push hook to Git repositories via symlink.
-Also removes legacy post-commit symlinks that this script previously created
-(symlinks whose readlink target matches the absolute ayumy/hooks/post-commit
-path); symlinks installed by hand with a different path representation are
-left untouched.
+Install the pre-push hook to the current repository via symlink.
+Also removes legacy post-commit symlinks created by this script;
+ones installed by hand with a different path are left untouched.
 
 Options:
-  --all <dir>   Scan immediate children of <dir> for Git repositories and install hooks
   --force       Overwrite an existing pre-push hook
   -h, --help    Show this help message
 USAGE
@@ -43,10 +40,9 @@ remove_legacy_post_commit() {
   return 0
 }
 
-# Arguments: $1 = path to .git directory
+# Arguments: $1 = path to the hooks directory Git reads
 install_hook() {
-  local git_dir="$1"
-  local hook_dir="$git_dir/hooks"
+  local hook_dir="$1"
   local hook_path="$hook_dir/pre-push"
 
   remove_legacy_post_commit "$hook_dir" || true
@@ -78,15 +74,9 @@ install_hook() {
 }
 
 force="false"
-all_dir=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --all)
-      [[ $# -lt 2 ]] && { echo "ayumy setup-hooks: --all requires a directory" >&2; exit 1; }
-      all_dir="$2"
-      shift 2
-      ;;
     --force)
       force="true"
       shift
@@ -107,55 +97,16 @@ if [[ ! -f "$HOOK_SOURCE" || ! -x "$HOOK_SOURCE" ]]; then
   exit 1
 fi
 
-if [[ -n "$all_dir" ]]; then
-  if [[ ! -d "$all_dir" ]]; then
-    echo "ayumy setup-hooks: directory not found: $all_dir" >&2
-    exit 1
-  fi
-
-  found=0
-  skipped=0
-  errors=0
-  for git_dir in "$all_dir"/*/.git; do
-    [[ -d "$git_dir" ]] || continue
-    found=$((found + 1))
-    rc=0
-    install_hook "$git_dir" || rc=$?
-    if [[ "$rc" -eq 1 ]]; then
-      skipped=$((skipped + 1))
-    elif [[ "$rc" -ge 2 ]]; then
-      errors=$((errors + 1))
-    fi
-  done
-
-  if [[ "$found" -eq 0 ]]; then
-    echo "[ayumy] no Git repositories found in: $all_dir" >&2
-    exit 1
-  fi
-  installed=$((found - skipped - errors))
-  summary="[ayumy] done: $found repos found, $installed installed, $skipped skipped"
-  [[ "$errors" -gt 0 ]] && summary="$summary, $errors failed"
-  echo "$summary"
-  if [[ "$errors" -gt 0 ]]; then
-    exit 2
-  fi
-else
-  # Install to the current directory's repository.
-  git_dir="$(git rev-parse --git-dir 2>/dev/null)" || {
-    echo "ayumy setup-hooks: not a Git repository" >&2
-    exit 1
-  }
-  # Worktrees and submodules use a .git file instead of a directory; not supported.
-  if [[ ! -d "$git_dir" ]]; then
-    echo "ayumy setup-hooks: unsupported Git layout (.git is not a directory): $git_dir" >&2
-    exit 1
-  fi
-  # Normalize to absolute path.
-  git_dir="$(cd "$git_dir" && pwd)"
-  rc=0
-  install_hook "$git_dir" || rc=$?
-  # Exit with error code for real failures; skip (rc=1) is non-fatal.
-  if [[ "$rc" -ge 2 ]]; then
-    exit "$rc"
-  fi
+# A linked worktree keeps its hooks in the common dir, so ask Git for the path instead of deriving it.
+hook_dir="$(git rev-parse --git-path hooks 2>/dev/null)" || {
+  echo "ayumy setup-hooks: not a Git repository" >&2
+  exit 1
+}
+# Normalize to absolute path via the parent, since the hooks directory itself may not exist yet.
+hook_dir="$(cd "$(dirname "$hook_dir")" && pwd)/$(basename "$hook_dir")"
+rc=0
+install_hook "$hook_dir" || rc=$?
+# Exit with error code for real failures; skip (rc=1) is non-fatal.
+if [[ "$rc" -ge 2 ]]; then
+  exit "$rc"
 fi

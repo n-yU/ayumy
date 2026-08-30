@@ -50,19 +50,7 @@ teardown() {
   [[ "$output" == *"unknown option"* ]]
 }
 
-@test "setup_hooks.sh: --all without directory is rejected" {
-  run "$SCRIPT" --all
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"--all requires a directory"* ]]
-}
-
-@test "setup_hooks.sh: --all with non-existent directory is rejected" {
-  run "$SCRIPT" --all "$TMPDIR_TEST/nope"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"directory not found"* ]]
-}
-
-# --- single-repo install (default mode) ---
+# --- single-repo install ---
 
 @test "setup_hooks.sh: installs new pre-push symlink into a fresh repo" {
   make_git_repo
@@ -107,14 +95,14 @@ teardown() {
   [[ "$output" == *"not a Git repository"* ]]
 }
 
-@test "setup_hooks.sh: .git as file (worktree/submodule layout) is rejected" {
-  local repo="$TMPDIR_TEST/repo"
-  mkdir -p "$repo"
-  echo "gitdir: /some/where" > "$repo/.git"
-  export GIT_STUB_GIT_DIR="$repo/.git"
+@test "setup_hooks.sh: installs into the hooks dir Git reports, not the worktree gitdir" {
+  local common="$TMPDIR_TEST/main/.git"
+  mkdir -p "$common/hooks" "$common/worktrees/wt/hooks"
+  export GIT_STUB_HOOKS_DIR="$common/hooks"
   run "$SCRIPT"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"unsupported Git layout"* ]]
+  [ "$status" -eq 0 ]
+  [ -L "$common/hooks/pre-push" ]
+  [ ! -e "$common/worktrees/wt/hooks/pre-push" ]
 }
 
 # --- legacy post-commit cleanup ---
@@ -136,36 +124,4 @@ teardown() {
   [[ "$output" != *"removed legacy"* ]]
   [ -L "$repo/.git/hooks/post-commit" ]
   [ "$(readlink "$repo/.git/hooks/post-commit")" = "/some/unrelated/path" ]
-}
-
-# --- --all batch install ---
-
-@test "setup_hooks.sh: --all installs hooks across multiple repos and summarizes" {
-  local root="$TMPDIR_TEST/projects"
-  mkdir -p "$root/repo1/.git" "$root/repo2/.git" "$root/repo3/.git"
-  run "$SCRIPT" --all "$root"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"3 repos found, 3 installed"* ]]
-  [ -L "$root/repo1/.git/hooks/pre-push" ]
-  [ -L "$root/repo2/.git/hooks/pre-push" ]
-  [ -L "$root/repo3/.git/hooks/pre-push" ]
-}
-
-@test "setup_hooks.sh: --all aggregates installed and skipped counts" {
-  local root="$TMPDIR_TEST/projects"
-  mkdir -p "$root/fresh/.git/hooks" "$root/blocked/.git/hooks"
-  echo "#!/bin/sh" > "$root/blocked/.git/hooks/pre-push"
-  run "$SCRIPT" --all "$root"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"2 repos found, 1 installed, 1 skipped"* ]]
-  [ -L "$root/fresh/.git/hooks/pre-push" ]
-  [ ! -L "$root/blocked/.git/hooks/pre-push" ]
-}
-
-@test "setup_hooks.sh: --all with no Git repos in directory is rejected" {
-  local root="$TMPDIR_TEST/projects"
-  mkdir -p "$root/justadir"
-  run "$SCRIPT" --all "$root"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"no Git repositories found"* ]]
 }

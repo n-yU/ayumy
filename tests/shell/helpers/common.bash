@@ -31,7 +31,7 @@ make_project() {
 make_git_repo() {
   repo="$TMPDIR_TEST/${1:-repo}"
   mkdir -p "$repo/.git/hooks"
-  export GIT_STUB_GIT_DIR="$repo/.git"
+  export GIT_STUB_HOOKS_DIR="$repo/.git/hooks"
 }
 
 # Dump status / output to stderr; surfaces on bats failure.
