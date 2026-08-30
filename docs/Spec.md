@@ -40,7 +40,7 @@ Ayumy の全要件を記す。アーキテクチャ・データフロー・外�
 - [Future Extensions](#future-extensions)
 
 ## Overview
-GitHub 上の日次開発アクティビティ（Commit, Pull Request, Issue）と Claude Code での会話記録を自動収集し、Claude API で自然言語の要約を生成したうえで、Notion データベースに記録するシステム。対象リポジトリは S3 上のsession ログから特定する
+GitHub 上の日次開発アクティビティ（Commit, Pull Request, Issue）と Claude Code での会話記録を自動収集し、Claude API で自然言語の要約を生成したうえで、Notion データベースに記録するシステム。対象リポジトリは S3 上の session ログから特定する
 
 ## Goals
 - 日々の開発作業を自動的に記録・蓄積する
@@ -202,8 +202,8 @@ sync_session.sh [--project <project-name>] [--all] [--report] [--date DATE]
 
 | Option | Behavior |
 |---|---|
-| `--project <name>` | 指定プロジェクトの差分 sessionのみ転送。`<name>` は `~/.claude/projects/` 以下のディレクトリ名（例: `-Users-username-Documents-github-repo`） |
-| `--all` | 全プロジェクトから差分 sessionを一括転送 |
+| `--project <name>` | 指定プロジェクトの差分 session のみ転送。`<name>` は `~/.claude/projects/` 以下のディレクトリ名（例: `-Users-username-Documents-github-repo`） |
+| `--all` | 全プロジェクトから差分 session を一括転送 |
 | `--report` | S3 転送後に Lambda 関数を呼び出してレポート生成を実行 |
 | `--date DATE` | 指定日または日付範囲のレポートを生成・再生成（`--report` 必須）。`YYYY-MM-DD` または `YYYY-MM-DD..YYYY-MM-DD` 形式 |
 | 引数なし | カレントディレクトリに対応するプロジェクトを自動判定 |
@@ -269,7 +269,7 @@ ayumy sync --report --date 2026-03-01..2026-03-05               # 日付範囲�
 - `target_date` は `YYYY-MM-DD` または `YYYY-MM-DD..YYYY-MM-DD` 形式。範囲指定時は各日付に対して順にレポートを生成する
 - `target_date` 指定時は backfill（未レポート日の自動検出）をスキップし、指定された日付のみを処理する
 
-対象リポジトリは S3 上のsession ログから特定する。各プロジェクトディレクトリの `.ayumy_repo` メタデータファイルからリポジトリ名を読み取り、そのリポジトリのみ `GET /repos/{owner}/{repo}` で取得する
+対象リポジトリは S3 上の session ログから特定する。各プロジェクトディレクトリの `.ayumy_repo` メタデータファイルからリポジトリ名を読み取り、そのリポジトリのみ `GET /repos/{owner}/{repo}` で取得する
 
 | Activity | Endpoint | Filter |
 |---|---|---|
