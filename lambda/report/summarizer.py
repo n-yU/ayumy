@@ -19,9 +19,11 @@ logger = logging.getLogger(__name__)
 
 TOOL_NAME = "submit_daily_report"
 _TAG_GUIDANCE = "\n".join(f"- {t.name}: {t.description}" for t in TAG_DEFINITIONS)
-# `$name` placeholders rather than `str.format`, so the braces in the prompt's own examples need no escaping
+# Template's `$` placeholders rather than `str.format`, so the braces in the prompt's own examples need no escaping
 _SYSTEM_PROMPT = Template(
-    (Path(__file__).parent / "prompts" / "summary_system.txt").read_text()
+    (Path(__file__).parent / "prompts" / "summary_system.txt").read_text(
+        encoding="utf-8"
+    )
 ).substitute(tool_name=TOOL_NAME, tag_guidance=_TAG_GUIDANCE)
 _RESPONSE_SHAPE_SCHEMA = {
     "type": "object",
