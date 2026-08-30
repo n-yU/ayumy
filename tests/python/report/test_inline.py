@@ -56,6 +56,9 @@ class TestParseInline:
     def test_leaves_markup_inside_code_span_unparsed(self):
         assert _parse("`**#12**`") == [Segment("**#12**", code=True)]
 
+    def test_leaves_backtick_inside_bold_span_literal(self):
+        assert _parse("**`a`**") == [Segment("`a`", bold=True)]
+
     def test_splits_multiple_markups_in_one_line(self):
         assert _parse("`a.py` を **修正** し #7 を close") == [
             Segment("a.py", code=True),

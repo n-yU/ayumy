@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-# Code spans come first in the alternation so backticked text is taken whole and its contents stay unparsed
+# Code spans come first in the alternation so a run starting with a backtick is taken whole and its contents stay unparsed
 _TOKEN = re.compile(
     r"`(?P<code>[^`]+)`"
     r"|\*\*(?P<bold>.+?)\*\*"
@@ -35,6 +35,7 @@ def issue_url(owner: str, repo: str, number: str) -> str:
 def parse_inline(text: str, owner: str, repo: str) -> list[Segment]:
     """Split `text` into styled runs on inline code, bold, and number references.
 
+    Runs are taken left to right and never nest, so the markup inside a code span stays literal and a backtick inside a bold span does the same.
     Bare numbers resolve against `repo`; a number written with a repository name resolves against that one.
     """
     segments: list[Segment] = []
