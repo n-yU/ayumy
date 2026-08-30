@@ -1,4 +1,5 @@
 # Setup Guide
+Ayumy を初めて動かすまでの構築手順。AWS・Notion・Slack・GitHub 側の準備、Lambda のデプロイ、クライアントマシンの設定を上から順に行う。日常の運用は [Manual.md](Manual.md) を参照
 
 ## 1. AWS CLI
 1. AWS CLI をインストール
@@ -10,7 +11,6 @@
 2. Notion にデータベースを作成し、Integration を接続
    - データベースページの URL から ID を取得: `https://www.notion.so/{database-id}?v=...`
 3. データベースに [Spec: Database Properties](Spec.md#database-properties) のプロパティを作成する。Repository / Tags の select オプションはレポート書き込み時に自動追加されるため事前作成は不要だが、配色を制御したい場合は手動で追加する（Tags の option 名はコード側 [lambda/report/tags.py](../lambda/report/tags.py) を参照）
-
 4. AWS Secrets Manager（ap-northeast-1）に登録
    - シークレットのタイプ: その他のシークレットのタイプ
    - シークレット名: `ayumy/notion-secret`
@@ -32,13 +32,13 @@
 2. `sam build && sam deploy --guided` で初回デプロイを実行
    - Stack Name: `ayumy`
    - Region: `ap-northeast-1`
-   - `NotionDatabaseId` に「2. Notion」で取得したデータベース ID を入力
-   - `SlackChannelId` に「3. Slack」で取得した channel ID を入力
+   - `NotionDatabaseId` に [2. Notion](#2-notion) で取得したデータベース ID を入力
+   - `SlackChannelId` に [3. Slack](#3-slack) で取得した channel ID を入力
    - Confirm changes before deploy: `Y`
    - Allow SAM CLI IAM role creation: `Y`
    - Disable rollback: `N`
    - Save arguments to configuration file: `Y`
-3. Outputs に表示される `ReportFunctionName` と `SessionBucketName` を控える（「7. クライアントマシン」で使用）
+3. Outputs に表示される `ReportFunctionName` と `SessionBucketName` を控える（[7. Client Machine](#7-client-machine) で使用）
 
 2回目以降のデプロイは `make lambda-deploy` のみでよい。デプロイ用 S3 バケットを変更する場合は `samconfig.toml` の `s3_bucket` を編集し、`sam deploy --no-resolve-s3` で実行する
 
@@ -60,14 +60,14 @@
    - シークレット名: `ayumy/anthropic-api-key`
    - プレーンテキストで API キーを貼り付け
 
-## 7. クライアントマシン
+## 7. Client Machine
 クライアント側のスクリプト（`scripts/`, `hooks/`, `bin/ayumy`）は macOS のみサポートする
 
 1. リポジトリをクローン: `git clone https://github.com/{user}/ayumy.git ~/ayumy`
 2. PATH を通す: `export PATH="$HOME/ayumy/bin:$PATH"`（`~/.zshrc` 等に追加）
 3. 環境変数を設定（`~/.zshrc` 等に追加）
-   - `AYUMY_S3_BUCKET`: 「4. AWS SAM」の Outputs の `SessionBucketName`
-   - `AYUMY_LAMBDA_FUNCTION`: 「4. AWS SAM」の Outputs の `ReportFunctionName`
+   - `AYUMY_S3_BUCKET`: [4. AWS SAM](#4-aws-sam) の Outputs の `SessionBucketName`
+   - `AYUMY_LAMBDA_FUNCTION`: [4. AWS SAM](#4-aws-sam) の Outputs の `ReportFunctionName`
 4. hook を設置: 対象のリポジトリごとに `ayumy setup-hooks` を実行する
-   - Notion ページのアイコンを尋ねられるので、Notion のアイコンピッカー上の名前と色を答える
+   - Notion ページのアイコンを尋ねられる。Notion のアイコンピッカー上の名前と色を答える
    - 答えた内容は `lambda/config/config.yml` に追記される。`make lambda-deploy` を実行すると反映される
