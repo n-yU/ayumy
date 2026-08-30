@@ -225,7 +225,7 @@ hook はリポジトリパスからプロジェクト名を解決し、`sync_ses
 hook の配布方法（`ayumy setup-hooks` コマンドで設置）
 
 - **コマンド設置**: 対象リポジトリで `ayumy setup-hooks` を実行
-- **手動設置**: `ln -s {AYUMY_REPO}/hooks/pre-push {REPO}/.git/hooks/pre-push`
+- **手動設置**: 対象リポジトリで `ln -s {AYUMY_REPO}/hooks/pre-push "$(git rev-parse --git-path hooks)/pre-push"` を実行
 
 `ayumy setup-hooks` は過去に同コマンドが作成した旧 `post-commit` symlink（`readlink` の target が `ayumy/hooks/post-commit` の絶対パスと一致するもの）の除去も担当する。手動 `ln` で別パス表記により設置された legacy hook は対象外で、ユーザー側で削除する必要がある
 
