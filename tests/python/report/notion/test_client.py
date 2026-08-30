@@ -5,7 +5,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from config import CONFIG
 from report import SessionActivity
+from report.notion.client import _page_icon
 
 from .._builders import (
     REPO,
@@ -473,6 +475,40 @@ class TestBuildChildren:
 
         assert _headings(children) == ["Summary"]
         assert _texts(children) == ["only point"]
+
+
+class TestPageIcon:
+    def test_uses_configured_icon_for_known_repository(self):
+        repo, icon = next(iter(CONFIG.notion.repository_icons.items()))
+        assert _page_icon(repo) == {
+            "type": "icon",
+            "icon": {"name": icon.name, "color": icon.color},
+        }
+
+    def test_falls_back_to_default_icon_for_unconfigured_repository(self):
+        default = CONFIG.notion.default_icon
+        assert _page_icon("repo-without-an-entry") == {
+            "type": "icon",
+            "icon": {"name": default.name, "color": default.color},
+        }
+
+
+class TestCreatePage:
+    def test_sends_repository_icon_with_the_page(self, notion_client):
+        notion_client.create_page(
+            TARGET_DATE,
+            {"name": REPO, "summary": [], "tags": []},
+            make_repo_activity(),
+            SINCE,
+            UNTIL,
+            0,
+            0,
+            0,
+            0,
+        )
+
+        kwargs = notion_client.client.pages.create.call_args.kwargs
+        assert kwargs["icon"] == _page_icon(REPO)
 
 
 @pytest.fixture
