@@ -349,6 +349,10 @@ GitHub アクティビティと Claude Code セッションログの両方をコ
 - **Claude Code での作業**: 上記の要点の中に Claude Code セッションでの相談・実装方針の検討内容も含めて構わない
 - PR/Issue のステータス別一覧と時系列のイベントは Notion 本文の生成時にプログラムで組み立てるため、Claude API の出力には含めない
 
+番号と識別子の書き方はシステムプロンプト（[lambda/report/summarizer.py](../lambda/report/summarizer.py)）で指定し、そちらを single source of truth とする。装飾として使わせる記法は [Page Body の Summary](#summary) が解釈するものに揃える
+
+出力がルールから外れた場合の後処理は設けない。種別の前置を機械的に削ると「その PR #155 では」のような自然な文まで削ることになり、表示が冗長になる程度の実害と釣り合わない
+
 <details>
 <summary>Summary Prompt Format</summary>
 
