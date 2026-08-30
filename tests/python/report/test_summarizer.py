@@ -51,6 +51,20 @@ class TestSystemPrompt:
             assert tag.name in _SYSTEM_PROMPT
             assert tag.description in _SYSTEM_PROMPT
 
+    @pytest.mark.parametrize(
+        "rule",
+        [
+            pytest.param("種別を置くことは", id="no_kind_prefix"),
+            pytest.param("カッコで囲まず", id="no_parenthesized_number"),
+            pytest.param("claude-config#12", id="cross_repository_number"),
+            pytest.param("PR-3 / Phase 2 / Commit 1", id="plan_identifier"),
+            pytest.param("(#180: PR-2)", id="unopened_pull_binding"),
+            pytest.param("**...**", id="allowed_decoration"),
+        ],
+    )
+    def test_states_each_notation_rule(self, rule):
+        assert rule in _SYSTEM_PROMPT
+
 
 class TestBuildPrompt:
     def test_contains_date_and_sections(self):

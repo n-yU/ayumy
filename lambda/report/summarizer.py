@@ -2,6 +2,8 @@
 
 import logging
 from datetime import datetime
+from pathlib import Path
+from string import Template
 from typing import cast
 
 import anthropic
@@ -17,27 +19,12 @@ logger = logging.getLogger(__name__)
 
 TOOL_NAME = "submit_daily_report"
 _TAG_GUIDANCE = "\n".join(f"- {t.name}: {t.description}" for t in TAG_DEFINITIONS)
-_SYSTEM_PROMPT = f"""\
-あなたは開発者の日次アクティビティを要約するアシスタントです。
-与えられた GitHub アクティビティと Claude Code セッションログをもとに、
-日本語で構造化された要約を生成し、{TOOL_NAME} ツールに渡してください。
-
-文体は常体（である調・体言止め可）で統一し、ですます調は使わないでください。
-各リポジトリの summary でこの規則を守ってください。
-
-summary は各項目を1文程度の短い箇条書きとし、2〜5項目で記述してください。
-最初の項目はそのリポジトリの最重要の要点として単独でも通じるものにしてください。
-Claude Code セッションでの作業内容（相談・実装方針の検討など）も summary に含めて構いません。
-PR/Issue の状態別一覧や時系列のイベントは別途プログラムで生成するため、summary では作業の意図や論点を中心に記述してください。
-
-Claude Code セッションのプロジェクト名は GitHub リポジトリ名と対応させてください。
-プロジェクト名からリポジトリを特定できない場合は、name を "unknown ({{プロジェクト名}})" としてください。
-無理に推測して既存のリポジトリに紐づけないでください。
-
-tags にはその日の作業内容を表す値を以下から選んでください:
-{_TAG_GUIDANCE}
-GitHub の Issue/PR ラベル（enhancement など）に引きずられず、必ず上記のいずれかを使用してください。当てはまるものがない場合は other を使用してください。
-"""
+# Template's `$` placeholders rather than `str.format`, so the braces in the prompt's own examples need no escaping
+_SYSTEM_PROMPT = Template(
+    (Path(__file__).parent / "prompts" / "summary_system.txt").read_text(
+        encoding="utf-8"
+    )
+).substitute(tool_name=TOOL_NAME, tag_guidance=_TAG_GUIDANCE)
 _RESPONSE_SHAPE_SCHEMA = {
     "type": "object",
     "required": ["repositories"],
