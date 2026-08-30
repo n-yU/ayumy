@@ -4,6 +4,9 @@ set -euo pipefail
 AYUMY_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 HOOK_SOURCE="$AYUMY_ROOT/hooks/pre-push"
 LEGACY_HOOK_SOURCE="$AYUMY_ROOT/hooks/post-commit"
+CONFIG_FILE="$AYUMY_ROOT/lambda/config/config.yml"
+ICON_COLORS="gray lightgray brown yellow orange green blue purple pink red"
+DEFAULT_ICON_COLOR="gray"
 
 usage() {
   local code="${1:-1}"
@@ -12,7 +15,8 @@ usage() {
   cat >&"$dest" <<'USAGE'
 Usage: ayumy setup-hooks [options]
 
-Install the pre-push hook to the current repository via symlink.
+Install the pre-push hook to the current repository via symlink,
+then ask for the Notion page icon unless the repository already has one.
 Also removes legacy post-commit symlinks created by this script;
 ones installed by hand with a different path are left untouched.
 
@@ -73,6 +77,43 @@ install_hook() {
   echo "[ayumy] installed: $hook_path"
 }
 
+# Arguments: $1 = repository name
+has_icon_entry() {
+  # Escape dots so a name like `a.b` cannot match `axb`
+  grep -q "^    ${1//./\\.}: {" "$CONFIG_FILE"
+}
+
+# Arguments: $1 = repository name
+# Appends one entry to the repository_icons map, which the config file keeps last for this purpose.
+configure_icon() {
+  local repo_name="$1" name color
+
+  if has_icon_entry "$repo_name"; then
+    echo "[ayumy] Notion icon already configured: $repo_name"
+    return 0
+  fi
+
+  echo "[ayumy] Notion page icon for $repo_name (name as shown in the Notion icon picker)"
+  read -r -p "  icon name: " name || true
+  if [[ -z "$name" ]]; then
+    echo "[ayumy] icon name is required; rerun 'ayumy setup-hooks' or add the entry to $CONFIG_FILE by hand" >&2
+    return 1
+  fi
+
+  read -r -p "  color [$DEFAULT_ICON_COLOR] ($ICON_COLORS): " color || true
+  color="${color:-$DEFAULT_ICON_COLOR}"
+  case " $ICON_COLORS " in
+    *" $color "*) ;;
+    *)
+      echo "[ayumy] unknown color '$color'; rerun 'ayumy setup-hooks' or add the entry to $CONFIG_FILE by hand" >&2
+      return 1
+      ;;
+  esac
+
+  printf '    %s: {name: %s, color: %s}\n' "$repo_name" "$name" "$color" >> "$CONFIG_FILE"
+  echo "[ayumy] recorded icon in $CONFIG_FILE; run 'make lambda-deploy' to apply"
+}
+
 force="false"
 
 while [[ $# -gt 0 ]]; do
@@ -109,4 +150,16 @@ install_hook "$hook_dir" || rc=$?
 # Exit with error code for real failures; skip (rc=1) is non-fatal.
 if [[ "$rc" -ge 2 ]]; then
   exit "$rc"
+fi
+
+if [[ "$rc" -eq 0 ]]; then
+  remote_url="$(git remote get-url origin 2>/dev/null || true)"
+  repo_name="$(echo "$remote_url" | sed 's|.*[:/]||; s|\.git$||')"
+  if [[ -z "$repo_name" ]]; then
+    # Reports are keyed by repository name, so a remote-less repo has nothing to attach an icon to
+    echo "[ayumy] no origin remote; skipped Notion icon setup" >&2
+  else
+    # The icon is required per repository, so an unanswered or invalid prompt fails the command
+    configure_icon "$repo_name" || exit 1
+  fi
 fi

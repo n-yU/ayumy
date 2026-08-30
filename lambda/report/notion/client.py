@@ -5,6 +5,8 @@ from datetime import datetime
 
 from notion_client import Client
 
+from config import CONFIG
+
 from .. import (
     JST,
     ReportSummary,
@@ -18,6 +20,12 @@ from ..notice import Notice, NoticeSource
 from .blocks import bulleted_link, bulleted_text, heading_2
 
 logger = logging.getLogger(__name__)
+
+
+def _page_icon(repo_name: str) -> dict:
+    """Build the native icon payload so the database listing distinguishes repositories at a glance."""
+    icon = CONFIG.notion.icon_for(repo_name)
+    return {"type": "icon", "icon": {"name": icon.name, "color": icon.color}}
 
 
 class NotionClient:
@@ -267,6 +275,7 @@ class NotionClient:
     ) -> str:
         page = self.client.pages.create(
             parent={"database_id": self.database_id},
+            icon=_page_icon(repo_summary["name"]),
             properties=self._build_properties(
                 target_date,
                 repo_summary,

@@ -31,11 +31,27 @@ class PipelineConfig:
 
 
 @dataclass(frozen=True)
+class NotionIcon:
+    name: str
+    color: str
+
+
+@dataclass(frozen=True)
+class NotionConfig:
+    default_icon: NotionIcon
+    repository_icons: dict[str, NotionIcon]
+
+    def icon_for(self, repo_name: str) -> NotionIcon:
+        return self.repository_icons.get(repo_name, self.default_icon)
+
+
+@dataclass(frozen=True)
 class Config:
     claude: ClaudeConfig
     slack: SlackConfig
     github: GitHubConfig
     pipeline: PipelineConfig
+    notion: NotionConfig
 
 
 def _load() -> Config:
@@ -47,11 +63,20 @@ def _load() -> Config:
         raise ValueError(
             f"claude.model '{claude.model}' has no entry in claude.pricing"
         )
+    notion = data["notion"]
     return Config(
         claude=claude,
         slack=SlackConfig(**data["slack"]),
         github=GitHubConfig(**data["github"]),
         pipeline=PipelineConfig(**data["pipeline"]),
+        notion=NotionConfig(
+            default_icon=NotionIcon(**notion["default_icon"]),
+            # Empty when no repository has been configured yet, which YAML reads as None
+            repository_icons={
+                repo: NotionIcon(**icon)
+                for repo, icon in (notion["repository_icons"] or {}).items()
+            },
+        ),
     )
 
 

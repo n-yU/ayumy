@@ -229,6 +229,8 @@ hook の配布方法（`ayumy setup-hooks` コマンドで設置）
 
 `ayumy setup-hooks` は過去に同コマンドが作成した旧 `post-commit` symlink（`readlink` の target が `ayumy/hooks/post-commit` の絶対パスと一致するもの）の除去も担当する。手動 `ln` で別パス表記により設置された legacy hook は対象外で、ユーザー側で削除する必要がある
 
+コマンド設置では hook を置いたあと、そのリポジトリの Notion ページアイコン（[Database Properties](#database-properties)）を対話で尋ね、設定ファイルの対応表に追記する。リポジトリを追加したときに設定が漏れないよう指定を必須とし、答えが空または色が不正なら非ゼロで終了する。既に設定があるリポジトリには尋ねず、origin remote が無いリポジトリはアイコンを紐づける先が無いため警告して飛ばす
+
 設置先は Git に hook の参照先を問い合わせて決めるため、通常のリポジトリに加えて worktree やサブモジュールでも同じ手順で設置できる。worktree で実行した場合は共通ディレクトリに設置され、同じリポジトリのすべての worktree に効く
 
 ### Manual Sync
@@ -480,6 +482,8 @@ Date × Repository 単位でページを作成する。1日に複数ページが
 | Closed | Number | 対象日にクローズした Issue 数 | `1` |
 | Sessions | Number | リポジトリのセッション数 | `3` |
 | Version | Text | レポート生成時の ayumy バージョン | `0.2.0` |
+
+ページには絵文字ではなく Notion 組み込みのアイコンを設定し、データベースの一覧でリポジトリを見分けられるようにする。アイコンと色はリポジトリごとに [lambda/config/config.yml](../lambda/config/config.yml) の `notion` セクションで指定し、エントリの無いリポジトリには既定のアイコンを当てる。名前は Notion のアイコンピッカー上の表示名を受け付け、実在しない名前は API がエラーを返す
 
 ### Page Body
 Notion ページの本文は Summary、ステータス別セクション、Timeline で構成する。Summary は Claude API が生成し、それ以外は GitHub アクティビティから決定論的に組み立てる。ブロックタイプは `heading_2` と `bulleted_list_item` を使い分け、Timeline では `bulleted_list_item` の `children` フィールドで PR 配下の commit をネストする

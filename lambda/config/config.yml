@@ -28,3 +28,10 @@ pipeline:
   max_backfill: 3
   # Maximum inclusive span (in days) for the `--date A..B` manual sync option.
   max_range_days: 31
+
+notion:
+  # Page icon for repositories with no entry below. `name` accepts any Notion icon picker name.
+  default_icon: {name: document, color: gray}
+  # Page icon per repository. Keep last in this file: `ayumy setup-hooks` appends one line per repository.
+  repository_icons:
+    ayumy: {name: walk, color: blue}
