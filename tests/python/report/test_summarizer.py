@@ -54,7 +54,7 @@ class TestSystemPrompt:
     @pytest.mark.parametrize(
         "rule",
         [
-            pytest.param("「PR #155」", id="no_kind_prefix"),
+            pytest.param("種別を置くことは", id="no_kind_prefix"),
             pytest.param("カッコで囲まず", id="no_parenthesized_number"),
             pytest.param("claude-config#12", id="cross_repository_number"),
             pytest.param("PR-3 / Phase 2 / Commit 1", id="plan_identifier"),
