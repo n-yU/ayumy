@@ -2,6 +2,8 @@
 
 import logging
 from datetime import datetime
+from pathlib import Path
+from string import Template
 from typing import cast
 
 import anthropic
@@ -17,38 +19,10 @@ logger = logging.getLogger(__name__)
 
 TOOL_NAME = "submit_daily_report"
 _TAG_GUIDANCE = "\n".join(f"- {t.name}: {t.description}" for t in TAG_DEFINITIONS)
-_SYSTEM_PROMPT = f"""\
-あなたは開発者の日次アクティビティを要約するアシスタントです。
-与えられた GitHub アクティビティと Claude Code セッションログをもとに、
-日本語で構造化された要約を生成し、{TOOL_NAME} ツールに渡してください。
-
-文体は常体（である調・体言止め可）で統一し、ですます調は使わないでください。
-各リポジトリの summary でこの規則を守ってください。
-
-summary は各項目を1文程度の短い箇条書きとし、2〜5項目で記述してください。
-最初の項目はそのリポジトリの最重要の要点として単独でも通じるものにしてください。
-Claude Code セッションでの作業内容（相談・実装方針の検討など）も summary に含めて構いません。
-PR/Issue の状態別一覧や時系列のイベントは別途プログラムで生成するため、summary では作業の意図や論点を中心に記述してください。
-
-PR / Issue の番号は #155 の形で書き、「PR #155」「Issue #123」のように種別を前置しないでください。
-番号を出典として文に添える場合もカッコで囲まず、「〜を実装・マージ #155」のように書いてください。
-対象のリポジトリ以外の番号には claude-config#12 のようにリポジトリ名を添えてください。
-
-Plan コメント内でのみ通じる識別子（PR-3 / Phase 2 / Commit 1 など）をそのまま書かないでください。
-対応する PR 番号が分かる場合はその番号に置き換え、まだ PR が存在しない場合のみ、初出時に (#180: PR-2) の形で Plan を載せた Issue の番号と紐づけ、2 回目以降は識別子だけで書いてください。
-この紐づけのカッコは上記の「カッコで囲まない」ルールの対象外です。
-どちらの番号も与えられた情報から判断できない場合は、番号を推測せず識別子も使わずに、作業内容そのものを書いてください。
-
-装飾はインラインコードの `...` と太字の **...** のみ使えます。他の記法は装飾として解釈されず記号のまま表示されます。
-
-Claude Code セッションのプロジェクト名は GitHub リポジトリ名と対応させてください。
-プロジェクト名からリポジトリを特定できない場合は、name を "unknown ({{プロジェクト名}})" としてください。
-無理に推測して既存のリポジトリに紐づけないでください。
-
-tags にはその日の作業内容を表す値を以下から選んでください:
-{_TAG_GUIDANCE}
-GitHub の Issue/PR ラベル（enhancement など）に引きずられず、必ず上記のいずれかを使用してください。当てはまるものがない場合は other を使用してください。
-"""
+# `$name` placeholders rather than `str.format`, so the braces in the prompt's own examples need no escaping
+_SYSTEM_PROMPT = Template(
+    (Path(__file__).parent / "prompts" / "summary_system.txt").read_text()
+).substitute(tool_name=TOOL_NAME, tag_guidance=_TAG_GUIDANCE)
 _RESPONSE_SHAPE_SCHEMA = {
     "type": "object",
     "required": ["repositories"],

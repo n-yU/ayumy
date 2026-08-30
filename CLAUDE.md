@@ -18,6 +18,7 @@ hooks/pre-push                       # Git hook（各リポジトリにシンボ
 lambda/handler.py                    # Lambda ハンドラ（report パッケージを呼び出すエントリポイント）
 lambda/config/                       # チューニング定数の YAML と loader（モデル ID・throttle 値等）
 lambda/report/                       # メインパッケージ: GitHub API + Claude API + Notion API
+lambda/report/prompts/               # Claude API に渡すプロンプト本文（`$name` を実行時に差し込む）
 lambda/requirements.in               # Lambda デプロイ依存の source（直接依存のみ、バージョン範囲指定）
 lambda/requirements-dev.in           # ローカル開発依存の source（boto3 等を追加、`-r requirements.in` で本体を参照）
 lambda/requirements.txt              # `requirements.in` から `uv pip compile --generate-hashes` で生成した hash 付き lock
