@@ -97,8 +97,8 @@ class TestStatusSections:
 
         assert _headings(blocks) == ["Done"]
         assert _texts(blocks) == [
-            f"✅ {REPO}#1: Merged PR",
-            f"⚠️ (not planned) {REPO}#11: Not planned",
+            "✅ #1: Merged PR",
+            "⚠️ (not planned) #11: Not planned",
         ]
         assert _urls(blocks) == [
             f"https://github.com/{REPO_FULL_NAME}/pull/1",
@@ -122,9 +122,9 @@ class TestStatusSections:
 
         assert _headings(blocks) == ["In Progress"]
         assert _texts(blocks) == [
-            f"{REPO}#3: WIP",
-            f"{REPO}#4: Ready",
-            f"{REPO}#20: Old open issue",
+            "#3: WIP",
+            "#4: Ready",
+            "#20: Old open issue",
         ]
         assert _urls(blocks) == [
             f"https://github.com/{REPO_FULL_NAME}/pull/3",
@@ -146,8 +146,8 @@ class TestStatusSections:
 
         assert _headings(blocks) == ["In Progress", "Todo"]
         assert _texts(blocks) == [
-            f"{REPO}#31: Old open issue",
-            f"{REPO}#30: New issue",
+            "#31: Old open issue",
+            "#30: New issue",
         ]
         assert _urls(blocks) == [
             f"https://github.com/{REPO_FULL_NAME}/issues/31",
@@ -183,9 +183,9 @@ class TestStatusSections:
 
         assert _headings(blocks) == ["In Progress", "Todo"]
         assert _texts(blocks) == [
-            f"{REPO}#1: Merged next day",
-            f"{REPO}#11: Created earlier, closed later",
-            f"{REPO}#10: Created in window, closed later",
+            "#1: Merged next day",
+            "#11: Created earlier, closed later",
+            "#10: Created in window, closed later",
         ]
 
     @pytest.mark.parametrize(
@@ -264,7 +264,7 @@ class TestTimelineSection:
         assert _headings(blocks) == ["Timeline"]
         # The merge commit stays at top level
         assert _texts(blocks) == [
-            f"🔀 {REPO}#1: Add feature",
+            "🔀 #1: Add feature",
             "🔸 ccc3333: Squash merge",
         ]
         assert [_text(c) for c in _children(blocks[1])] == [
@@ -306,8 +306,8 @@ class TestTimelineSection:
         )
 
         assert {_text(b): [_text(c) for c in _children(b)] for b in blocks[1:]} == {
-            f"🔀 {REPO}#2: PR two": ["🔸 aaa1111: shared commit"],
-            f"🔀 {REPO}#5: PR five": [],
+            "🔀 #2: PR two": ["🔸 aaa1111: shared commit"],
+            "🔀 #5: PR five": [],
         }
 
     def test_sorts_pull_header_before_its_merge_commit(self, build_timeline):
@@ -334,7 +334,7 @@ class TestTimelineSection:
         )
 
         assert _texts(blocks) == [
-            f"🔀 {REPO}#2: Old PR finally merged",
+            "🔀 #2: Old PR finally merged",
             "🔸 ccc3333: Squash merge",
         ]
         assert _children(blocks[1]) == []
@@ -358,8 +358,8 @@ class TestTimelineSection:
         )
 
         assert _texts(blocks) == [
-            f"🔀 {REPO}#7: Rejected",
-            f"⚠️ close: {REPO}#7: Rejected",
+            "🔀 #7: Rejected",
+            "⚠️ close: #7: Rejected",
         ]
 
     def test_renders_issue_open_and_close_lines(self, build_timeline):
@@ -380,8 +380,8 @@ class TestTimelineSection:
         )
 
         assert _texts(blocks) == [
-            f"🟢 open: {REPO}#5: New bug",
-            f"⚠️ close (not planned): {REPO}#7: Won't fix",
+            "🟢 open: #5: New bug",
+            "⚠️ close (not planned): #7: Won't fix",
         ]
 
     def test_orders_entries_chronologically_across_types(self, build_timeline):
@@ -402,8 +402,8 @@ class TestTimelineSection:
         )
 
         assert _texts(blocks) == [
-            f"🟢 open: {REPO}#5: Bug",  # 08:00
-            f"🔀 {REPO}#1: Feature",  # sorts on the 09:00 open
+            "🟢 open: #5: Bug",  # 08:00
+            "🔀 #1: Feature",  # sorts on the 09:00 open
             "🔸 ddd4444: Direct",  # 12:00
         ]
         assert [_text(c) for c in _children(blocks[2])] == [

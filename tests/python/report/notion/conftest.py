@@ -7,7 +7,7 @@ import pytest
 from report.notice import Notice
 from report.notion import NotionClient
 
-from .._builders import REPO, SINCE, UNTIL, make_repo_activity, make_stub
+from .._builders import SINCE, UNTIL, make_repo_activity, make_stub
 
 
 @pytest.fixture
@@ -27,7 +27,7 @@ def build_status(notion_client):
 
     def _build(**activity):
         return notion_client._build_status_sections(
-            REPO, make_repo_activity(**activity), SINCE, UNTIL
+            make_repo_activity(**activity), SINCE, UNTIL
         )
 
     return _build
@@ -39,7 +39,7 @@ def build_timeline(notion_client):
 
     def _build(**activity):
         return notion_client._build_timeline_section(
-            REPO, make_repo_activity(**activity), SINCE, UNTIL
+            make_repo_activity(**activity), SINCE, UNTIL
         )
 
     return _build
