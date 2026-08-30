@@ -487,7 +487,7 @@ Notion ページの本文は Summary、ステータス別セクション、Timel
 [bulleted_list_item]   対象日に完了した PR や Issue
 [heading_2]            In Progress（該当がある場合のみ）
 [bulleted_list_item]   作業中の PR や Issue（draft PR を含む）
-[heading_2]            Todo（該当がある場合のみ）
+[heading_2]            TODO（該当がある場合のみ）
 [bulleted_list_item]   対象日に新規作成された Issue（バックログ）
 [heading_2]            Timeline（該当がある場合のみ）
 [bulleted_list_item]   PR ブロック親 + 配下 commit を `children` でネスト、merge commit / 直接 commit / Issue open / close / unmerged PR close を最上位に時系列で interleave
@@ -497,7 +497,7 @@ Notion ページの本文は Summary、ステータス別セクション、Timel
 
 - Done: 対象日に完了した PR / Issue
 - In Progress: 対象日終了時点で未完了の PR（draft 含む）、対象日より前に作成された未完了 Issue
-- Todo: 対象日に新規作成され、対象日終了時点で未完了の Issue
+- TODO: 対象日に新規作成され、対象日終了時点で未完了の Issue
 
 Done セクションの各項目には状態を示す prefix を付ける。通常完了したものには `✅ `、イレギュラーな完了には `⚠️ (理由) ` を付け、後者は以下を区別する
 

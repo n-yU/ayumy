@@ -144,7 +144,7 @@ class TestStatusSections:
             ],
         )
 
-        assert _headings(blocks) == ["In Progress", "Todo"]
+        assert _headings(blocks) == ["In Progress", "TODO"]
         assert _texts(blocks) == [
             "#31: Old open issue",
             "#30: New issue",
@@ -181,7 +181,7 @@ class TestStatusSections:
             ],
         )
 
-        assert _headings(blocks) == ["In Progress", "Todo"]
+        assert _headings(blocks) == ["In Progress", "TODO"]
         assert _texts(blocks) == [
             "#1: Merged next day",
             "#11: Created earlier, closed later",
@@ -449,7 +449,7 @@ class TestBuildChildren:
             repo_summary, repo_activity, SINCE, UNTIL
         )
 
-        assert _headings(children) == ["Summary", "Done", "Todo", "Timeline"]
+        assert _headings(children) == ["Summary", "Done", "TODO", "Timeline"]
         assert _texts(children)[:2] == ["point one", "point two"]
 
     def test_renders_only_summary_when_no_activity(self, notion_client):

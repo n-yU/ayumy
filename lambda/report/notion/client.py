@@ -82,7 +82,7 @@ class NotionClient:
         since: datetime,
         until: datetime,
     ) -> list[dict]:
-        """Per 'Spec: Page Body': Done = PRs / issues completed within the window; Todo = issues still open at `until` and created in window; In Progress = remaining opens. Items completed before the window and empty sections are omitted."""
+        """Per 'Spec: Page Body': Done = PRs / issues completed within the window; TODO = issues still open at `until` and created in window; In Progress = remaining opens. Items completed before the window and empty sections are omitted."""
         done: list[tuple[str, str, str]] = []
         in_progress: list[tuple[str, str, str]] = []
         todo: list[tuple[str, str, str]] = []
@@ -113,7 +113,7 @@ class NotionClient:
         for heading, items in (
             ("Done", done),
             ("In Progress", in_progress),
-            ("Todo", todo),
+            ("TODO", todo),
         ):
             if not items:
                 continue
