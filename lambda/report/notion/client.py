@@ -28,6 +28,18 @@ def _page_icon(repo_name: str) -> dict:
     return {"type": "icon", "icon": {"name": icon.name, "color": icon.color}}
 
 
+def _queried_repository(page: dict) -> str | None:
+    """Read the repository a queried page belongs to, or None when the property is unset."""
+    select = page.get("properties", {}).get("Repository", {}).get("select")
+    return select.get("name") if select else None
+
+
+def _queried_regens(page: dict) -> int:
+    """Read how many times a queried page had been rebuilt; pages predating the property count as never rebuilt."""
+    value = page.get("properties", {}).get("Regens", {}).get("number")
+    return int(value) if value is not None else 0
+
+
 class NotionClient:
     """Client for writing daily report pages to a Notion database."""
 
@@ -66,6 +78,7 @@ class NotionClient:
         prs_merged: int,
         issues_closed: int,
         claude_sessions: int,
+        regens: int,
     ) -> dict:
         """Property payload per 'Spec: Database Properties'."""
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
@@ -80,6 +93,7 @@ class NotionClient:
             "Merged": {"number": prs_merged},
             "Closed": {"number": issues_closed},
             "Sessions": {"number": claude_sessions},
+            "Regens": {"number": regens},
             "Version": {
                 "rich_text": [{"type": "text", "text": {"content": get_version()}}]
             },
@@ -272,6 +286,7 @@ class NotionClient:
         prs_merged: int,
         issues_closed: int,
         claude_sessions: int,
+        regens: int,
     ) -> str:
         page = self.client.pages.create(
             parent={"database_id": self.database_id},
@@ -283,27 +298,40 @@ class NotionClient:
                 prs_merged,
                 issues_closed,
                 claude_sessions,
+                regens,
             ),
             children=self._build_children(repo_summary, repo_activity, since, until),
         )
 
         return page["url"]
 
-    def _archive_existing_pages(self, target_date: datetime) -> int:
-        """Archive every page already recorded for `target_date` so re-runs stay idempotent."""
+    def _archive_existing_pages(self, target_date: datetime) -> dict[str, int]:
+        """Archive every page already recorded for `target_date` so re-runs stay idempotent, returning the rebuild count to record per repository.
+
+        Archiving moves pages to the trash, which queries can no longer reach, so the counts have to be carried over here rather than looked up at creation time.
+        """
         date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
         # No pagination: daily page count won't exceed Notion's default page size (100)
         results = self.client.data_sources.query(
             data_source_id=self.data_source_id,
             filter={"property": "Date", "date": {"equals": date_str}},
         )
+        existing = results["results"]
 
-        count = 0
-        for page in results["results"]:
+        regens_by_repo: dict[str, int] = {}
+        for page in existing:
+            repo_name = _queried_repository(page)
+            if repo_name is not None:
+                # Duplicated rows would otherwise let the query order decide what gets carried
+                regens_by_repo[repo_name] = max(
+                    regens_by_repo.get(repo_name, 0), _queried_regens(page) + 1
+                )
             self.client.pages.update(page_id=page["id"], archived=True)
-            count += 1
 
-        return count
+        if existing:
+            logger.info("Archived %d existing page(s) for %s", len(existing), date_str)
+
+        return regens_by_repo
 
     def create_report_pages(
         self,
@@ -315,11 +343,7 @@ class NotionClient:
         session_activity: SessionActivity,
     ) -> list[tuple[str, str]]:
         """Create a report page for each summarized repository that has fetched activity, archiving same-date pages first to ensure re-runs stay idempotent."""
-        archived = self._archive_existing_pages(target_date)
-        if archived:
-            date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
-            logger.info("Archived %d existing page(s) for %s", archived, date_str)
-
+        regens_by_repo = self._archive_existing_pages(target_date)
         pages: list[tuple[str, str]] = []
 
         for repo_summary in report["repositories"]:
@@ -362,6 +386,7 @@ class NotionClient:
                 prs_merged,
                 issues_closed,
                 claude_sessions,
+                regens_by_repo.get(repo_name, 0),
             )
             pages.append((repo_name, url))
 

@@ -481,6 +481,8 @@ DynamoDB への書き込みが正常に完了した後、処理した JSONL フ�
 ### Database Properties
 Date × Repository 単位でページを作成する。1日に複数ページが生成される。再実行時は対象日の既存ページをアーカイブ（soft-delete）してから再作成し、冪等性を担保する。GitHub activity に存在しないリポジトリは Notion ページを作成しない
 
+アーカイブしたページはクエリから辿れなくなるため、作り直した回数はアーカイブの直前に Repository 単位で読み取り、1 を足した値を新しいページに引き継ぐ。対象日にページが無いリポジトリは初回の生成として `0` から数える
+
 | Property | Type | Description | Example |
 |---|---|---|---|
 | Name | Title | 日付とリポジトリ名 | `26-03-01: ayumy` |
@@ -491,6 +493,7 @@ Date × Repository 単位でページを作成する。1日に複数ページが
 | Merged | Number | 対象日にマージした PR 数 | `2` |
 | Closed | Number | 対象日にクローズした Issue 数 | `1` |
 | Sessions | Number | リポジトリの session 数 | `3` |
+| Regens | Number | ページを作り直した回数（初回生成は `0`） | `2` |
 | Version | Text | レポート生成時の ayumy バージョン | `0.2.0` |
 
 ページには絵文字ではなく Notion 組み込みのアイコンを設定し、データベースの一覧でリポジトリを見分けられるようにする。アイコンと色はリポジトリごとに [lambda/config/config.yml](../lambda/config/config.yml) の `notion` セクションで指定し、エントリの無いリポジトリには既定のアイコンを当てる。名前は Notion のアイコンピッカー上の表示名を受け付け、実在しない名前は API がエラーを返す
