@@ -28,7 +28,7 @@ def _truncate_headline(headline: str, limit: int = CONFIG.slack.headline_max) ->
 
 
 def _escape_mrkdwn(text: str) -> str:
-    """Disable mrkdwn markup in `text`; all Slack specials (`<!channel>`, `<@U...>`, `<url|text>`) start with `<`, so HTML-entity-escaping `&`/`<`/`>` is sufficient."""
+    """Neutralize the Slack special sequences (`<!channel>`, `<@U...>`, `<url|text>`) in `text`; they all start with `<`, so HTML-entity-escaping `&`/`<`/`>` is sufficient."""
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
