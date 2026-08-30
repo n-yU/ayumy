@@ -207,6 +207,15 @@ class TestNotify:
         assert page_text.count("\n") == 0
         assert "first line second line third line" in page_text
 
+    def test_headline_number_reference_links_to_page_repository(self, client):
+        report = {"repositories": [_repo("repo", ["マージ #155"])]}
+        client.notify(TARGET_DATE, report, [("repo", PAGE_URL)], owner=OWNER)
+        client.flush()
+
+        page_text = _get_send_kwargs(client)["blocks"][1]["text"]["text"]
+        url = f"https://github.com/{OWNER}/repo/issues/155"
+        assert page_text.endswith(f"— マージ <{url}|#155>")
+
     def test_headline_special_chars_are_escaped(self, client):
         headline = "fix <!channel> & <T> generic leak"
         report = {"repositories": [_repo("repo", [headline])]}
