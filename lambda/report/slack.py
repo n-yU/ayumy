@@ -33,10 +33,10 @@ def _escape_mrkdwn(text: str) -> str:
 
 
 def _to_mrkdwn(text: str, owner: str, repo: str) -> str:
-    """Render the inline notation of a summary line as mrkdwn, escaping first so Slack specials in the generated text stay neutralized.
+    """Render the inline notation of a summary line as mrkdwn.
 
-    Backticks already mean inline code in mrkdwn and pass through unchanged; bold switches from `**` to `*`,
-    and number references become links.
+    Escaping runs first so Slack specials in the generated text stay neutralized.
+    Backticks pass through unchanged because they already mean inline code in mrkdwn.
     """
     parts = []
     for segment in parse_inline(_escape_mrkdwn(text), owner, repo):
