@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help help-% lambda-install lambda-invoke lambda-deploy lock test test-python test-shell test-cov format format-check lint lint-fix oidc-deploy scan-sessions aws-auth-check
+.PHONY: help help-% lambda-install lambda-invoke lambda-deploy lock test test-python test-shell test-cov format format-check lint lint-fix scan-sessions aws-auth-check
 
 FORMAT_TARGETS := lambda tests
 
@@ -91,11 +91,3 @@ scan-sessions: ## Scan DynamoDB session items
 		--projection-expression "#d, #rs, updated_at" \
 		--expression-attribute-names '{"#d": "date", "#rs": "repo#session_id"}' \
 		--output table
-
-oidc-deploy: aws-auth-check ## Deploy OIDC bootstrap stack for GitHub Actions
-	aws cloudformation deploy \
-		--template-file .github/oidc-bootstrap.yml \
-		--stack-name ayumy-github-oidc \
-		--capabilities CAPABILITY_NAMED_IAM \
-		--no-fail-on-empty-changeset \
-		--region ap-northeast-1

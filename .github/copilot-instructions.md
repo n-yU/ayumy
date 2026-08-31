@@ -64,7 +64,6 @@ ayumy リポジトリの PR レビューにおいて、過去の PR で繰り返
 - Notion `databases.query` のページネーション、`pages.create` の 100 ブロック上限（LLM の `max_tokens=2048` で十分小さく収まる）
 - DynamoDB `Scan` コスト（テーブル規模が小さい）
 - pre-push hook の同時実行レース
-- GitHub OIDC `ThumbprintList` の単一値固定（AWS は 2023 年以降この値を検証しない）
 
 ### 信頼境界の具体（共通方針「信頼済みデータ」に対する補足）
 以下は信頼境界の内側として扱う
@@ -79,7 +78,6 @@ ayumy リポジトリの PR レビューにおいて、過去の PR で繰り返
 すでにプロジェクト側で対処済みのため、対応提案は不要
 - `samconfig.toml` はローカル保存（`.gitignore` 対象）で、`sam deploy` が stack 名・capabilities・S3 バケット／プレフィックス・`NotionDatabaseId` / `SlackChannelId` を自動読み込みする
 - `lambda/VERSION` はリポジトリルート `VERSION` への git symlink（mode `120000`）であり drift しない
-- `make oidc-deploy` は初回のみの手動実行で、テンプレート default 値への依存は意図的
 
 ### 意図的な設計判断
 以下は意図的な設計のため変更を提案しない
