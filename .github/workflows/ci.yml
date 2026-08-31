@@ -1,4 +1,4 @@
-name: CI/CD
+name: CI
 
 on:
   push:
@@ -57,42 +57,3 @@ jobs:
       - name: Note partial coverage on test failure
         if: failure()
         run: echo "_Coverage values may be partial when tests fail._" >> "$GITHUB_STEP_SUMMARY"
-
-  deploy:
-    needs: test
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    concurrency:
-      group: cd-${{ github.ref }}
-      cancel-in-progress: true
-    permissions:
-      id-token: write
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - uses: aws-actions/setup-sam@v2
-
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ap-northeast-1
-
-      - name: Build
-        run: sam build
-
-      - name: Deploy
-        run: >
-          sam deploy
-          --stack-name ayumy
-          --capabilities CAPABILITY_IAM
-          --s3-bucket ${{ secrets.SAM_DEPLOY_BUCKET }}
-          --s3-prefix ayumy
-          --no-confirm-changeset
-          --no-fail-on-empty-changeset
-          --parameter-overrides NotionDatabaseId=${{ secrets.NOTION_DATABASE_ID }}
