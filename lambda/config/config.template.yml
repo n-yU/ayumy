@@ -1,0 +1,36 @@
+# Ayumy Config
+# config.template.yml は編集せず、make config-init で config.yml を生成してから編集する
+
+claude:
+  # 日次サマリの生成に利用するモデル
+  model: claude-sonnet-4-6
+  # 1 回のリクエストで生成する最大トークン数
+  max_tokens: 2048
+  # 100 万トークンあたりの単価（USD）（model に対応する設定が必要）
+  pricing:
+    claude-sonnet-4-6:
+      input_usd_per_1m_tokens: 3.00
+      output_usd_per_1m_tokens: 15.00
+
+slack:
+  # サマリ通知に記載するリポジトリごとの要約の文字数上限（Slack の本文は全体で最大 3000 文字まで）
+  headline_max: 200
+
+github:
+  # サマリ生成時に利用する検索 API の呼び出し上限
+  # search_batch 回を呼んだら search_window_sec 秒経つまで待つ（最大 1 分あたり 30 回まで）
+  search_batch: 10
+  search_window_sec: 20
+
+pipeline:
+  # 定期実行の際に遡ってレポートを作成する日数
+  max_backfill: 3
+  # date option を利用した複数日生成時の日数上限
+  max_range_days: 31
+
+notion:
+  # サマリページのアイコンのデフォルト設定（name には Notion のアイコンピッカー上の名前を指定）
+  default_icon: {name: document, color: gray}
+  # リポジトリ別ページアイコン
+  repository_icons:
+    # ayumy: {name: walk, color: blue}

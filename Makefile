@@ -1,8 +1,10 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help help-% lambda-install lambda-invoke lambda-deploy lock test test-python test-shell test-cov format format-check lint lint-fix scan-sessions aws-auth-check
+.PHONY: help help-% config-init config-diff lambda-install lambda-invoke lambda-deploy lock test test-python test-shell test-cov format format-check lint lint-fix scan-sessions aws-auth-check
 
 FORMAT_TARGETS := lambda tests
+CONFIG_FILE := lambda/config/config.yml
+CONFIG_TEMPLATE := lambda/config/config.template.yml
 
 ##@ Help
 
@@ -25,16 +27,29 @@ help-%: ## Show description and usage for <target>
 		in_recipe && /^\t/ {next} \
 		in_recipe && /^[^\t]/ {exit}' $(MAKEFILE_LIST)
 
+##@ Config
+
+# Declared without prerequisites so an existing config survives even when the template is newer.
+$(CONFIG_FILE):
+	cp $(CONFIG_TEMPLATE) $@
+	@echo "generated $@ from $(CONFIG_TEMPLATE)"
+
+config-init: | $(CONFIG_FILE) ## Generate config.yml from the template, keeping any existing file
+	@echo "$(CONFIG_FILE) is ready; an existing file is never overwritten"
+
+config-diff: | $(CONFIG_FILE) ## Show how config.yml differs from the template
+	@diff -u $(CONFIG_TEMPLATE) $(CONFIG_FILE) && echo "no difference from $(CONFIG_TEMPLATE)" || true
+
 ##@ Lambda
 
 lambda-install: ## Install lambda deps into local .venv via uv (includes dev deps)
 	test -d .venv || uv venv
 	uv pip install --python .venv/bin/python -r lambda/requirements-dev.txt
 
-lambda-invoke: ## Invoke Lambda function locally for testing
+lambda-invoke: | $(CONFIG_FILE) ## Invoke Lambda function locally for testing
 	sam build && sam local invoke ReportFunction
 
-lambda-deploy: aws-auth-check ## Build and deploy Lambda function to AWS
+lambda-deploy: aws-auth-check | $(CONFIG_FILE) ## Build and deploy Lambda function to AWS
 	sam build && sam deploy --no-confirm-changeset
 
 lock: ## Regenerate hash-pinned requirements*.txt from requirements*.in
@@ -43,12 +58,12 @@ lock: ## Regenerate hash-pinned requirements*.txt from requirements*.in
 
 ##@ Test
 
-test: lambda-install ## Run Python + shell tests together
+test: lambda-install | $(CONFIG_FILE) ## Run Python + shell tests together
 	.venv/bin/python -m pytest tests/python/ -v
 	bats tests/shell/
 
 test-python: TARGET = tests/python/
-test-python: lambda-install ## Run Python tests (override path via TARGET=...)
+test-python: lambda-install | $(CONFIG_FILE) ## Run Python tests (override path via TARGET=...)
 	# Usage: make test-python TARGET=tests/python/report/test_notion.py
 	.venv/bin/python -m pytest $(TARGET) -v
 
@@ -57,7 +72,7 @@ test-shell: ## Run shell tests via bats (override path via TARGET=...)
 	# Usage: make test-shell TARGET=tests/shell/sync_session.bats
 	bats $(TARGET)
 
-test-cov: lambda-install ## Run Python tests with coverage measurement
+test-cov: lambda-install | $(CONFIG_FILE) ## Run Python tests with coverage measurement
 	.venv/bin/python -m pytest tests/python/ \
 		--cov=lambda --cov-report=term-missing --cov-report=xml
 

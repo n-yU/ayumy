@@ -4,5 +4,6 @@
 __pycache__/
 .pytest_cache/
 samconfig.toml
+lambda/config/config.yml
 .coverage
 coverage-python.xml
