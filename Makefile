@@ -35,7 +35,7 @@ $(CONFIG_FILE):
 	@echo "generated $@ from $(CONFIG_TEMPLATE)"
 
 config-init: | $(CONFIG_FILE) ## Generate config.yml from the template, keeping any existing file
-	@echo "$(CONFIG_FILE) is ready; an existing file is never overwritten"
+	@echo "$(CONFIG_FILE) is ready"
 
 config-diff: | $(CONFIG_FILE) ## Show how config.yml differs from the template
 	@diff -u $(CONFIG_TEMPLATE) $(CONFIG_FILE) && echo "no difference from $(CONFIG_TEMPLATE)" || true
