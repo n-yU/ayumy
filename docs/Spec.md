@@ -232,7 +232,7 @@ hook の配布方法（`ayumy setup-hooks` コマンドで設置）
 
 `ayumy setup-hooks` は過去に同コマンドが作成した旧 `post-commit` symlink（`readlink` の target が `ayumy/hooks/post-commit` の絶対パスと一致するもの）の除去も担当する。手動 `ln` で別パス表記により設置された legacy hook は対象外で、ユーザー側で削除する必要がある
 
-コマンド設置では hook を置いたあと、そのリポジトリの Notion ページアイコン（[Database Properties](#database-properties)）を対話で尋ね、設定ファイルの対応表に追記する。リポジトリを追加したときに設定が漏れないよう指定を必須とし、答えが空または色が不正なら非ゼロで終了する。既に設定があるリポジトリには尋ねず、origin remote が無いリポジトリはアイコンを紐づける先が無いため警告して飛ばす
+コマンド設置では hook を置いたあと、そのリポジトリの Notion ページアイコン（[Database Properties](#database-properties)）を対話で尋ね、設定ファイルの対応表に追記する。リポジトリを追加したときに設定が漏れないよう指定を必須とし、答えが空または色が不正なら非ゼロで終了する。既に設定があるリポジトリには尋ねず、origin remote が無いリポジトリはアイコンを紐づける先が無いため警告して飛ばす。設定ファイルが未生成のときは追記すると中身がアイコン 1 行だけのファイルになるため、生成用の make target を伝えて非ゼロで終了する
 
 設置先は Git に hook の参照先を問い合わせて決めるため、通常のリポジトリに加えて worktree やサブモジュールでも同じ手順で設置できる。worktree で実行した場合は共通ディレクトリに設置され、同じリポジトリのすべての worktree に効く
 
@@ -496,7 +496,7 @@ Date × Repository 単位でページを作成する。1日に複数ページが
 | Regens | Number | ページを作り直した回数（初回生成は `0`） | `2` |
 | Version | Text | レポート生成時の ayumy バージョン | `0.2.0` |
 
-ページには絵文字ではなく Notion 組み込みのアイコンを設定し、データベースの一覧でリポジトリを見分けられるようにする。アイコンと色はリポジトリごとに [lambda/config/config.yml](../lambda/config/config.yml) の `notion` セクションで指定し、エントリの無いリポジトリには既定のアイコンを当てる。名前は Notion のアイコンピッカー上の表示名を受け付け、実在しない名前は API がエラーを返す
+ページには絵文字ではなく Notion 組み込みのアイコンを設定し、データベースの一覧でリポジトリを見分けられるようにする。アイコンと色はリポジトリごとに `lambda/config/config.yml` の `notion` セクションで指定し、エントリの無いリポジトリには既定のアイコンを当てる。名前は Notion のアイコンピッカー上の表示名を受け付け、実在しない名前は API がエラーを返す
 
 ### Page Body
 Notion ページの本文は Summary、ステータス別セクション、Timeline で構成する。Summary は Claude API が生成し、それ以外は GitHub アクティビティから決定論的に組み立てる。ブロックタイプは `heading_2` と `bulleted_list_item` を使い分け、Timeline では `bulleted_list_item` の `children` フィールドで PR 配下の commit をネストする
@@ -603,8 +603,9 @@ Lambda 関数の環境変数として設定する。機密情報は AWS Secrets 
 - **タイムアウト / メモリ**: [template.yaml](../template.yaml) で定義（タイムアウトは SAM パラメータ化、メモリは固定値）
 - **依存パッケージ**: 直接依存を [lambda/requirements.in](../lambda/requirements.in)（デプロイ）と [lambda/requirements-dev.in](../lambda/requirements-dev.in)（ローカル開発、`boto3` 等を追加）に定義し、`uv pip compile --generate-hashes` で hash 付き lock の [lambda/requirements.txt](../lambda/requirements.txt) と [lambda/requirements-dev.txt](../lambda/requirements-dev.txt) を生成する。Lambda デプロイ・CI・ローカル install はすべて生成済みの `.txt` を読む。`boto3` は Lambda ランタイム同梱版を利用するためデプロイ側には含めない
 - **IAM ロール**: S3 バケットへの読み書き、DynamoDB テーブルへの読み書き、Secrets Manager の読み取り、CloudWatch Logs への書き込み
-- **チューニング定数**: モデル ID・API throttle 値・truncation 長など「振る舞いを調整する値」を [lambda/config/config.yml](../lambda/config/config.yml) に集約する
-  - Lambda コールドスタート時に [lambda/config/config.py](../lambda/config/config.py) の loader が frozen dataclass singleton として読み込む
+- **チューニング定数**: モデル ID・API throttle 値・truncation 長など「振る舞いを調整する値」を `lambda/config/config.yml` に集約する
+  - 追跡対象は既定値だけを持つ [lambda/config/config.template.yml](../lambda/config/config.template.yml) とし、使う人ごとの設定を書く `config.yml` は各自の手元で生成する。生成には `make config-init` を使い、既にあるファイルは上書きしない
+  - Lambda コールドスタート時に [lambda/config/config.py](../lambda/config/config.py) の loader が frozen dataclass singleton として読み込む。`config.yml` が無い場合は生成用の make target を伝えて失敗する
   - 環境依存値と secret は環境変数 / Secrets Manager 経由で扱い、config.yml には持ち込まない
 
 ### Deployment
@@ -659,7 +660,7 @@ Lambda 側で発生する失敗は以下の 3 区分で扱う。`logger.warning`
 
 **Anthropic API（`claude-sonnet-4-6`）**
 - 入力: $3 / 1M tokens、出力: $15 / 1M tokens
-- 実行時のトークン → USD 換算に使う単価は [lambda/config/config.yml](../lambda/config/config.yml) の `claude.pricing` に定義する
+- 実行時のトークン → USD 換算に使う単価は `lambda/config/config.yml` の `claude.pricing` に定義する
 
 **1日あたりのトークン使用量（目安）**
 

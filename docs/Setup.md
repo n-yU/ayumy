@@ -27,7 +27,13 @@ Ayumy を初めて動かすまでの構築手順。AWS・Notion・Slack・GitHub
    - シークレット名: `ayumy/slack-bot-token`
    - プレーンテキストで Bot User OAuth Token を貼り付け
 
-## 4. AWS SAM
+## 4. Repository
+1. リポジトリをクローン: `git clone https://github.com/{user}/ayumy.git ~/ayumy`
+2. クローンしたディレクトリで `make config-init` を実行し、設定ファイル `lambda/config/config.yml` を生成する
+   - Lambda がこのファイルを読み込むため、生成しないままデプロイすると実行時に失敗する
+   - 中身は既定値のままでも動く。変更できる設定は [Manual: Config](Manual.md#config) を参照
+
+## 5. AWS SAM
 1. AWS SAM CLI をインストール: `brew install aws-sam-cli`
 2. `sam build && sam deploy --guided` で初回デプロイを実行
    - Stack Name: `ayumy`
@@ -38,11 +44,11 @@ Ayumy を初めて動かすまでの構築手順。AWS・Notion・Slack・GitHub
    - Allow SAM CLI IAM role creation: `Y`
    - Disable rollback: `N`
    - Save arguments to configuration file: `Y`
-3. Outputs に表示される `ReportFunctionName` と `SessionBucketName` を控える（[7. Client Machine](#7-client-machine) で使用）
+3. Outputs に表示される `ReportFunctionName` と `SessionBucketName` を控える（[8. Client Machine](#8-client-machine) で使用）
 
 2回目以降のデプロイは `make lambda-deploy` のみでよい。デプロイ用 S3 バケットを変更する場合は `samconfig.toml` の `s3_bucket` を編集し、`sam deploy --no-resolve-s3` で実行する
 
-## 5. GitHub PAT
+## 6. GitHub PAT
 1. GitHub Settings → Developer settings → Fine-grained personal access tokens で PAT を作成
    - Resource owner: 自分の個人アカウント
    - Repository access: All repositories
@@ -53,21 +59,20 @@ Ayumy を初めて動かすまでの構築手順。AWS・Notion・Slack・GitHub
    - シークレット名: `ayumy/github-pat`
    - プレーンテキストで `github_pat_...` の値をそのまま貼り付け
 
-## 6. Anthropic API
+## 7. Anthropic API
 1. [Anthropic Console](https://console.anthropic.com/) で API キーを発行（API は従量課金で、サブスクリプションプランとは別）
 2. AWS Secrets Manager（ap-northeast-1）に登録
    - シークレットのタイプ: その他のシークレットのタイプ
    - シークレット名: `ayumy/anthropic-api-key`
    - プレーンテキストで API キーを貼り付け
 
-## 7. Client Machine
+## 8. Client Machine
 クライアント側のスクリプト（`scripts/`, `hooks/`, `bin/ayumy`）は macOS のみサポートする
 
-1. リポジトリをクローン: `git clone https://github.com/{user}/ayumy.git ~/ayumy`
-2. PATH を通す: `export PATH="$HOME/ayumy/bin:$PATH"`（`~/.zshrc` 等に追加）
-3. 環境変数を設定（`~/.zshrc` 等に追加）
-   - `AYUMY_S3_BUCKET`: [4. AWS SAM](#4-aws-sam) の Outputs の `SessionBucketName`
-   - `AYUMY_LAMBDA_FUNCTION`: [4. AWS SAM](#4-aws-sam) の Outputs の `ReportFunctionName`
-4. hook を設置: 対象のリポジトリごとに `ayumy setup-hooks` を実行する
+1. PATH を通す: `export PATH="$HOME/ayumy/bin:$PATH"`（`~/.zshrc` 等に追加）
+2. 環境変数を設定（`~/.zshrc` 等に追加）
+   - `AYUMY_S3_BUCKET`: [5. AWS SAM](#5-aws-sam) の Outputs の `SessionBucketName`
+   - `AYUMY_LAMBDA_FUNCTION`: [5. AWS SAM](#5-aws-sam) の Outputs の `ReportFunctionName`
+3. hook を設置: 対象のリポジトリごとに `ayumy setup-hooks` を実行する
    - Notion ページのアイコンを尋ねられる。Notion のアイコンピッカー上の名前と色を答える
    - 答えた内容は `lambda/config/config.yml` に追記される。`make lambda-deploy` を実行すると反映される

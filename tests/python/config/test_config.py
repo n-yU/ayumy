@@ -101,6 +101,11 @@ class TestLoader:
             with pytest.raises(ValueError, match="unregistered-model"):
                 _load()
 
+    def test_load_raises_with_the_generation_target_when_config_is_missing(self):
+        with patch.object(Path, "exists", return_value=False):
+            with pytest.raises(FileNotFoundError, match="make config-init"):
+                _load()
+
     def test_load_accepts_a_repository_icons_map_with_no_entries(self):
         # The state of a checkout where `ayumy setup-hooks` has not run yet, which YAML reads as None
         stub = yaml.safe_load(TEMPLATE_PATH.read_text(encoding="utf-8"))
