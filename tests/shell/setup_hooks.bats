@@ -211,6 +211,19 @@ run_setup_with_answers() {
   ! grep -q "fresh-repo" "$fake_config"
 }
 
+@test "setup_hooks.sh: refuses icon setup when the config file is not generated yet" {
+  make_git_repo
+  make_fake_root
+  rm "$fake_config"
+  export GIT_STUB_REMOTE_URL="git@github.com:n-yU/fresh-repo.git"
+
+  run_setup_with_answers "rocket" "green"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"config file not found"* ]]
+  [[ "$output" == *"make config-init"* ]]
+  [ ! -e "$fake_config" ]
+}
+
 @test "setup_hooks.sh: skips icon setup when the repository has no origin remote" {
   make_git_repo
   make_fake_root

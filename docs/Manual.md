@@ -28,7 +28,7 @@ Ayumy の構築後の日常運用ガイド。基本的な操作・Notion レポ�
 
 ### pre-push hook による自動転送
 - `ayumy setup-hooks` で設置した pre-push hook が、各リポジトリの push を契機に未同期 session を S3 に転送する
-- 転送はフォアグラウンドで実行され、失敗時は非ゼロ終了で push を中止する。AWS 認証切れなどの障害は push 時点で顕在化する
+- 転送が終わるまで push は完了しない。AWS 認証切れ等の場合は転送に失敗して push は中止される
 - 対応する Claude session が存在しないリポジトリでは hook は何もせず通常通り push を通す
 
 ### 手動同期
@@ -53,8 +53,9 @@ session 転送に続けてレポート生成まで走らせるときや、既存
 `--report` 指定時の Lambda 呼び出しは非同期のため、コマンド自体はすぐ完了する。結果は Slack 通知で確認する。実行方式別の対象期間は [Spec: GitHub Activity Fetch](Spec.md#github-activity-fetch) を参照
 
 ## Config
-- 使用する Claude モデルなど各種設定は [lambda/config/config.yml](../lambda/config/config.yml) で変更できる
+- 使用する Claude モデルなど各種設定は `lambda/config/config.yml` で変更できる
 - 編集後は `make lambda-deploy` で Lambda に反映する
+- ayumy を更新して設定項目が増えたときは、`make config-diff` で既定の設定と自分の `config.yml` を見比べ、増えた項目を書き足す
 
 ## Reading Notion Reports
 Notion ページは 1 日 × リポジトリ単位で作られる。GitHub アクティビティが 0 件のリポジトリには作られない
@@ -79,10 +80,10 @@ hook が動いていないときや、別のパスから設置し直したいと
 `ayumy setup-hooks` は過去に同コマンドで設置された旧 `post-commit` symlink を併せて除去する。ただし手動 `ln` で別のパス表記により設置した hook は対象外のため、自分で削除する
 
 ### AWS 認証切れからの復旧
-転送に失敗して push が止まるときは、AWS の認証切れであることが多い。`aws login` で認証を更新して push し直す。未転送の JSONL はソース側に残るため、次回の転送でリトライされる
+転送に失敗して push が止まるときは、AWS の認証切れであることが多い。その場合は `aws login` で認証を更新して push し直す。転送できなかった session は手元に残るため、次の転送でまとめて送られる
 
 ### 過去日レポートの再生成
-[手動レポート生成](#手動レポート生成) の `--date` 指定で再生成する。session は DynamoDB に永続化されているため再転送は不要。Notion 側は同日の既存ページをアーカイブしてから再作成する
+[手動レポート生成](#手動レポート生成) の `--date` 指定で再生成する。転送済みの session は AWS 側に保存されているため再転送は不要。Notion 側は同日の既存ページをアーカイブしてから再作成する
 
 作り直した回数は新しいページの `Regens` に残る。初回の生成が `0` で、再生成のたびに 1 ずつ増える
 

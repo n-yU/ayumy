@@ -78,6 +78,7 @@ ayumy リポジトリの PR レビューにおいて、過去の PR で繰り返
 すでにプロジェクト側で対処済みのため、対応提案は不要
 - `samconfig.toml` はローカル保存（`.gitignore` 対象）で、`sam deploy` が stack 名・capabilities・S3 バケット／プレフィックス・`NotionDatabaseId` / `SlackChannelId` を自動読み込みする
 - `lambda/VERSION` はリポジトリルート `VERSION` への git symlink（mode `120000`）であり drift しない
+- `lambda/config/config.yml` は `.gitignore` 対象で、追跡対象の `config.template.yml` から `make config-init` で生成する。テストとデプロイは make target 側の依存で生成を担保する
 
 ### 意図的な設計判断
 以下は意図的な設計のため変更を提案しない

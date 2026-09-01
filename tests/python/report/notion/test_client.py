@@ -1,11 +1,13 @@
 """Tests for Notion client pure logic."""
 
 import re
-from unittest.mock import MagicMock
+from dataclasses import replace
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from config import CONFIG
+from config.config import NotionIcon
 from report import SessionActivity
 from report.notion.client import _page_icon
 
@@ -482,11 +484,16 @@ class TestBuildChildren:
 
 class TestPageIcon:
     def test_uses_configured_icon_for_known_repository(self):
-        repo, icon = next(iter(CONFIG.notion.repository_icons.items()))
-        assert _page_icon(repo) == {
-            "type": "icon",
-            "icon": {"name": icon.name, "color": icon.color},
-        }
+        # The tracked template ships no entries, so the configured path needs a config built here
+        icon = NotionIcon(name="walk", color="blue")
+        configured = replace(
+            CONFIG, notion=replace(CONFIG.notion, repository_icons={REPO: icon})
+        )
+        with patch("report.notion.client.CONFIG", configured):
+            assert _page_icon(REPO) == {
+                "type": "icon",
+                "icon": {"name": "walk", "color": "blue"},
+            }
 
     def test_falls_back_to_default_icon_for_unconfigured_repository(self):
         default = CONFIG.notion.default_icon

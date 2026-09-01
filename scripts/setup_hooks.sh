@@ -88,6 +88,13 @@ has_icon_entry() {
 configure_icon() {
   local repo_name="$1" name color
 
+  # Appending to a missing file would produce a config holding nothing but one icon entry
+  if [[ ! -f "$CONFIG_FILE" ]]; then
+    echo "[ayumy] config file not found: $CONFIG_FILE" >&2
+    echo "[ayumy] run 'make config-init' in $AYUMY_ROOT, then rerun 'ayumy setup-hooks'" >&2
+    return 1
+  fi
+
   if has_icon_entry "$repo_name"; then
     echo "[ayumy] Notion icon already configured: $repo_name"
     return 0

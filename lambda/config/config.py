@@ -56,6 +56,10 @@ class Config:
 
 def _load() -> Config:
     config_path = Path(__file__).parent / "config.yml"
+    if not config_path.exists():
+        raise FileNotFoundError(
+            f"{config_path} not found; run 'make config-init' to generate it from the template"
+        )
     with config_path.open() as f:
         data = yaml.safe_load(f)
     claude = ClaudeConfig(**data["claude"])

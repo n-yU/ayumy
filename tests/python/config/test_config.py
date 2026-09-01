@@ -20,7 +20,7 @@ from config.config import (
     _load,
 )
 
-CONFIG_PATH = Path(config.config.__file__).parent / "config.yml"
+TEMPLATE_PATH = Path(config.config.__file__).parent / "config.template.yml"
 
 
 class TestConfigShape:
@@ -61,10 +61,10 @@ class TestConfigValues:
 
     def test_repository_icons_stays_at_the_end_of_the_file(self):
         # `ayumy setup-hooks` appends entries at EOF instead of locating the map, so nothing may follow it
-        last = CONFIG_PATH.read_text(encoding="utf-8").rstrip().splitlines()[-1]
-        assert re.fullmatch(r"    \S+: \{name: .+, color: \w+\}", last) or re.fullmatch(
-            r"  repository_icons:", last
-        ), last
+        last = TEMPLATE_PATH.read_text(encoding="utf-8").rstrip().splitlines()[-1]
+        assert re.fullmatch(
+            r"    (# )?\S+: \{name: .+, color: \w+\}", last
+        ) or re.fullmatch(r"  repository_icons:", last), last
 
     def test_unconfigured_repository_falls_back_to_the_default_icon(self):
         assert CONFIG.notion.icon_for("no-such-repo") is CONFIG.notion.default_icon
@@ -101,9 +101,14 @@ class TestLoader:
             with pytest.raises(ValueError, match="unregistered-model"):
                 _load()
 
+    def test_load_raises_with_the_generation_target_when_config_is_missing(self):
+        with patch.object(Path, "exists", return_value=False):
+            with pytest.raises(FileNotFoundError, match="make config-init"):
+                _load()
+
     def test_load_accepts_a_repository_icons_map_with_no_entries(self):
         # The state of a checkout where `ayumy setup-hooks` has not run yet, which YAML reads as None
-        stub = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
+        stub = yaml.safe_load(TEMPLATE_PATH.read_text(encoding="utf-8"))
         stub["notion"]["repository_icons"] = None
         with patch("config.config.yaml.safe_load", return_value=stub):
             assert _load().notion.repository_icons == {}
