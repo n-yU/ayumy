@@ -1,13 +1,29 @@
 """DynamoDB session store for session metadata."""
 
+import hashlib
+import json
+import logging
 from datetime import UTC, date, datetime
 
 import boto3
 from boto3.dynamodb.conditions import Key
+from botocore.exceptions import ClientError
 
 from .. import SessionActivity, SessionInfo
 from ..notice import Notice
 from .parser import SessionLogParser
+
+logger = logging.getLogger(__name__)
+
+
+def _content_hash(fields: dict) -> str:
+    """Return the SHA-256 fingerprint of the attributes that feed a report."""
+    # `updated_at` is stamped on every ingest, so including it would make every fingerprint unique
+    content = {k: v for k, v in fields.items() if k != "updated_at"}
+    payload = json.dumps(
+        content, sort_keys=True, ensure_ascii=False, separators=(",", ":")
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 class SessionStore:
@@ -29,20 +45,38 @@ class SessionStore:
         return keys
 
     def _write_items(self, items: list[dict]) -> None:
-        """Uses `update_item` to preserve existing `reported_at` values across re-ingestion."""
+        """Uses `update_item` to preserve existing `reported_at` values across re-ingestion.
+
+        Writes are conditional on `content_hash` so that re-ingesting a date whose content is unchanged leaves `updated_at` alone,
+        keeping the date out of backfill detection.
+        """
+        skipped = 0
         for item in items:
             key = {
                 "date": item["date"],
                 "repo#session_id": item["repo#session_id"],
             }
             fields = {k: v for k, v in item.items() if k not in key}
+            fields["content_hash"] = _content_hash(fields)
             update_expr = "SET " + ", ".join(f"#f_{k} = :v_{k}" for k in fields)
-            self.table.update_item(
-                Key=key,
-                UpdateExpression=update_expr,
-                ExpressionAttributeNames={f"#f_{k}": k for k in fields},
-                ExpressionAttributeValues={f":v_{k}": v for k, v in fields.items()},
-            )
+            try:
+                self.table.update_item(
+                    Key=key,
+                    UpdateExpression=update_expr,
+                    ConditionExpression=(
+                        "attribute_not_exists(#f_content_hash) "
+                        "OR #f_content_hash <> :v_content_hash"
+                    ),
+                    ExpressionAttributeNames={f"#f_{k}": k for k in fields},
+                    ExpressionAttributeValues={f":v_{k}": v for k, v in fields.items()},
+                )
+            except ClientError as e:
+                if e.response["Error"]["Code"] != "ConditionalCheckFailedException":
+                    raise
+                skipped += 1
+
+        if skipped:
+            logger.info("Skipped %d unchanged item(s)", skipped)
 
     def fetch_sessions(self, date_str: str) -> SessionActivity:
         """Query the JST date `date_str` (`YYYY-MM-DD`) and return sessions grouped by repository."""

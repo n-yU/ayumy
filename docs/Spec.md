@@ -333,6 +333,7 @@ DynamoDB の `ayumy-sessions` テーブルから対象日付をパーティシ�
 | | `session_commits` | List | session 中の git commit 結果（`[{sha, message, timestamp}]`、未検出時は空リスト） |
 | | `session_pulls` | List | session 中の Bash tool 操作で言及された PR 番号のソート済みリスト（未検出時は空リスト） |
 | | `session_issues` | List | session 中の Bash tool 操作で言及された Issue 番号のソート済みリスト（未検出時は空リスト） |
+| | `content_hash` | String | 内容属性から算出した指紋（`updated_at` / `reported_at` は対象外） |
 | | `updated_at` | String | ISO 8601、書き込み・更新時刻 |
 | | `reported_at` | String | ISO 8601、レポート生成時刻（未生成時は未設定） |
 
@@ -341,11 +342,12 @@ DynamoDB の `ayumy-sessions` テーブルから対象日付をパーティシ�
 書き込み時の動作
 
 - 同一キー（PK + SK）のアイテムは上書きされる（冪等性を担保）
+- 保存済みの `content_hash` と一致するアイテムは書き込まない。日をまたいで続くセッションは push のたびにファイル全体が再アップロードされるため、内容が変わっていない過去日まで `updated_at` が新しくなり、バックフィル検出（[Session Log Read](#session-log-read)）が同じ日を繰り返し拾ってしまうのを防ぐ
 - ユーザーメッセージも `session_commits` もないグループはスキップする
 - リポジトリ名は `.ayumy_repo` メタデータファイルから解決する。メタデータがないプロジェクトはスキップする
 - assistant の Bash tool_use のコマンドから PR/Issue 番号を抽出する。`gh` / `git` の引数として PR/Issue を明示的に操作した箇所のみが対象で、本文中で言及されただけの URL や `#番号` はノイズとなるため対象外とする。`git` 由来の番号は PR/Issue の種別を判別できないため両方の候補として保持し fetch 側で振り分ける（[Hybrid Backfill Fetch](#hybrid-backfill-fetch)）
 - 抽出は project の作業ディレクトリ内で実行されたコマンドのみを対象とする。Bash tool の冒頭で `cd <他 repo path> && ...` により別ディレクトリへ移動した場合、そのコマンド由来の commit / PR / Issue 番号は除外する。`cd` のパス指定が解決できない形式（別ユーザーの `~user/...` 等）も project 外として扱う
-- 書き込み成功後、処理した JSONL を S3 から削除する。書き込み失敗時は S3 を削除せず、次回実行時に再試行する。書き込み失敗時も DynamoDB に前回成功分のデータが残っているため、レポート生成フローは継続する
+- 書き込み成功後、処理した JSONL を S3 から削除する。指紋の一致で書き込みを落としたアイテムも取り込み済みとして扱う。書き込み失敗時は S3 を削除せず、次回実行時に再試行する。書き込み失敗時も DynamoDB に前回成功分のデータが残っているため、レポート生成フローは継続する
 
 レポート生成後の動作
 
