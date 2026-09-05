@@ -121,6 +121,7 @@ class TestWriteItems:
                 ]
             )
 
+        assert store.table.update_item.call_count == 2
         assert "Skipped 1 unchanged item(s)" in caplog.text
 
     def test_reraises_other_client_errors(self, store):
@@ -140,6 +141,14 @@ class TestIngest:
 
         assert keys == [SESSION_KEY]
         store.table.update_item.assert_called_once()
+
+    def test_returns_processed_keys_for_unchanged_items(self, store, stub_session_log):
+        client = stub_session_log(user("2026-03-28T10:00:00+09:00", "Hello"))
+        store.table.update_item.side_effect = _client_error(
+            "ConditionalCheckFailedException"
+        )
+
+        assert store.ingest(client) == [SESSION_KEY]
 
 
 class TestFetchSessions:
