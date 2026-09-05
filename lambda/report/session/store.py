@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 
 
 def _content_hash(fields: dict) -> str:
-    """Return the SHA-256 fingerprint of the attributes that feed a report."""
-    # `updated_at` is stamped on every ingest, so including it would make every fingerprint unique
+    """Return the SHA-256 hash of the attributes that feed a report."""
+    # `updated_at` is stamped on every ingest, so including it would make every hash unique
     content = {k: v for k, v in fields.items() if k != "updated_at"}
     payload = json.dumps(
         content, sort_keys=True, ensure_ascii=False, separators=(",", ":")
