@@ -1,10 +1,16 @@
 """Tests for SessionStore."""
 
+import logging
 from datetime import date
 
 import pytest
+from botocore.exceptions import ClientError
 
 from ._builders import SESSION_KEY, user
+
+
+def _client_error(code):
+    return ClientError({"Error": {"Code": code}}, "UpdateItem")
 
 
 def _item(**overrides):
@@ -26,21 +32,41 @@ def _item(**overrides):
     return base
 
 
+def _write_item(**overrides):
+    """Minimal `_write_items` input; overrides replace any default."""
+    base = {
+        "date": "2026-03-28",
+        "repo#session_id": "repo#s1",
+        "repo": "repo",
+        "user_messages": ["msg"],
+        "updated_at": "2026-03-28T00:00:00+00:00",
+    }
+    base.update(overrides)
+    return base
+
+
+@pytest.fixture
+def written_hashes(store):
+    """Return a callable that writes the given items and collects the content hashes sent to DynamoDB."""
+
+    def _collect(*items):
+        store._write_items(list(items))
+        return {
+            c.kwargs["ExpressionAttributeValues"][":v_content_hash"]
+            for c in store.table.update_item.call_args_list
+        }
+
+    return _collect
+
+
 class TestWriteItems:
     def test_uses_update_item(self, store):
         items = [
-            {
-                "date": "2026-03-28",
-                "repo#session_id": "repo#s1",
-                "repo": "repo",
-                "updated_at": "2026-03-28T00:00:00+00:00",
-            },
-            {
-                "date": "2026-03-29",
-                "repo#session_id": "repo#s2",
-                "repo": "repo",
-                "updated_at": "2026-03-29T00:00:00+00:00",
-            },
+            _write_item(),
+            _write_item(
+                **{"date": "2026-03-29", "repo#session_id": "repo#s2"},
+                updated_at="2026-03-29T00:00:00+00:00",
+            ),
         ]
 
         store._write_items(items)
@@ -53,6 +79,59 @@ class TestWriteItems:
         }
         assert "UpdateExpression" in first_call.kwargs
 
+    def test_writes_content_hash_under_condition(self, store):
+        store._write_items([_write_item()])
+
+        kwargs = store.table.update_item.call_args.kwargs
+        assert kwargs["ExpressionAttributeNames"]["#f_content_hash"] == "content_hash"
+        assert kwargs["ExpressionAttributeValues"][":v_content_hash"]
+        assert kwargs["ConditionExpression"] == (
+            "attribute_not_exists(#f_content_hash) OR #f_content_hash <> :v_content_hash"
+        )
+
+    @pytest.mark.parametrize(
+        ("second_item", "distinct_hashes"),
+        [
+            pytest.param(
+                {"updated_at": "2026-03-29T00:00:00+00:00"},
+                1,
+                id="write_time_excluded",
+            ),
+            pytest.param({"user_messages": ["msg", "more"]}, 2, id="content_included"),
+        ],
+    )
+    def test_content_hash_covers_report_content_only(
+        self, written_hashes, second_item, distinct_hashes
+    ):
+        hashes = written_hashes(_write_item(), _write_item(**second_item))
+
+        assert len(hashes) == distinct_hashes
+
+    def test_skips_items_rejected_by_condition(self, store, caplog):
+        store.table.update_item.side_effect = [
+            _client_error("ConditionalCheckFailedException"),
+            None,
+        ]
+
+        with caplog.at_level(logging.INFO, logger="report.session.store"):
+            store._write_items(
+                [
+                    _write_item(),
+                    _write_item(**{"repo#session_id": "repo#s2"}),
+                ]
+            )
+
+        assert store.table.update_item.call_count == 2
+        assert "Skipped 1 unchanged item(s)" in caplog.text
+
+    def test_reraises_other_client_errors(self, store):
+        store.table.update_item.side_effect = _client_error(
+            "ProvisionedThroughputExceededException"
+        )
+
+        with pytest.raises(ClientError):
+            store._write_items([_write_item()])
+
 
 class TestIngest:
     def test_returns_processed_keys(self, store, stub_session_log):
@@ -62,6 +141,14 @@ class TestIngest:
 
         assert keys == [SESSION_KEY]
         store.table.update_item.assert_called_once()
+
+    def test_returns_processed_keys_for_unchanged_items(self, store, stub_session_log):
+        client = stub_session_log(user("2026-03-28T10:00:00+09:00", "Hello"))
+        store.table.update_item.side_effect = _client_error(
+            "ConditionalCheckFailedException"
+        )
+
+        assert store.ingest(client) == [SESSION_KEY]
 
 
 class TestFetchSessions:
