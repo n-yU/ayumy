@@ -11,8 +11,9 @@ import jsonschema
 
 from config import CONFIG
 
-from . import JST, ReportSummary, SummaryUsage
+from . import ReportSummary, SummaryUsage
 from .notice import Notice, NoticeSource
+from .shared.dates import JST
 from .tags import ALLOWED_TAG_NAMES, TAG_DEFINITIONS
 
 logger = logging.getLogger(__name__)

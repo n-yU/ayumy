@@ -9,10 +9,11 @@ from slack_sdk.errors import SlackClientError
 
 from config import CONFIG
 
-from . import JST, ReportSummary
+from . import ReportSummary
 from .cost import CostDisplay
 from .inline import parse_inline
 from .notice import Notice
+from .shared.dates import JST
 from .summarizer import ValidationResult
 
 logger = logging.getLogger(__name__)

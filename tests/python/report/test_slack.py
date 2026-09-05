@@ -7,9 +7,10 @@ import pytest
 from slack_sdk.errors import SlackApiError
 
 from config import CONFIG
-from report import JST, slack
+from report import slack
 from report.cost import CostDisplay
 from report.notice import Notice, NoticeSource
+from report.shared.dates import JST
 from report.summarizer import ValidationResult
 
 from ._builders import OWNER, TARGET_DATE, make_stub

@@ -9,9 +9,10 @@ import pytest
 from botocore.exceptions import ClientError
 
 from config import CONFIG
-from report import JST, SessionActivity, SummaryUsage
+from report import SessionActivity, SummaryUsage
 from report.github import GitHubActivity
 from report.pipeline import process_date, run
+from report.shared.dates import JST
 from report.summarizer import ValidationResult
 
 from ._builders import (
