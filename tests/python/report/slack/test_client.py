@@ -1,4 +1,4 @@
-"""Tests for SlackClient notification formatting."""
+"""Tests for SlackClient message assembly and sending."""
 
 from datetime import datetime
 from unittest.mock import MagicMock
@@ -7,13 +7,19 @@ import pytest
 from slack_sdk.errors import SlackApiError
 
 from config import CONFIG
-from report import slack
 from report.cost import CostDisplay
 from report.shared.dates import JST
 from report.shared.notice import Notice, NoticeSource
+from report.slack import client as slack_client
+from report.slack.blocks import (
+    SECTION_TEXT_MAX,
+    divider,
+    header_block,
+    section_block,
+)
 from report.summarizer import ValidationResult
 
-from ._builders import OWNER, TARGET_DATE, make_stub
+from .._builders import OWNER, TARGET_DATE, make_stub
 
 CHANNEL = "C0TEST"
 FIRST_TS = "1700000000.000100"
@@ -27,7 +33,7 @@ DAYS_IN_MARCH = 31
 @pytest.fixture
 def client():
     stub = make_stub(
-        slack.SlackClient,
+        slack_client.SlackClient,
         client=MagicMock(),
         channel=CHANNEL,
         is_manual=False,
@@ -234,72 +240,18 @@ class TestNotify:
         assert "&lt;T&gt;" in headline_part
 
 
-class TestEscapeMrkdwn:
-    def test_escapes_ampersand_and_angle_brackets(self):
-        assert slack._escape_mrkdwn("a & b") == "a &amp; b"
-        assert slack._escape_mrkdwn("<!channel>") == "&lt;!channel&gt;"
-        assert slack._escape_mrkdwn("<@U123>") == "&lt;@U123&gt;"
-
-    def test_passes_plain_text_through(self):
-        assert slack._escape_mrkdwn("plain text 日本語") == "plain text 日本語"
-
-
-class TestToMrkdwn:
-    def _convert(self, text):
-        return slack._to_mrkdwn(text, OWNER, "my-repo")
-
-    def test_keeps_backticks_as_mrkdwn_inline_code(self):
-        assert self._convert("`a.py` を追加") == "`a.py` を追加"
-
-    def test_converts_double_asterisk_bold_to_single(self):
-        assert self._convert("**重要** な変更") == "*重要* な変更"
-
-    def test_links_number_reference(self):
-        url = f"https://github.com/{OWNER}/my-repo/issues/155"
-        assert self._convert("マージ #155") == f"マージ <{url}|#155>"
-
-    def test_escapes_slack_specials_before_converting(self):
-        assert self._convert("<!channel> **注意**") == "&lt;!channel&gt; *注意*"
-
-
-class TestBlockPrimitives:
-    def test_divider(self):
-        assert slack._divider() == {"type": "divider"}
-
-    def test_header_block(self):
-        assert slack._header_block("📝 Daily Report (2026-03-28)") == {
-            "type": "header",
-            "text": {
-                "type": "plain_text",
-                "text": "📝 Daily Report (2026-03-28)",
-            },
-        }
-
-    def test_section_block(self):
-        assert slack._section_block("hello") == {
-            "type": "section",
-            "text": {"type": "mrkdwn", "text": "hello"},
-        }
-
-    def test_context_block(self):
-        assert slack._context_block("ctx") == {
-            "type": "context",
-            "elements": [{"type": "mrkdwn", "text": "ctx"}],
-        }
-
-
 class TestAppendGroup:
     def test_buffers_blocks_and_fallback_as_one_group(self, client):
-        header = slack._header_block("📝 Daily Report (2026-03-28)")
-        section = slack._section_block("body")
+        header = header_block("📝 Daily Report (2026-03-28)")
+        section = section_block("body")
         client._append_group([header, section], "1 page(s) created")
 
         assert client._groups == [[header, section]]
         assert client._fallback_parts == ["1 page(s) created"]
 
     def test_keeps_groups_separate(self, client):
-        first = slack._section_block("first")
-        second = slack._section_block("second")
+        first = section_block("first")
+        second = section_block("second")
         client._append_group([first], "a")
         client._append_group([second], "b")
 
@@ -309,14 +261,12 @@ class TestAppendGroup:
 
 class TestChunkBlocks:
     def test_returns_single_chunk_within_limit(self):
-        blocks = [slack._section_block(str(i)) for i in range(3)]
-
-        assert slack._chunk_blocks(blocks, limit=3) == [blocks]
+        blocks = [section_block(str(i)) for i in range(3)]
+        assert slack_client._chunk_blocks(blocks, limit=3) == [blocks]
 
     def test_splits_into_chunks_of_limit(self):
-        blocks = [slack._section_block(str(i)) for i in range(5)]
-
-        assert slack._chunk_blocks(blocks, limit=2) == [
+        blocks = [section_block(str(i)) for i in range(5)]
+        assert slack_client._chunk_blocks(blocks, limit=2) == [
             blocks[:2],
             blocks[2:4],
             blocks[4:],
@@ -325,30 +275,27 @@ class TestChunkBlocks:
 
 class TestPackMessages:
     def test_returns_nothing_for_empty_buffer(self):
-        assert slack._pack_messages([], []) == []
+        assert slack_client._pack_messages([], []) == []
 
     def test_joins_groups_with_divider_without_leading_divider(self):
-        first = slack._section_block("first")
-        second = slack._section_block("second")
+        first = section_block("first")
+        second = section_block("second")
+        messages = slack_client._pack_messages([[first], [second]], ["a", "b"])
 
-        messages = slack._pack_messages([[first], [second]], ["a", "b"])
-
-        assert messages == [([first, slack._divider(), second], "a | b")]
+        assert messages == [([first, divider(), second], "a | b")]
 
     def test_starts_new_message_when_limit_exceeded(self):
-        groups = [[slack._section_block(str(i))] for i in range(4)]
+        groups = [[section_block(str(i))] for i in range(4)]
         fallbacks = [str(i) for i in range(4)]
-
-        messages = slack._pack_messages(groups, fallbacks, limit=3)
+        messages = slack_client._pack_messages(groups, fallbacks, limit=3)
 
         assert [len(blocks) for blocks, _ in messages] == [3, 3]
         assert [fallback for _, fallback in messages] == ["0 | 1", "2 | 3"]
 
     def test_never_splits_a_group_across_messages(self):
-        pair = [slack._header_block("h"), slack._section_block("s")]
+        pair = [header_block("h"), section_block("s")]
         groups = [list(pair) for _ in range(3)]
-
-        messages = slack._pack_messages(groups, ["a", "b", "c"], limit=4)
+        messages = slack_client._pack_messages(groups, ["a", "b", "c"], limit=4)
 
         assert [len(blocks) for blocks, _ in messages] == [2, 2, 2]
         for blocks, _ in messages:
@@ -761,7 +708,7 @@ class TestFlush:
         sent = _all_send_kwargs(client)
         assert len(sent) > 1
         for kwargs in sent:
-            assert len(kwargs["blocks"]) <= slack.BLOCKS_MAX
+            assert len(kwargs["blocks"]) <= slack_client.BLOCKS_MAX
             assert kwargs["blocks"][0]["type"] != "divider"
         headers = [
             block
@@ -859,20 +806,20 @@ class TestSendNoticeThread:
         assert len(section_blocks) >= 2
         for block in section_blocks:
             text = block["text"]["text"]
-            assert len(text) <= slack.SECTION_TEXT_MAX
+            assert len(text) <= SECTION_TEXT_MAX
             assert text.startswith("*session*")
 
     def test_splits_into_multiple_replies_over_block_limit(self, threaded_client):
         notice = Notice()
         # Each title nearly fills a section, so every entry lands in its own block
-        for i in range(slack.BLOCKS_MAX + 5):
+        for i in range(slack_client.BLOCKS_MAX + 5):
             notice.add(NoticeSource.SESSION, "x" * 2850, key=f"k{i}")
         threaded_client.send_notice_thread(notice)
 
         sent = _all_send_kwargs(threaded_client)
         assert len(sent) > 1
         for kwargs in sent:
-            assert len(kwargs["blocks"]) <= slack.BLOCKS_MAX
+            assert len(kwargs["blocks"]) <= slack_client.BLOCKS_MAX
             assert kwargs["thread_ts"] == FIRST_TS
 
     def test_truncates_single_line_exceeding_section_limit(self, threaded_client):
@@ -885,5 +832,5 @@ class TestSendNoticeThread:
         section_blocks = [b for b in blocks if b["type"] == "section"]
         assert len(section_blocks) == 1
         text = section_blocks[0]["text"]["text"]
-        assert len(text) <= slack.SECTION_TEXT_MAX
+        assert len(text) <= SECTION_TEXT_MAX
         assert text.endswith("…")

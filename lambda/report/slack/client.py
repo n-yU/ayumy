@@ -7,105 +7,28 @@ from datetime import datetime
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackClientError
 
-from config import CONFIG
-
-from .cost import CostDisplay
-from .domain.summary import ReportSummary
-from .shared.dates import JST
-from .shared.inline import parse_inline
-from .shared.notice import Notice
-from .summarizer import ValidationResult
+from ..cost import CostDisplay
+from ..domain.summary import ReportSummary
+from ..shared.dates import JST
+from ..shared.notice import Notice
+from ..summarizer import ValidationResult
+from .blocks import (
+    SECTION_TEXT_MAX,
+    chunk_lines,
+    context_block,
+    divider,
+    escape_mrkdwn,
+    header_block,
+    mom_suffix,
+    run_labels,
+    section_block,
+    to_mrkdwn,
+    truncate_headline,
+)
 
 logger = logging.getLogger(__name__)
 
-SECTION_TEXT_MAX = 2900  # Slack section text limit is 3000; cap below to leave room for headers and continuation prefixes
 BLOCKS_MAX = 50  # Slack API limit itself; no margin needed unlike SECTION_TEXT_MAX
-
-
-def _truncate_headline(headline: str, limit: int = CONFIG.slack.headline_max) -> str:
-    if len(headline) <= limit:
-        return headline
-    return headline[: limit - 1] + "…"
-
-
-def _escape_mrkdwn(text: str) -> str:
-    """Neutralize the Slack special sequences (`<!channel>`, `<@U...>`, `<url|text>`) in `text`; they all start with `<`, so HTML-entity-escaping `&`/`<`/`>` is sufficient."""
-    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-
-
-def _to_mrkdwn(text: str, owner: str, repo: str) -> str:
-    """Render the inline notation of a summary line as mrkdwn.
-
-    Escaping runs first so Slack specials in the generated text stay neutralized.
-    Backticks pass through unchanged because they already mean inline code in mrkdwn.
-    """
-    parts = []
-    for segment in parse_inline(_escape_mrkdwn(text), owner, repo):
-        if segment.code:
-            parts.append(f"`{segment.text}`")
-        elif segment.bold:
-            parts.append(f"*{segment.text}*")
-        elif segment.url:
-            parts.append(f"<{segment.url}|{segment.text}>")
-        else:
-            parts.append(segment.text)
-    return "".join(parts)
-
-
-def _divider() -> dict:
-    return {"type": "divider"}
-
-
-def _header_block(text: str) -> dict:
-    return {
-        "type": "header",
-        "text": {"type": "plain_text", "text": text},
-    }
-
-
-def _section_block(text: str) -> dict:
-    return {"type": "section", "text": {"type": "mrkdwn", "text": text}}
-
-
-def _context_block(text: str) -> dict:
-    return {"type": "context", "elements": [{"type": "mrkdwn", "text": text}]}
-
-
-def _run_labels(is_manual: bool, is_backfill: bool) -> str:
-    """Render the header suffix marking how the report was triggered, empty for a routine scheduled run so its notifications keep their usual look."""
-    labels = []
-    if is_manual:
-        labels.append("[manual]")
-    if is_backfill:
-        labels.append("[backfill]")
-    return "".join(f" {label}" for label in labels)
-
-
-def _mom_suffix(change: float | None) -> str:
-    """Render the `(MoM ...)` fragment, returning empty string when `change` is None so callers can drop it for uncomputable periods."""
-    if change is None:
-        return ""
-    return f" (MoM {change:+.0f}%)"
-
-
-def _chunk_lines(lines: list[str], limit: int) -> list[str]:
-    """Split `lines` into chunks of at most `limit` characters, truncating any single line longer than `limit` so each chunk stays within Slack's section text limit."""
-    chunks: list[str] = []
-    current: list[str] = []
-    used = 0
-    for raw in lines:
-        line = raw if len(raw) <= limit else raw[: limit - 1] + "…"
-        added = len(line) + (1 if current else 0)
-        if current and used + added > limit:
-            chunks.append("\n".join(current))
-            current = [line]
-            used = len(line)
-        else:
-            current.append(line)
-            used += added
-    if current:
-        chunks.append("\n".join(current))
-    return chunks
 
 
 def _chunk_blocks(blocks: list[dict], limit: int = BLOCKS_MAX) -> list[list[dict]]:
@@ -127,7 +50,7 @@ def _pack_messages(
             current_fallbacks = [fallback]
         else:
             if current:
-                current.append(_divider())
+                current.append(divider())
             current.extend(blocks)
             current_fallbacks.append(fallback)
     if current:
@@ -161,12 +84,12 @@ class SlackClient:
     ) -> None:
         title = (
             f"{emoji} Daily Report ({date_str})"
-            f"{_run_labels(self.is_manual, is_backfill)}"
+            f"{run_labels(self.is_manual, is_backfill)}"
         )
-        blocks = [_header_block(title), _section_block(body_text)]
+        blocks = [header_block(title), section_block(body_text)]
         if session_only_repos:
             blocks.append(
-                _context_block(f"📓 Session-only: {', '.join(session_only_repos)}")
+                context_block(f"📓 Session-only: {', '.join(session_only_repos)}")
             )
         self._append_group(blocks, f"{title}: {fallback_suffix}")
 
@@ -195,7 +118,7 @@ class SlackClient:
                 raw_headline = repo["summary"][0] if repo and repo["summary"] else ""
                 # Collapse newlines so a multi-line headline cannot break the one-line-per-repo layout of the Slack section.
                 raw_headline = raw_headline.replace("\n", " ").replace("\r", " ")
-                headline = _to_mrkdwn(_truncate_headline(raw_headline), owner, name)
+                headline = to_mrkdwn(truncate_headline(raw_headline), owner, name)
                 link = f"<{url}|{date_str}: {name}>"
                 page_lines.append(f"{link} — {headline}" if headline else link)
 
@@ -292,16 +215,16 @@ class SlackClient:
         fallback = f"📊 Execution Metrics: v{version}, {elapsed_text}, {memory_text}"
         if cost is not None:
             run_text = f"🧾 ${cost.current_run_spend_usd:.4f}"
-            mtd_text = f"💰 MTD ${cost.monthly_spend_usd:.2f}{_mom_suffix(cost.spend_change_pct)}"
-            calls_text = f"🔁 {cost.monthly_call_count} calls{_mom_suffix(cost.call_count_change_pct)}"
+            mtd_text = f"💰 MTD ${cost.monthly_spend_usd:.2f}{mom_suffix(cost.spend_change_pct)}"
+            calls_text = f"🔁 {cost.monthly_call_count} calls{mom_suffix(cost.call_count_change_pct)}"
             parts.extend([run_text, mtd_text, calls_text])
             fallback += (
                 f", run ${cost.current_run_spend_usd:.4f}"
-                f", MTD ${cost.monthly_spend_usd:.2f}{_mom_suffix(cost.spend_change_pct)}"
-                f", {cost.monthly_call_count} calls{_mom_suffix(cost.call_count_change_pct)}"
+                f", MTD ${cost.monthly_spend_usd:.2f}{mom_suffix(cost.spend_change_pct)}"
+                f", {cost.monthly_call_count} calls{mom_suffix(cost.call_count_change_pct)}"
             )
 
-        self._append_group([_context_block("  |  ".join(parts))], fallback)
+        self._append_group([context_block("  |  ".join(parts))], fallback)
 
     def flush(self) -> None:
         for blocks, fallback in _pack_messages(self._groups, self._fallback_parts):
@@ -315,19 +238,19 @@ class SlackClient:
             return
         grouped: dict[str, list[str]] = defaultdict(list)
         for entry in notice.entries():
-            line = f"• {_escape_mrkdwn(entry.title)}"
+            line = f"• {escape_mrkdwn(entry.title)}"
             if entry.details:
                 detail_str = ", ".join(
-                    f"{k}={_escape_mrkdwn(v)}" for k, v in entry.details.items()
+                    f"{k}={escape_mrkdwn(v)}" for k, v in entry.details.items()
                 )
                 line += f"  `{detail_str}`"
             grouped[entry.source].append(line)
         total = len(notice)
-        blocks: list[dict] = [_header_block(f"⚠️ Warnings ({total})")]
+        blocks: list[dict] = [header_block(f"⚠️ Warnings ({total})")]
         for source, lines in grouped.items():
             header = f"*{source}* ({len(lines)})"
-            for chunk in _chunk_lines(lines, SECTION_TEXT_MAX - len(header) - 1):
-                blocks.append(_section_block(f"{header}\n{chunk}"))
+            for chunk in chunk_lines(lines, SECTION_TEXT_MAX - len(header) - 1):
+                blocks.append(section_block(f"{header}\n{chunk}"))
         fallback = f"⚠️ {total} warning(s) emitted"
         for chunk in _chunk_blocks(blocks):
             self._send(fallback, chunk, thread_ts=self.parent_ts)
