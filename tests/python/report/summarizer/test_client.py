@@ -28,7 +28,7 @@ class TestBuildToolSchema:
         repo_props = schema["input_schema"]["properties"]["repositories"]["items"][
             "properties"
         ]
-        assert repo_props["tags"]["items"]["enum"] == list(tags.ALLOWED_TAG_NAMES)
+        assert repo_props["tags"]["items"]["enum"] == list(tags.ALLOWED_NAMES)
 
     def test_tags_field_carries_description_per_tag(self):
         client = _make_client()
@@ -36,14 +36,14 @@ class TestBuildToolSchema:
         tags_field = schema["input_schema"]["properties"]["repositories"]["items"][
             "properties"
         ]["tags"]
-        for tag in tags.TAG_DEFINITIONS:
+        for tag in tags.DEFINITIONS:
             assert tag.name in tags_field["description"]
             assert tag.description in tags_field["description"]
 
 
 class TestSystemPrompt:
     def test_lists_each_tag_with_description(self):
-        for tag in tags.TAG_DEFINITIONS:
+        for tag in tags.DEFINITIONS:
             assert tag.name in summarizer_client._SYSTEM_PROMPT
             assert tag.description in summarizer_client._SYSTEM_PROMPT
 
@@ -76,7 +76,7 @@ class TestBuildPrompt:
 class TestValidateReport:
     def setup_method(self):
         self.client = _make_client()
-        self.valid_tag = tags.ALLOWED_TAG_NAMES[0]
+        self.valid_tag = tags.ALLOWED_NAMES[0]
 
     def test_valid_report_unchanged(self):
         report = {

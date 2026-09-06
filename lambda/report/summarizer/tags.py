@@ -13,7 +13,7 @@ class Definition(NamedTuple):
     description: str
 
 
-TAG_DEFINITIONS: tuple[Definition, ...] = (
+DEFINITIONS: tuple[Definition, ...] = (
     Definition("feature", "新機能の追加や既存機能の拡張"),
     Definition("bugfix", "バグ修正・障害対応"),
     Definition("docs", "ドキュメント・README・Spec の整備"),
@@ -33,4 +33,4 @@ TAG_DEFINITIONS: tuple[Definition, ...] = (
     ),
 )
 
-ALLOWED_TAG_NAMES: tuple[str, ...] = tuple(t.name for t in TAG_DEFINITIONS)
+ALLOWED_NAMES: tuple[str, ...] = tuple(t.name for t in DEFINITIONS)

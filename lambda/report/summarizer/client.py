@@ -19,7 +19,7 @@ from . import tags
 logger = logging.getLogger(__name__)
 
 TOOL_NAME = "submit_daily_report"
-_TAG_GUIDANCE = "\n".join(f"- {t.name}: {t.description}" for t in tags.TAG_DEFINITIONS)
+_TAG_GUIDANCE = "\n".join(f"- {t.name}: {t.description}" for t in tags.DEFINITIONS)
 # Template's `$` placeholders rather than `str.format`, so the braces in the prompt's own examples need no escaping
 _SYSTEM_PROMPT = Template(
     (Path(__file__).parent.parent / "prompts" / "summary_system.txt").read_text(
@@ -110,7 +110,7 @@ class Client:
                                     ),
                                     "items": {
                                         "type": "string",
-                                        "enum": list(tags.ALLOWED_TAG_NAMES),
+                                        "enum": list(tags.ALLOWED_NAMES),
                                     },
                                 },
                             },
@@ -176,7 +176,7 @@ class Client:
     def validate_report(self, report: summary.Report) -> ValidationResult:
         """Strips disallowed tags from `report` in place."""
         result = ValidationResult()
-        tag_set = set(tags.ALLOWED_TAG_NAMES)
+        tag_set = set(tags.ALLOWED_NAMES)
 
         for repo in report["repositories"]:
             name = repo["name"]
