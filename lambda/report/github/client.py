@@ -6,7 +6,7 @@ import time
 from datetime import datetime, timedelta
 from functools import cached_property
 
-from github import Github, GithubException, UnknownObjectException
+import github as gh
 from github.Issue import Issue
 from github.Repository import Repository
 
@@ -31,7 +31,7 @@ class GitHubClient:
     """GitHub activity fetcher via PyGithub."""
 
     def __init__(self, pat: str, notice: Notice | None = None) -> None:
-        self.g = Github(pat, per_page=100)
+        self.g = gh.Github(pat, per_page=100)
         self._search_count = 0
         self._window_start = 0.0
         self._notice = notice or Notice()
@@ -232,7 +232,7 @@ class GitHubClient:
         try:
             commit = repo.get_commit(sha)
             return [pr.number for pr in commit.get_pulls()]
-        except UnknownObjectException:
+        except gh.UnknownObjectException:
             self._notice.add(
                 NoticeSource.GITHUB,
                 "Commit not found (404)",
@@ -260,7 +260,7 @@ class GitHubClient:
             c = commits[i]
             try:
                 commit = repo.get_commit(c.sha)
-            except GithubException as e:
+            except gh.GithubException as e:
                 if e.status not in (404, 422):
                     raise
                 self._notice.add(
@@ -308,7 +308,7 @@ class GitHubClient:
         for n in sorted(event_numbers | exempt_numbers):
             try:
                 pr = repo.get_pull(n)
-            except UnknownObjectException:
+            except gh.UnknownObjectException:
                 self._notice.add(
                     NoticeSource.GITHUB,
                     "PR not found (404)",
@@ -346,7 +346,7 @@ class GitHubClient:
         for number in session_set - event_numbers:
             try:
                 issue = repo.get_issue(number)
-            except UnknownObjectException:
+            except gh.UnknownObjectException:
                 logger.warning("Issue #%d not found (404), skipping", number)
                 continue
             if issue.pull_request is not None:

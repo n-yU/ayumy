@@ -3,14 +3,14 @@
 import logging
 from datetime import date
 
+import botocore.exceptions
 import pytest
-from botocore.exceptions import ClientError
 
 from ._builders import SESSION_KEY, user
 
 
 def _client_error(code):
-    return ClientError({"Error": {"Code": code}}, "UpdateItem")
+    return botocore.exceptions.ClientError({"Error": {"Code": code}}, "UpdateItem")
 
 
 def _item(**overrides):
@@ -129,7 +129,7 @@ class TestWriteItems:
             "ProvisionedThroughputExceededException"
         )
 
-        with pytest.raises(ClientError):
+        with pytest.raises(botocore.exceptions.ClientError):
             store._write_items([_write_item()])
 
 

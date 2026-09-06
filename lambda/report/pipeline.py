@@ -6,7 +6,7 @@ import resource
 import time
 from datetime import datetime
 
-from botocore.exceptions import BotoCoreError, ClientError
+import botocore.exceptions
 
 from config import CONFIG
 
@@ -179,7 +179,7 @@ def run(
             try:
                 deleted = session_client.delete_sessions(ingested_keys)
                 logger.info("Deleted %d JSONL file(s) from S3", deleted)
-            except (ClientError, BotoCoreError):
+            except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError):
                 notice.add(
                     NoticeSource.PIPELINE,
                     "S3 deletion failed; JSONL will be re-ingested on next run",

@@ -4,7 +4,7 @@ from datetime import datetime
 from unittest.mock import MagicMock
 
 import pytest
-from slack_sdk.errors import SlackApiError
+import slack_sdk
 
 from config import CONFIG
 from report.cost import CostDisplay
@@ -687,7 +687,7 @@ class TestFlush:
         assert _get_send_kwargs(client)["channel"] == CHANNEL
 
     def test_suppresses_slack_sdk_errors(self, client):
-        client.client.chat_postMessage.side_effect = SlackApiError(
+        client.client.chat_postMessage.side_effect = slack_sdk.errors.SlackApiError(
             "rate_limited", response={"error": "rate_limited"}
         )
         client.notify_error(TARGET_DATE, RuntimeError("fail"))

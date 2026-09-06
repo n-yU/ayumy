@@ -4,8 +4,8 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
+import boto3.dynamodb.conditions as conditions
 import pytest
-from boto3.dynamodb.conditions import ConditionExpressionBuilder
 
 from report.cost import CostDisplay, CostStore, MonthSummary
 from report.domain.summary import SummaryUsage
@@ -20,7 +20,7 @@ def _make_store():
 
 def _condition_values(condition) -> list:
     """Return literal values embedded in a boto3 KeyCondition so tests can assert on the SK ceiling."""
-    _, _, values = ConditionExpressionBuilder().build_expression(condition)
+    _, _, values = conditions.ConditionExpressionBuilder().build_expression(condition)
     return list(values.values())
 
 

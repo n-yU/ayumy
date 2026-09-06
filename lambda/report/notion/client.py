@@ -3,7 +3,7 @@
 import logging
 from datetime import datetime
 
-from notion_client import Client
+import notion_client
 
 from config import CONFIG
 
@@ -48,7 +48,7 @@ class NotionClient:
     def __init__(
         self, token: str, database_id: str, owner: str, notice: Notice | None = None
     ) -> None:
-        self.client = Client(auth=token)
+        self.client = notion_client.Client(auth=token)
         self.database_id = database_id
         self.owner = owner  # Resolves number references in summaries to GitHub URLs
         self._data_source_id: str | None = None

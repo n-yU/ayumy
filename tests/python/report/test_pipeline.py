@@ -5,8 +5,8 @@ from contextlib import ExitStack
 from datetime import date, datetime, timedelta
 from unittest.mock import patch
 
+import botocore.exceptions
 import pytest
-from botocore.exceptions import ClientError
 
 from config import CONFIG
 from report.domain.activity import GitHubActivity
@@ -503,7 +503,7 @@ class TestRun:
     ):
         session_store.ingest.return_value = ["claude-sessions/proj/s1.jsonl"]
         session_client = run_patches["SessionClient"].return_value
-        session_client.delete_sessions.side_effect = ClientError(
+        session_client.delete_sessions.side_effect = botocore.exceptions.ClientError(
             {"Error": {"Code": "AccessDenied", "Message": "denied"}}, "DeleteObjects"
         )
         with caplog.at_level(logging.WARNING, logger="report.pipeline"):

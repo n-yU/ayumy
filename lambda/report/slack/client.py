@@ -4,8 +4,7 @@ import logging
 from collections import defaultdict
 from datetime import datetime
 
-from slack_sdk import WebClient
-from slack_sdk.errors import SlackClientError
+import slack_sdk
 
 from ..cost import CostDisplay
 from ..domain.summary import ReportSummary
@@ -62,7 +61,7 @@ class SlackClient:
     """Client for sending daily report notifications via Slack chat.postMessage."""
 
     def __init__(self, token: str, channel: str, *, is_manual: bool = False) -> None:
-        self.client = WebClient(token=token)
+        self.client = slack_sdk.WebClient(token=token)
         self.channel = channel
         self.is_manual = is_manual
         self._groups: list[list[dict]] = []
@@ -271,6 +270,6 @@ class SlackClient:
             if thread_ts is None:
                 # Warnings thread under the final message, which carries the execution metrics
                 self.parent_ts = response.get("ts")
-        except SlackClientError as e:
+        except slack_sdk.errors.SlackClientError as e:
             # Broad within Slack SDK errors: best-effort notification must not abort the pipeline
             logger.exception("Failed to send Slack notification: %r", e)
