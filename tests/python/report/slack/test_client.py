@@ -7,7 +7,7 @@ import pytest
 import slack_sdk.errors
 
 from config import CONFIG
-from report.cost import CostDisplay
+from report import cost
 from report.shared.dates import JST
 from report.shared.notice import Notice, NoticeSource
 from report.slack import client as slack_client
@@ -88,7 +88,7 @@ def _queue_every_day(client):
 
 
 def _cost(spend_change_pct=8.0, call_count_change_pct=5.0):
-    return CostDisplay(
+    return cost.CostDisplay(
         current_run_spend_usd=0.0340,
         monthly_spend_usd=1.23,
         spend_change_pct=spend_change_pct,
@@ -103,10 +103,10 @@ def _invalid_tags_result():
     return result
 
 
-def _repo(name, summary=None):
+def _repo(name, summary_lines=None):
     return {
         "name": name,
-        "summary": summary or [],
+        "summary": summary_lines or [],
         "achievements": [],
         "ongoing": [],
         "claude_code": "",
@@ -427,8 +427,8 @@ class TestNotifyMetricsWithCost:
     def test_renders_cost_caption(
         self, client, spend_change_pct, call_count_change_pct, expected, absent
     ):
-        cost = _cost(spend_change_pct, call_count_change_pct)
-        client.notify_metrics(1.0, 100.0, VERSION, cost_display=cost)
+        cost_display = _cost(spend_change_pct, call_count_change_pct)
+        client.notify_metrics(1.0, 100.0, VERSION, cost_display=cost_display)
         client.flush()
 
         text = _blocks_text(_get_send_kwargs(client)["blocks"])

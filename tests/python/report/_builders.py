@@ -3,7 +3,7 @@
 from datetime import datetime
 from unittest.mock import MagicMock
 
-from report.domain.activity import CommitInfo, GitHubActivity, IssueInfo, PullInfo
+from report.domain import activity
 from report.domain.session import SessionActivity
 from report.shared.dates import JST
 
@@ -32,7 +32,7 @@ def make_commit(
     url=None,
     pull_numbers=(),
 ):
-    return CommitInfo(
+    return activity.CommitInfo(
         sha=sha,
         message=message,
         author=author,
@@ -68,7 +68,7 @@ def make_pull(
     if merge_commit_sha is _DERIVED:
         merge_commit_sha = "deadbeef" if state == "merged" else None
 
-    return PullInfo(
+    return activity.PullInfo(
         number=number,
         title=title,
         state=state,
@@ -102,7 +102,7 @@ def make_issue(
     if closed_at is _DERIVED:
         closed_at = COMPLETED_AT if state == "closed" else None
 
-    return IssueInfo(
+    return activity.IssueInfo(
         number=number,
         title=title,
         state=state,
@@ -157,7 +157,7 @@ def make_repo_activity(*, commits=(), pulls=(), issues=()):
 
 
 def make_github(repo=REPO, *, commits=(), pulls=(), issues=()):
-    return GitHubActivity(
+    return activity.GitHubActivity(
         {repo: make_repo_activity(commits=commits, pulls=pulls, issues=issues)}
     )
 

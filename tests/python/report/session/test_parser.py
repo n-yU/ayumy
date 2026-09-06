@@ -4,12 +4,7 @@ import logging
 
 import pytest
 
-from report.session.parser import (
-    _effective_cwd,
-    _expand_home,
-    _extract_pr_issue_refs,
-    _is_cross_repo,
-)
+from report.session import parser
 
 from ._builders import SESSION_KEY, assistant, bash, tool_result, tool_use_block, user
 
@@ -51,15 +46,15 @@ class TestExpandHome:
         ],
     )
     def test_expands(self, path, project_cwd, expected):
-        assert _expand_home(path, project_cwd) == expected
+        assert parser._expand_home(path, project_cwd) == expected
 
     def test_falls_back_when_project_cwd_unknown(self, monkeypatch):
         monkeypatch.setenv("HOME", "/tmp/fakehome")
-        assert _expand_home("~/foo", None) == "/tmp/fakehome/foo"
+        assert parser._expand_home("~/foo", None) == "/tmp/fakehome/foo"
 
     def test_falls_back_for_atypical_project_cwd(self, monkeypatch):
         monkeypatch.setenv("HOME", "/tmp/fakehome")
-        assert _expand_home("~/foo", "/srv/app") == "/tmp/fakehome/foo"
+        assert parser._expand_home("~/foo", "/srv/app") == "/tmp/fakehome/foo"
 
 
 class TestEffectiveCwd:
@@ -115,7 +110,7 @@ class TestEffectiveCwd:
         ],
     )
     def test_resolves(self, command, project_cwd, expected):
-        assert _effective_cwd(command, project_cwd) == expected
+        assert parser._effective_cwd(command, project_cwd) == expected
 
     @pytest.mark.parametrize(
         "command",
@@ -132,9 +127,9 @@ class TestEffectiveCwd:
     )
     def test_unresolvable_cd_classified_as_cross_repo(self, command):
         project_cwd = "/Users/alice/proj"
-        result = _effective_cwd(command, project_cwd)
+        result = parser._effective_cwd(command, project_cwd)
         assert result is not None
-        assert _is_cross_repo(result, project_cwd) is True
+        assert parser._is_cross_repo(result, project_cwd) is True
 
 
 class TestIsCrossRepo:
@@ -165,7 +160,7 @@ class TestIsCrossRepo:
         ],
     )
     def test_classifies(self, effective_cwd, project_cwd, expected):
-        assert _is_cross_repo(effective_cwd, project_cwd) is expected
+        assert parser._is_cross_repo(effective_cwd, project_cwd) is expected
 
 
 class TestExtractPrIssueRefs:
@@ -233,7 +228,7 @@ class TestExtractPrIssueRefs:
         ],
     )
     def test_extracts(self, command, expected_pulls, expected_issues):
-        pulls, issues = _extract_pr_issue_refs(command)
+        pulls, issues = parser._extract_pr_issue_refs(command)
         assert pulls == expected_pulls
         assert issues == expected_issues
 

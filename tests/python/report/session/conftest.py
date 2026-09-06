@@ -4,8 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from report.session.parser import SessionLogParser
-from report.session.store import SessionStore
+from report.session import SessionStore, parser
 
 from ._builders import SESSION_KEY, jsonl
 
@@ -43,6 +42,8 @@ def run_parser(stub_session_log):
     """Return a callable that parses the given session log entries as a single session file."""
 
     def _run(*entries, repo="repo"):
-        return SessionLogParser().build_items(stub_session_log(*entries, repo=repo))
+        return parser.SessionLogParser().build_items(
+            stub_session_log(*entries, repo=repo)
+        )
 
     return _run
