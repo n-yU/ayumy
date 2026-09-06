@@ -33,10 +33,10 @@ template.yaml                        # AWS SAM テンプレート（Lambda, Even
 名前を個別に取り込むのは以下に限る。判定は参照するファイルごとに行う
 - モジュール直下の定数（`CONFIG` / `JST` / `TAG_DEFINITIONS` 等）。参照側で由来を取り違える余地が小さい一方、前置すると多数の箇所が長くなる
 - 型注釈にしか使わない取り込み（`github.Issue` / `github.Repository`）
-- そのファイルの引数名・ローカル変数名とモジュール名が重なる場合（`notice` / `blocks`）。モジュールが隠れるため
-- モジュール名が別の subpackage と重なる場合（`domain/session.py` と `report/session/`）
+- そのファイルの引数名・ローカル変数名とモジュール名が衝突する場合（`notice` / `blocks`）。モジュールが隠れるため
+- モジュール名が別の subpackage と衝突する場合（`domain/session.py` と `report/session/`）
 
-3 つ目は、識別子の側を役割で名付け直せるなら改名してモジュール経由に寄せる。対象そのものを指す一般名（`cost` / `activity` / `summary`）は `cost_display` / `github_activity` / `summary_lines` のように具体化できることが多い。名前を歪めてまで寄せる必要はない
+モジュール名の衝突は、識別子の側を役割で名付け直せるなら改名してモジュール経由に寄せる。対象そのものを指す一般名（`cost` / `activity` / `summary`）は `cost_display` / `github_activity` / `summary_lines` のように具体化できることが多い。名前を歪めてまで寄せる必要はない
 
 機能を提供する subpackage（`github` / `notion` / `session` / `slack` / `summarizer`）は `__init__.py` の再 export を経由して参照し、内部モジュールを直接指さない。型とヘルパーを置く `domain` / `shared` は再 export を持たないため、モジュールを直接指す
 
