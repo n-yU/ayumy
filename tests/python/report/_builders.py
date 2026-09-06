@@ -218,21 +218,23 @@ def pull_mock(
     repo=REPO,
     merge_commit_sha="merge-sha",
 ):
-    pr = MagicMock()
-    pr.number = number
-    pr.title = title
-    pr.created_at = created_at
-    pr.updated_at = updated_at if updated_at is not None else created_at
-    pr.merged_at = merged_at
-    pr.closed_at = closed_at if closed_at is not None else merged_at
+    mock = MagicMock()
+    mock.number = number
+    mock.title = title
+    mock.created_at = created_at
+    mock.updated_at = updated_at if updated_at is not None else created_at
+    mock.merged_at = merged_at
+    mock.closed_at = closed_at if closed_at is not None else merged_at
     # A merged PR is closed on GitHub, so derive the state after the merged_at fallback
-    pr.state = state if state is not None else ("closed" if pr.closed_at else "open")
-    pr.draft = draft
-    pr.html_url = f"https://github.com/{OWNER}/{repo}/pull/{number}"
-    pr.user.login = "user"
-    pr.labels = [label_mock(n) for n in labels]
-    pr.merge_commit_sha = merge_commit_sha
-    return pr
+    mock.state = (
+        state if state is not None else ("closed" if mock.closed_at else "open")
+    )
+    mock.draft = draft
+    mock.html_url = f"https://github.com/{OWNER}/{repo}/pull/{number}"
+    mock.user.login = "user"
+    mock.labels = [label_mock(n) for n in labels]
+    mock.merge_commit_sha = merge_commit_sha
+    return mock
 
 
 def issue_mock(
