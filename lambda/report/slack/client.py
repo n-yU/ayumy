@@ -96,7 +96,7 @@ class Client:
     def notify(
         self,
         target_date: datetime,
-        report: summary.ReportSummary,
+        report: summary.Report,
         pages: list[tuple[str, str]],
         session_only_repos: list[str] | None = None,
         *,
@@ -194,7 +194,7 @@ class Client:
         elapsed: float,
         peak_memory_mb: float,
         version: str,
-        cost_display: cost.CostDisplay | None = None,
+        cost_display: cost.Display | None = None,
         memory_limit_mb: int | None = None,
         timeout_seconds: int | None = None,
     ) -> None:

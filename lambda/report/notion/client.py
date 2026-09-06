@@ -67,7 +67,7 @@ class Client:
     def _build_properties(
         self,
         target_date: datetime,
-        repo_summary: summary.RepoSummary,
+        repo_summary: summary.Repo,
         commits: int,
         prs_merged: int,
         issues_closed: int,
@@ -95,7 +95,7 @@ class Client:
 
     def _build_status_sections(
         self,
-        repo_activity: activity.RepoActivity,
+        repo_activity: activity.Repo,
         since: datetime,
         until: datetime,
     ) -> list[dict]:
@@ -142,7 +142,7 @@ class Client:
 
     def _build_timeline_section(
         self,
-        repo_activity: activity.RepoActivity,
+        repo_activity: activity.Repo,
         since: datetime,
         until: datetime,
     ) -> list[dict]:
@@ -255,8 +255,8 @@ class Client:
 
     def _build_children(
         self,
-        repo_summary: summary.RepoSummary,
-        repo_activity: activity.RepoActivity,
+        repo_summary: summary.Repo,
+        repo_activity: activity.Repo,
         since: datetime,
         until: datetime,
     ) -> list[dict]:
@@ -274,8 +274,8 @@ class Client:
     def create_page(
         self,
         target_date: datetime,
-        repo_summary: summary.RepoSummary,
-        repo_activity: activity.RepoActivity,
+        repo_summary: summary.Repo,
+        repo_activity: activity.Repo,
         since: datetime,
         until: datetime,
         commits: int,
@@ -334,7 +334,7 @@ class Client:
         target_date: datetime,
         since: datetime,
         until: datetime,
-        report: summary.ReportSummary,
+        report: summary.Report,
         github_activity: activity.GitHubActivity,
         session_activity: SessionActivity,
     ) -> list[tuple[str, str]]:

@@ -47,7 +47,7 @@ _RESPONSE_SHAPE_SCHEMA = {
 _VALUE_REPR_LIMIT = 200
 
 
-def _validate_response_shape(payload: object) -> summary.ReportSummary:
+def _validate_response_shape(payload: object) -> summary.Report:
     try:
         jsonschema.validate(payload, _RESPONSE_SHAPE_SCHEMA)
     except jsonschema.ValidationError as e:
@@ -61,7 +61,7 @@ def _validate_response_shape(payload: object) -> summary.ReportSummary:
             f"got={type(e.instance).__name__} value={value_repr}"
         )
         raise ValueError(f"{summary_line}\n{e}") from e
-    return cast(summary.ReportSummary, payload)
+    return cast(summary.Report, payload)
 
 
 class ValidationResult:
@@ -142,7 +142,7 @@ class Client:
         target_date: datetime,
         formatted_github: str,
         formatted_sessions: str,
-    ) -> tuple[summary.ReportSummary, summary.SummaryUsage]:
+    ) -> tuple[summary.Report, summary.Usage]:
         """Generate the structured summary via Claude API tool use.
 
         Returns the parsed report and the token / spend record for the API call.
@@ -163,7 +163,7 @@ class Client:
             messages=[{"role": "user", "content": prompt}],
         )
 
-        usage = summary.SummaryUsage.from_call(
+        usage = summary.Usage.from_call(
             message.usage.input_tokens, message.usage.output_tokens
         )
 
@@ -173,7 +173,7 @@ class Client:
 
         raise ValueError(f"Claude API response missing tool_use block for {TOOL_NAME}.")
 
-    def validate_report(self, report: summary.ReportSummary) -> ValidationResult:
+    def validate_report(self, report: summary.Report) -> ValidationResult:
         """Strips disallowed tags from `report` in place."""
         result = ValidationResult()
         tag_set = set(tags.ALLOWED_TAG_NAMES)

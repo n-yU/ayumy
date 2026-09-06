@@ -205,7 +205,7 @@ class IssueInfo:
         )
 
 
-class RepoActivity(TypedDict):
+class Repo(TypedDict):
     commits: list[CommitInfo]
     pulls: list[PullInfo]
     issues: list[IssueInfo]
@@ -214,10 +214,10 @@ class RepoActivity(TypedDict):
 class GitHubActivity:
     """GitHub activity data keyed by repository name."""
 
-    def __init__(self, data: dict[str, RepoActivity]) -> None:
+    def __init__(self, data: dict[str, Repo]) -> None:
         self._data = data
 
-    def repos(self) -> dict[str, RepoActivity]:
+    def repos(self) -> dict[str, Repo]:
         return self._data
 
     def keys(self) -> KeysView[str]:

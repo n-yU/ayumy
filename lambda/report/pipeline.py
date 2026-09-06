@@ -259,7 +259,7 @@ def run(
             memory_limit_mb,
             timeout_seconds,
         )
-        cost_display: cost.CostDisplay | None = None
+        cost_display: cost.Display | None = None
         if cost_store is not None:
             try:
                 cost_display = cost_store.compute_display(

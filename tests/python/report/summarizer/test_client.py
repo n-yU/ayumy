@@ -147,7 +147,7 @@ class TestGenerateSummary:
             10_000 * rates["input_usd_per_1m_tokens"]
             + 2_000 * rates["output_usd_per_1m_tokens"]
         ) / 1_000_000
-        assert isinstance(usage, summary.SummaryUsage)
+        assert isinstance(usage, summary.Usage)
         assert usage.input_tokens == 10_000
         assert usage.output_tokens == 2_000
         assert usage.spend_usd == pytest.approx(expected_spend)

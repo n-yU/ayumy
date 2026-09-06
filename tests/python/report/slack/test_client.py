@@ -87,7 +87,7 @@ def _queue_every_day(client):
 
 
 def _cost(spend_change_pct=8.0, call_count_change_pct=5.0):
-    return cost.CostDisplay(
+    return cost.Display(
         current_run_spend_usd=0.0340,
         monthly_spend_usd=1.23,
         spend_change_pct=spend_change_pct,

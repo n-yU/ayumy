@@ -16,7 +16,7 @@ from report.shared import dates
 
 from . import _builders
 
-_STUB_USAGE = summary.SummaryUsage(input_tokens=0, output_tokens=0, spend_usd=0.0)
+_STUB_USAGE = summary.Usage(input_tokens=0, output_tokens=0, spend_usd=0.0)
 
 
 def _repo(name, summary_lines=("work",), tags=()):
@@ -133,9 +133,7 @@ class TestProcessDate:
         _stub_summary(
             pipeline_clients,
             [_repo("my-repo")],
-            usage=summary.SummaryUsage(
-                input_tokens=1000, output_tokens=200, spend_usd=0.012
-            ),
+            usage=summary.Usage(input_tokens=1000, output_tokens=200, spend_usd=0.012),
         )
         pipeline.process_date(
             _builders.SINCE,

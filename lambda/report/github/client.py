@@ -150,7 +150,7 @@ class Client:
         session_issues: dict[str, list[int]] | None = None,
     ) -> activity.GitHubActivity:
         user = self.g.get_user()
-        data: dict[str, activity.RepoActivity] = {}
+        data: dict[str, activity.Repo] = {}
         session_pulls = session_pulls or {}
         session_issues = session_issues or {}
 
