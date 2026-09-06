@@ -1,11 +1,8 @@
 """Ayumy daily report generator."""
 
-import os
 from collections.abc import Container, KeysView
 from dataclasses import dataclass
 from datetime import datetime
-from functools import lru_cache
-from pathlib import Path
 from typing import NotRequired, TypedDict
 
 from config import CONFIG
@@ -128,22 +125,3 @@ class SummaryUsage:
             output_tokens=output_tokens,
             spend_usd=spend_usd,
         )
-
-
-def require_env(name: str) -> str:
-    """Return the environment variable value.
-
-    Raises:
-        ValueError: If the variable is unset or empty.
-    """
-    value = os.environ.get(name)
-    if not value:
-        raise ValueError(f"{name} is not set")
-    return value
-
-
-@lru_cache
-def get_version() -> str:
-    """Return the ayumy version recorded in the VERSION file."""
-    version_path = Path(__file__).resolve().parent.parent / "VERSION"
-    return version_path.read_text().strip()

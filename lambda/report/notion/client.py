@@ -11,12 +11,12 @@ from .. import (
     ReportSummary,
     RepoSummary,
     SessionActivity,
-    get_version,
 )
 from ..domain import CommitInfo, PullInfo, in_range
 from ..github import GitHubActivity, RepoActivity
 from ..notice import Notice, NoticeSource
 from ..shared.dates import JST
+from ..shared.env import get_version
 from .blocks import bulleted_link, bulleted_text, heading_2
 
 logger = logging.getLogger(__name__)

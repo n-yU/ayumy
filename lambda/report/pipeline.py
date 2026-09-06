@@ -10,7 +10,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 
 from config import CONFIG
 
-from . import SessionActivity, get_version, require_env
+from . import SessionActivity
 from .cost import CostDisplay, CostStore
 from .github import GitHubClient
 from .notice import Notice, NoticeSource
@@ -22,6 +22,7 @@ from .shared.dates import (
     get_target_date_range,
     parse_target_dates,
 )
+from .shared.env import get_version, require_env
 from .slack import SlackClient
 from .summarizer import SummaryClient
 
