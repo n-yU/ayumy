@@ -27,7 +27,7 @@ def _content_hash(fields: dict) -> str:
 
 
 class Store:
-    """Client for reading and writing session metadata in DynamoDB."""
+    """Store for reading and writing session metadata in DynamoDB."""
 
     def __init__(
         self,

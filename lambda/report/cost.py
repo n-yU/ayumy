@@ -37,7 +37,7 @@ def _pct_change(current: float, prev: float) -> float | None:
 
 
 class Store:
-    """Client for persisting per-execution Claude API cost records."""
+    """Store for persisting per-execution Claude API cost records."""
 
     def __init__(self, table_name: str) -> None:
         self.table = boto3.resource("dynamodb").Table(table_name)
