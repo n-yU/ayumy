@@ -551,7 +551,7 @@ Timeline は `bulleted_list_item` のネスト構造で表現する。PR 親エ�
 並び順は対象日ウィンドウ内における最初の活動時刻を基準に、PR ブロックと他のトップレベル要素を時系列で混ぜて並べる。PR ブロックの並び順キーは PR open（in range の場合）・最初の配下 commit・merge 時刻のうち最も早いものを採る。同時刻のタイブレークは PR 親エントリ → 同じ時刻の merge commit の順とする
 
 ### Tag Classification
-タグは Claude API の要約生成時に自動判定させる。タグ名と判定基準（description）はコード側（[lambda/report/tags.py](../lambda/report/tags.py)）で single source of truth として管理する。Notion DB の multi-select オプションには description フィールドがないため、コード側に置いたうえで Claude API のシステムプロンプトに注入する
+タグは Claude API の要約生成時に自動判定させる。タグ名と判定基準（description）はコード側（[lambda/report/summarizer/tags.py](../lambda/report/summarizer/tags.py)）で single source of truth として管理する。Notion DB の multi-select オプションには description フィールドがないため、コード側に置いたうえで Claude API のシステムプロンプトに注入する
 
 ## AWS Lambda Configuration
 ### Lambda Execution Modes

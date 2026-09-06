@@ -9,14 +9,14 @@ from config import CONFIG
 from report.domain.summary import SummaryUsage
 from report.shared.dates import JST
 from report.shared.notice import Notice
-from report.summarizer import (
+from report.summarizer.client import (
     _SYSTEM_PROMPT,
     _VALUE_REPR_LIMIT,
     TOOL_NAME,
     SummaryClient,
     ValidationResult,
 )
-from report.tags import ALLOWED_TAG_NAMES, TAG_DEFINITIONS
+from report.summarizer.tags import ALLOWED_TAG_NAMES, TAG_DEFINITIONS
 
 
 def _make_client() -> SummaryClient:
