@@ -7,12 +7,12 @@ import pytest
 from report.github import GitHubClient
 from report.shared.notice import Notice
 
-from .._builders import REPO, REPO_FULL_NAME, make_stub
+from .. import _builders
 
 
 @pytest.fixture
 def github_client():
-    return make_stub(
+    return _builders.stub(
         GitHubClient,
         g=MagicMock(),
         _search_count=0,
@@ -24,8 +24,8 @@ def github_client():
 @pytest.fixture
 def repo():
     repo = MagicMock()
-    repo.name = REPO
-    repo.full_name = REPO_FULL_NAME
+    repo.name = _builders.REPO
+    repo.full_name = _builders.REPO_FULL_NAME
     return repo
 
 

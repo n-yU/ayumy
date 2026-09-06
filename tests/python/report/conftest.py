@@ -7,13 +7,13 @@ import pytest
 from report.domain import summary
 from report.summarizer import ValidationResult
 
-from ._builders import OWNER
+from . import _builders
 
 
 @pytest.fixture
 def pipeline_clients():
     github_client = MagicMock()
-    github_client.owner = OWNER
+    github_client.owner = _builders.OWNER
     summary_client = MagicMock()
     summary_client.validate_report.return_value = ValidationResult()
     summary_client.generate_summary.return_value = (

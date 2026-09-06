@@ -11,7 +11,7 @@ from report.notion.blocks import (
     linked_text,
 )
 
-from .._builders import OWNER, REPO
+from .. import _builders
 
 URL = "https://example.com/1"
 
@@ -21,11 +21,11 @@ def _linked(text: str) -> list[dict]:
 
 
 def _bulleted_text(text: str) -> dict:
-    return bulleted_text(text, OWNER, REPO)
+    return bulleted_text(text, _builders.OWNER, _builders.REPO)
 
 
 def _issue_url(number: str) -> str:
-    return f"https://github.com/{OWNER}/{REPO}/issues/{number}"
+    return f"https://github.com/{_builders.OWNER}/{_builders.REPO}/issues/{number}"
 
 
 @pytest.mark.parametrize(
@@ -146,7 +146,7 @@ def test_bulleted_text_links_number_reference():
 def test_bulleted_text_chunks_and_relinks_long_reference_segment():
     long_repo = "r" * (RICH_TEXT_LIMIT + 10)
     rich_text = _bulleted_text(f"{long_repo}#7")["bulleted_list_item"]["rich_text"]
-    url = f"https://github.com/{OWNER}/{long_repo}/issues/7"
+    url = f"https://github.com/{_builders.OWNER}/{long_repo}/issues/7"
     assert [rt["text"]["link"] for rt in rich_text] == [{"url": url}] * 2
 
 

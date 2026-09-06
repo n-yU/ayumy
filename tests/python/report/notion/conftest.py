@@ -7,16 +7,16 @@ import pytest
 from report.notion import NotionClient
 from report.shared.notice import Notice
 
-from .._builders import OWNER, SINCE, UNTIL, make_repo_activity, make_stub
+from .. import _builders
 
 
 @pytest.fixture
 def notion_client():
-    return make_stub(
+    return _builders.stub(
         NotionClient,
         client=MagicMock(),
         database_id="db-id",
-        owner=OWNER,
+        owner=_builders.OWNER,
         _data_source_id=None,
         _notice=Notice(),
     )
@@ -28,7 +28,7 @@ def build_status(notion_client):
 
     def _build(**activity):
         return notion_client._build_status_sections(
-            make_repo_activity(**activity), SINCE, UNTIL
+            _builders.repo_activity(**activity), _builders.SINCE, _builders.UNTIL
         )
 
     return _build
@@ -40,7 +40,7 @@ def build_timeline(notion_client):
 
     def _build(**activity):
         return notion_client._build_timeline_section(
-            make_repo_activity(**activity), SINCE, UNTIL
+            _builders.repo_activity(**activity), _builders.SINCE, _builders.UNTIL
         )
 
     return _build

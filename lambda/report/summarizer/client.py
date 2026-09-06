@@ -12,14 +12,14 @@ import jsonschema
 from config import CONFIG
 
 from ..domain import summary
-from ..shared.dates import JST
+from ..shared import dates
 from ..shared.notice import Notice, NoticeSource
-from .tags import ALLOWED_TAG_NAMES, TAG_DEFINITIONS
+from . import tags
 
 logger = logging.getLogger(__name__)
 
 TOOL_NAME = "submit_daily_report"
-_TAG_GUIDANCE = "\n".join(f"- {t.name}: {t.description}" for t in TAG_DEFINITIONS)
+_TAG_GUIDANCE = "\n".join(f"- {t.name}: {t.description}" for t in tags.TAG_DEFINITIONS)
 # Template's `$` placeholders rather than `str.format`, so the braces in the prompt's own examples need no escaping
 _SYSTEM_PROMPT = Template(
     (Path(__file__).parent.parent / "prompts" / "summary_system.txt").read_text(
@@ -110,7 +110,7 @@ class SummaryClient:
                                     ),
                                     "items": {
                                         "type": "string",
-                                        "enum": list(ALLOWED_TAG_NAMES),
+                                        "enum": list(tags.ALLOWED_TAG_NAMES),
                                     },
                                 },
                             },
@@ -128,7 +128,7 @@ class SummaryClient:
         formatted_github: str,
         formatted_sessions: str,
     ) -> str:
-        date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
+        date_str = target_date.astimezone(dates.JST).strftime("%Y-%m-%d")
         return (
             f"以下は {date_str} の GitHub アクティビティおよび"
             f" Claude Code での作業記録です。\n"
@@ -176,7 +176,7 @@ class SummaryClient:
     def validate_report(self, report: summary.ReportSummary) -> ValidationResult:
         """Strips disallowed tags from `report` in place."""
         result = ValidationResult()
-        tag_set = set(ALLOWED_TAG_NAMES)
+        tag_set = set(tags.ALLOWED_TAG_NAMES)
 
         for repo in report["repositories"]:
             name = repo["name"]

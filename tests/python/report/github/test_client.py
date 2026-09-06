@@ -7,29 +7,22 @@ import github as gh
 import pytest
 
 from config import CONFIG
-from report.shared.dates import JST
+from report.shared import dates
 
-from .._builders import (
-    REPO_FULL_NAME,
-    make_commit,
-    make_commit_mock,
-    make_issue_mock,
-    make_number_mock,
-    make_pull_mock,
-)
+from .. import _builders
 
 # Default JST day window used across most tests
-SINCE = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
-UNTIL = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+SINCE = datetime(2026, 3, 28, 0, 0, tzinfo=dates.JST)
+UNTIL = datetime(2026, 3, 29, 0, 0, tzinfo=dates.JST)
 
 
 class TestFetchCommits:
     def test_extracts_commit_info(self, github_client, repo):
         github_client.g.search_commits.return_value = [
-            make_commit_mock(
+            _builders.commit_mock(
                 sha="abc123",
                 message="Fix bug\n\nDetailed description",
-                date=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
+                date=datetime(2026, 3, 28, 10, 0, tzinfo=dates.JST),
             )
         ]
         repo.get_commit.return_value.get_pulls.return_value = []
@@ -40,14 +33,19 @@ class TestFetchCommits:
         assert result[0].sha == "abc123"
         assert result[0].message == "Fix bug"
         assert result[0].author == "user"
-        assert result[0].url == f"https://github.com/{REPO_FULL_NAME}/commit/abc123"
+        assert (
+            result[0].url
+            == f"https://github.com/{_builders.REPO_FULL_NAME}/commit/abc123"
+        )
         assert result[0].pull_numbers == ()
 
     def test_populates_pull_numbers_from_associated_prs(self, github_client, repo):
-        github_client.g.search_commits.return_value = [make_commit_mock(sha="abc123")]
+        github_client.g.search_commits.return_value = [
+            _builders.commit_mock(sha="abc123")
+        ]
         repo.get_commit.return_value.get_pulls.return_value = [
-            make_number_mock(5),
-            make_number_mock(9),
+            _builders.number_mock(5),
+            _builders.number_mock(9),
         ]
 
         result = github_client.fetch_commits(repo, SINCE, UNTIL)
@@ -60,7 +58,7 @@ class TestFetchCommits:
         [
             pytest.param(UNTIL, "2026-03-27..2026-03-29", id="full_day"),
             pytest.param(
-                datetime(2026, 3, 28, 15, 0, tzinfo=JST),
+                datetime(2026, 3, 28, 15, 0, tzinfo=dates.JST),
                 "2026-03-27..2026-03-28",
                 id="partial_day",
             ),
@@ -74,18 +72,22 @@ class TestFetchCommits:
         github_client.fetch_commits(repo, SINCE, until)
 
         query = github_client.g.search_commits.call_args[0][0]
-        assert f"repo:{REPO_FULL_NAME}" in query
+        assert f"repo:{_builders.REPO_FULL_NAME}" in query
         assert f"author-date:{expected_range}" in query
 
     def test_filters_commits_outside_time_range(self, github_client, repo):
         github_client.g.search_commits.return_value = [
-            make_commit_mock(sha="aaa", date=datetime(2026, 3, 28, 10, 0, tzinfo=JST)),
-            make_commit_mock(sha="bbb", date=datetime(2026, 3, 28, 18, 0, tzinfo=JST)),
+            _builders.commit_mock(
+                sha="aaa", date=datetime(2026, 3, 28, 10, 0, tzinfo=dates.JST)
+            ),
+            _builders.commit_mock(
+                sha="bbb", date=datetime(2026, 3, 28, 18, 0, tzinfo=dates.JST)
+            ),
         ]
         repo.get_commit.return_value.get_pulls.return_value = []
 
         result = github_client.fetch_commits(
-            repo, SINCE, datetime(2026, 3, 28, 15, 0, tzinfo=JST)
+            repo, SINCE, datetime(2026, 3, 28, 15, 0, tzinfo=dates.JST)
         )
 
         assert len(result) == 1
@@ -95,12 +97,12 @@ class TestFetchCommits:
 class TestFetchPulls:
     def test_returns_pull_info_for_pr_updated_in_window(self, github_client, repo):
         repo.get_pulls.return_value = [
-            make_pull_mock(
+            _builders.pull_mock(
                 1,
                 title="Add feature",
-                created_at=datetime(2026, 3, 27, 9, 0, tzinfo=JST),
-                updated_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
-                merged_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
+                created_at=datetime(2026, 3, 27, 9, 0, tzinfo=dates.JST),
+                updated_at=datetime(2026, 3, 28, 10, 0, tzinfo=dates.JST),
+                merged_at=datetime(2026, 3, 28, 10, 0, tzinfo=dates.JST),
             )
         ]
 
@@ -109,17 +111,17 @@ class TestFetchPulls:
         assert len(result) == 1
         assert result[0].state == "merged"
         assert result[0].draft is False
-        assert result[0].url == f"https://github.com/{REPO_FULL_NAME}/pull/1"
+        assert result[0].url == f"https://github.com/{_builders.REPO_FULL_NAME}/pull/1"
         assert result[0].created_at == "2026-03-27T09:00:00+09:00"
         assert result[0].merged_at == "2026-03-28T10:00:00+09:00"
         assert result[0].closed_at == "2026-03-28T10:00:00+09:00"
 
     def test_breaks_on_old_prs(self, github_client, repo):
         repo.get_pulls.return_value = [
-            make_pull_mock(
+            _builders.pull_mock(
                 99,
-                created_at=datetime(2026, 3, 26, 0, 0, tzinfo=JST),
-                updated_at=datetime(2026, 3, 27, 0, 0, tzinfo=JST),
+                created_at=datetime(2026, 3, 26, 0, 0, tzinfo=dates.JST),
+                updated_at=datetime(2026, 3, 27, 0, 0, tzinfo=dates.JST),
             )
         ]
 
@@ -131,7 +133,9 @@ class TestFetchIssues:
         pr_as_issue = MagicMock()
         pr_as_issue.pull_request = MagicMock()
         repo.get_issues.return_value = [
-            make_issue_mock(5, created_at=datetime(2026, 3, 28, 10, 0, tzinfo=JST)),
+            _builders.issue_mock(
+                5, created_at=datetime(2026, 3, 28, 10, 0, tzinfo=dates.JST)
+            ),
             pr_as_issue,
         ]
 
@@ -139,7 +143,9 @@ class TestFetchIssues:
 
         assert len(result) == 1
         assert result[0].number == 5
-        assert result[0].url == f"https://github.com/{REPO_FULL_NAME}/issues/5"
+        assert (
+            result[0].url == f"https://github.com/{_builders.REPO_FULL_NAME}/issues/5"
+        )
         assert result[0].created_at == "2026-03-28T10:00:00+09:00"
         assert result[0].closed_at is None
 
@@ -208,7 +214,7 @@ class TestSearchByEvent:
         getattr(github_client, method)(repo, SINCE, UNTIL, event)
 
         query = github_client.g.search_issues.call_args[0][0]
-        assert f"repo:{REPO_FULL_NAME}" in query
+        assert f"repo:{_builders.REPO_FULL_NAME}" in query
         assert expected_kind in query
         # Range starts at SINCE - 1day; UNTIL is the literal date
         assert f"{event}:2026-03-27..2026-03-29" in query
@@ -240,7 +246,7 @@ class TestPopulateCommitPullNumbers:
         github_client.g.get_user.return_value.get_repo.return_value = repo
 
     def _commit(self, sha, pull_numbers):
-        return make_commit(sha=sha, pull_numbers=pull_numbers)
+        return _builders.commit(sha=sha, pull_numbers=pull_numbers)
 
     def test_skips_commits_with_existing_pull_numbers(self, github_client, repo):
         commits = [self._commit("aaa", [3]), self._commit("bbb", [7])]
@@ -252,8 +258,8 @@ class TestPopulateCommitPullNumbers:
         assert commits[1].pull_numbers == (7,)
 
     def test_resolves_only_unresolved_commits(self, github_client, repo):
-        commit_obj = make_commit_mock(sha="bbb")
-        commit_obj.get_pulls.return_value = [make_number_mock(11)]
+        commit_obj = _builders.commit_mock(sha="bbb")
+        commit_obj.get_pulls.return_value = [_builders.number_mock(11)]
         repo.get_commit.return_value = commit_obj
 
         commits = [self._commit("aaa", [3]), self._commit("bbb", [])]
@@ -265,7 +271,7 @@ class TestPopulateCommitPullNumbers:
 
     def test_normalizes_short_sha_to_full(self, github_client, repo):
         full_sha = "bbb2222abcdef1234abcdef1234abcdef12345678"
-        commit_obj = make_commit_mock(sha=full_sha)
+        commit_obj = _builders.commit_mock(sha=full_sha)
         commit_obj.get_pulls.return_value = []
         repo.get_commit.return_value = commit_obj
 
@@ -275,7 +281,8 @@ class TestPopulateCommitPullNumbers:
         repo.get_commit.assert_called_once_with("bbb2222")
         assert commits[0].sha == full_sha
         assert (
-            commits[0].url == f"https://github.com/{REPO_FULL_NAME}/commit/{full_sha}"
+            commits[0].url
+            == f"https://github.com/{_builders.REPO_FULL_NAME}/commit/{full_sha}"
         )
 
     @pytest.mark.parametrize(
@@ -318,16 +325,20 @@ class TestFetchPullsBackfill:
     def test_unions_search_events_and_commit_derived_pulls(self, github_client, repo):
         # Search returns: created→#1, merged→#2, closed→#3
         github_client.g.search_issues.side_effect = [
-            [make_number_mock(1)],
-            [make_number_mock(2)],
-            [make_number_mock(3)],
+            [_builders.number_mock(1)],
+            [_builders.number_mock(2)],
+            [_builders.number_mock(3)],
         ]
-        in_range = datetime(2026, 3, 28, 12, 0, tzinfo=JST)
-        repo.get_pull.side_effect = lambda n: make_pull_mock(n, created_at=in_range)
+        in_range = datetime(2026, 3, 28, 12, 0, tzinfo=dates.JST)
+        repo.get_pull.side_effect = lambda n: _builders.pull_mock(
+            n, created_at=in_range
+        )
 
         # Commits already carry pull_numbers populated by fetch_commits
         commits = [
-            make_commit(sha="deadbee", date=in_range.isoformat(), pull_numbers=[1, 4])
+            _builders.commit(
+                sha="deadbee", date=in_range.isoformat(), pull_numbers=[1, 4]
+            )
         ]
         result = github_client.fetch_pulls(
             repo, SINCE, UNTIL, is_backfill=True, commits=commits
@@ -339,10 +350,14 @@ class TestFetchPullsBackfill:
 
     def test_post_filters_search_only_pulls_outside_range(self, github_client, repo):
         """Search-derived PRs without an in-range event are dropped."""
-        github_client.g.search_issues.side_effect = [[make_number_mock(10)], [], []]
+        github_client.g.search_issues.side_effect = [
+            [_builders.number_mock(10)],
+            [],
+            [],
+        ]
         # PR #10 was created on a different day (search widens window by 1 day)
-        repo.get_pull.return_value = make_pull_mock(
-            10, created_at=datetime(2026, 3, 27, 23, 0, tzinfo=JST)
+        repo.get_pull.return_value = _builders.pull_mock(
+            10, created_at=datetime(2026, 3, 27, 23, 0, tzinfo=dates.JST)
         )
 
         result = github_client.fetch_pulls(
@@ -356,7 +371,7 @@ class TestFetchPullsBackfill:
         [
             pytest.param(
                 99,
-                {"commits": [make_commit(sha="abc", pull_numbers=[99])]},
+                {"commits": [_builders.commit(sha="abc", pull_numbers=[99])]},
                 id="commit_derived",
             ),
             pytest.param(
@@ -370,8 +385,8 @@ class TestFetchPullsBackfill:
         """PRs reached via commits or sessions are kept regardless of state-event timing."""
         github_client.g.search_issues.side_effect = [[], [], []]
         # PR opened weeks ago, no merged/closed yet
-        repo.get_pull.return_value = make_pull_mock(
-            number, created_at=datetime(2026, 3, 1, 0, 0, tzinfo=JST)
+        repo.get_pull.return_value = _builders.pull_mock(
+            number, created_at=datetime(2026, 3, 1, 0, 0, tzinfo=dates.JST)
         )
 
         result = github_client.fetch_pulls(
@@ -383,7 +398,9 @@ class TestFetchPullsBackfill:
     @pytest.mark.parametrize(
         ("search_results", "extra_kwargs"),
         [
-            pytest.param([[make_number_mock(50)], [], []], {}, id="search_derived"),
+            pytest.param(
+                [[_builders.number_mock(50)], [], []], {}, id="search_derived"
+            ),
             pytest.param(
                 [[], [], []], {"session_numbers": [999]}, id="session_derived"
             ),
@@ -402,7 +419,11 @@ class TestFetchPullsBackfill:
         assert result == []
 
     def test_propagates_non_404_pull_fetch_errors(self, github_client, repo):
-        github_client.g.search_issues.side_effect = [[make_number_mock(50)], [], []]
+        github_client.g.search_issues.side_effect = [
+            [_builders.number_mock(50)],
+            [],
+            [],
+        ]
         repo.get_pull.side_effect = RuntimeError("transient failure")
 
         with pytest.raises(RuntimeError):
@@ -410,9 +431,15 @@ class TestFetchPullsBackfill:
 
     def test_unions_session_with_search_and_dedups(self, github_client, repo):
         # Search→#10 (in range), session→#10, #20
-        in_range = datetime(2026, 3, 28, 12, 0, tzinfo=JST)
-        github_client.g.search_issues.side_effect = [[make_number_mock(10)], [], []]
-        repo.get_pull.side_effect = lambda n: make_pull_mock(n, created_at=in_range)
+        in_range = datetime(2026, 3, 28, 12, 0, tzinfo=dates.JST)
+        github_client.g.search_issues.side_effect = [
+            [_builders.number_mock(10)],
+            [],
+            [],
+        ]
+        repo.get_pull.side_effect = lambda n: _builders.pull_mock(
+            n, created_at=in_range
+        )
 
         result = github_client.fetch_pulls(
             repo, SINCE, UNTIL, is_backfill=True, commits=[], session_numbers=[10, 20]
@@ -426,13 +453,13 @@ class TestFetchPullsBackfill:
 
 class TestFetchIssuesBackfill:
     def test_unions_created_and_closed_search(self, github_client, repo):
-        in_range = datetime(2026, 3, 28, 12, 0, tzinfo=JST)
+        in_range = datetime(2026, 3, 28, 12, 0, tzinfo=dates.JST)
         github_client.g.search_issues.side_effect = [
-            [make_issue_mock(1, created_at=in_range)],
+            [_builders.issue_mock(1, created_at=in_range)],
             [
-                make_issue_mock(
+                _builders.issue_mock(
                     2,
-                    created_at=datetime(2026, 3, 1, 0, 0, tzinfo=JST),
+                    created_at=datetime(2026, 3, 1, 0, 0, tzinfo=dates.JST),
                     closed_at=in_range,
                     state_reason="completed",
                 )
@@ -447,7 +474,11 @@ class TestFetchIssuesBackfill:
     def test_post_filters_issue_outside_range(self, github_client, repo):
         # Returned by search but actually outside JST window
         github_client.g.search_issues.side_effect = [
-            [make_issue_mock(5, created_at=datetime(2026, 3, 27, 22, 0, tzinfo=JST))],
+            [
+                _builders.issue_mock(
+                    5, created_at=datetime(2026, 3, 27, 22, 0, tzinfo=dates.JST)
+                )
+            ],
             [],
         ]
 
@@ -460,8 +491,8 @@ class TestFetchIssuesBackfill:
     ):
         """Session-derived issues are kept regardless of state-event timing."""
         github_client.g.search_issues.side_effect = [[], []]
-        repo.get_issue.return_value = make_issue_mock(
-            42, created_at=datetime(2026, 2, 1, 0, 0, tzinfo=JST)
+        repo.get_issue.return_value = _builders.issue_mock(
+            42, created_at=datetime(2026, 2, 1, 0, 0, tzinfo=dates.JST)
         )
 
         result = github_client.fetch_issues(
@@ -473,9 +504,9 @@ class TestFetchIssuesBackfill:
     def test_skips_session_number_resolving_to_pr(self, github_client, repo):
         """Session #N may resolve to a PR; PRs must be filtered out."""
         github_client.g.search_issues.side_effect = [[], []]
-        repo.get_issue.return_value = make_issue_mock(
+        repo.get_issue.return_value = _builders.issue_mock(
             87,
-            created_at=datetime(2026, 2, 1, 0, 0, tzinfo=JST),
+            created_at=datetime(2026, 2, 1, 0, 0, tzinfo=dates.JST),
             pull_request=MagicMock(),
         )
 
@@ -500,7 +531,11 @@ class TestFetchIssuesBackfill:
     ):
         """Numbers covered by Search are reused; get_issue is only called for new ones."""
         github_client.g.search_issues.side_effect = [
-            [make_issue_mock(10, created_at=datetime(2026, 3, 28, 12, 0, tzinfo=JST))],
+            [
+                _builders.issue_mock(
+                    10, created_at=datetime(2026, 3, 28, 12, 0, tzinfo=dates.JST)
+                )
+            ],
             [],
         ]
 

@@ -9,7 +9,7 @@ from report.slack.blocks import (
     to_mrkdwn,
 )
 
-from .._builders import OWNER
+from .. import _builders
 
 
 class TestEscapeMrkdwn:
@@ -24,7 +24,7 @@ class TestEscapeMrkdwn:
 
 class TestToMrkdwn:
     def _convert(self, text):
-        return to_mrkdwn(text, OWNER, "my-repo")
+        return to_mrkdwn(text, _builders.OWNER, "my-repo")
 
     def test_keeps_backticks_as_mrkdwn_inline_code(self):
         assert self._convert("`a.py` を追加") == "`a.py` を追加"
@@ -33,7 +33,7 @@ class TestToMrkdwn:
         assert self._convert("**重要** な変更") == "*重要* な変更"
 
     def test_links_number_reference(self):
-        url = f"https://github.com/{OWNER}/my-repo/issues/155"
+        url = f"https://github.com/{_builders.OWNER}/my-repo/issues/155"
         assert self._convert("マージ #155") == f"マージ <{url}|#155>"
 
     def test_escapes_slack_specials_before_converting(self):

@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from os.path import normpath
 from pathlib import Path, PurePosixPath
 
-from ..shared.dates import JST
+from ..shared import dates
 from ..shared.notice import Notice, NoticeSource
 
 logger = logging.getLogger(__name__)
@@ -213,7 +213,7 @@ class SessionLogParser:
                 if not timestamp:
                     continue
 
-                entry_dt = datetime.fromisoformat(timestamp).astimezone(JST)
+                entry_dt = datetime.fromisoformat(timestamp).astimezone(dates.JST)
                 date_str = entry_dt.date().isoformat()
                 group_key = (date_str, repo, session_id)
                 key_groups[key].add(group_key)

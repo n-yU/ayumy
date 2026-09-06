@@ -9,7 +9,7 @@ import slack_sdk.errors
 
 from .. import cost
 from ..domain import summary
-from ..shared.dates import JST
+from ..shared import dates
 from ..shared.notice import Notice
 from ..summarizer import ValidationResult
 from .blocks import (
@@ -108,7 +108,7 @@ class SlackClient:
         `session_only_repos` are repos that had Claude Code sessions but no GitHub activity; they were excluded from the Claude summary input and get surfaced here as a context row.
         `owner` resolves the number references in each headline to GitHub URLs.
         """
-        date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
+        date_str = target_date.astimezone(dates.JST).strftime("%Y-%m-%d")
 
         if pages:
             repo_map = {r["name"]: r for r in report["repositories"]}
@@ -143,7 +143,7 @@ class SlackClient:
     def notify_no_activity(
         self, target_date: datetime, *, is_backfill: bool = False
     ) -> None:
-        date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
+        date_str = target_date.astimezone(dates.JST).strftime("%Y-%m-%d")
         self._append_report_section(
             "💤", date_str, "No activity", "No activity", is_backfill=is_backfill
         )
@@ -156,7 +156,7 @@ class SlackClient:
         is_backfill: bool = False,
     ) -> None:
         """Send when every repo on this date is session-only; Claude summary is skipped and no Notion pages exist."""
-        date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
+        date_str = target_date.astimezone(dates.JST).strftime("%Y-%m-%d")
         repos_text = ", ".join(session_only_repos)
         body = f"Session-only: {repos_text}"
         self._append_report_section(
@@ -174,7 +174,7 @@ class SlackClient:
         *,
         is_backfill: bool = False,
     ) -> None:
-        date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
+        date_str = target_date.astimezone(dates.JST).strftime("%Y-%m-%d")
         lines = [f"• {name}: tags={tags}" for name, tags in result.invalid_tags.items()]
         body = f"Invalid tags detected\n{'\n'.join(lines)}"
         self._append_report_section(
@@ -184,7 +184,7 @@ class SlackClient:
     def notify_error(
         self, target_date: datetime, error: Exception, *, is_backfill: bool = False
     ) -> None:
-        date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
+        date_str = target_date.astimezone(dates.JST).strftime("%Y-%m-%d")
         self._append_report_section(
             "❌", date_str, str(error), str(error), is_backfill=is_backfill
         )

@@ -6,25 +6,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from config import CONFIG
-from config.config import NotionIcon
+from config import CONFIG, config
 from report.domain.session import SessionActivity
 from report.notion import client
 
-from .._builders import (
-    REPO,
-    REPO_FULL_NAME,
-    SINCE,
-    TARGET_DATE,
-    UNTIL,
-    make_commit,
-    make_github,
-    make_issue,
-    make_pull,
-    make_repo_activity,
-)
+from .. import _builders
 
-REPORT = {"repositories": [{"name": REPO, "summary": [], "tags": []}]}
+REPORT = {"repositories": [{"name": _builders.REPO, "summary": [], "tags": []}]}
 
 
 def _text(block: dict) -> str:
@@ -62,17 +50,20 @@ def _children(block: dict) -> list[dict]:
 class TestBuildProperties:
     def test_fills_every_database_property(self, notion_client):
         repo_summary = {
-            "name": REPO,
+            "name": _builders.REPO,
             "summary": ["要点1", "要点2"],
             "tags": ["CI/CD", "Testing"],
         }
         props = notion_client._build_properties(
-            TARGET_DATE, repo_summary, 5, 2, 1, 3, 4
+            _builders.TARGET_DATE, repo_summary, 5, 2, 1, 3, 4
         )
 
-        assert props["Name"]["title"][0]["text"]["content"] == f"26-03-28: {REPO}"
+        assert (
+            props["Name"]["title"][0]["text"]["content"]
+            == f"26-03-28: {_builders.REPO}"
+        )
         assert props["Date"]["date"]["start"] == "2026-03-28"
-        assert props["Repository"]["select"]["name"] == REPO
+        assert props["Repository"]["select"]["name"] == _builders.REPO
         assert [t["name"] for t in props["Tags"]["multi_select"]] == [
             "CI/CD",
             "Testing",
@@ -90,9 +81,9 @@ class TestBuildProperties:
 class TestStatusSections:
     def test_done_collects_merged_and_closed(self, build_status):
         blocks = build_status(
-            pulls=[make_pull(1, "Merged PR", "merged")],
+            pulls=[_builders.pull(1, "Merged PR", "merged")],
             issues=[
-                make_issue(
+                _builders.issue(
                     11,
                     "Not planned",
                     "closed",
@@ -108,8 +99,8 @@ class TestStatusSections:
             "⚠️ (not planned) #11: Not planned",
         ]
         assert _urls(blocks) == [
-            f"https://github.com/{REPO_FULL_NAME}/pull/1",
-            f"https://github.com/{REPO_FULL_NAME}/issues/11",
+            f"https://github.com/{_builders.REPO_FULL_NAME}/pull/1",
+            f"https://github.com/{_builders.REPO_FULL_NAME}/issues/11",
         ]
 
     def test_in_progress_collects_open_pulls_and_pre_existing_issues(
@@ -117,11 +108,11 @@ class TestStatusSections:
     ):
         blocks = build_status(
             pulls=[
-                make_pull(3, "WIP", "open", draft=True),
-                make_pull(4, "Ready", "open"),
+                _builders.pull(3, "WIP", "open", draft=True),
+                _builders.pull(4, "Ready", "open"),
             ],
             issues=[
-                make_issue(
+                _builders.issue(
                     20, "Old open issue", "open", created_at="2026-03-20T09:00:00+09:00"
                 )
             ],
@@ -134,18 +125,18 @@ class TestStatusSections:
             "#20: Old open issue",
         ]
         assert _urls(blocks) == [
-            f"https://github.com/{REPO_FULL_NAME}/pull/3",
-            f"https://github.com/{REPO_FULL_NAME}/pull/4",
-            f"https://github.com/{REPO_FULL_NAME}/issues/20",
+            f"https://github.com/{_builders.REPO_FULL_NAME}/pull/3",
+            f"https://github.com/{_builders.REPO_FULL_NAME}/pull/4",
+            f"https://github.com/{_builders.REPO_FULL_NAME}/issues/20",
         ]
 
     def test_todo_collects_issues_opened_within_window(self, build_status):
         blocks = build_status(
             issues=[
-                make_issue(
+                _builders.issue(
                     30, "New issue", "open", created_at="2026-03-28T11:00:00+09:00"
                 ),
-                make_issue(
+                _builders.issue(
                     31, "Old open issue", "open", created_at="2026-03-20T09:00:00+09:00"
                 ),
             ],
@@ -157,14 +148,14 @@ class TestStatusSections:
             "#30: New issue",
         ]
         assert _urls(blocks) == [
-            f"https://github.com/{REPO_FULL_NAME}/issues/31",
-            f"https://github.com/{REPO_FULL_NAME}/issues/30",
+            f"https://github.com/{_builders.REPO_FULL_NAME}/issues/31",
+            f"https://github.com/{_builders.REPO_FULL_NAME}/issues/30",
         ]
 
     def test_reports_items_completed_after_window_as_pending(self, build_status):
         blocks = build_status(
             pulls=[
-                make_pull(
+                _builders.pull(
                     1,
                     "Merged next day",
                     "merged",
@@ -172,13 +163,13 @@ class TestStatusSections:
                 )
             ],
             issues=[
-                make_issue(
+                _builders.issue(
                     10,
                     "Created in window, closed later",
                     "closed",
                     closed_at="2026-03-29T12:00:00+09:00",
                 ),
-                make_issue(
+                _builders.issue(
                     11,
                     "Created earlier, closed later",
                     "closed",
@@ -202,13 +193,13 @@ class TestStatusSections:
             pytest.param(
                 {
                     "pulls": [
-                        make_pull(
+                        _builders.pull(
                             1,
                             "Merged earlier",
                             "merged",
                             merged_at="2026-03-27T10:00:00+09:00",
                         ),
-                        make_pull(
+                        _builders.pull(
                             2,
                             "Rejected earlier",
                             "closed",
@@ -216,7 +207,7 @@ class TestStatusSections:
                         ),
                     ],
                     "issues": [
-                        make_issue(
+                        _builders.issue(
                             10,
                             "Closed earlier",
                             "closed",
@@ -238,19 +229,19 @@ class TestTimelineSection:
     def test_nests_non_merge_commits_under_their_pull(self, build_timeline):
         blocks = build_timeline(
             commits=[
-                make_commit(
+                _builders.commit(
                     "aaa1111",
                     "branch commit 1",
                     date="2026-03-28T09:30:00+09:00",
                     pull_numbers=[1],
                 ),
-                make_commit(
+                _builders.commit(
                     "bbb2222",
                     "branch commit 2",
                     date="2026-03-28T10:00:00+09:00",
                     pull_numbers=[1],
                 ),
-                make_commit(
+                _builders.commit(
                     "ccc3333",
                     "Squash merge",
                     date="2026-03-28T11:00:00+09:00",
@@ -258,7 +249,7 @@ class TestTimelineSection:
                 ),
             ],
             pulls=[
-                make_pull(
+                _builders.pull(
                     1,
                     "Add feature",
                     "merged",
@@ -284,20 +275,20 @@ class TestTimelineSection:
         # but 10:00+09:00 (= 01:00 UTC) precedes 09:00+00:00 (= 18:00 JST)
         blocks = build_timeline(
             commits=[
-                make_commit(
+                _builders.commit(
                     "bbb2222",
                     "later in time",
                     date="2026-03-28T09:00:00+00:00",
                     pull_numbers=[1],
                 ),
-                make_commit(
+                _builders.commit(
                     "aaa1111",
                     "earlier in time",
                     date="2026-03-28T10:00:00+09:00",
                     pull_numbers=[1],
                 ),
             ],
-            pulls=[make_pull(1, "feat", "open")],
+            pulls=[_builders.pull(1, "feat", "open")],
         )
 
         assert [_text(c) for c in _children(blocks[1])] == [
@@ -308,8 +299,11 @@ class TestTimelineSection:
     def test_nests_commit_shared_by_pulls_under_smallest_number(self, build_timeline):
         # A cherry-picked commit appears in two PRs; nesting must not depend on input order
         blocks = build_timeline(
-            commits=[make_commit("aaa1111", "shared commit", pull_numbers=[5, 2])],
-            pulls=[make_pull(2, "PR two", "open"), make_pull(5, "PR five", "open")],
+            commits=[_builders.commit("aaa1111", "shared commit", pull_numbers=[5, 2])],
+            pulls=[
+                _builders.pull(2, "PR two", "open"),
+                _builders.pull(5, "PR five", "open"),
+            ],
         )
 
         assert {_text(b): [_text(c) for c in _children(b)] for b in blocks[1:]} == {
@@ -321,7 +315,7 @@ class TestTimelineSection:
         # PR opened before the window, so only the squash merge commit lands in range
         blocks = build_timeline(
             commits=[
-                make_commit(
+                _builders.commit(
                     "ccc3333",
                     "Squash merge",
                     date="2026-03-28T11:00:00+09:00",
@@ -329,7 +323,7 @@ class TestTimelineSection:
                 )
             ],
             pulls=[
-                make_pull(
+                _builders.pull(
                     2,
                     "Old PR finally merged",
                     "merged",
@@ -347,14 +341,14 @@ class TestTimelineSection:
         assert _children(blocks[1]) == []
 
     def test_renders_direct_commit_at_top_level(self, build_timeline):
-        blocks = build_timeline(commits=[make_commit("ddd4444", "Direct commit")])
+        blocks = build_timeline(commits=[_builders.commit("ddd4444", "Direct commit")])
 
         assert _texts(blocks) == ["🔸 ddd4444: Direct commit"]
 
     def test_appends_close_line_for_unmerged_pull(self, build_timeline):
         blocks = build_timeline(
             pulls=[
-                make_pull(
+                _builders.pull(
                     7,
                     "Rejected",
                     "closed",
@@ -372,10 +366,10 @@ class TestTimelineSection:
     def test_renders_issue_open_and_close_lines(self, build_timeline):
         blocks = build_timeline(
             issues=[
-                make_issue(
+                _builders.issue(
                     5, "New bug", "open", created_at="2026-03-28T08:00:00+09:00"
                 ),
-                make_issue(
+                _builders.issue(
                     7,
                     "Won't fix",
                     "closed",
@@ -394,17 +388,19 @@ class TestTimelineSection:
     def test_orders_entries_chronologically_across_types(self, build_timeline):
         blocks = build_timeline(
             commits=[
-                make_commit(
+                _builders.commit(
                     "aaa1111",
                     "commit on PR#1",
                     date="2026-03-28T10:30:00+09:00",
                     pull_numbers=[1],
                 ),
-                make_commit("ddd4444", "Direct", date="2026-03-28T12:00:00+09:00"),
+                _builders.commit("ddd4444", "Direct", date="2026-03-28T12:00:00+09:00"),
             ],
-            pulls=[make_pull(1, "Feature", "open")],
+            pulls=[_builders.pull(1, "Feature", "open")],
             issues=[
-                make_issue(5, "Bug", "open", created_at="2026-03-28T08:00:00+09:00")
+                _builders.issue(
+                    5, "Bug", "open", created_at="2026-03-28T08:00:00+09:00"
+                )
             ],
         )
 
@@ -424,7 +420,7 @@ class TestTimelineSection:
             pytest.param(
                 {
                     "pulls": [
-                        make_pull(
+                        _builders.pull(
                             8, "Touched", "open", created_at="2026-03-20T09:00:00+09:00"
                         )
                     ]
@@ -440,42 +436,50 @@ class TestTimelineSection:
 class TestBuildChildren:
     def test_orders_summary_status_and_timeline_sections(self, notion_client):
         repo_summary = {
-            "name": REPO,
+            "name": _builders.REPO,
             "summary": ["point one", "point two"],
             "tags": [],
         }
-        repo_activity = make_repo_activity(
-            commits=[make_commit("deadbeef00", "Commit msg")],
+        repo_activity = _builders.repo_activity(
+            commits=[_builders.commit("deadbeef00", "Commit msg")],
             pulls=[
-                make_pull(1, "Merged", "merged", merged_at="2026-03-28T11:00:00+09:00")
+                _builders.pull(
+                    1, "Merged", "merged", merged_at="2026-03-28T11:00:00+09:00"
+                )
             ],
-            issues=[make_issue(5, "Open today", "open")],
+            issues=[_builders.issue(5, "Open today", "open")],
         )
 
         children = notion_client._build_children(
-            repo_summary, repo_activity, SINCE, UNTIL
+            repo_summary, repo_activity, _builders.SINCE, _builders.UNTIL
         )
 
         assert _headings(children) == ["Summary", "Done", "TODO", "Timeline"]
         assert _texts(children)[:2] == ["point one", "point two"]
 
     def test_summary_number_reference_links_to_page_repository(self, notion_client):
-        repo_summary = {"name": REPO, "summary": ["マージ #155"], "tags": []}
+        repo_summary = {"name": _builders.REPO, "summary": ["マージ #155"], "tags": []}
 
         children = notion_client._build_children(
-            repo_summary, make_repo_activity(), SINCE, UNTIL
+            repo_summary,
+            _builders.repo_activity(),
+            _builders.SINCE,
+            _builders.UNTIL,
         )
 
         rich_text = children[1]["bulleted_list_item"]["rich_text"]
         assert rich_text[-1]["text"]["link"] == {
-            "url": f"https://github.com/{REPO_FULL_NAME}/issues/155"
+            "url": f"https://github.com/{_builders.REPO_FULL_NAME}/issues/155"
         }
 
     def test_renders_only_summary_when_no_activity(self, notion_client):
-        repo_summary = {"name": REPO, "summary": ["only point"], "tags": []}
+        repo_summary = {"name": _builders.REPO, "summary": ["only point"], "tags": []}
 
         children = notion_client._build_children(
-            repo_summary, make_repo_activity(), SINCE, UNTIL
+            repo_summary,
+            _builders.repo_activity(),
+            _builders.SINCE,
+            _builders.UNTIL,
         )
 
         assert _headings(children) == ["Summary"]
@@ -485,12 +489,13 @@ class TestBuildChildren:
 class TestPageIcon:
     def test_uses_configured_icon_for_known_repository(self):
         # The tracked template ships no entries, so the configured path needs a config built here
-        icon = NotionIcon(name="walk", color="blue")
+        icon = config.NotionIcon(name="walk", color="blue")
         configured = replace(
-            CONFIG, notion=replace(CONFIG.notion, repository_icons={REPO: icon})
+            CONFIG,
+            notion=replace(CONFIG.notion, repository_icons={_builders.REPO: icon}),
         )
         with patch("report.notion.client.CONFIG", configured):
-            assert client._page_icon(REPO) == {
+            assert client._page_icon(_builders.REPO) == {
                 "type": "icon",
                 "icon": {"name": "walk", "color": "blue"},
             }
@@ -506,11 +511,11 @@ class TestPageIcon:
 class TestCreatePage:
     def test_sends_repository_icon_with_the_page(self, notion_client):
         notion_client.create_page(
-            TARGET_DATE,
-            {"name": REPO, "summary": [], "tags": []},
-            make_repo_activity(),
-            SINCE,
-            UNTIL,
+            _builders.TARGET_DATE,
+            {"name": _builders.REPO, "summary": [], "tags": []},
+            _builders.repo_activity(),
+            _builders.SINCE,
+            _builders.UNTIL,
             0,
             0,
             0,
@@ -519,7 +524,7 @@ class TestCreatePage:
         )
 
         kwargs = notion_client.client.pages.create.call_args.kwargs
-        assert kwargs["icon"] == client._page_icon(REPO)
+        assert kwargs["icon"] == client._page_icon(_builders.REPO)
 
 
 def _queried_page(page_id: str, repo: str | None, regens: int | None) -> dict:
@@ -536,7 +541,7 @@ def archiver(notion_client):
     def _archive(*pages):
         notion_client._data_source_id = "ds-id"
         notion_client.client.data_sources.query.return_value = {"results": list(pages)}
-        return notion_client._archive_existing_pages(TARGET_DATE)
+        return notion_client._archive_existing_pages(_builders.TARGET_DATE)
 
     return _archive
 
@@ -544,7 +549,7 @@ def archiver(notion_client):
 class TestArchiveExistingPages:
     def test_archives_every_page_recorded_for_the_date(self, archiver, notion_client):
         archiver(
-            _queried_page("page1", REPO, 0),
+            _queried_page("page1", _builders.REPO, 0),
             _queried_page("page2", "other-repo", 0),
         )
 
@@ -556,18 +561,20 @@ class TestArchiveExistingPages:
 
     def test_increments_the_count_carried_from_each_repository(self, archiver):
         assert archiver(
-            _queried_page("page1", REPO, 2),
+            _queried_page("page1", _builders.REPO, 2),
             _queried_page("page2", "other-repo", 0),
-        ) == {REPO: 3, "other-repo": 1}
+        ) == {_builders.REPO: 3, "other-repo": 1}
 
     def test_carries_the_highest_count_when_a_repository_has_duplicates(self, archiver):
         assert archiver(
-            _queried_page("page1", REPO, 4),
-            _queried_page("page2", REPO, 1),
-        ) == {REPO: 5}
+            _queried_page("page1", _builders.REPO, 4),
+            _queried_page("page2", _builders.REPO, 1),
+        ) == {_builders.REPO: 5}
 
     def test_counts_pages_predating_the_property_as_never_rebuilt(self, archiver):
-        assert archiver(_queried_page("page1", REPO, None)) == {REPO: 1}
+        assert archiver(_queried_page("page1", _builders.REPO, None)) == {
+            _builders.REPO: 1
+        }
 
     def test_skips_pages_without_a_repository(self, archiver):
         assert archiver(_queried_page("page1", None, 3)) == {}
@@ -587,31 +594,40 @@ def page_creator(notion_client):
 class TestCreateReportPagesWiring:
     def test_passes_window_to_create_page(self, page_creator):
         page_creator.create_report_pages(
-            TARGET_DATE, SINCE, UNTIL, REPORT, make_github(), SessionActivity({})
+            _builders.TARGET_DATE,
+            _builders.SINCE,
+            _builders.UNTIL,
+            REPORT,
+            _builders.github(),
+            SessionActivity({}),
         )
 
         page_creator.create_page.assert_called_once()
         args = page_creator.create_page.call_args[0]
         # Signature: target_date, repo_summary, repo_activity, since, until, ...
-        assert (args[0], args[3], args[4]) == (TARGET_DATE, SINCE, UNTIL)
+        assert (args[0], args[3], args[4]) == (
+            _builders.TARGET_DATE,
+            _builders.SINCE,
+            _builders.UNTIL,
+        )
 
     def test_counts_only_activity_within_window(self, page_creator):
-        activity = make_github(
+        activity = _builders.github(
             commits=[
-                make_commit("aaa1111", "In window"),
-                make_commit(
+                _builders.commit("aaa1111", "In window"),
+                _builders.commit(
                     "bbb2222", "Previous day", date="2026-03-27T10:00:00+09:00"
                 ),
             ],
             pulls=[
-                make_pull(1, "Merged in window", "merged"),
-                make_pull(
+                _builders.pull(1, "Merged in window", "merged"),
+                _builders.pull(
                     2,
                     "Merged before window",
                     "merged",
                     merged_at="2026-03-27T10:00:00+09:00",
                 ),
-                make_pull(
+                _builders.pull(
                     3,
                     "Merged after window",
                     "merged",
@@ -619,13 +635,13 @@ class TestCreateReportPagesWiring:
                 ),
             ],
             issues=[
-                make_issue(
+                _builders.issue(
                     10,
                     "Closed in window",
                     "closed",
                     closed_at="2026-03-28T12:00:00+09:00",
                 ),
-                make_issue(
+                _builders.issue(
                     11,
                     "Closed before window",
                     "closed",
@@ -635,7 +651,12 @@ class TestCreateReportPagesWiring:
         )
 
         page_creator.create_report_pages(
-            TARGET_DATE, SINCE, UNTIL, REPORT, activity, SessionActivity({})
+            _builders.TARGET_DATE,
+            _builders.SINCE,
+            _builders.UNTIL,
+            REPORT,
+            activity,
+            SessionActivity({}),
         )
 
         args = page_creator.create_page.call_args[0]
@@ -643,10 +664,15 @@ class TestCreateReportPagesWiring:
         assert args[5:9] == (1, 1, 1, 0)
 
     def test_records_the_count_carried_from_the_archived_page(self, page_creator):
-        page_creator._archive_existing_pages.return_value = {REPO: 3}
+        page_creator._archive_existing_pages.return_value = {_builders.REPO: 3}
 
         page_creator.create_report_pages(
-            TARGET_DATE, SINCE, UNTIL, REPORT, make_github(), SessionActivity({})
+            _builders.TARGET_DATE,
+            _builders.SINCE,
+            _builders.UNTIL,
+            REPORT,
+            _builders.github(),
+            SessionActivity({}),
         )
 
         assert page_creator.create_page.call_args[0][9] == 3
@@ -657,7 +683,12 @@ class TestCreateReportPagesWiring:
         page_creator._archive_existing_pages.return_value = {"other-repo": 5}
 
         page_creator.create_report_pages(
-            TARGET_DATE, SINCE, UNTIL, REPORT, make_github(), SessionActivity({})
+            _builders.TARGET_DATE,
+            _builders.SINCE,
+            _builders.UNTIL,
+            REPORT,
+            _builders.github(),
+            SessionActivity({}),
         )
 
         assert page_creator.create_page.call_args[0][9] == 0

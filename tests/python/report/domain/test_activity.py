@@ -6,21 +6,9 @@ from datetime import datetime
 import pytest
 
 from report.domain import activity
-from report.shared.dates import JST
+from report.shared import dates
 
-from .._builders import (
-    OWNER,
-    REPO_FULL_NAME,
-    SINCE,
-    UNTIL,
-    make_commit,
-    make_commit_mock,
-    make_issue,
-    make_issue_mock,
-    make_pull,
-    make_pull_mock,
-    make_session_entry,
-)
+from .. import _builders
 
 
 def _session(
@@ -28,7 +16,7 @@ def _session(
     start="2026-03-28T10:00:00+09:00",
     session_commits=(),
 ):
-    return make_session_entry(
+    return _builders.session_entry(
         start=start,
         end=start,
         messages=(),
@@ -90,7 +78,7 @@ def _make_pr_mock(
     closed_at_dt=None,
     label_names=(),
 ):
-    return make_pull_mock(
+    return _builders.pull_mock(
         42,
         title="PR title",
         state=pr_state,
@@ -118,14 +106,17 @@ class TestCommitInfo:
         ],
     )
     def test_is_in_range(self, date_str, expected):
-        assert _commit(date=date_str).is_in_range(SINCE, UNTIL) is expected
+        assert (
+            _commit(date=date_str).is_in_range(_builders.SINCE, _builders.UNTIL)
+            is expected
+        )
 
     def test_from_search_commit_extracts_first_message_line(self):
-        commit = make_commit_mock(
+        commit = _builders.commit_mock(
             sha="deadbeef",
             message="Subject line\n\nBody paragraph",
             author="alice",
-            date=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
+            date=datetime(2026, 3, 28, 10, 0, tzinfo=dates.JST),
         )
 
         info = activity.CommitInfo.from_search_commit(commit, pull_numbers=[42, 43])
@@ -134,11 +125,13 @@ class TestCommitInfo:
         assert info.message == "Subject line"
         assert info.author == "alice"
         assert info.date == "2026-03-28T10:00:00+09:00"
-        assert info.url == f"https://github.com/{REPO_FULL_NAME}/commit/deadbeef"
+        assert (
+            info.url == f"https://github.com/{_builders.REPO_FULL_NAME}/commit/deadbeef"
+        )
         assert info.pull_numbers == (42, 43)
 
     def test_from_search_commit_defaults_pull_numbers_to_empty(self):
-        info = activity.CommitInfo.from_search_commit(make_commit_mock())
+        info = activity.CommitInfo.from_search_commit(_builders.commit_mock())
 
         assert info.pull_numbers == ()
 
@@ -179,7 +172,7 @@ class TestPullInfo:
     )
     def test_has_event_in_range(self, created_at, merged_at, closed_at, expected):
         pr = _pull(created_at=created_at, merged_at=merged_at, closed_at=closed_at)
-        assert pr.has_event_in_range(SINCE, UNTIL) is expected
+        assert pr.has_event_in_range(_builders.SINCE, _builders.UNTIL) is expected
 
     @pytest.mark.parametrize(
         "state,merged_at,closed_at,expected",
@@ -218,10 +211,10 @@ class TestPullInfo:
     )
     def test_state_in_range(self, state, merged_at, closed_at, expected):
         pr = _pull(state=state, merged_at=merged_at, closed_at=closed_at)
-        assert pr.state_in_range(SINCE, UNTIL) == expected
+        assert pr.state_in_range(_builders.SINCE, _builders.UNTIL) == expected
 
     def test_from_pull_request_classifies_merged(self):
-        pr = _make_pr_mock(merged_at_dt=datetime(2026, 3, 28, 10, 0, tzinfo=JST))
+        pr = _make_pr_mock(merged_at_dt=datetime(2026, 3, 28, 10, 0, tzinfo=dates.JST))
         info = activity.PullInfo.from_pull_request(pr)
         assert info.state == "merged"
         assert info.merged_at == "2026-03-28T10:00:00+09:00"
@@ -230,7 +223,7 @@ class TestPullInfo:
     def test_from_pull_request_classifies_closed_unmerged(self):
         pr = _make_pr_mock(
             pr_state="closed",
-            closed_at_dt=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
+            closed_at_dt=datetime(2026, 3, 28, 10, 0, tzinfo=dates.JST),
         )
         info = activity.PullInfo.from_pull_request(pr)
         assert info.state == "closed"
@@ -292,7 +285,7 @@ class TestIssueInfo:
     )
     def test_has_event_in_range(self, created_at, closed_at, expected):
         issue = _issue(created_at=created_at, closed_at=closed_at)
-        assert issue.has_event_in_range(SINCE, UNTIL) is expected
+        assert issue.has_event_in_range(_builders.SINCE, _builders.UNTIL) is expected
 
     @pytest.mark.parametrize(
         "state,closed_at,expected",
@@ -308,10 +301,10 @@ class TestIssueInfo:
     )
     def test_state_in_range(self, state, closed_at, expected):
         issue = _issue(state=state, closed_at=closed_at)
-        assert issue.state_in_range(SINCE, UNTIL) == expected
+        assert issue.state_in_range(_builders.SINCE, _builders.UNTIL) == expected
 
     def test_from_issue_extracts_labels_as_tuple(self):
-        issue = make_issue_mock(7, labels=("bug", "priority:high"))
+        issue = _builders.issue_mock(7, labels=("bug", "priority:high"))
 
         info = activity.IssueInfo.from_issue(issue)
 
@@ -320,9 +313,9 @@ class TestIssueInfo:
         assert info.state == "open"
 
     def test_from_issue_serializes_closed_at(self):
-        issue = make_issue_mock(
+        issue = _builders.issue_mock(
             7,
-            closed_at=datetime(2026, 3, 28, 11, 0, tzinfo=JST),
+            closed_at=datetime(2026, 3, 28, 11, 0, tzinfo=dates.JST),
             state_reason="not_planned",
         )
 
@@ -336,16 +329,16 @@ class TestGitHubActivityFormat:
     def test_empty_activity(self):
         github_activity = activity.GitHubActivity({})
         assert (
-            github_activity.format(SINCE, UNTIL)
+            github_activity.format(_builders.SINCE, _builders.UNTIL)
             == "# GitHub アクティビティ\nアクティビティなし"
         )
 
     def test_with_commits_prs_issues(self):
         data = {
             "my-repo": {
-                "commits": [make_commit(message="Fix bug")],
+                "commits": [_builders.commit(message="Fix bug")],
                 "pulls": [
-                    make_pull(
+                    _builders.pull(
                         1,
                         "Add feature",
                         "merged",
@@ -354,13 +347,13 @@ class TestGitHubActivityFormat:
                     )
                 ],
                 "issues": [
-                    make_issue(
+                    _builders.issue(
                         2, "Bug report", "closed", closed_at="2026-03-28T11:00:00+09:00"
                     )
                 ],
             },
         }
-        result = activity.GitHubActivity(data).format(SINCE, UNTIL)
+        result = activity.GitHubActivity(data).format(_builders.SINCE, _builders.UNTIL)
         assert "## my-repo" in result
         assert "- Fix bug" in result
         assert "- [merged] #1 Add feature (enhancement)" in result
@@ -369,38 +362,40 @@ class TestGitHubActivityFormat:
     def test_repos_sorted_alphabetically(self):
         data = {
             "z-repo": {
-                "commits": [make_commit(message="z")],
+                "commits": [_builders.commit(message="z")],
                 "pulls": [],
                 "issues": [],
             },
             "a-repo": {
-                "commits": [make_commit(message="a")],
+                "commits": [_builders.commit(message="a")],
                 "pulls": [],
                 "issues": [],
             },
         }
-        result = activity.GitHubActivity(data).format(SINCE, UNTIL)
+        result = activity.GitHubActivity(data).format(_builders.SINCE, _builders.UNTIL)
         assert result.index("a-repo") < result.index("z-repo")
 
     def test_omits_items_completed_before_window(self):
         data = {
             "my-repo": {
                 "commits": [
-                    make_commit(message="Yesterday", date="2026-03-27T10:00:00+09:00")
+                    _builders.commit(
+                        message="Yesterday", date="2026-03-27T10:00:00+09:00"
+                    )
                 ],
                 "pulls": [
-                    make_pull(
+                    _builders.pull(
                         1, "Merged", "merged", merged_at="2026-03-27T10:00:00+09:00"
                     )
                 ],
                 "issues": [
-                    make_issue(
+                    _builders.issue(
                         2, "Closed", "closed", closed_at="2026-03-27T11:00:00+09:00"
                     )
                 ],
             },
         }
-        result = activity.GitHubActivity(data).format(SINCE, UNTIL)
+        result = activity.GitHubActivity(data).format(_builders.SINCE, _builders.UNTIL)
         assert result == "# GitHub アクティビティ\nアクティビティなし"
 
     def test_reports_items_completed_after_window_as_open(self):
@@ -408,18 +403,18 @@ class TestGitHubActivityFormat:
             "my-repo": {
                 "commits": [],
                 "pulls": [
-                    make_pull(
+                    _builders.pull(
                         1, "Merged", "merged", merged_at="2026-03-29T10:00:00+09:00"
                     )
                 ],
                 "issues": [
-                    make_issue(
+                    _builders.issue(
                         2, "Closed", "closed", closed_at="2026-03-29T11:00:00+09:00"
                     )
                 ],
             },
         }
-        result = activity.GitHubActivity(data).format(SINCE, UNTIL)
+        result = activity.GitHubActivity(data).format(_builders.SINCE, _builders.UNTIL)
         assert "- [open] #1 Merged" in result
         assert "- [open] #2 Closed" in result
 
@@ -442,7 +437,7 @@ class TestMergeSessionCommits:
         github_activity.merge_session_commits(
             "my-repo",
             [_session(session_commits=[])],
-            owner=OWNER,
+            owner=_builders.OWNER,
             populate_pull_numbers=self._populate_no_op,
         )
         assert github_activity.repos() == {}
@@ -457,7 +452,7 @@ class TestMergeSessionCommits:
         github_activity.merge_session_commits(
             "my-repo",
             [_session(session_commits=[{"sha": "abc1234", "message": "Fix login"}])],
-            owner=OWNER,
+            owner=_builders.OWNER,
             populate_pull_numbers=populate,
         )
 
@@ -467,7 +462,7 @@ class TestMergeSessionCommits:
         assert repo["commits"][0].message == "Fix login"
         assert (
             repo["commits"][0].url
-            == f"https://github.com/{OWNER}/my-repo/commit/abc1234"
+            == f"https://github.com/{_builders.OWNER}/my-repo/commit/abc1234"
         )
         assert repo["commits"][0].author == ""
         assert repo["pulls"] == []
@@ -480,7 +475,7 @@ class TestMergeSessionCommits:
             message="Existing",
             author="user",
             date="2026-03-28T09:00:00+09:00",
-            url=f"https://github.com/{OWNER}/my-repo/commit/aaa1111",
+            url=f"https://github.com/{_builders.OWNER}/my-repo/commit/aaa1111",
         )
         github_activity = activity.GitHubActivity(
             {"my-repo": {"commits": [existing], "pulls": [], "issues": []}}
@@ -488,7 +483,7 @@ class TestMergeSessionCommits:
         github_activity.merge_session_commits(
             "my-repo",
             [_session(session_commits=[{"sha": "bbb2222", "message": "New"}])],
-            owner=OWNER,
+            owner=_builders.OWNER,
             populate_pull_numbers=self._populate_no_op,
         )
         commits = github_activity.repos()["my-repo"]["commits"]
@@ -502,7 +497,7 @@ class TestMergeSessionCommits:
             message="Existing",
             author="user",
             date="2026-03-28T09:00:00+09:00",
-            url=f"https://github.com/{OWNER}/my-repo/commit/{full_sha}",
+            url=f"https://github.com/{_builders.OWNER}/my-repo/commit/{full_sha}",
         )
         github_activity = activity.GitHubActivity(
             {"my-repo": {"commits": [existing], "pulls": [], "issues": []}}
@@ -515,7 +510,7 @@ class TestMergeSessionCommits:
         github_activity.merge_session_commits(
             "my-repo",
             [_session(session_commits=[{"sha": "abc1234", "message": "Same commit"}])],
-            owner=OWNER,
+            owner=_builders.OWNER,
             populate_pull_numbers=populate,
         )
         commits = github_activity.repos()["my-repo"]["commits"]
@@ -550,7 +545,7 @@ class TestMergeSessionCommits:
         github_activity.merge_session_commits(
             "my-repo",
             sessions,
-            owner=OWNER,
+            owner=_builders.OWNER,
             populate_pull_numbers=self._populate_no_op,
         )
         commits = github_activity.repos()["my-repo"]["commits"]
@@ -576,7 +571,7 @@ class TestMergeSessionCommits:
                     ],
                 )
             ],
-            owner=OWNER,
+            owner=_builders.OWNER,
             populate_pull_numbers=self._populate_no_op,
         )
         commits = github_activity.repos()["my-repo"]["commits"]
