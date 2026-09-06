@@ -1,4 +1,4 @@
-"""Slack block builders, mrkdwn conversion, and the text shaping they need."""
+"""Slack block builders: mrkdwn conversion / block dict builders / text shaping."""
 
 from config import CONFIG
 
