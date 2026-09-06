@@ -1,4 +1,4 @@
-"""GitHub API client subpackage: client (PyGithub wrappers)."""
+"""GitHub API subpackage: client (GitHubClient)."""
 
 from .client import GitHubClient
 

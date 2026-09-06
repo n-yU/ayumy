@@ -1,4 +1,4 @@
-"""Tests for SessionActivity formatting."""
+"""Tests for SessionActivity formatting and repo exclusion."""
 
 import pytest
 
