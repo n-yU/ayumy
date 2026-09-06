@@ -11,7 +11,7 @@ import jsonschema
 
 from config import CONFIG
 
-from . import ReportSummary, SummaryUsage
+from .domain.summary import ReportSummary, SummaryUsage
 from .shared.dates import JST
 from .shared.notice import Notice, NoticeSource
 from .tags import ALLOWED_TAG_NAMES, TAG_DEFINITIONS

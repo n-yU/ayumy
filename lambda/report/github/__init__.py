@@ -1,6 +1,5 @@
-"""GitHub activity subpackage: client (PyGithub wrappers) + activity container."""
+"""GitHub API subpackage: client (GitHubClient)."""
 
-from .activity import GitHubActivity, RepoActivity
 from .client import GitHubClient
 
-__all__ = ["GitHubActivity", "GitHubClient", "RepoActivity"]
+__all__ = ["GitHubClient"]

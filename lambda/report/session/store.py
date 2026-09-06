@@ -9,7 +9,7 @@ import boto3
 from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
-from .. import SessionActivity, SessionInfo
+from ..domain.session import SessionActivity, SessionInfo
 from ..shared.notice import Notice
 from .parser import SessionLogParser
 

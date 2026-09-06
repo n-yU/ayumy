@@ -1,8 +1,8 @@
-"""Tests for SessionActivity formatting."""
+"""Tests for SessionActivity formatting and repo exclusion."""
 
 import pytest
 
-from report import SessionActivity
+from report.domain.session import SessionActivity
 
 
 class TestSessionActivityFormat:

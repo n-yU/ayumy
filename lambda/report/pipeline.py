@@ -10,8 +10,8 @@ from botocore.exceptions import BotoCoreError, ClientError
 
 from config import CONFIG
 
-from . import SessionActivity
 from .cost import CostDisplay, CostStore
+from .domain.session import SessionActivity
 from .github import GitHubClient
 from .notion import NotionClient
 from .session import SessionClient, SessionStore

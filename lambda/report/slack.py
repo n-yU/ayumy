@@ -9,8 +9,8 @@ from slack_sdk.errors import SlackClientError
 
 from config import CONFIG
 
-from . import ReportSummary
 from .cost import CostDisplay
+from .domain.summary import ReportSummary
 from .shared.dates import JST
 from .shared.inline import parse_inline
 from .shared.notice import Notice

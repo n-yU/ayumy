@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from boto3.dynamodb.conditions import ConditionExpressionBuilder
 
-from report import SummaryUsage
 from report.cost import CostDisplay, CostStore, MonthSummary
+from report.domain.summary import SummaryUsage
 
 
 def _make_store():

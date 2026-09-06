@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from report import SummaryUsage
+from report.domain.summary import SummaryUsage
 from report.summarizer import ValidationResult
 
 from ._builders import OWNER
