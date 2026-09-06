@@ -9,7 +9,7 @@ import boto3.dynamodb.conditions as conditions
 
 from config import CONFIG
 
-from .domain.summary import SummaryUsage
+from .domain import summary
 from .shared.dates import JST
 
 
@@ -43,7 +43,7 @@ class CostStore:
         self.table = boto3.resource("dynamodb").Table(table_name)
         self._run_spend_usd = 0.0
 
-    def start_record(self, target_date: date, usage: SummaryUsage) -> None:
+    def start_record(self, target_date: date, usage: summary.SummaryUsage) -> None:
         """Record one Claude API call; `model` and pricing are snapshotted onto the row so later config changes do not affect historical spend."""
         executed_at_utc = datetime.now(UTC)
         executed_date_jst = executed_at_utc.astimezone(JST).date()

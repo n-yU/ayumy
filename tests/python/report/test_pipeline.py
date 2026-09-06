@@ -315,10 +315,10 @@ class TestRun:
             "GitHubClient": "report.pipeline.GitHubClient",
             "SessionClient": "report.pipeline.SessionClient",
             "SessionStore": "report.pipeline.SessionStore",
-            "CostStore": "report.pipeline.CostStore",
+            "CostStore": "report.cost.CostStore",
             "SlackClient": "report.pipeline.SlackClient",
-            "require_env": "report.pipeline.require_env",
-            "get_target_date_range": "report.pipeline.get_target_date_range",
+            "require_env": "report.shared.env.require_env",
+            "get_target_date_range": "report.shared.dates.get_target_date_range",
         }
         with ExitStack() as stack:
             mocks = {
@@ -377,7 +377,7 @@ class TestRun:
         assert slack_client.notify_metrics.call_args.kwargs["memory_limit_mb"] == 512
         slack_client.flush.assert_called_once()
 
-    @patch("report.pipeline.get_version")
+    @patch("report.shared.env.get_version")
     def test_passes_version_and_timeout_to_metrics(
         self, mock_get_version, slack_client
     ):
@@ -397,7 +397,7 @@ class TestRun:
         run(source=None)
 
         slack_client.notify_metrics.assert_called_once()
-        assert slack_client.notify_metrics.call_args.kwargs["cost"] is None
+        assert slack_client.notify_metrics.call_args.kwargs["cost_display"] is None
         slack_client.flush.assert_called_once()
         slack_client.send_notice_thread.assert_called_once()
 
@@ -406,10 +406,10 @@ class TestRun:
         with pytest.raises(RuntimeError):
             run(source=None)
 
-        # Main-flow error still reaches Slack, and the metrics chain runs with cost=None
+        # Main-flow error still reaches Slack, and the metrics chain runs with no cost display
         slack_client.notify_error.assert_called_once()
         slack_client.notify_metrics.assert_called_once()
-        assert slack_client.notify_metrics.call_args.kwargs["cost"] is None
+        assert slack_client.notify_metrics.call_args.kwargs["cost_display"] is None
         slack_client.flush.assert_called_once()
 
     def test_backfills_past_dates(self, session_store):

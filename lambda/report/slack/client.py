@@ -6,8 +6,8 @@ from datetime import datetime
 
 import slack_sdk
 
-from ..cost import CostDisplay
-from ..domain.summary import ReportSummary
+from .. import cost
+from ..domain import summary
 from ..shared.dates import JST
 from ..shared.notice import Notice
 from ..summarizer import ValidationResult
@@ -95,7 +95,7 @@ class SlackClient:
     def notify(
         self,
         target_date: datetime,
-        report: ReportSummary,
+        report: summary.ReportSummary,
         pages: list[tuple[str, str]],
         session_only_repos: list[str] | None = None,
         *,
@@ -193,7 +193,7 @@ class SlackClient:
         elapsed: float,
         peak_memory_mb: float,
         version: str,
-        cost: CostDisplay | None = None,
+        cost_display: cost.CostDisplay | None = None,
         memory_limit_mb: int | None = None,
         timeout_seconds: int | None = None,
     ) -> None:
@@ -212,15 +212,15 @@ class SlackClient:
 
         parts = [f"🔖 v{version}", f"⏱️ {elapsed_text}", f"💾 {memory_text}"]
         fallback = f"📊 Execution Metrics: v{version}, {elapsed_text}, {memory_text}"
-        if cost is not None:
-            run_text = f"🧾 ${cost.current_run_spend_usd:.4f}"
-            mtd_text = f"💰 MTD ${cost.monthly_spend_usd:.2f}{mom_suffix(cost.spend_change_pct)}"
-            calls_text = f"🔁 {cost.monthly_call_count} calls{mom_suffix(cost.call_count_change_pct)}"
+        if cost_display is not None:
+            run_text = f"🧾 ${cost_display.current_run_spend_usd:.4f}"
+            mtd_text = f"💰 MTD ${cost_display.monthly_spend_usd:.2f}{mom_suffix(cost_display.spend_change_pct)}"
+            calls_text = f"🔁 {cost_display.monthly_call_count} calls{mom_suffix(cost_display.call_count_change_pct)}"
             parts.extend([run_text, mtd_text, calls_text])
             fallback += (
-                f", run ${cost.current_run_spend_usd:.4f}"
-                f", MTD ${cost.monthly_spend_usd:.2f}{mom_suffix(cost.spend_change_pct)}"
-                f", {cost.monthly_call_count} calls{mom_suffix(cost.call_count_change_pct)}"
+                f", run ${cost_display.current_run_spend_usd:.4f}"
+                f", MTD ${cost_display.monthly_spend_usd:.2f}{mom_suffix(cost_display.spend_change_pct)}"
+                f", {cost_display.monthly_call_count} calls{mom_suffix(cost_display.call_count_change_pct)}"
             )
 
         self._append_group([context_block("  |  ".join(parts))], fallback)

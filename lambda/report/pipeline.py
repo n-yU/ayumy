@@ -10,18 +10,12 @@ import botocore.exceptions
 
 from config import CONFIG
 
-from .cost import CostDisplay, CostStore
+from . import cost
 from .domain.session import SessionActivity
 from .github import GitHubClient
 from .notion import NotionClient
 from .session import SessionClient, SessionStore
-from .shared.dates import (
-    JST,
-    date_to_range,
-    get_target_date_range,
-    parse_target_dates,
-)
-from .shared.env import get_version, require_env
+from .shared import dates, env
 from .shared.notice import Notice, NoticeSource
 from .slack import SlackClient
 from .summarizer import SummaryClient
@@ -36,7 +30,7 @@ def process_date(
     github_client: GitHubClient,
     notion_client: NotionClient,
     summary_client: SummaryClient,
-    cost_store: CostStore,
+    cost_store: cost.CostStore,
     slack_client: SlackClient,
     *,
     is_backfill: bool = False,
@@ -157,20 +151,22 @@ def run(
     `memory_limit_mb` / `timeout_seconds` are None from the CLI.
     """
     start = time.monotonic()
-    since, until = get_target_date_range(source, target_date=target_date)
-    primary_date = since.astimezone(JST).date()
+    since, until = dates.get_target_date_range(source, target_date=target_date)
+    primary_date = since.astimezone(dates.JST).date()
 
     slack_client = SlackClient(
-        token=require_env("SLACK_BOT_TOKEN"),
-        channel=require_env("SLACK_CHANNEL"),
+        token=env.require_env("SLACK_BOT_TOKEN"),
+        channel=env.require_env("SLACK_CHANNEL"),
         is_manual=source == "manual",
     )
     notice = Notice()
-    cost_store: CostStore | None = None
+    cost_store: cost.CostStore | None = None
 
     try:
-        session_client = SessionClient(require_env("AYUMY_S3_BUCKET"), notice=notice)
-        store = SessionStore(require_env("AYUMY_DYNAMO_TABLE"), notice=notice)
+        session_client = SessionClient(
+            env.require_env("AYUMY_S3_BUCKET"), notice=notice
+        )
+        store = SessionStore(env.require_env("AYUMY_DYNAMO_TABLE"), notice=notice)
 
         ingested_keys = store.ingest(session_client)
         logger.info("Ingested %d JSONL file(s)", len(ingested_keys))
@@ -189,7 +185,7 @@ def run(
 
         backfill_set: set[str] = set()
         if target_date:
-            process_dates = parse_target_dates(target_date)
+            process_dates = dates.parse_target_dates(target_date)
             backfill_set = {d.isoformat() for d in process_dates}
         else:
             backfill_dates = store.scan_backfill_dates(primary_date)
@@ -199,22 +195,24 @@ def run(
             if backfill_dates:
                 logger.info("Backfill dates detected: %s", backfill_dates)
 
-        github_client = GitHubClient(require_env("GITHUB_PAT"), notice=notice)
+        github_client = GitHubClient(env.require_env("GITHUB_PAT"), notice=notice)
         notion_client = NotionClient(
-            require_env("NOTION_SECRET"),
-            require_env("NOTION_DATABASE_ID"),
+            env.require_env("NOTION_SECRET"),
+            env.require_env("NOTION_DATABASE_ID"),
             github_client.owner,
             notice=notice,
         )
         notion_client.init_data_source()
-        summary_client = SummaryClient(require_env("ANTHROPIC_API_KEY"), notice=notice)
-        cost_store = CostStore(require_env("AYUMY_COST_TABLE"))
+        summary_client = SummaryClient(
+            env.require_env("ANTHROPIC_API_KEY"), notice=notice
+        )
+        cost_store = cost.CostStore(env.require_env("AYUMY_COST_TABLE"))
 
         for d in process_dates:
             if not target_date and d == primary_date:
                 day_since, day_until = since, until
             else:
-                day_since, day_until = date_to_range(d)
+                day_since, day_until = dates.date_to_range(d)
             date_str = d.isoformat()
             try:
                 session_activity = store.fetch_sessions(date_str)
@@ -266,10 +264,12 @@ def run(
             memory_limit_mb,
             timeout_seconds,
         )
-        cost_display: CostDisplay | None = None
+        cost_display: cost.CostDisplay | None = None
         if cost_store is not None:
             try:
-                cost_display = cost_store.compute_display(datetime.now(JST).date())
+                cost_display = cost_store.compute_display(
+                    datetime.now(dates.JST).date()
+                )
             except Exception:
                 # Broad: cost display is auxiliary; any failure here should not block metrics/notice notifications
                 notice.add(
@@ -281,8 +281,8 @@ def run(
         slack_client.notify_metrics(
             elapsed,
             peak_memory_mb,
-            get_version(),
-            cost=cost_display,
+            env.get_version(),
+            cost_display=cost_display,
             memory_limit_mb=memory_limit_mb,
             timeout_seconds=timeout_seconds,
         )
