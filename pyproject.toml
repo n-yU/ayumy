@@ -43,7 +43,7 @@ banned-from = [
     "slack_sdk.errors",
 ]
 
-[tool.ruff.lint.flake8-import-conventions.aliases]
+[tool.ruff.lint.flake8-import-conventions.extend-aliases]
 "boto3.dynamodb.conditions" = "conditions"
 github = "gh"
 
