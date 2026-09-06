@@ -1,4 +1,4 @@
-"""Tests for report package core utilities."""
+"""Tests for SummaryUsage token accounting."""
 
 import pytest
 
