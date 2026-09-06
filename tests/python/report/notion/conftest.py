@@ -4,8 +4,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from report.notice import Notice
 from report.notion import NotionClient
+from report.shared.notice import Notice
 
 from .._builders import OWNER, SINCE, UNTIL, make_repo_activity, make_stub
 

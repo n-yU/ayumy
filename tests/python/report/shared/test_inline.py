@@ -1,10 +1,10 @@
-"""Tests for report.inline notation parsing."""
+"""Tests for report.shared.inline notation parsing."""
 
 import pytest
 
-from report.inline import Segment, issue_url, parse_inline
+from report.shared.inline import Segment, issue_url, parse_inline
 
-from ._builders import OWNER, REPO
+from .._builders import OWNER, REPO
 
 OTHER_REPO = "other-repo"
 

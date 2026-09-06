@@ -9,8 +9,8 @@ from datetime import UTC, datetime
 from os.path import normpath
 from pathlib import Path, PurePosixPath
 
-from .. import JST
-from ..notice import Notice, NoticeSource
+from ..shared.dates import JST
+from ..shared.notice import Notice, NoticeSource
 
 logger = logging.getLogger(__name__)
 

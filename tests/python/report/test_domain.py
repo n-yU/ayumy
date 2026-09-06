@@ -5,8 +5,8 @@ from datetime import datetime
 
 import pytest
 
-from report import JST
 from report.domain import CommitInfo, IssueInfo, PullInfo
+from report.shared.dates import JST
 
 from ._builders import (
     REPO_FULL_NAME,

@@ -1,6 +1,6 @@
 """Notion block primitives: low-level rich_text / block dict builders."""
 
-from ..inline import Segment, parse_inline
+from ..shared.inline import Segment, parse_inline
 
 RICH_TEXT_LIMIT = 2000  # Notion's rich_text per-item char limit
 

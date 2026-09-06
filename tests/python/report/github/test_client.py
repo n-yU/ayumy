@@ -7,7 +7,7 @@ import pytest
 from github import GithubException, UnknownObjectException
 
 from config import CONFIG
-from report import JST
+from report.shared.dates import JST
 
 from .._builders import (
     REPO_FULL_NAME,

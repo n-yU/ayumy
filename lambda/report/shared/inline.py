@@ -1,7 +1,5 @@
 """Inline notation in generated summaries, shared by the Notion and Slack renderers."""
 
-from __future__ import annotations
-
 import re
 from dataclasses import dataclass
 

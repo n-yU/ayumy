@@ -4,7 +4,7 @@ import logging
 
 import pytest
 
-from report.notice import Notice, NoticeEntry, NoticeSource
+from report.shared.notice import Notice, NoticeEntry, NoticeSource
 
 
 class TestNoticeAdd:
@@ -68,10 +68,10 @@ class TestNoticeAdd:
         assert "RuntimeError: boom" in caplog.text
 
     def test_uses_default_logger_when_omitted(self, caplog):
-        with caplog.at_level(logging.WARNING, logger="report.notice"):
+        with caplog.at_level(logging.WARNING, logger="report.shared.notice"):
             self.notice.add(NoticeSource.SUMMARY, "Invalid tags removed")
 
-        assert any(r.name == "report.notice" for r in caplog.records)
+        assert any(r.name == "report.shared.notice" for r in caplog.records)
 
 
 class TestNoticeContainerProtocol:

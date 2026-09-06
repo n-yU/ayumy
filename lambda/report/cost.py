@@ -9,7 +9,8 @@ from boto3.dynamodb.conditions import Key
 
 from config import CONFIG
 
-from . import JST, SummaryUsage
+from . import SummaryUsage
+from .shared.dates import JST
 
 
 @dataclass(frozen=True)

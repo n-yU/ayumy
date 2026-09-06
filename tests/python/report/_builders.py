@@ -3,9 +3,10 @@
 from datetime import datetime
 from unittest.mock import MagicMock
 
-from report import JST, SessionActivity
+from report import SessionActivity
 from report.domain import CommitInfo, IssueInfo, PullInfo
 from report.github import GitHubActivity
+from report.shared.dates import JST
 
 OWNER = "n-yU"
 REPO = "my-repo"
