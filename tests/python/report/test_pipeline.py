@@ -63,6 +63,24 @@ def _arrange_no_activity(clients):
     _stub_fetch_activity(clients, activity.GitHubActivity({}))
 
 
+def _assert_published(clients):
+    """Verify report → Notion → Slack ran once."""
+    clients["summary_client"].generate_summary.assert_called_once()
+    clients["notion_client"].create_report_pages.assert_called_once()
+    clients["slack_client"].notify.assert_called_once()
+    clients["slack_client"].notify_validation_errors.assert_not_called()
+
+
+def _assert_skipped(clients, since):
+    clients["summary_client"].generate_summary.assert_not_called()
+    clients["notion_client"].create_report_pages.assert_not_called()
+    clients["slack_client"].notify.assert_not_called()
+    clients["slack_client"].notify_validation_errors.assert_not_called()
+    clients["slack_client"].notify_no_activity.assert_called_once_with(
+        since, is_backfill=False
+    )
+
+
 def _fail_on_nth_fetch(store, n, message):
     """Raise from the `n`-th fetch_sessions call so the surrounding dates still succeed."""
     calls = 0
@@ -84,7 +102,7 @@ class TestProcessDate:
             _builders.SINCE, _builders.UNTIL, SessionActivity({}), **pipeline_clients
         )
 
-        _builders.assert_skipped(pipeline_clients, _builders.SINCE)
+        _assert_skipped(pipeline_clients, _builders.SINCE)
 
     def test_generates_report_and_publishes(self, pipeline_clients):
         _stub_fetch_activity(
@@ -103,7 +121,7 @@ class TestProcessDate:
             **pipeline_clients,
         )
 
-        _builders.assert_published(pipeline_clients)
+        _assert_published(pipeline_clients)
         # Verify the (target_date, since, until) trio is passed in order
         notion_args = pipeline_clients["notion_client"].create_report_pages.call_args[0]
         assert notion_args[:3] == (_builders.SINCE, _builders.SINCE, _builders.UNTIL)

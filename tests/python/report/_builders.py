@@ -1,4 +1,4 @@
-"""Builders and assert helpers for tests/report/."""
+"""Builders for tests/report/."""
 
 from datetime import datetime
 from unittest.mock import MagicMock
@@ -261,21 +261,3 @@ def issue_mock(
     mock.labels = [label_mock(n) for n in labels]
     mock.pull_request = pull_request
     return mock
-
-
-def assert_published(clients):
-    """Verify report → Notion → Slack ran once."""
-    clients["summary_client"].generate_summary.assert_called_once()
-    clients["notion_client"].create_report_pages.assert_called_once()
-    clients["slack_client"].notify.assert_called_once()
-    clients["slack_client"].notify_validation_errors.assert_not_called()
-
-
-def assert_skipped(clients, since):
-    clients["summary_client"].generate_summary.assert_not_called()
-    clients["notion_client"].create_report_pages.assert_not_called()
-    clients["slack_client"].notify.assert_not_called()
-    clients["slack_client"].notify_validation_errors.assert_not_called()
-    clients["slack_client"].notify_no_activity.assert_called_once_with(
-        since, is_backfill=False
-    )
