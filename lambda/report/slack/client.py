@@ -5,6 +5,7 @@ from collections import defaultdict
 from datetime import datetime
 
 import slack_sdk
+import slack_sdk.errors
 
 from .. import cost
 from ..domain import summary

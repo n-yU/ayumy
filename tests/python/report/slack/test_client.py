@@ -4,7 +4,7 @@ from datetime import datetime
 from unittest.mock import MagicMock
 
 import pytest
-import slack_sdk
+import slack_sdk.errors
 
 from config import CONFIG
 from report.cost import CostDisplay
