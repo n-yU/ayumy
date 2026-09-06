@@ -4,8 +4,7 @@ from datetime import datetime
 from unittest.mock import MagicMock
 
 from report import SessionActivity
-from report.domain import CommitInfo, IssueInfo, PullInfo
-from report.github import GitHubActivity
+from report.domain.activity import CommitInfo, GitHubActivity, IssueInfo, PullInfo
 from report.shared.dates import JST
 
 OWNER = "n-yU"

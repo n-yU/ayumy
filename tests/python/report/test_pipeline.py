@@ -10,7 +10,7 @@ from botocore.exceptions import ClientError
 
 from config import CONFIG
 from report import SessionActivity, SummaryUsage
-from report.github import GitHubActivity
+from report.domain.activity import GitHubActivity
 from report.pipeline import process_date, run
 from report.shared.dates import JST
 from report.summarizer import ValidationResult

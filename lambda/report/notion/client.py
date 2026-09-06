@@ -12,8 +12,13 @@ from .. import (
     RepoSummary,
     SessionActivity,
 )
-from ..domain import CommitInfo, PullInfo, in_range
-from ..github import GitHubActivity, RepoActivity
+from ..domain.activity import (
+    CommitInfo,
+    GitHubActivity,
+    PullInfo,
+    RepoActivity,
+    in_range,
+)
 from ..shared.dates import JST
 from ..shared.env import get_version
 from ..shared.notice import Notice, NoticeSource
