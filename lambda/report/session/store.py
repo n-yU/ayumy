@@ -6,8 +6,8 @@ import logging
 from datetime import UTC, date, datetime
 
 import boto3
-from boto3.dynamodb.conditions import Key
-from botocore.exceptions import ClientError
+import boto3.dynamodb.conditions as conditions
+import botocore.exceptions
 
 from ..domain.session import SessionActivity, SessionInfo
 from ..shared.notice import Notice
@@ -73,7 +73,7 @@ class SessionStore:
                     ExpressionAttributeNames={f"#f_{k}": k for k in fields},
                     ExpressionAttributeValues={f":v_{k}": v for k, v in fields.items()},
                 )
-            except ClientError as e:
+            except botocore.exceptions.ClientError as e:
                 if e.response["Error"]["Code"] != "ConditionalCheckFailedException":
                     raise
                 skipped += 1
@@ -85,13 +85,13 @@ class SessionStore:
         """Query the JST date `date_str` (`YYYY-MM-DD`) and return sessions grouped by repository."""
         items = []
         response = self.table.query(
-            KeyConditionExpression=Key("date").eq(date_str),
+            KeyConditionExpression=conditions.Key("date").eq(date_str),
         )
         items.extend(response["Items"])
 
         while "LastEvaluatedKey" in response:
             response = self.table.query(
-                KeyConditionExpression=Key("date").eq(date_str),
+                KeyConditionExpression=conditions.Key("date").eq(date_str),
                 ExclusiveStartKey=response["LastEvaluatedKey"],
             )
             items.extend(response["Items"])
@@ -147,7 +147,7 @@ class SessionStore:
         now = datetime.now(UTC).isoformat()
 
         response = self.table.query(
-            KeyConditionExpression=Key("date").eq(date_str),
+            KeyConditionExpression=conditions.Key("date").eq(date_str),
             ProjectionExpression="#d, #sk",
             ExpressionAttributeNames={
                 "#d": "date",
@@ -158,7 +158,7 @@ class SessionStore:
 
         while "LastEvaluatedKey" in response:
             response = self.table.query(
-                KeyConditionExpression=Key("date").eq(date_str),
+                KeyConditionExpression=conditions.Key("date").eq(date_str),
                 ProjectionExpression="#d, #sk",
                 ExpressionAttributeNames={
                     "#d": "date",

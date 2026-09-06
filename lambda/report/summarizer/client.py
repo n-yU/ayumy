@@ -11,7 +11,7 @@ import jsonschema
 
 from config import CONFIG
 
-from ..domain.summary import ReportSummary, SummaryUsage
+from ..domain import summary
 from ..shared.dates import JST
 from ..shared.notice import Notice, NoticeSource
 from .tags import ALLOWED_TAG_NAMES, TAG_DEFINITIONS
@@ -47,7 +47,7 @@ _RESPONSE_SHAPE_SCHEMA = {
 _VALUE_REPR_LIMIT = 200
 
 
-def _validate_response_shape(payload: object) -> ReportSummary:
+def _validate_response_shape(payload: object) -> summary.ReportSummary:
     try:
         jsonschema.validate(payload, _RESPONSE_SHAPE_SCHEMA)
     except jsonschema.ValidationError as e:
@@ -61,7 +61,7 @@ def _validate_response_shape(payload: object) -> ReportSummary:
             f"got={type(e.instance).__name__} value={value_repr}"
         )
         raise ValueError(f"{summary_line}\n{e}") from e
-    return cast(ReportSummary, payload)
+    return cast(summary.ReportSummary, payload)
 
 
 class ValidationResult:
@@ -142,7 +142,7 @@ class SummaryClient:
         target_date: datetime,
         formatted_github: str,
         formatted_sessions: str,
-    ) -> tuple[ReportSummary, SummaryUsage]:
+    ) -> tuple[summary.ReportSummary, summary.SummaryUsage]:
         """Generate the structured summary via Claude API tool use.
 
         Returns the parsed report and the token / spend record for the API call.
@@ -163,7 +163,7 @@ class SummaryClient:
             messages=[{"role": "user", "content": prompt}],
         )
 
-        usage = SummaryUsage.from_call(
+        usage = summary.SummaryUsage.from_call(
             message.usage.input_tokens, message.usage.output_tokens
         )
 
@@ -173,7 +173,7 @@ class SummaryClient:
 
         raise ValueError(f"Claude API response missing tool_use block for {TOOL_NAME}.")
 
-    def validate_report(self, report: ReportSummary) -> ValidationResult:
+    def validate_report(self, report: summary.ReportSummary) -> ValidationResult:
         """Strips disallowed tags from `report` in place."""
         result = ValidationResult()
         tag_set = set(ALLOWED_TAG_NAMES)

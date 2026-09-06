@@ -3,21 +3,14 @@
 import logging
 from datetime import datetime
 
-from notion_client import Client
+import notion_client
 
 from config import CONFIG
 
-from ..domain.activity import (
-    CommitInfo,
-    GitHubActivity,
-    PullInfo,
-    RepoActivity,
-    in_range,
-)
+from ..domain import activity, summary
 from ..domain.session import SessionActivity
-from ..domain.summary import ReportSummary, RepoSummary
+from ..shared import env
 from ..shared.dates import JST
-from ..shared.env import get_version
 from ..shared.notice import Notice, NoticeSource
 from .blocks import bulleted_link, bulleted_text, heading_2
 
@@ -48,7 +41,7 @@ class NotionClient:
     def __init__(
         self, token: str, database_id: str, owner: str, notice: Notice | None = None
     ) -> None:
-        self.client = Client(auth=token)
+        self.client = notion_client.Client(auth=token)
         self.database_id = database_id
         self.owner = owner  # Resolves number references in summaries to GitHub URLs
         self._data_source_id: str | None = None
@@ -75,7 +68,7 @@ class NotionClient:
     def _build_properties(
         self,
         target_date: datetime,
-        repo_summary: RepoSummary,
+        repo_summary: summary.RepoSummary,
         commits: int,
         prs_merged: int,
         issues_closed: int,
@@ -97,13 +90,13 @@ class NotionClient:
             "Sessions": {"number": claude_sessions},
             "Regens": {"number": regens},
             "Version": {
-                "rich_text": [{"type": "text", "text": {"content": get_version()}}]
+                "rich_text": [{"type": "text", "text": {"content": env.get_version()}}]
             },
         }
 
     def _build_status_sections(
         self,
-        repo_activity: RepoActivity,
+        repo_activity: activity.RepoActivity,
         since: datetime,
         until: datetime,
     ) -> list[dict]:
@@ -129,7 +122,7 @@ class NotionClient:
                 continue
             if state != "open":
                 done.append((label, issue.url, issue.done_prefix()))
-            elif in_range(issue.created_at, since, until):
+            elif activity.in_range(issue.created_at, since, until):
                 todo.append((label, issue.url, ""))
             else:
                 in_progress.append((label, issue.url, ""))
@@ -150,7 +143,7 @@ class NotionClient:
 
     def _build_timeline_section(
         self,
-        repo_activity: RepoActivity,
+        repo_activity: activity.RepoActivity,
         since: datetime,
         until: datetime,
     ) -> list[dict]:
@@ -158,11 +151,13 @@ class NotionClient:
         pulls = repo_activity["pulls"]
         issues = repo_activity["issues"]
 
-        merge_sha_to_pr: dict[str, PullInfo] = {
+        merge_sha_to_pr: dict[str, activity.PullInfo] = {
             pr.merge_commit_sha: pr for pr in pulls if pr.merge_commit_sha
         }
-        pr_by_number: dict[int, PullInfo] = {pr.number: pr for pr in pulls}
-        pr_nested_commits: dict[int, list[CommitInfo]] = {n: [] for n in pr_by_number}
+        pr_by_number: dict[int, activity.PullInfo] = {pr.number: pr for pr in pulls}
+        pr_nested_commits: dict[int, list[activity.CommitInfo]] = {
+            n: [] for n in pr_by_number
+        }
 
         # secondary_priority is 0 for PR headers so they sort before adjacent merge commits at the same ts
         entries: list[tuple[datetime, int, dict]] = []
@@ -188,16 +183,16 @@ class NotionClient:
                 key=lambda c: datetime.fromisoformat(c.date),
             )
             candidates: list[datetime] = []
-            if in_range(pr.created_at, since, until):
+            if activity.in_range(pr.created_at, since, until):
                 candidates.append(datetime.fromisoformat(pr.created_at))
             if nested:
                 candidates.append(datetime.fromisoformat(nested[0].date))
-            if in_range(pr.merged_at, since, until):
+            if activity.in_range(pr.merged_at, since, until):
                 candidates.append(datetime.fromisoformat(pr.merged_at))
             if (
                 pr.state == "closed"
                 and not pr.merged_at
-                and in_range(pr.closed_at, since, until)
+                and activity.in_range(pr.closed_at, since, until)
             ):
                 candidates.append(datetime.fromisoformat(pr.closed_at))
             if not candidates:
@@ -216,7 +211,7 @@ class NotionClient:
                 )
             )
             # Unmerged-closed PR also gets a top-level close line
-            if pr.state == "closed" and in_range(pr.closed_at, since, until):
+            if pr.state == "closed" and activity.in_range(pr.closed_at, since, until):
                 entries.append(
                     (
                         datetime.fromisoformat(pr.closed_at),
@@ -231,7 +226,7 @@ class NotionClient:
 
         for issue in issues:
             label = issue.label()
-            if in_range(issue.created_at, since, until):
+            if activity.in_range(issue.created_at, since, until):
                 entries.append(
                     (
                         datetime.fromisoformat(issue.created_at),
@@ -239,7 +234,7 @@ class NotionClient:
                         bulleted_link(label, issue.url, prefix="🟢 open: "),
                     )
                 )
-            if in_range(issue.closed_at, since, until):
+            if activity.in_range(issue.closed_at, since, until):
                 entries.append(
                     (
                         datetime.fromisoformat(issue.closed_at),
@@ -261,8 +256,8 @@ class NotionClient:
 
     def _build_children(
         self,
-        repo_summary: RepoSummary,
-        repo_activity: RepoActivity,
+        repo_summary: summary.RepoSummary,
+        repo_activity: activity.RepoActivity,
         since: datetime,
         until: datetime,
     ) -> list[dict]:
@@ -280,8 +275,8 @@ class NotionClient:
     def create_page(
         self,
         target_date: datetime,
-        repo_summary: RepoSummary,
-        repo_activity: RepoActivity,
+        repo_summary: summary.RepoSummary,
+        repo_activity: activity.RepoActivity,
         since: datetime,
         until: datetime,
         commits: int,
@@ -340,8 +335,8 @@ class NotionClient:
         target_date: datetime,
         since: datetime,
         until: datetime,
-        report: ReportSummary,
-        activity: GitHubActivity,
+        report: summary.ReportSummary,
+        github_activity: activity.GitHubActivity,
         session_activity: SessionActivity,
     ) -> list[tuple[str, str]]:
         """Create a report page for each summarized repository that has fetched activity, archiving same-date pages first to ensure re-runs stay idempotent."""
@@ -351,7 +346,7 @@ class NotionClient:
         for repo_summary in report["repositories"]:
             repo_name = repo_summary["name"]
 
-            if repo_name not in activity:
+            if repo_name not in github_activity:
                 self._notice.add(
                     NoticeSource.NOTION,
                     "Unknown repo skipped",
@@ -360,7 +355,7 @@ class NotionClient:
                 )
                 continue
 
-            repo_activity = activity.repos()[repo_name]
+            repo_activity = github_activity.repos()[repo_name]
 
             # Counted on the same window basis as the page body so the properties match what the page lists
             commits = sum(

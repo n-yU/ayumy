@@ -6,19 +6,13 @@ import time
 from datetime import datetime, timedelta
 from functools import cached_property
 
-from github import Github, GithubException, UnknownObjectException
+import github as gh
 from github.Issue import Issue
 from github.Repository import Repository
 
 from config import CONFIG
 
-from ..domain.activity import (
-    CommitInfo,
-    GitHubActivity,
-    IssueInfo,
-    PullInfo,
-    RepoActivity,
-)
+from ..domain import activity
 from ..shared.notice import Notice, NoticeSource
 
 logger = logging.getLogger(__name__)
@@ -31,7 +25,7 @@ class GitHubClient:
     """GitHub activity fetcher via PyGithub."""
 
     def __init__(self, pat: str, notice: Notice | None = None) -> None:
-        self.g = Github(pat, per_page=100)
+        self.g = gh.Github(pat, per_page=100)
         self._search_count = 0
         self._window_start = 0.0
         self._notice = notice or Notice()
@@ -55,7 +49,7 @@ class GitHubClient:
 
     def fetch_commits(
         self, repo: Repository, since: datetime, until: datetime
-    ) -> list[CommitInfo]:
+    ) -> list[activity.CommitInfo]:
         """Annotate each commit with PR numbers.
 
         Uses Search Commits API (author-date) to cover all branches;
@@ -69,13 +63,13 @@ class GitHubClient:
         query = f"repo:{repo.full_name} author-date:{since_str}..{until_str}"
 
         self._search_throttle()
-        results: list[CommitInfo] = []
+        results: list[activity.CommitInfo] = []
         for c in self.g.search_commits(query, sort="author-date", order="desc"):
             author_date = c.commit.author.date
             if author_date < since or author_date >= until:
                 continue
             results.append(
-                CommitInfo.from_search_commit(
+                activity.CommitInfo.from_search_commit(
                     c, pull_numbers=self._fetch_pulls_for_commit(repo, c.sha)
                 )
             )
@@ -88,9 +82,9 @@ class GitHubClient:
         until: datetime,
         *,
         is_backfill: bool = False,
-        commits: list[CommitInfo] | None = None,
+        commits: list[activity.CommitInfo] | None = None,
         session_numbers: list[int] | None = None,
-    ) -> list[PullInfo]:
+    ) -> list[activity.PullInfo]:
         """Fetch PRs in `repo` active within the window.
 
         Default path filters by `updated_at`.
@@ -105,13 +99,13 @@ class GitHubClient:
                 session_numbers or [],
             )
 
-        results: list[PullInfo] = []
+        results: list[activity.PullInfo] = []
         for pr in repo.get_pulls(state="all", sort="updated", direction="desc"):
             if pr.updated_at < since:
                 break
             if pr.updated_at >= until:
                 continue
-            results.append(PullInfo.from_pull_request(pr))
+            results.append(activity.PullInfo.from_pull_request(pr))
         return results
 
     def fetch_issues(
@@ -122,7 +116,7 @@ class GitHubClient:
         *,
         is_backfill: bool = False,
         session_numbers: list[int] | None = None,
-    ) -> list[IssueInfo]:
+    ) -> list[activity.IssueInfo]:
         """Fetch issues in `repo` active within the window.
 
         Default path filters by `updated_at`.
@@ -136,13 +130,13 @@ class GitHubClient:
                 session_numbers or [],
             )
 
-        results: list[IssueInfo] = []
+        results: list[activity.IssueInfo] = []
         for issue in repo.get_issues(since=since, state="all"):
             if issue.pull_request is not None:
                 continue
             if issue.updated_at >= until:
                 continue
-            results.append(IssueInfo.from_issue(issue))
+            results.append(activity.IssueInfo.from_issue(issue))
         return results
 
     def fetch_activity(
@@ -154,9 +148,9 @@ class GitHubClient:
         is_backfill: bool = False,
         session_pulls: dict[str, list[int]] | None = None,
         session_issues: dict[str, list[int]] | None = None,
-    ) -> GitHubActivity:
+    ) -> activity.GitHubActivity:
         user = self.g.get_user()
-        data: dict[str, RepoActivity] = {}
+        data: dict[str, activity.RepoActivity] = {}
         session_pulls = session_pulls or {}
         session_issues = session_issues or {}
 
@@ -185,7 +179,7 @@ class GitHubClient:
                     "pulls": pulls,
                     "issues": issues,
                 }
-        return GitHubActivity(data)
+        return activity.GitHubActivity(data)
 
     def _search_pulls_by_event(
         self,
@@ -232,7 +226,7 @@ class GitHubClient:
         try:
             commit = repo.get_commit(sha)
             return [pr.number for pr in commit.get_pulls()]
-        except UnknownObjectException:
+        except gh.UnknownObjectException:
             self._notice.add(
                 NoticeSource.GITHUB,
                 "Commit not found (404)",
@@ -245,7 +239,7 @@ class GitHubClient:
     def populate_commit_pull_numbers(
         self,
         repo_name: str,
-        commits: list[CommitInfo],
+        commits: list[activity.CommitInfo],
     ) -> None:
         """Resolve associated PRs for commits lacking them, replacing each with its full SHA and URL from the API response.
 
@@ -260,7 +254,7 @@ class GitHubClient:
             c = commits[i]
             try:
                 commit = repo.get_commit(c.sha)
-            except GithubException as e:
+            except gh.GithubException as e:
                 if e.status not in (404, 422):
                     raise
                 self._notice.add(
@@ -285,9 +279,9 @@ class GitHubClient:
         repo: Repository,
         since: datetime,
         until: datetime,
-        commits: list[CommitInfo],
+        commits: list[activity.CommitInfo],
         session_numbers: list[int],
-    ) -> list[PullInfo]:
+    ) -> list[activity.PullInfo]:
         """Union Search-by-event PRs with those derived from commits and sessions.
 
         Commit/session-derived numbers bypass the date filter (activity proven by commit/session touch); reuses pull_numbers populated by `fetch_commits` to avoid duplicate API calls.
@@ -304,11 +298,11 @@ class GitHubClient:
         session_set: set[int] = set(session_numbers)
         exempt_numbers = commit_numbers | session_set
 
-        results: list[PullInfo] = []
+        results: list[activity.PullInfo] = []
         for n in sorted(event_numbers | exempt_numbers):
             try:
                 pr = repo.get_pull(n)
-            except UnknownObjectException:
+            except gh.UnknownObjectException:
                 self._notice.add(
                     NoticeSource.GITHUB,
                     "PR not found (404)",
@@ -317,7 +311,7 @@ class GitHubClient:
                     number=str(n),
                 )
                 continue
-            info = PullInfo.from_pull_request(pr)
+            info = activity.PullInfo.from_pull_request(pr)
             # Search-only entries must have a state event in [since, until)
             if n in event_numbers and n not in exempt_numbers:
                 if not info.has_event_in_range(since, until):
@@ -331,7 +325,7 @@ class GitHubClient:
         since: datetime,
         until: datetime,
         session_numbers: list[int],
-    ) -> list[IssueInfo]:
+    ) -> list[activity.IssueInfo]:
         """Union Search-by-event issues with those derived from sessions.
 
         Session-derived numbers may resolve to PRs (PR/Issue numbering is shared); fetched via `get_issue` and skipped when `pull_request` is set.
@@ -346,17 +340,17 @@ class GitHubClient:
         for number in session_set - event_numbers:
             try:
                 issue = repo.get_issue(number)
-            except UnknownObjectException:
+            except gh.UnknownObjectException:
                 logger.warning("Issue #%d not found (404), skipping", number)
                 continue
             if issue.pull_request is not None:
                 continue
             seen[number] = issue
 
-        results: list[IssueInfo] = []
+        results: list[activity.IssueInfo] = []
         for number in sorted(seen):
             issue = seen[number]
-            info = IssueInfo.from_issue(issue)
+            info = activity.IssueInfo.from_issue(issue)
             # Search-only entries must have a state event in [since, until)
             if number in event_numbers and number not in session_set:
                 if not info.has_event_in_range(since, until):

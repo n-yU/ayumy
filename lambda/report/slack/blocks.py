@@ -2,7 +2,7 @@
 
 from config import CONFIG
 
-from ..shared.inline import parse_inline
+from ..shared import inline
 
 SECTION_TEXT_MAX = 2900  # Slack section text limit is 3000; cap below to leave room for headers and continuation prefixes
 
@@ -25,7 +25,7 @@ def to_mrkdwn(text: str, owner: str, repo: str) -> str:
     Backticks pass through unchanged because they already mean inline code in mrkdwn.
     """
     parts = []
-    for segment in parse_inline(escape_mrkdwn(text), owner, repo):
+    for segment in inline.parse_inline(escape_mrkdwn(text), owner, repo):
         if segment.code:
             parts.append(f"`{segment.text}`")
         elif segment.bold:

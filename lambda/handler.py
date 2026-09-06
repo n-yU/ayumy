@@ -4,8 +4,8 @@ import os
 
 import boto3
 
-from report.pipeline import run
-from report.shared.env import require_env
+from report import pipeline
+from report.shared import env
 
 logging.getLogger().setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
@@ -38,8 +38,8 @@ def lambda_handler(event, context):
     target_date = event.get("target_date")
 
     try:
-        timeout_seconds = int(require_env("AYUMY_LAMBDA_TIMEOUT"))
-        run(
+        timeout_seconds = int(env.require_env("AYUMY_LAMBDA_TIMEOUT"))
+        pipeline.run(
             source,
             target_date=target_date,
             memory_limit_mb=int(context.memory_limit_in_mb),

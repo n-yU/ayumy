@@ -26,6 +26,20 @@ lambda/requirements-dev.txt          # `requirements-dev.in` から同様に生�
 template.yaml                        # AWS SAM テンプレート（Lambda, EventBridge, IAM ロール, S3 バケット, DynamoDB テーブル）
 ```
 
+## コーディング規約
+### import の使い分け
+自リポジトリのモジュールと第三者ライブラリは、モジュールを取り込んで `<module>.<name>` の形で参照する。標準ライブラリは対象外とし、現状の個別取り込みを維持する
+
+名前を個別に取り込むのは以下に限る
+- モジュール直下の定数（`CONFIG` / `JST` / `TAG_DEFINITIONS` 等）。参照側で由来を取り違える余地が小さい一方、前置すると多数の箇所が長くなる
+- 型注釈にしか使わない取り込み（`github.Issue` / `github.Repository`）
+- モジュール名が参照側の引数名・ローカル変数名と重なる場合（`notice` / `blocks` / `parser`）。モジュールが隠れるため
+- モジュール名が別の subpackage と重なる場合（`domain/session.py` と `report/session/`）
+
+機能を提供する subpackage（`github` / `notion` / `session` / `slack` / `summarizer`）は `__init__.py` の再 export を経由して参照し、内部モジュールを直接指さない。型とヘルパーを置く `domain` / `shared` は再 export を持たないため、モジュールを直接指す
+
+第三者ライブラリ側の対象と別名は ruff の flake8-import-conventions で固定しているため、ここには列挙しない
+
 ## 技術詳細
 - **実行環境**: AWS Lambda（SAM でデプロイ）
 - **クライアント対応 OS**: クライアント側のスクリプト（`scripts/`, `hooks/`, `bin/ayumy`）は macOS のみサポート

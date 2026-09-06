@@ -3,8 +3,8 @@
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
+import github as gh
 import pytest
-from github import GithubException, UnknownObjectException
 
 from config import CONFIG
 from report.shared.dates import JST
@@ -223,7 +223,7 @@ class TestSearchByEvent:
 
 class TestFetchPullsForCommit:
     def test_returns_empty_on_404(self, github_client, repo):
-        repo.get_commit.side_effect = UnknownObjectException(404, "Not Found", {})
+        repo.get_commit.side_effect = gh.UnknownObjectException(404, "Not Found", {})
 
         assert github_client._fetch_pulls_for_commit(repo, "abc1234") == []
 
@@ -281,10 +281,12 @@ class TestPopulateCommitPullNumbers:
     @pytest.mark.parametrize(
         "error",
         [
-            pytest.param(UnknownObjectException(404, "Not Found", {}), id="404"),
+            pytest.param(gh.UnknownObjectException(404, "Not Found", {}), id="404"),
             # Short SHA ambiguity / not-found is reported as 422 by GET /commits/{sha}
             pytest.param(
-                GithubException(422, {"message": "No commit found for SHA: aaa"}, {}),
+                gh.GithubException(
+                    422, {"message": "No commit found for SHA: aaa"}, {}
+                ),
                 id="422",
             ),
         ],
@@ -298,12 +300,12 @@ class TestPopulateCommitPullNumbers:
         assert commits[0].pull_numbers == ()
 
     def test_propagates_other_github_errors(self, github_client, repo):
-        repo.get_commit.side_effect = GithubException(
+        repo.get_commit.side_effect = gh.GithubException(
             500, {"message": "server error"}, {}
         )
 
         commits = [self._commit("aaa", [])]
-        with pytest.raises(GithubException):
+        with pytest.raises(gh.GithubException):
             github_client.populate_commit_pull_numbers("repo", commits)
 
     def test_skips_api_call_when_no_unresolved(self, github_client):
@@ -391,7 +393,7 @@ class TestFetchPullsBackfill:
         self, github_client, repo, search_results, extra_kwargs
     ):
         github_client.g.search_issues.side_effect = search_results
-        repo.get_pull.side_effect = UnknownObjectException(404, "Not Found", {})
+        repo.get_pull.side_effect = gh.UnknownObjectException(404, "Not Found", {})
 
         result = github_client.fetch_pulls(
             repo, SINCE, UNTIL, is_backfill=True, commits=[], **extra_kwargs
@@ -485,7 +487,7 @@ class TestFetchIssuesBackfill:
 
     def test_skips_session_issue_not_found(self, github_client, repo):
         github_client.g.search_issues.side_effect = [[], []]
-        repo.get_issue.side_effect = UnknownObjectException(404, "Not Found", {})
+        repo.get_issue.side_effect = gh.UnknownObjectException(404, "Not Found", {})
 
         result = github_client.fetch_issues(
             repo, SINCE, UNTIL, is_backfill=True, session_numbers=[999]

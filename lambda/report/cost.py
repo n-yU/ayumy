@@ -5,11 +5,11 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 import boto3
-from boto3.dynamodb.conditions import Key
+import boto3.dynamodb.conditions as conditions
 
 from config import CONFIG
 
-from .domain.summary import SummaryUsage
+from .domain import summary
 from .shared.dates import JST
 
 
@@ -43,7 +43,7 @@ class CostStore:
         self.table = boto3.resource("dynamodb").Table(table_name)
         self._run_spend_usd = 0.0
 
-    def start_record(self, target_date: date, usage: SummaryUsage) -> None:
+    def start_record(self, target_date: date, usage: summary.SummaryUsage) -> None:
         """Record one Claude API call; `model` and pricing are snapshotted onto the row so later config changes do not affect historical spend."""
         executed_at_utc = datetime.now(UTC)
         executed_date_jst = executed_at_utc.astimezone(JST).date()
@@ -75,10 +75,12 @@ class CostStore:
         self, year_month: str, through_date: date | None = None
     ) -> MonthSummary:
         """Sum `spend_usd` and count rows; `through_date` caps SK to include only rows up to that JST date."""
-        condition = Key("year_month").eq(year_month)
+        condition = conditions.Key("year_month").eq(year_month)
         if through_date is not None:
             # "Z" (0x5A) sorts after "#" (0x23), so <= "<date>Z" includes all rows for that date
-            condition = condition & Key("sk").lte(f"{through_date.isoformat()}Z")
+            condition = condition & conditions.Key("sk").lte(
+                f"{through_date.isoformat()}Z"
+            )
         items = self._query_all(condition)
         spend = sum(float(item["spend_usd"]) for item in items)
         return MonthSummary(spend_usd=spend, call_count=len(items))
