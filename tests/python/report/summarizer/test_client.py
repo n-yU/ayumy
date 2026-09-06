@@ -1,4 +1,4 @@
-"""Tests for SummaryClient pure logic."""
+"""Tests for report.summarizer.client logic and its system prompt."""
 
 from datetime import datetime
 from unittest.mock import MagicMock
