@@ -1,28 +1,28 @@
-"""Builders and assert helpers for tests/report/."""
+"""Builders for tests/report/."""
 
 from datetime import datetime
 from unittest.mock import MagicMock
 
 from report.domain import activity
 from report.domain.session import SessionActivity
-from report.shared.dates import JST
+from report.shared import dates
 
 OWNER = "n-yU"
 REPO = "my-repo"
 REPO_FULL_NAME = f"{OWNER}/{REPO}"
-MOCK_CREATED_AT = datetime(2026, 3, 28, 9, 0, tzinfo=JST)
+MOCK_CREATED_AT = datetime(2026, 3, 28, 9, 0, tzinfo=dates.JST)
 CREATED_AT = MOCK_CREATED_AT.isoformat()
-COMPLETED_AT = datetime(2026, 3, 28, 10, 0, tzinfo=JST).isoformat()
+COMPLETED_AT = datetime(2026, 3, 28, 10, 0, tzinfo=dates.JST).isoformat()
 
-SINCE = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
-UNTIL = datetime(2026, 3, 29, 0, 0, tzinfo=JST)
+SINCE = datetime(2026, 3, 28, 0, 0, tzinfo=dates.JST)
+UNTIL = datetime(2026, 3, 29, 0, 0, tzinfo=dates.JST)
 TARGET_DATE = SINCE  # A report covers the day its window starts on
 
 # Marks a completion field left to the value that matches `state`
 _DERIVED = object()
 
 
-def make_commit(
+def commit(
     sha="abc1234",
     message="Fix bug",
     *,
@@ -44,7 +44,7 @@ def make_commit(
     )
 
 
-def make_pull(
+def pull(
     number=1,
     title="PR title",
     state="merged",
@@ -85,7 +85,7 @@ def make_pull(
     )
 
 
-def make_issue(
+def issue(
     number=1,
     title="Issue title",
     state="open",
@@ -117,7 +117,7 @@ def make_issue(
     )
 
 
-def make_session_entry(
+def session_entry(
     *,
     session_id="s1",
     project=REPO,
@@ -142,13 +142,13 @@ def make_session_entry(
     }
 
 
-def make_session(repo=REPO, *, entries=None, **entry_kwargs):
+def session(repo=REPO, *, entries=None, **entry_kwargs):
     if entries is None:
-        entries = [make_session_entry(project=repo, **entry_kwargs)]
+        entries = [session_entry(project=repo, **entry_kwargs)]
     return SessionActivity({repo: entries})
 
 
-def make_repo_activity(*, commits=(), pulls=(), issues=()):
+def repo_activity(*, commits=(), pulls=(), issues=()):
     return {
         "commits": list(commits),
         "pulls": list(pulls),
@@ -156,13 +156,13 @@ def make_repo_activity(*, commits=(), pulls=(), issues=()):
     }
 
 
-def make_github(repo=REPO, *, commits=(), pulls=(), issues=()):
+def github(repo=REPO, *, commits=(), pulls=(), issues=()):
     return activity.GitHubActivity(
-        {repo: make_repo_activity(commits=commits, pulls=pulls, issues=issues)}
+        {repo: repo_activity(commits=commits, pulls=pulls, issues=issues)}
     )
 
 
-def make_stub(cls, **attrs):
+def stub(cls, **attrs):
     """Instantiate `cls` with `__init__` bypassed and set the given attributes.
 
     Client classes build their API client from credentials that tests do not hold.
@@ -173,21 +173,21 @@ def make_stub(cls, **attrs):
     return obj
 
 
-def make_label_mock(name):
+def label_mock(name):
     label = MagicMock()
     # `name` is consumed by MagicMock's constructor, so it has to be assigned afterwards
     label.name = name
     return label
 
 
-def make_number_mock(number):
+def number_mock(number):
     """Build the minimal stand-in for objects the API returns only to expose their number."""
     item = MagicMock()
     item.number = number
     return item
 
 
-def make_commit_mock(
+def commit_mock(
     sha="abc1234",
     *,
     message="Fix bug",
@@ -195,16 +195,16 @@ def make_commit_mock(
     author="user",
     repo=REPO,
 ):
-    commit = MagicMock()
-    commit.sha = sha
-    commit.commit.message = message
-    commit.commit.author.name = author
-    commit.commit.author.date = date
-    commit.html_url = f"https://github.com/{OWNER}/{repo}/commit/{sha}"
-    return commit
+    mock = MagicMock()
+    mock.sha = sha
+    mock.commit.message = message
+    mock.commit.author.name = author
+    mock.commit.author.date = date
+    mock.html_url = f"https://github.com/{OWNER}/{repo}/commit/{sha}"
+    return mock
 
 
-def make_pull_mock(
+def pull_mock(
     number=1,
     *,
     created_at=MOCK_CREATED_AT,
@@ -218,24 +218,26 @@ def make_pull_mock(
     repo=REPO,
     merge_commit_sha="merge-sha",
 ):
-    pr = MagicMock()
-    pr.number = number
-    pr.title = title
-    pr.created_at = created_at
-    pr.updated_at = updated_at if updated_at is not None else created_at
-    pr.merged_at = merged_at
-    pr.closed_at = closed_at if closed_at is not None else merged_at
+    mock = MagicMock()
+    mock.number = number
+    mock.title = title
+    mock.created_at = created_at
+    mock.updated_at = updated_at if updated_at is not None else created_at
+    mock.merged_at = merged_at
+    mock.closed_at = closed_at if closed_at is not None else merged_at
     # A merged PR is closed on GitHub, so derive the state after the merged_at fallback
-    pr.state = state if state is not None else ("closed" if pr.closed_at else "open")
-    pr.draft = draft
-    pr.html_url = f"https://github.com/{OWNER}/{repo}/pull/{number}"
-    pr.user.login = "user"
-    pr.labels = [make_label_mock(n) for n in labels]
-    pr.merge_commit_sha = merge_commit_sha
-    return pr
+    mock.state = (
+        state if state is not None else ("closed" if mock.closed_at else "open")
+    )
+    mock.draft = draft
+    mock.html_url = f"https://github.com/{OWNER}/{repo}/pull/{number}"
+    mock.user.login = "user"
+    mock.labels = [label_mock(n) for n in labels]
+    mock.merge_commit_sha = merge_commit_sha
+    return mock
 
 
-def make_issue_mock(
+def issue_mock(
     number=1,
     *,
     created_at=MOCK_CREATED_AT,
@@ -248,34 +250,16 @@ def make_issue_mock(
     pull_request=None,
     repo=REPO,
 ):
-    issue = MagicMock()
-    issue.number = number
-    issue.title = title
-    issue.created_at = created_at
-    issue.updated_at = updated_at if updated_at is not None else created_at
-    issue.closed_at = closed_at
-    issue.state = state if state is not None else ("closed" if closed_at else "open")
-    issue.state_reason = state_reason
-    issue.html_url = f"https://github.com/{OWNER}/{repo}/issues/{number}"
-    issue.user.login = "user"
-    issue.labels = [make_label_mock(n) for n in labels]
-    issue.pull_request = pull_request
-    return issue
-
-
-def assert_published(clients):
-    """Verify report → Notion → Slack ran once."""
-    clients["summary_client"].generate_summary.assert_called_once()
-    clients["notion_client"].create_report_pages.assert_called_once()
-    clients["slack_client"].notify.assert_called_once()
-    clients["slack_client"].notify_validation_errors.assert_not_called()
-
-
-def assert_skipped(clients, since):
-    clients["summary_client"].generate_summary.assert_not_called()
-    clients["notion_client"].create_report_pages.assert_not_called()
-    clients["slack_client"].notify.assert_not_called()
-    clients["slack_client"].notify_validation_errors.assert_not_called()
-    clients["slack_client"].notify_no_activity.assert_called_once_with(
-        since, is_backfill=False
-    )
+    mock = MagicMock()
+    mock.number = number
+    mock.title = title
+    mock.created_at = created_at
+    mock.updated_at = updated_at if updated_at is not None else created_at
+    mock.closed_at = closed_at
+    mock.state = state if state is not None else ("closed" if closed_at else "open")
+    mock.state_reason = state_reason
+    mock.html_url = f"https://github.com/{OWNER}/{repo}/issues/{number}"
+    mock.user.login = "user"
+    mock.labels = [label_mock(n) for n in labels]
+    mock.pull_request = pull_request
+    return mock

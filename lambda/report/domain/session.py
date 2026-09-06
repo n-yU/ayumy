@@ -4,7 +4,7 @@ from collections.abc import Container, KeysView
 from datetime import datetime
 from typing import NotRequired, TypedDict
 
-from ..shared.dates import JST
+from ..shared import dates
 
 
 class SessionCommit(TypedDict):
@@ -84,5 +84,5 @@ class SessionActivity:
         # Parser fills `start_time` / `end_time` for every session item, so an empty value indicates a parser regression
         if not iso_timestamp:
             raise ValueError("Session timestamp is missing")
-        dt = datetime.fromisoformat(iso_timestamp).astimezone(JST)
+        dt = datetime.fromisoformat(iso_timestamp).astimezone(dates.JST)
         return dt.strftime("%H:%M")

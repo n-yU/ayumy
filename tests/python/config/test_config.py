@@ -8,35 +8,26 @@ from unittest.mock import patch
 import pytest
 import yaml
 
-import config.config
-from config import CONFIG
-from config.config import (
-    ClaudeConfig,
-    Config,
-    GitHubConfig,
-    NotionConfig,
-    PipelineConfig,
-    SlackConfig,
-    _load,
-)
+from config import CONFIG, config
 
-TEMPLATE_PATH = Path(config.config.__file__).parent / "config.template.yml"
+TEMPLATE_PATH = Path(config.__file__).parent / "config.template.yml"
 
 
 class TestConfigShape:
     def test_config_is_frozen_config_dataclass(self):
-        assert isinstance(CONFIG, Config)
+        assert isinstance(CONFIG, config.Config)
 
     def test_all_sections_are_populated(self):
-        assert isinstance(CONFIG.claude, ClaudeConfig)
-        assert isinstance(CONFIG.slack, SlackConfig)
-        assert isinstance(CONFIG.github, GitHubConfig)
-        assert isinstance(CONFIG.pipeline, PipelineConfig)
-        assert isinstance(CONFIG.notion, NotionConfig)
+        assert isinstance(CONFIG.claude, config.ClaudeConfig)
+        assert isinstance(CONFIG.slack, config.SlackConfig)
+        assert isinstance(CONFIG.github, config.GitHubConfig)
+        assert isinstance(CONFIG.pipeline, config.PipelineConfig)
+        assert isinstance(CONFIG.notion, config.NotionConfig)
 
     def test_top_level_config_is_immutable(self):
+        section = config.ClaudeConfig(model="x", max_tokens=1, pricing={})
         with pytest.raises(FrozenInstanceError):
-            CONFIG.claude = ClaudeConfig(model="x", max_tokens=1, pricing={})  # type: ignore[misc]
+            CONFIG.claude = section  # type: ignore[misc]
 
     def test_section_dataclass_is_immutable(self):
         with pytest.raises(FrozenInstanceError):
@@ -77,8 +68,8 @@ class TestConfigValues:
 
 class TestLoader:
     def test_load_returns_value_equal_to_singleton(self):
-        result = _load()
-        assert isinstance(result, Config)
+        result = config._load()
+        assert isinstance(result, config.Config)
         assert result == CONFIG
 
     def test_load_raises_when_active_model_missing_from_pricing(self):
@@ -99,16 +90,16 @@ class TestLoader:
         }
         with patch("config.config.yaml.safe_load", return_value=stub):
             with pytest.raises(ValueError, match="unregistered-model"):
-                _load()
+                config._load()
 
     def test_load_raises_with_the_generation_target_when_config_is_missing(self):
         with patch.object(Path, "exists", return_value=False):
             with pytest.raises(FileNotFoundError, match="make config-init"):
-                _load()
+                config._load()
 
     def test_load_accepts_a_repository_icons_map_with_no_entries(self):
         # The state of a checkout where `ayumy setup-hooks` has not run yet, which YAML reads as None
         stub = yaml.safe_load(TEMPLATE_PATH.read_text(encoding="utf-8"))
         stub["notion"]["repository_icons"] = None
         with patch("config.config.yaml.safe_load", return_value=stub):
-            assert _load().notion.repository_icons == {}
+            assert config._load().notion.repository_icons == {}

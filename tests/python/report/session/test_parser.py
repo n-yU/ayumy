@@ -6,7 +6,7 @@ import pytest
 
 from report.session import parser
 
-from ._builders import SESSION_KEY, assistant, bash, tool_result, tool_use_block, user
+from . import _builders
 
 COMMIT_TS = "2026-03-28T10:05:00+09:00"
 PROJECT_CWD = "/Users/a/proj"
@@ -236,8 +236,8 @@ class TestExtractPrIssueRefs:
 class TestBuildItems:
     def test_groups_by_date(self, run_parser):
         items, keys = run_parser(
-            user("2026-03-28T23:30:00+09:00", "Day 1 message"),
-            user("2026-03-29T00:30:00+09:00", "Day 2 message"),
+            _builders.user("2026-03-28T23:30:00+09:00", "Day 1 message"),
+            _builders.user("2026-03-29T00:30:00+09:00", "Day 2 message"),
             repo="my-repo",
         )
 
@@ -250,21 +250,21 @@ class TestBuildItems:
             assert item["repo"] == "my-repo"
             assert item["project"] == "proj"
 
-        assert keys == [SESSION_KEY]
+        assert keys == [_builders.SESSION_KEY]
 
     def test_aggregates_messages_and_tools(self, run_parser):
         items, _ = run_parser(
-            user("2026-03-28T10:00:00+09:00", "First message"),
-            assistant(
+            _builders.user("2026-03-28T10:00:00+09:00", "First message"),
+            _builders.assistant(
                 "2026-03-28T10:01:00+09:00",
-                tool_use_block("Read"),
-                tool_use_block("Edit"),
+                _builders.tool_use_block("Read"),
+                _builders.tool_use_block("Edit"),
             ),
-            user("2026-03-28T10:05:00+09:00", "Second message"),
-            assistant(
+            _builders.user("2026-03-28T10:05:00+09:00", "Second message"),
+            _builders.assistant(
                 "2026-03-28T10:06:00+09:00",
-                tool_use_block("Read"),
-                tool_use_block("Bash"),
+                _builders.tool_use_block("Read"),
+                _builders.tool_use_block("Bash"),
             ),
         )
 
@@ -318,8 +318,8 @@ class TestBuildItems:
     )
     def test_extracts_commits(self, run_parser, content, is_error, expected):
         items, _ = run_parser(
-            user("2026-03-28T10:00:00+09:00", "work"),
-            tool_result(COMMIT_TS, content, is_error=is_error),
+            _builders.user("2026-03-28T10:00:00+09:00", "work"),
+            _builders.tool_result(COMMIT_TS, content, is_error=is_error),
         )
 
         assert len(items) == 1
@@ -330,12 +330,12 @@ class TestBuildItems:
 
     def test_commit_timestamp_follows_its_tool_result(self, run_parser):
         items, _ = run_parser(
-            user("2026-03-28T10:00:00+09:00", "Fix the bug"),
-            tool_result(
+            _builders.user("2026-03-28T10:00:00+09:00", "Fix the bug"),
+            _builders.tool_result(
                 "2026-03-28T10:05:00+09:00",
                 "[feat/login a1b2c3d] Implement login flow\n 2 files changed",
             ),
-            tool_result(
+            _builders.tool_result(
                 "2026-03-28T10:10:00+09:00",
                 "[feat/login e5f6a7b] Fix test failure\n 1 file changed",
             ),
@@ -349,8 +349,8 @@ class TestBuildItems:
     def test_cross_midnight_commit_only_day(self, run_parser):
         # Day 1 has a user message; Day 2 has only a tool_result with a commit
         items, keys = run_parser(
-            user("2026-03-28T23:50:00+09:00", "Fix the bug"),
-            tool_result(
+            _builders.user("2026-03-28T23:50:00+09:00", "Fix the bug"),
+            _builders.tool_result(
                 "2026-03-29T00:05:00+09:00",
                 "[main a1b2c3d] Apply fix\n 1 file changed",
             ),
@@ -370,7 +370,7 @@ class TestBuildItems:
                 "timestamp": "2026-03-29T00:05:00+09:00",
             },
         ]
-        assert keys == [SESSION_KEY]
+        assert keys == [_builders.SESSION_KEY]
 
     def test_skips_no_repo(self, run_parser, session_client):
         items, keys = run_parser(repo=None)
@@ -381,10 +381,10 @@ class TestBuildItems:
 
     def test_merges_pr_issue_refs_across_bash_entries(self, run_parser):
         items, _ = run_parser(
-            user("2026-03-28T10:00:00+09:00", "do work"),
-            bash("2026-03-28T10:01:00+09:00", "gh pr view 87 --json body"),
-            bash("2026-03-28T10:02:00+09:00", "gh issue close 84"),
-            bash("2026-03-28T10:03:00+09:00", 'git commit -m "Fix #12"'),
+            _builders.user("2026-03-28T10:00:00+09:00", "do work"),
+            _builders.bash("2026-03-28T10:01:00+09:00", "gh pr view 87 --json body"),
+            _builders.bash("2026-03-28T10:02:00+09:00", "gh issue close 84"),
+            _builders.bash("2026-03-28T10:03:00+09:00", 'git commit -m "Fix #12"'),
             repo="ayumy",
         )
 
@@ -396,11 +396,11 @@ class TestBuildItems:
 
     def test_ignores_non_bash_tool_use(self, run_parser):
         items, _ = run_parser(
-            user("2026-03-28T10:00:00+09:00", "look at #87"),
-            assistant(
+            _builders.user("2026-03-28T10:00:00+09:00", "look at #87"),
+            _builders.assistant(
                 "2026-03-28T10:01:00+09:00",
                 {"type": "text", "text": "https://github.com/n-yU/ayumy/pull/87"},
-                tool_use_block("Read", file_path="/tmp/notes_42.md"),
+                _builders.tool_use_block("Read", file_path="/tmp/notes_42.md"),
             ),
             repo="ayumy",
         )
@@ -411,7 +411,7 @@ class TestBuildItems:
 
     def test_skips_no_user_messages(self, run_parser):
         items, keys = run_parser(
-            assistant(
+            _builders.assistant(
                 "2026-03-28T10:00:00+09:00",
                 {"type": "text", "text": "hello"},
             ),
@@ -426,7 +426,7 @@ class TestBuildItemsTypeViolations:
 
     def test_non_string_cwd_logs_warning(self, run_parser, caplog):
         with caplog.at_level(logging.WARNING, logger="report.session.parser"):
-            run_parser(user("2026-03-28T10:00:00+09:00", "msg", cwd=123))
+            run_parser(_builders.user("2026-03-28T10:00:00+09:00", "msg", cwd=123))
 
         warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
         assert warnings
@@ -434,7 +434,9 @@ class TestBuildItemsTypeViolations:
 
     def test_non_string_bash_command_logs_warning(self, run_parser, caplog):
         with caplog.at_level(logging.WARNING, logger="report.session.parser"):
-            run_parser(bash("2026-03-28T10:00:00+09:00", ["ls"], tool_use_id="t1"))
+            run_parser(
+                _builders.bash("2026-03-28T10:00:00+09:00", ["ls"], tool_use_id="t1")
+            )
 
         warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
         assert warnings
@@ -468,14 +470,14 @@ class TestBuildItemsCwdFilter:
         self, run_parser, command, entry_cwd, expected_shas
     ):
         items, _ = run_parser(
-            user("2026-03-28T10:00:00+09:00", "work", cwd=PROJECT_CWD),
-            bash(
+            _builders.user("2026-03-28T10:00:00+09:00", "work", cwd=PROJECT_CWD),
+            _builders.bash(
                 "2026-03-28T10:01:00+09:00",
                 command,
                 tool_use_id="tu_x",
                 cwd=entry_cwd,
             ),
-            tool_result(
+            _builders.tool_result(
                 "2026-03-28T10:02:00+09:00",
                 "[main abc1234] commit\n 1 file",
                 tool_use_id="tu_x",
@@ -486,8 +488,8 @@ class TestBuildItemsCwdFilter:
 
     def test_drops_refs_after_cd_to_other_repo(self, run_parser):
         items, _ = run_parser(
-            user("2026-03-28T10:00:00+09:00", "work", cwd=PROJECT_CWD),
-            bash(
+            _builders.user("2026-03-28T10:00:00+09:00", "work", cwd=PROJECT_CWD),
+            _builders.bash(
                 "2026-03-28T10:01:00+09:00",
                 "cd ~/other && gh pr view 99",
                 tool_use_id="tu_x",
@@ -499,8 +501,8 @@ class TestBuildItemsCwdFilter:
     def test_does_not_filter_when_project_cwd_missing(self, run_parser):
         # Legacy sessions without any cwd field must still record commits
         items, _ = run_parser(
-            user("2026-03-28T10:00:00+09:00", "work"),
-            tool_result(
+            _builders.user("2026-03-28T10:00:00+09:00", "work"),
+            _builders.tool_result(
                 "2026-03-28T10:02:00+09:00",
                 "[main abc1234] no cwd info\n 1 file",
                 tool_use_id="tu_x",
@@ -511,14 +513,14 @@ class TestBuildItemsCwdFilter:
     def test_drops_commit_when_entry_cwd_is_outside_project(self, run_parser):
         # A later entry whose own cwd is outside project_cwd must drop commits even without a leading `cd`
         items, _ = run_parser(
-            user("2026-03-28T10:00:00+09:00", "work", cwd="/Users/a/proj"),
-            bash(
+            _builders.user("2026-03-28T10:00:00+09:00", "work", cwd="/Users/a/proj"),
+            _builders.bash(
                 "2026-03-28T10:01:00+09:00",
                 "git commit -m x",
                 tool_use_id="tu_x",
                 cwd="/Users/a/other",
             ),
-            tool_result(
+            _builders.tool_result(
                 "2026-03-28T10:02:00+09:00",
                 "[main abc1234] outside cwd\n 1 file",
                 tool_use_id="tu_x",

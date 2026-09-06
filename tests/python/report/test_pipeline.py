@@ -12,20 +12,10 @@ from config import CONFIG
 from report import pipeline
 from report.domain import activity, summary
 from report.domain.session import SessionActivity
-from report.shared.dates import JST
+from report.shared import dates
 from report.summarizer import ValidationResult
 
-from ._builders import (
-    OWNER,
-    SINCE,
-    UNTIL,
-    assert_published,
-    assert_skipped,
-    make_commit,
-    make_github,
-    make_session,
-    make_session_entry,
-)
+from . import _builders
 
 _STUB_USAGE = summary.SummaryUsage(input_tokens=0, output_tokens=0, spend_usd=0.0)
 
@@ -49,7 +39,7 @@ def _stub_summary(clients, repos, *, usage=_STUB_USAGE, pages=()):
 
 def _stub_date_range(run_patches, day):
     """Point the window at the given March day, as an explicit --date would."""
-    since = datetime(2026, 3, day, tzinfo=JST)
+    since = datetime(2026, 3, day, tzinfo=dates.JST)
     run_patches["get_target_date_range"].return_value = (
         since,
         since + timedelta(days=1),
@@ -59,7 +49,8 @@ def _stub_date_range(run_patches, day):
 def _arrange_report_with_invalid_tags(clients):
     """Drive the path that publishes a report and reports invalid tags alongside it."""
     _stub_fetch_activity(
-        clients, make_github("repo", commits=[make_commit(sha="abc", repo="repo")])
+        clients,
+        _builders.github("repo", commits=[_builders.commit(sha="abc", repo="repo")]),
     )
     _stub_summary(clients, [_repo("repo", tags=("BadTag",))])
     invalid = ValidationResult()
@@ -70,6 +61,24 @@ def _arrange_report_with_invalid_tags(clients):
 def _arrange_no_activity(clients):
     """Drive the paths that skip the summary; whether they end in the no-activity or session-only notification depends on the sessions passed in."""
     _stub_fetch_activity(clients, activity.GitHubActivity({}))
+
+
+def _assert_published(clients):
+    """Verify report → Notion → Slack ran once."""
+    clients["summary_client"].generate_summary.assert_called_once()
+    clients["notion_client"].create_report_pages.assert_called_once()
+    clients["slack_client"].notify.assert_called_once()
+    clients["slack_client"].notify_validation_errors.assert_not_called()
+
+
+def _assert_skipped(clients, since):
+    clients["summary_client"].generate_summary.assert_not_called()
+    clients["notion_client"].create_report_pages.assert_not_called()
+    clients["slack_client"].notify.assert_not_called()
+    clients["slack_client"].notify_validation_errors.assert_not_called()
+    clients["slack_client"].notify_no_activity.assert_called_once_with(
+        since, is_backfill=False
+    )
 
 
 def _fail_on_nth_fetch(store, n, message):
@@ -89,29 +98,38 @@ def _fail_on_nth_fetch(store, n, message):
 class TestProcessDate:
     def test_skips_when_no_activity(self, pipeline_clients):
         _stub_fetch_activity(pipeline_clients, activity.GitHubActivity({}))
-        pipeline.process_date(SINCE, UNTIL, SessionActivity({}), **pipeline_clients)
+        pipeline.process_date(
+            _builders.SINCE, _builders.UNTIL, SessionActivity({}), **pipeline_clients
+        )
 
-        assert_skipped(pipeline_clients, SINCE)
+        _assert_skipped(pipeline_clients, _builders.SINCE)
 
     def test_generates_report_and_publishes(self, pipeline_clients):
         _stub_fetch_activity(
-            pipeline_clients, make_github("my-repo", commits=[make_commit(sha="abc")])
+            pipeline_clients,
+            _builders.github("my-repo", commits=[_builders.commit(sha="abc")]),
         )
         _stub_summary(
             pipeline_clients,
             [_repo("my-repo")],
             pages=[("my-repo", "https://notion.so/page1")],
         )
-        pipeline.process_date(SINCE, UNTIL, make_session("my-repo"), **pipeline_clients)
+        pipeline.process_date(
+            _builders.SINCE,
+            _builders.UNTIL,
+            _builders.session("my-repo"),
+            **pipeline_clients,
+        )
 
-        assert_published(pipeline_clients)
-        # Verify the (target_date, SINCE, UNTIL) trio is passed in order
+        _assert_published(pipeline_clients)
+        # Verify the (target_date, since, until) trio is passed in order
         notion_args = pipeline_clients["notion_client"].create_report_pages.call_args[0]
-        assert notion_args[:3] == (SINCE, SINCE, UNTIL)
+        assert notion_args[:3] == (_builders.SINCE, _builders.SINCE, _builders.UNTIL)
 
     def test_records_cost_after_summary_generation(self, pipeline_clients):
         _stub_fetch_activity(
-            pipeline_clients, make_github("my-repo", commits=[make_commit(sha="abc")])
+            pipeline_clients,
+            _builders.github("my-repo", commits=[_builders.commit(sha="abc")]),
         )
         _stub_summary(
             pipeline_clients,
@@ -120,7 +138,12 @@ class TestProcessDate:
                 input_tokens=1000, output_tokens=200, spend_usd=0.012
             ),
         )
-        pipeline.process_date(SINCE, UNTIL, make_session("my-repo"), **pipeline_clients)
+        pipeline.process_date(
+            _builders.SINCE,
+            _builders.UNTIL,
+            _builders.session("my-repo"),
+            **pipeline_clients,
+        )
 
         start = pipeline_clients["cost_store"].start_record
         start.assert_called_once()
@@ -131,7 +154,9 @@ class TestProcessDate:
     def test_notifies_validation_errors(self, pipeline_clients):
         _stub_fetch_activity(
             pipeline_clients,
-            make_github("repo", commits=[make_commit(sha="abc", repo="repo")]),
+            _builders.github(
+                "repo", commits=[_builders.commit(sha="abc", repo="repo")]
+            ),
         )
         _stub_summary(
             pipeline_clients, [_repo("repo", summary_lines=(), tags=("BadTag",))]
@@ -139,7 +164,12 @@ class TestProcessDate:
         invalid = ValidationResult()
         invalid.invalid_tags = {"repo": ["BadTag"]}
         pipeline_clients["summary_client"].validate_report.return_value = invalid
-        pipeline.process_date(SINCE, UNTIL, make_session("repo"), **pipeline_clients)
+        pipeline.process_date(
+            _builders.SINCE,
+            _builders.UNTIL,
+            _builders.session("repo"),
+            **pipeline_clients,
+        )
 
         pipeline_clients["slack_client"].notify_validation_errors.assert_called_once()
 
@@ -148,13 +178,13 @@ class TestProcessDate:
         [
             pytest.param(
                 _arrange_report_with_invalid_tags,
-                lambda: make_session("repo"),
+                lambda: _builders.session("repo"),
                 "notify",
                 id="report",
             ),
             pytest.param(
                 _arrange_report_with_invalid_tags,
-                lambda: make_session("repo"),
+                lambda: _builders.session("repo"),
                 "notify_validation_errors",
                 id="validation-errors",
             ),
@@ -166,7 +196,7 @@ class TestProcessDate:
             ),
             pytest.param(
                 _arrange_no_activity,
-                lambda: make_session("repo-a"),
+                lambda: _builders.session("repo-a"),
                 "notify_session_only",
                 id="session-only",
             ),
@@ -177,7 +207,11 @@ class TestProcessDate:
     ):
         arrange(pipeline_clients)
         pipeline.process_date(
-            SINCE, UNTIL, session(), **pipeline_clients, is_backfill=True
+            _builders.SINCE,
+            _builders.UNTIL,
+            session(),
+            **pipeline_clients,
+            is_backfill=True,
         )
 
         notify = getattr(pipeline_clients["slack_client"], notification)
@@ -185,20 +219,25 @@ class TestProcessDate:
 
     def test_invokes_session_commit_merge_per_repo(self, pipeline_clients):
         # Stub fetch_activity so we can observe merge_session_commits on the real container
-        _stub_fetch_activity(pipeline_clients, make_github("my-repo"))
+        _stub_fetch_activity(pipeline_clients, _builders.github("my-repo"))
         _stub_summary(pipeline_clients, [_repo("my-repo")])
-        session = make_session(
+        session = _builders.session(
             "my-repo",
             tools=("Bash",),
             session_commits=[{"sha": "a1b2c3d", "message": "Fix login bug"}],
         )
-        pipeline.process_date(SINCE, UNTIL, session, **pipeline_clients)
+        pipeline.process_date(
+            _builders.SINCE, _builders.UNTIL, session, **pipeline_clients
+        )
 
         # End-to-end: the session commit reaches the activity that flows to Notion
         notion_args = pipeline_clients["notion_client"].create_report_pages.call_args[0]
         merged = notion_args[4].repos()["my-repo"]["commits"]
         assert [c.sha for c in merged] == ["a1b2c3d"]
-        assert merged[0].url == f"https://github.com/{OWNER}/my-repo/commit/a1b2c3d"
+        assert (
+            merged[0].url
+            == f"https://github.com/{_builders.OWNER}/my-repo/commit/a1b2c3d"
+        )
         # The summary prompt also sees the session commit: merge must run before format
         summary_args = pipeline_clients["summary_client"].generate_summary.call_args[0]
         assert "Fix login bug" in summary_args[1]
@@ -211,28 +250,33 @@ class TestProcessDate:
 
     def test_all_session_only_skips_summary(self, pipeline_clients):
         _stub_fetch_activity(pipeline_clients, activity.GitHubActivity({}))
-        pipeline.process_date(SINCE, UNTIL, make_session("repo-a"), **pipeline_clients)
+        pipeline.process_date(
+            _builders.SINCE,
+            _builders.UNTIL,
+            _builders.session("repo-a"),
+            **pipeline_clients,
+        )
 
         pipeline_clients["summary_client"].generate_summary.assert_not_called()
         pipeline_clients["cost_store"].start_record.assert_not_called()
         pipeline_clients["notion_client"].create_report_pages.assert_not_called()
         pipeline_clients["slack_client"].notify.assert_not_called()
         pipeline_clients["slack_client"].notify_session_only.assert_called_once_with(
-            SINCE, ["repo-a"], is_backfill=False
+            _builders.SINCE, ["repo-a"], is_backfill=False
         )
 
     def test_partial_session_only_excludes_from_prompt(self, pipeline_clients):
         session = SessionActivity(
             {
                 "repo-a": [
-                    make_session_entry(
+                    _builders.session_entry(
                         session_id="sa",
                         project="repo-a",
                         messages=("work on repo-a",),
                     )
                 ],
                 "repo-b": [
-                    make_session_entry(
+                    _builders.session_entry(
                         session_id="sb",
                         project="repo-b",
                         start="2026-03-28T12:00:00+09:00",
@@ -245,14 +289,18 @@ class TestProcessDate:
         )
         _stub_fetch_activity(
             pipeline_clients,
-            make_github("repo-a", commits=[make_commit(sha="abc", repo="repo-a")]),
+            _builders.github(
+                "repo-a", commits=[_builders.commit(sha="abc", repo="repo-a")]
+            ),
         )
         _stub_summary(
             pipeline_clients,
             [_repo("repo-a")],
             pages=[("repo-a", "https://notion.so/a")],
         )
-        pipeline.process_date(SINCE, UNTIL, session, **pipeline_clients)
+        pipeline.process_date(
+            _builders.SINCE, _builders.UNTIL, session, **pipeline_clients
+        )
 
         summary_args = pipeline_clients["summary_client"].generate_summary.call_args[0]
         formatted_sessions = summary_args[2]
@@ -263,10 +311,10 @@ class TestProcessDate:
         assert notify_kwargs["session_only_repos"] == ["repo-b"]
 
     def test_passes_session_refs_to_github_client_when_backfill(self, pipeline_clients):
-        session = make_session(
+        session = _builders.session(
             "repo-a",
             entries=[
-                make_session_entry(
+                _builders.session_entry(
                     session_id="s1",
                     project="repo-a",
                     messages=("msg",),
@@ -274,7 +322,7 @@ class TestProcessDate:
                     session_pulls=[10, 20],
                     session_issues=[30],
                 ),
-                make_session_entry(
+                _builders.session_entry(
                     session_id="s2",
                     project="repo-a",
                     start="2026-03-28T12:00:00+09:00",
@@ -288,7 +336,11 @@ class TestProcessDate:
         )
         _stub_fetch_activity(pipeline_clients, activity.GitHubActivity({}))
         pipeline.process_date(
-            SINCE, UNTIL, session, **pipeline_clients, is_backfill=True
+            _builders.SINCE,
+            _builders.UNTIL,
+            session,
+            **pipeline_clients,
+            is_backfill=True,
         )
 
         kwargs = pipeline_clients["github_client"].fetch_activity.call_args.kwargs
@@ -297,7 +349,7 @@ class TestProcessDate:
         assert kwargs["session_issues"] == {"repo-a": [30]}
 
     def test_omits_session_refs_when_not_backfill(self, pipeline_clients):
-        session = make_session(
+        session = _builders.session(
             "repo-a",
             messages=("msg",),
             tools=(),
@@ -305,7 +357,9 @@ class TestProcessDate:
             session_issues=[20],
         )
         _stub_fetch_activity(pipeline_clients, activity.GitHubActivity({}))
-        pipeline.process_date(SINCE, UNTIL, session, **pipeline_clients)
+        pipeline.process_date(
+            _builders.SINCE, _builders.UNTIL, session, **pipeline_clients
+        )
 
         kwargs = pipeline_clients["github_client"].fetch_activity.call_args.kwargs
         assert kwargs["session_pulls"] == {}
@@ -333,7 +387,10 @@ class TestRun:
                 for name, target in targets.items()
             }
             mocks["require_env"].side_effect = lambda k: f"fake-{k}"
-            mocks["get_target_date_range"].return_value = (SINCE, UNTIL)
+            mocks["get_target_date_range"].return_value = (
+                _builders.SINCE,
+                _builders.UNTIL,
+            )
             store = mocks["SessionStore"].return_value
             store.ingest.return_value = []
             store.scan_backfill_dates.return_value = []
@@ -547,13 +604,16 @@ class TestRun:
     @patch("report.pipeline.process_date")
     def test_manual_run_uses_original_until(self, mock_process_date, run_patches):
         """Manual run without --date passes get_target_date_range's partial_until (not full-day)."""
-        partial_until = datetime(2026, 3, 28, 15, 30, tzinfo=JST)
-        run_patches["get_target_date_range"].return_value = (SINCE, partial_until)
+        partial_until = datetime(2026, 3, 28, 15, 30, tzinfo=dates.JST)
+        run_patches["get_target_date_range"].return_value = (
+            _builders.SINCE,
+            partial_until,
+        )
         pipeline.run(source="manual")
 
         mock_process_date.assert_called_once()
         call_args = mock_process_date.call_args
-        assert call_args[0][0] == SINCE
+        assert call_args[0][0] == _builders.SINCE
         assert call_args[0][1] == partial_until
 
     def test_target_date_skips_backfill(self, run_patches, session_store):
@@ -597,7 +657,7 @@ class TestRun:
             for call in github_client.fetch_activity.call_args_list
         ]
         # 2 backfill + 1 primary
-        backfill_flags = [f for s, f in flags if s != SINCE]
-        primary_flags = [f for s, f in flags if s == SINCE]
+        backfill_flags = [f for s, f in flags if s != _builders.SINCE]
+        primary_flags = [f for s, f in flags if s == _builders.SINCE]
         assert backfill_flags == [True, True]
         assert primary_flags == [False]

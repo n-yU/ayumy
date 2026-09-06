@@ -6,7 +6,7 @@ import pytest
 
 from report.session import SessionStore, parser
 
-from ._builders import SESSION_KEY, jsonl
+from . import _builders
 
 
 @pytest.fixture
@@ -27,10 +27,12 @@ def stub_session_log(session_client):
     """Return a callable that stages the given entries on `session_client` as one session file."""
 
     def _stub(*entries, repo="repo"):
-        session_client.list_session_objects.return_value = [{"Key": SESSION_KEY}]
+        session_client.list_session_objects.return_value = [
+            {"Key": _builders.SESSION_KEY}
+        ]
         session_client.read_repo_name.return_value = repo
         body = MagicMock()
-        body.read.return_value = jsonl(*entries).encode("utf-8")
+        body.read.return_value = _builders.jsonl(*entries).encode("utf-8")
         session_client.s3.get_object.return_value = {"Body": body}
         return session_client
 

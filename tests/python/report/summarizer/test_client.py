@@ -7,11 +7,10 @@ import pytest
 
 from config import CONFIG
 from report.domain import summary
-from report.shared.dates import JST
+from report.shared import dates
 from report.shared.notice import Notice
-from report.summarizer import SummaryClient, ValidationResult
+from report.summarizer import SummaryClient, ValidationResult, tags
 from report.summarizer import client as summarizer_client
-from report.summarizer.tags import ALLOWED_TAG_NAMES, TAG_DEFINITIONS
 
 
 def _make_client() -> SummaryClient:
@@ -28,7 +27,7 @@ class TestBuildToolSchema:
         repo_props = schema["input_schema"]["properties"]["repositories"]["items"][
             "properties"
         ]
-        assert repo_props["tags"]["items"]["enum"] == list(ALLOWED_TAG_NAMES)
+        assert repo_props["tags"]["items"]["enum"] == list(tags.ALLOWED_TAG_NAMES)
 
     def test_tags_field_carries_description_per_tag(self):
         client = _make_client()
@@ -36,14 +35,14 @@ class TestBuildToolSchema:
         tags_field = schema["input_schema"]["properties"]["repositories"]["items"][
             "properties"
         ]["tags"]
-        for tag in TAG_DEFINITIONS:
+        for tag in tags.TAG_DEFINITIONS:
             assert tag.name in tags_field["description"]
             assert tag.description in tags_field["description"]
 
 
 class TestSystemPrompt:
     def test_lists_each_tag_with_description(self):
-        for tag in TAG_DEFINITIONS:
+        for tag in tags.TAG_DEFINITIONS:
             assert tag.name in summarizer_client._SYSTEM_PROMPT
             assert tag.description in summarizer_client._SYSTEM_PROMPT
 
@@ -65,7 +64,7 @@ class TestSystemPrompt:
 class TestBuildPrompt:
     def test_contains_date_and_sections(self):
         client = _make_client()
-        target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        target = datetime(2026, 3, 28, 0, 0, tzinfo=dates.JST)
         result = client.build_prompt(target, "github data", "session data")
 
         assert "2026-03-28" in result
@@ -76,7 +75,7 @@ class TestBuildPrompt:
 class TestValidateReport:
     def setup_method(self):
         self.client = _make_client()
-        self.valid_tag = ALLOWED_TAG_NAMES[0]
+        self.valid_tag = tags.ALLOWED_TAG_NAMES[0]
 
     def test_valid_report_unchanged(self):
         report = {
@@ -112,7 +111,7 @@ class TestGenerateSummary:
     def setup_method(self):
         self.client = _make_client()
         self.client.client = MagicMock()
-        self.target = datetime(2026, 3, 28, 0, 0, tzinfo=JST)
+        self.target = datetime(2026, 3, 28, 0, 0, tzinfo=dates.JST)
 
     def _set_response(self, blocks, input_tokens=100, output_tokens=50):
         message = MagicMock(content=blocks)

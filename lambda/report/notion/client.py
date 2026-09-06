@@ -9,8 +9,7 @@ from config import CONFIG
 
 from ..domain import activity, summary
 from ..domain.session import SessionActivity
-from ..shared import env
-from ..shared.dates import JST
+from ..shared import dates, env
 from ..shared.notice import Notice, NoticeSource
 from .blocks import bulleted_link, bulleted_text, heading_2
 
@@ -76,8 +75,8 @@ class NotionClient:
         regens: int,
     ) -> dict:
         """Property payload per 'Spec: Database Properties'."""
-        date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
-        title_str = f"{target_date.astimezone(JST).strftime('%y-%m-%d')}: {repo_summary['name']}"
+        date_str = target_date.astimezone(dates.JST).strftime("%Y-%m-%d")
+        title_str = f"{target_date.astimezone(dates.JST).strftime('%y-%m-%d')}: {repo_summary['name']}"
 
         return {
             "Name": {"title": [{"type": "text", "text": {"content": title_str}}]},
@@ -307,7 +306,7 @@ class NotionClient:
 
         Archiving moves pages to the trash, which queries can no longer reach, so the counts have to be carried over here rather than looked up at creation time.
         """
-        date_str = target_date.astimezone(JST).strftime("%Y-%m-%d")
+        date_str = target_date.astimezone(dates.JST).strftime("%Y-%m-%d")
         # No pagination: daily page count won't exceed Notion's default page size (100)
         results = self.client.data_sources.query(
             data_source_id=self.data_source_id,

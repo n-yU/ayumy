@@ -4,22 +4,24 @@ import pytest
 
 from report.shared import inline
 
-from .._builders import OWNER, REPO
+from .. import _builders
 
 OTHER_REPO = "other-repo"
 
 
 def _parse(text):
-    return inline.parse_inline(text, OWNER, REPO)
+    return inline.parse_inline(text, _builders.OWNER, _builders.REPO)
 
 
 def _url(repo, number):
-    return f"https://github.com/{OWNER}/{repo}/issues/{number}"
+    return f"https://github.com/{_builders.OWNER}/{repo}/issues/{number}"
 
 
 class TestIssueUrl:
     def test_builds_issues_path_for_any_number(self):
-        assert inline.issue_url(OWNER, REPO, "42") == _url(REPO, "42")
+        assert inline.issue_url(_builders.OWNER, _builders.REPO, "42") == _url(
+            _builders.REPO, "42"
+        )
 
 
 class TestParseInline:
@@ -44,7 +46,7 @@ class TestParseInline:
     def test_links_bare_number_to_page_repository(self):
         assert _parse("実装・マージ #155") == [
             inline.Segment("実装・マージ "),
-            inline.Segment("#155", url=_url(REPO, "155")),
+            inline.Segment("#155", url=_url(_builders.REPO, "155")),
         ]
 
     def test_links_qualified_number_to_named_repository(self):
@@ -65,7 +67,7 @@ class TestParseInline:
             inline.Segment(" を "),
             inline.Segment("修正", bold=True),
             inline.Segment(" し "),
-            inline.Segment("#7", url=_url(REPO, "7")),
+            inline.Segment("#7", url=_url(_builders.REPO, "7")),
             inline.Segment(" を close"),
         ]
 

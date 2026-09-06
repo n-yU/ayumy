@@ -8,7 +8,7 @@ import slack_sdk.errors
 
 from config import CONFIG
 from report import cost
-from report.shared.dates import JST
+from report.shared import dates
 from report.shared.notice import Notice, NoticeSource
 from report.slack import client as slack_client
 from report.slack.blocks import (
@@ -19,7 +19,7 @@ from report.slack.blocks import (
 )
 from report.summarizer import ValidationResult
 
-from .._builders import OWNER, TARGET_DATE, make_stub
+from .. import _builders
 
 CHANNEL = "C0TEST"
 FIRST_TS = "1700000000.000100"
@@ -32,7 +32,7 @@ DAYS_IN_MARCH = 31
 
 @pytest.fixture
 def client():
-    stub = make_stub(
+    stub = _builders.stub(
         slack_client.SlackClient,
         client=MagicMock(),
         channel=CHANNEL,
@@ -84,7 +84,7 @@ def _blocks_text(blocks):
 def _queue_every_day(client):
     """Queue one section per day of March, enough groups to exceed the per-message block limit."""
     for day in range(1, DAYS_IN_MARCH + 1):
-        client.notify_no_activity(datetime(2026, 3, day, tzinfo=JST))
+        client.notify_no_activity(datetime(2026, 3, day, tzinfo=dates.JST))
 
 
 def _cost(spend_change_pct=8.0, call_count_change_pct=5.0):
@@ -118,7 +118,7 @@ class TestNotify:
     def test_sends_report_with_pages(self, client):
         report = {"repositories": [_repo("my-repo", ["主要な作業を実施"])]}
         pages = [("my-repo", "https://notion.so/page1")]
-        client.notify(TARGET_DATE, report, pages, owner=OWNER)
+        client.notify(_builders.TARGET_DATE, report, pages, owner=_builders.OWNER)
         client.flush()
 
         kwargs = _get_send_kwargs(client)
@@ -130,7 +130,9 @@ class TestNotify:
         assert kwargs["text"]  # fallback text exists
 
     def test_sends_no_pages_message(self, client):
-        client.notify(TARGET_DATE, {"repositories": []}, [], owner=OWNER)
+        client.notify(
+            _builders.TARGET_DATE, {"repositories": []}, [], owner=_builders.OWNER
+        )
         client.flush()
 
         text = _blocks_text(_get_send_kwargs(client)["blocks"])
@@ -139,11 +141,11 @@ class TestNotify:
     def test_includes_session_only_repos(self, client):
         report = {"repositories": [_repo("repo", ["headline"])]}
         client.notify(
-            TARGET_DATE,
+            _builders.TARGET_DATE,
             report,
             [("repo", PAGE_URL)],
             session_only_repos=["notes-repo"],
-            owner=OWNER,
+            owner=_builders.OWNER,
         )
         client.flush()
 
@@ -152,11 +154,11 @@ class TestNotify:
 
     def test_session_only_repos_with_no_pages(self, client):
         client.notify(
-            TARGET_DATE,
+            _builders.TARGET_DATE,
             {"repositories": []},
             [],
             session_only_repos=["notes-repo"],
-            owner=OWNER,
+            owner=_builders.OWNER,
         )
         client.flush()
 
@@ -165,7 +167,9 @@ class TestNotify:
 
     def test_page_line_omits_dash_when_no_headline(self, client):
         report = {"repositories": [_repo("repo")]}
-        client.notify(TARGET_DATE, report, [("repo", PAGE_URL)], owner=OWNER)
+        client.notify(
+            _builders.TARGET_DATE, report, [("repo", PAGE_URL)], owner=_builders.OWNER
+        )
         client.flush()
 
         blocks = _get_send_kwargs(client)["blocks"]
@@ -182,7 +186,7 @@ class TestNotify:
             ("a", "https://notion.so/a"),
             ("b", "https://notion.so/b"),
         ]
-        client.notify(TARGET_DATE, report, pages, owner=OWNER)
+        client.notify(_builders.TARGET_DATE, report, pages, owner=_builders.OWNER)
         client.flush()
 
         page_text = _get_send_kwargs(client)["blocks"][1]["text"]["text"]
@@ -194,7 +198,9 @@ class TestNotify:
     def test_long_headline_is_truncated(self, client):
         long_headline = "あ" * (CONFIG.slack.headline_max + 50)
         report = {"repositories": [_repo("repo", [long_headline])]}
-        client.notify(TARGET_DATE, report, [("repo", PAGE_URL)], owner=OWNER)
+        client.notify(
+            _builders.TARGET_DATE, report, [("repo", PAGE_URL)], owner=_builders.OWNER
+        )
         client.flush()
 
         page_text = _get_send_kwargs(client)["blocks"][1]["text"]["text"]
@@ -206,7 +212,9 @@ class TestNotify:
     def test_headline_newlines_are_collapsed(self, client):
         headline = "first line\nsecond line\rthird line"
         report = {"repositories": [_repo("repo", [headline])]}
-        client.notify(TARGET_DATE, report, [("repo", PAGE_URL)], owner=OWNER)
+        client.notify(
+            _builders.TARGET_DATE, report, [("repo", PAGE_URL)], owner=_builders.OWNER
+        )
         client.flush()
 
         page_text = _get_send_kwargs(client)["blocks"][1]["text"]["text"]
@@ -216,17 +224,21 @@ class TestNotify:
 
     def test_headline_number_reference_links_to_page_repository(self, client):
         report = {"repositories": [_repo("repo", ["マージ #155"])]}
-        client.notify(TARGET_DATE, report, [("repo", PAGE_URL)], owner=OWNER)
+        client.notify(
+            _builders.TARGET_DATE, report, [("repo", PAGE_URL)], owner=_builders.OWNER
+        )
         client.flush()
 
         page_text = _get_send_kwargs(client)["blocks"][1]["text"]["text"]
-        url = f"https://github.com/{OWNER}/repo/issues/155"
+        url = f"https://github.com/{_builders.OWNER}/repo/issues/155"
         assert page_text.endswith(f"— マージ <{url}|#155>")
 
     def test_headline_special_chars_are_escaped(self, client):
         headline = "fix <!channel> & <T> generic leak"
         report = {"repositories": [_repo("repo", [headline])]}
-        client.notify(TARGET_DATE, report, [("repo", PAGE_URL)], owner=OWNER)
+        client.notify(
+            _builders.TARGET_DATE, report, [("repo", PAGE_URL)], owner=_builders.OWNER
+        )
         client.flush()
 
         page_text = _get_send_kwargs(client)["blocks"][1]["text"]["text"]
@@ -304,7 +316,7 @@ class TestPackMessages:
 
 class TestNotifyNoActivity:
     def test_sends_no_activity_message(self, client):
-        client.notify_no_activity(TARGET_DATE)
+        client.notify_no_activity(_builders.TARGET_DATE)
         client.flush()
 
         kwargs = _get_send_kwargs(client)
@@ -316,7 +328,7 @@ class TestNotifyNoActivity:
 
 class TestNotifySessionOnly:
     def test_sends_session_only_message(self, client):
-        client.notify_session_only(TARGET_DATE, ["repo-a", "repo-b"])
+        client.notify_session_only(_builders.TARGET_DATE, ["repo-a", "repo-b"])
         client.flush()
 
         kwargs = _get_send_kwargs(client)
@@ -469,7 +481,7 @@ class TestNotifyMetricsWithCost:
 
 class TestNotifyValidationErrors:
     def test_sends_invalid_tags(self, client):
-        client.notify_validation_errors(TARGET_DATE, _invalid_tags_result())
+        client.notify_validation_errors(_builders.TARGET_DATE, _invalid_tags_result())
         client.flush()
 
         text = _blocks_text(_get_send_kwargs(client)["blocks"])
@@ -478,7 +490,7 @@ class TestNotifyValidationErrors:
 
 class TestNotifyError:
     def test_sends_error_message(self, client):
-        client.notify_error(TARGET_DATE, RuntimeError("something went wrong"))
+        client.notify_error(_builders.TARGET_DATE, RuntimeError("something went wrong"))
         client.flush()
 
         text = _blocks_text(_get_send_kwargs(client)["blocks"])
@@ -506,7 +518,7 @@ class TestRunLabels:
     )
     def test_header_marks_run_origin(self, client, is_manual, is_backfill, expected):
         client.is_manual = is_manual
-        client.notify_no_activity(TARGET_DATE, is_backfill=is_backfill)
+        client.notify_no_activity(_builders.TARGET_DATE, is_backfill=is_backfill)
         client.flush()
 
         kwargs = _get_send_kwargs(client)
@@ -518,29 +530,33 @@ class TestRunLabels:
         [
             pytest.param(
                 lambda c: c.notify(
-                    TARGET_DATE, {"repositories": []}, [], owner=OWNER, is_backfill=True
+                    _builders.TARGET_DATE,
+                    {"repositories": []},
+                    [],
+                    owner=_builders.OWNER,
+                    is_backfill=True,
                 ),
                 id="report",
             ),
             pytest.param(
-                lambda c: c.notify_no_activity(TARGET_DATE, is_backfill=True),
+                lambda c: c.notify_no_activity(_builders.TARGET_DATE, is_backfill=True),
                 id="no-activity",
             ),
             pytest.param(
                 lambda c: c.notify_session_only(
-                    TARGET_DATE, ["repo"], is_backfill=True
+                    _builders.TARGET_DATE, ["repo"], is_backfill=True
                 ),
                 id="session-only",
             ),
             pytest.param(
                 lambda c: c.notify_validation_errors(
-                    TARGET_DATE, _invalid_tags_result(), is_backfill=True
+                    _builders.TARGET_DATE, _invalid_tags_result(), is_backfill=True
                 ),
                 id="validation-errors",
             ),
             pytest.param(
                 lambda c: c.notify_error(
-                    TARGET_DATE, RuntimeError("boom"), is_backfill=True
+                    _builders.TARGET_DATE, RuntimeError("boom"), is_backfill=True
                 ),
                 id="error",
             ),
@@ -560,38 +576,38 @@ class TestBlockStructure:
         [
             pytest.param(
                 lambda c: c.notify(
-                    TARGET_DATE,
+                    _builders.TARGET_DATE,
                     {"repositories": [_repo("repo", ["h"])]},
                     [("repo", PAGE_URL)],
                     session_only_repos=["notes-repo"],
-                    owner=OWNER,
+                    owner=_builders.OWNER,
                 ),
                 ["header", "section", "context"],
                 "📝",
                 id="report",
             ),
             pytest.param(
-                lambda c: c.notify_no_activity(TARGET_DATE),
+                lambda c: c.notify_no_activity(_builders.TARGET_DATE),
                 ["header", "section"],
                 "💤",
                 id="no_activity",
             ),
             pytest.param(
-                lambda c: c.notify_session_only(TARGET_DATE, ["repo-a"]),
+                lambda c: c.notify_session_only(_builders.TARGET_DATE, ["repo-a"]),
                 ["header", "section"],
                 "📓",
                 id="session_only",
             ),
             pytest.param(
                 lambda c: c.notify_validation_errors(
-                    TARGET_DATE, _invalid_tags_result()
+                    _builders.TARGET_DATE, _invalid_tags_result()
                 ),
                 ["header", "section"],
                 "⚠️",
                 id="validation_errors",
             ),
             pytest.param(
-                lambda c: c.notify_error(TARGET_DATE, RuntimeError("fail")),
+                lambda c: c.notify_error(_builders.TARGET_DATE, RuntimeError("fail")),
                 ["header", "section"],
                 "❌",
                 id="error",
@@ -624,7 +640,9 @@ class TestBlockStructure:
 class TestFlush:
     def test_sends_combined_message(self, client):
         report = {"summary": "summary", "repositories": []}
-        client.notify(TARGET_DATE, report, [("repo", PAGE_URL)], owner=OWNER)
+        client.notify(
+            _builders.TARGET_DATE, report, [("repo", PAGE_URL)], owner=_builders.OWNER
+        )
         client.notify_metrics(10.0, 100.0, VERSION, memory_limit_mb=512)
         client.flush()
 
@@ -643,27 +661,27 @@ class TestFlush:
         client.client.chat_postMessage.assert_not_called()
 
     def test_clears_buffer_after_flush(self, client):
-        client.notify_error(TARGET_DATE, RuntimeError("fail"))
+        client.notify_error(_builders.TARGET_DATE, RuntimeError("fail"))
         client.flush()
         client.flush()
 
         assert client.client.chat_postMessage.call_count == 1
 
     def test_captures_parent_ts_after_send(self, client):
-        client.notify_error(TARGET_DATE, RuntimeError("fail"))
+        client.notify_error(_builders.TARGET_DATE, RuntimeError("fail"))
         client.flush()
 
         assert client.parent_ts == FIRST_TS
 
     def test_parent_ts_tracks_latest_top_level_message(self, client):
-        client.notify_error(TARGET_DATE, RuntimeError("first"))
+        client.notify_error(_builders.TARGET_DATE, RuntimeError("first"))
         client.flush()
 
         client.client.chat_postMessage.return_value = {
             "ok": True,
             "ts": SECOND_TS,
         }
-        client.notify_error(TARGET_DATE, RuntimeError("second"))
+        client.notify_error(_builders.TARGET_DATE, RuntimeError("second"))
         client.flush()
 
         assert client.parent_ts == SECOND_TS
@@ -681,7 +699,7 @@ class TestFlush:
         assert client.parent_ts == SECOND_TS
 
     def test_sends_to_configured_channel(self, client):
-        client.notify_error(TARGET_DATE, RuntimeError("fail"))
+        client.notify_error(_builders.TARGET_DATE, RuntimeError("fail"))
         client.flush()
 
         assert _get_send_kwargs(client)["channel"] == CHANNEL
@@ -690,12 +708,12 @@ class TestFlush:
         client.client.chat_postMessage.side_effect = slack_sdk.errors.SlackApiError(
             "rate_limited", response={"error": "rate_limited"}
         )
-        client.notify_error(TARGET_DATE, RuntimeError("fail"))
+        client.notify_error(_builders.TARGET_DATE, RuntimeError("fail"))
         client.flush()
 
     def test_propagates_unrelated_errors(self, client):
         client.client.chat_postMessage.side_effect = RuntimeError("boom")
-        client.notify_error(TARGET_DATE, RuntimeError("fail"))
+        client.notify_error(_builders.TARGET_DATE, RuntimeError("fail"))
 
         with pytest.raises(RuntimeError, match="boom"):
             client.flush()
@@ -731,11 +749,11 @@ class TestFlush:
     def test_keeps_day_blocks_in_one_message(self, client):
         for day in range(1, DAYS_IN_MARCH + 1):
             client.notify(
-                datetime(2026, 3, day, tzinfo=JST),
+                datetime(2026, 3, day, tzinfo=dates.JST),
                 {"summary": "s", "repositories": [_repo("repo")]},
                 [("repo", PAGE_URL)],
                 session_only_repos=["other"],
-                owner=OWNER,
+                owner=_builders.OWNER,
             )
         client.flush()
 

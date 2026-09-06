@@ -6,7 +6,7 @@ from datetime import date
 import botocore.exceptions
 import pytest
 
-from ._builders import SESSION_KEY, user
+from . import _builders
 
 
 def _client_error(code):
@@ -135,20 +135,20 @@ class TestWriteItems:
 
 class TestIngest:
     def test_returns_processed_keys(self, store, stub_session_log):
-        client = stub_session_log(user("2026-03-28T10:00:00+09:00", "Hello"))
+        client = stub_session_log(_builders.user("2026-03-28T10:00:00+09:00", "Hello"))
 
         keys = store.ingest(client)
 
-        assert keys == [SESSION_KEY]
+        assert keys == [_builders.SESSION_KEY]
         store.table.update_item.assert_called_once()
 
     def test_returns_processed_keys_for_unchanged_items(self, store, stub_session_log):
-        client = stub_session_log(user("2026-03-28T10:00:00+09:00", "Hello"))
+        client = stub_session_log(_builders.user("2026-03-28T10:00:00+09:00", "Hello"))
         store.table.update_item.side_effect = _client_error(
             "ConditionalCheckFailedException"
         )
 
-        assert store.ingest(client) == [SESSION_KEY]
+        assert store.ingest(client) == [_builders.SESSION_KEY]
 
 
 class TestFetchSessions:
