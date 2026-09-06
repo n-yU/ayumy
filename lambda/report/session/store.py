@@ -26,7 +26,7 @@ def _content_hash(fields: dict) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-class SessionStore:
+class Store:
     """Client for reading and writing session metadata in DynamoDB."""
 
     def __init__(

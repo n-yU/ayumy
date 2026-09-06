@@ -1,4 +1,4 @@
-"""Tests for CostStore."""
+"""Tests for the Claude API cost store."""
 
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -13,7 +13,7 @@ from report.domain import summary
 
 def _make_store():
     with patch("report.cost.boto3"):
-        store = cost.CostStore("table")
+        store = cost.Store("table")
     store.table = MagicMock()
     return store
 

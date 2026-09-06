@@ -58,7 +58,7 @@ def _pack_messages(
     return messages
 
 
-class SlackClient:
+class Client:
     """Client for sending daily report notifications via Slack chat.postMessage."""
 
     def __init__(self, token: str, channel: str, *, is_manual: bool = False) -> None:

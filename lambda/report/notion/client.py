@@ -34,7 +34,7 @@ def _queried_regens(page: dict) -> int:
     return int(value) if value is not None else 0
 
 
-class NotionClient:
+class Client:
     """Client for writing daily report pages to a Notion database."""
 
     def __init__(

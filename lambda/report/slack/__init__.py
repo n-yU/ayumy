@@ -1,5 +1,5 @@
-"""Slack API client subpackage: client (SlackClient) + block builders."""
+"""Slack API client subpackage: client + block builders."""
 
-from .client import SlackClient
+from .client import Client
 
-__all__ = ["SlackClient"]
+__all__ = ["Client"]

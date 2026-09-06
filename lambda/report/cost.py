@@ -36,7 +36,7 @@ def _pct_change(current: float, prev: float) -> float | None:
     return (current - prev) / prev * 100
 
 
-class CostStore:
+class Store:
     """Client for persisting per-execution Claude API cost records."""
 
     def __init__(self, table_name: str) -> None:

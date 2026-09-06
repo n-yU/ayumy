@@ -1,5 +1,5 @@
-"""Notion API client subpackage: client (NotionClient) + block primitives."""
+"""Notion API client subpackage: client + block primitives."""
 
-from .client import NotionClient
+from .client import Client
 
-__all__ = ["NotionClient"]
+__all__ = ["Client"]

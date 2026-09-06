@@ -10,15 +10,10 @@ import botocore.exceptions
 
 from config import CONFIG
 
-from . import cost
+from . import cost, github, notion, session, slack, summarizer
 from .domain.session import SessionActivity
-from .github import GitHubClient
-from .notion import NotionClient
-from .session import SessionClient, SessionStore
 from .shared import dates, env
 from .shared.notice import Notice, NoticeSource
-from .slack import SlackClient
-from .summarizer import SummaryClient
 
 logger = logging.getLogger(__name__)
 
@@ -27,11 +22,11 @@ def process_date(
     since: datetime,
     until: datetime,
     session_activity: SessionActivity,
-    github_client: GitHubClient,
-    notion_client: NotionClient,
-    summary_client: SummaryClient,
-    cost_store: cost.CostStore,
-    slack_client: SlackClient,
+    github_client: github.Client,
+    notion_client: notion.Client,
+    summary_client: summarizer.Client,
+    cost_store: cost.Store,
+    slack_client: slack.Client,
     *,
     is_backfill: bool = False,
 ) -> None:
@@ -154,19 +149,19 @@ def run(
     since, until = dates.get_target_date_range(source, target_date=target_date)
     primary_date = since.astimezone(dates.JST).date()
 
-    slack_client = SlackClient(
+    slack_client = slack.Client(
         token=env.require_env("SLACK_BOT_TOKEN"),
         channel=env.require_env("SLACK_CHANNEL"),
         is_manual=source == "manual",
     )
     notice = Notice()
-    cost_store: cost.CostStore | None = None
+    cost_store: cost.Store | None = None
 
     try:
-        session_client = SessionClient(
+        session_client = session.Client(
             env.require_env("AYUMY_S3_BUCKET"), notice=notice
         )
-        store = SessionStore(env.require_env("AYUMY_DYNAMO_TABLE"), notice=notice)
+        store = session.Store(env.require_env("AYUMY_DYNAMO_TABLE"), notice=notice)
 
         ingested_keys = store.ingest(session_client)
         logger.info("Ingested %d JSONL file(s)", len(ingested_keys))
@@ -195,18 +190,18 @@ def run(
             if backfill_dates:
                 logger.info("Backfill dates detected: %s", backfill_dates)
 
-        github_client = GitHubClient(env.require_env("GITHUB_PAT"), notice=notice)
-        notion_client = NotionClient(
+        github_client = github.Client(env.require_env("GITHUB_PAT"), notice=notice)
+        notion_client = notion.Client(
             env.require_env("NOTION_SECRET"),
             env.require_env("NOTION_DATABASE_ID"),
             github_client.owner,
             notice=notice,
         )
         notion_client.init_data_source()
-        summary_client = SummaryClient(
+        summary_client = summarizer.Client(
             env.require_env("ANTHROPIC_API_KEY"), notice=notice
         )
-        cost_store = cost.CostStore(env.require_env("AYUMY_COST_TABLE"))
+        cost_store = cost.Store(env.require_env("AYUMY_COST_TABLE"))
 
         for d in process_dates:
             if not target_date and d == primary_date:

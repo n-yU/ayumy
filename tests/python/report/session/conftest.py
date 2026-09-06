@@ -4,7 +4,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from report.session import SessionStore, parser
+from report import session
+from report.session import parser
 
 from . import _builders
 
@@ -17,7 +18,7 @@ def session_client():
 @pytest.fixture
 def store():
     with patch("report.session.store.boto3"):
-        store = SessionStore("table")
+        store = session.Store("table")
     store.table = MagicMock()
     return store
 

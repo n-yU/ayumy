@@ -6,16 +6,17 @@ from unittest.mock import MagicMock
 import pytest
 
 from config import CONFIG
+from report import summarizer
 from report.domain import summary
 from report.shared import dates
 from report.shared.notice import Notice
-from report.summarizer import SummaryClient, ValidationResult, tags
 from report.summarizer import client as summarizer_client
+from report.summarizer import tags
 
 
-def _make_client() -> SummaryClient:
+def _make_client() -> summarizer.Client:
     # Bypass Anthropic SDK init
-    client = SummaryClient.__new__(SummaryClient)
+    client = summarizer.Client.__new__(summarizer.Client)
     client._notice = Notice()
     return client
 
@@ -212,9 +213,9 @@ class TestGenerateSummary:
 
 class TestValidationResult:
     def test_bool_empty(self):
-        assert not ValidationResult()
+        assert not summarizer.ValidationResult()
 
     def test_bool_with_invalid_tags(self):
-        result = ValidationResult()
+        result = summarizer.ValidationResult()
         result.invalid_tags = {"repo": ["bad"]}
         assert result

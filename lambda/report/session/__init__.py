@@ -1,6 +1,6 @@
-"""Session subpackage: S3 client (SessionClient) + DynamoDB store (SessionStore)."""
+"""Session subpackage: S3 client + DynamoDB store."""
 
-from .client import SessionClient
-from .store import SessionStore
+from .client import Client
+from .store import Store
 
-__all__ = ["SessionClient", "SessionStore"]
+__all__ = ["Client", "Store"]

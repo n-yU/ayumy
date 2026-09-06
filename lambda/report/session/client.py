@@ -10,7 +10,7 @@ from ..shared.notice import Notice, NoticeSource
 logger = logging.getLogger(__name__)
 
 
-class SessionClient:
+class Client:
     """Client for managing Claude Code session JSONL files on S3."""
 
     def __init__(self, bucket: str, notice: Notice | None = None) -> None:

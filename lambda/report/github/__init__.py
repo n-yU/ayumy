@@ -1,5 +1,5 @@
-"""GitHub API subpackage: client (GitHubClient)."""
+"""GitHub API subpackage: client."""
 
-from .client import GitHubClient
+from .client import Client
 
-__all__ = ["GitHubClient"]
+__all__ = ["Client"]

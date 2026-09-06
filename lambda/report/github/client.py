@@ -21,7 +21,7 @@ _PULL_EVENTS = ("created", "merged", "closed")
 _ISSUE_EVENTS = ("created", "closed")
 
 
-class GitHubClient:
+class Client:
     """GitHub activity fetcher via PyGithub."""
 
     def __init__(self, pat: str, notice: Notice | None = None) -> None:

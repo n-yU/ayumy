@@ -74,7 +74,7 @@ class ValidationResult:
         return bool(self.invalid_tags)
 
 
-class SummaryClient:
+class Client:
     """Client for generating daily report summaries via Claude API."""
 
     def __init__(self, api_key: str, notice: Notice | None = None) -> None:

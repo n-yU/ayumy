@@ -1,4 +1,4 @@
-"""Tests for SessionStore."""
+"""Tests for the session DynamoDB store."""
 
 import logging
 from datetime import date

@@ -4,8 +4,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from report import summarizer
 from report.domain import summary
-from report.summarizer import ValidationResult
 
 from . import _builders
 
@@ -15,7 +15,7 @@ def pipeline_clients():
     github_client = MagicMock()
     github_client.owner = _builders.OWNER
     summary_client = MagicMock()
-    summary_client.validate_report.return_value = ValidationResult()
+    summary_client.validate_report.return_value = summarizer.ValidationResult()
     summary_client.generate_summary.return_value = (
         {"repositories": []},
         summary.SummaryUsage(input_tokens=0, output_tokens=0, spend_usd=0.0),
