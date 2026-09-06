@@ -13,7 +13,6 @@ from config import CONFIG
 from . import SessionActivity
 from .cost import CostDisplay, CostStore
 from .github import GitHubClient
-from .notice import Notice, NoticeSource
 from .notion import NotionClient
 from .session import SessionClient, SessionStore
 from .shared.dates import (
@@ -23,6 +22,7 @@ from .shared.dates import (
     parse_target_dates,
 )
 from .shared.env import get_version, require_env
+from .shared.notice import Notice, NoticeSource
 from .slack import SlackClient
 from .summarizer import SummaryClient
 

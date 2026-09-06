@@ -5,7 +5,7 @@ from typing import Any
 
 import boto3
 
-from ..notice import Notice, NoticeSource
+from ..shared.notice import Notice, NoticeSource
 
 logger = logging.getLogger(__name__)
 

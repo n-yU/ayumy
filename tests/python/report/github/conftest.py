@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from report.github import GitHubClient
-from report.notice import Notice
+from report.shared.notice import Notice
 
 from .._builders import REPO, REPO_FULL_NAME, make_stub
 

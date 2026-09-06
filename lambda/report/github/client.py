@@ -13,7 +13,7 @@ from github.Repository import Repository
 from config import CONFIG
 
 from ..domain import CommitInfo, IssueInfo, PullInfo
-from ..notice import Notice, NoticeSource
+from ..shared.notice import Notice, NoticeSource
 from .activity import GitHubActivity, RepoActivity
 
 logger = logging.getLogger(__name__)

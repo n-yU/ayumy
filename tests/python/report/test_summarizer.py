@@ -7,8 +7,8 @@ import pytest
 
 from config import CONFIG
 from report import SummaryUsage
-from report.notice import Notice
 from report.shared.dates import JST
+from report.shared.notice import Notice
 from report.summarizer import (
     _SYSTEM_PROMPT,
     _VALUE_REPR_LIMIT,

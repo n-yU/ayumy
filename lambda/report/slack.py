@@ -11,9 +11,9 @@ from config import CONFIG
 
 from . import ReportSummary
 from .cost import CostDisplay
-from .inline import parse_inline
-from .notice import Notice
 from .shared.dates import JST
+from .shared.inline import parse_inline
+from .shared.notice import Notice
 from .summarizer import ValidationResult
 
 logger = logging.getLogger(__name__)

@@ -10,7 +10,7 @@ from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
 from .. import SessionActivity, SessionInfo
-from ..notice import Notice
+from ..shared.notice import Notice
 from .parser import SessionLogParser
 
 logger = logging.getLogger(__name__)
