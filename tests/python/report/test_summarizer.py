@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from config import CONFIG
-from report import SummaryUsage
+from report.domain.summary import SummaryUsage
 from report.shared.dates import JST
 from report.shared.notice import Notice
 from report.summarizer import (

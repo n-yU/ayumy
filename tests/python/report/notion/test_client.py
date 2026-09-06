@@ -8,7 +8,7 @@ import pytest
 
 from config import CONFIG
 from config.config import NotionIcon
-from report import SessionActivity
+from report.domain.session import SessionActivity
 from report.notion.client import _page_icon
 
 from .._builders import (

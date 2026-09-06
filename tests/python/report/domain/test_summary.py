@@ -3,7 +3,7 @@
 import pytest
 
 from config import CONFIG
-from report import SummaryUsage
+from report.domain.summary import SummaryUsage
 
 
 class TestSummaryUsage:

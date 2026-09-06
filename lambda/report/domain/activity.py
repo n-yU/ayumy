@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from github.Issue import Issue
     from github.PullRequest import PullRequest
 
-    from .. import SessionInfo
+    from .session import SessionInfo
 
 
 _IRREGULAR_ISSUE_REASONS = {"not_planned": "not planned", "duplicate": "duplicate"}

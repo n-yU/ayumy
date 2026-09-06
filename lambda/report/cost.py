@@ -9,7 +9,7 @@ from boto3.dynamodb.conditions import Key
 
 from config import CONFIG
 
-from . import SummaryUsage
+from .domain.summary import SummaryUsage
 from .shared.dates import JST
 
 

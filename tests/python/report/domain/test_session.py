@@ -2,7 +2,7 @@
 
 import pytest
 
-from report import SessionActivity
+from report.domain.session import SessionActivity
 
 
 class TestSessionActivityFormat:
