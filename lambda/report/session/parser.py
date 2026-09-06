@@ -131,7 +131,7 @@ def _extract_pr_issue_refs(command: str) -> tuple[set[int], set[int]]:
 
 
 class SessionLogParser:
-    """Convert JSONL session logs read via `SessionClient` into DynamoDB-shaped items."""
+    """Convert JSONL session logs read via the S3 client into DynamoDB-shaped items."""
 
     def __init__(self, notice: Notice | None = None) -> None:
         self._notice = notice or Notice()

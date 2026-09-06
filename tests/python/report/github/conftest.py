@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from report.github import GitHubClient
+from report import github
 from report.shared.notice import Notice
 
 from .. import _builders
@@ -13,7 +13,7 @@ from .. import _builders
 @pytest.fixture
 def github_client():
     return _builders.stub(
-        GitHubClient,
+        github.Client,
         g=MagicMock(),
         _search_count=0,
         _window_start=0.0,

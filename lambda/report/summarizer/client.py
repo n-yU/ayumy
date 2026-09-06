@@ -19,7 +19,7 @@ from . import tags
 logger = logging.getLogger(__name__)
 
 TOOL_NAME = "submit_daily_report"
-_TAG_GUIDANCE = "\n".join(f"- {t.name}: {t.description}" for t in tags.TAG_DEFINITIONS)
+_TAG_GUIDANCE = "\n".join(f"- {t.name}: {t.description}" for t in tags.DEFINITIONS)
 # Template's `$` placeholders rather than `str.format`, so the braces in the prompt's own examples need no escaping
 _SYSTEM_PROMPT = Template(
     (Path(__file__).parent.parent / "prompts" / "summary_system.txt").read_text(
@@ -47,7 +47,7 @@ _RESPONSE_SHAPE_SCHEMA = {
 _VALUE_REPR_LIMIT = 200
 
 
-def _validate_response_shape(payload: object) -> summary.ReportSummary:
+def _validate_response_shape(payload: object) -> summary.Report:
     try:
         jsonschema.validate(payload, _RESPONSE_SHAPE_SCHEMA)
     except jsonschema.ValidationError as e:
@@ -61,7 +61,7 @@ def _validate_response_shape(payload: object) -> summary.ReportSummary:
             f"got={type(e.instance).__name__} value={value_repr}"
         )
         raise ValueError(f"{summary_line}\n{e}") from e
-    return cast(summary.ReportSummary, payload)
+    return cast(summary.Report, payload)
 
 
 class ValidationResult:
@@ -74,7 +74,7 @@ class ValidationResult:
         return bool(self.invalid_tags)
 
 
-class SummaryClient:
+class Client:
     """Client for generating daily report summaries via Claude API."""
 
     def __init__(self, api_key: str, notice: Notice | None = None) -> None:
@@ -110,7 +110,7 @@ class SummaryClient:
                                     ),
                                     "items": {
                                         "type": "string",
-                                        "enum": list(tags.ALLOWED_TAG_NAMES),
+                                        "enum": list(tags.ALLOWED_NAMES),
                                     },
                                 },
                             },
@@ -142,7 +142,7 @@ class SummaryClient:
         target_date: datetime,
         formatted_github: str,
         formatted_sessions: str,
-    ) -> tuple[summary.ReportSummary, summary.SummaryUsage]:
+    ) -> tuple[summary.Report, summary.Usage]:
         """Generate the structured summary via Claude API tool use.
 
         Returns the parsed report and the token / spend record for the API call.
@@ -163,7 +163,7 @@ class SummaryClient:
             messages=[{"role": "user", "content": prompt}],
         )
 
-        usage = summary.SummaryUsage.from_call(
+        usage = summary.Usage.from_call(
             message.usage.input_tokens, message.usage.output_tokens
         )
 
@@ -173,10 +173,10 @@ class SummaryClient:
 
         raise ValueError(f"Claude API response missing tool_use block for {TOOL_NAME}.")
 
-    def validate_report(self, report: summary.ReportSummary) -> ValidationResult:
+    def validate_report(self, report: summary.Report) -> ValidationResult:
         """Strips disallowed tags from `report` in place."""
         result = ValidationResult()
-        tag_set = set(tags.ALLOWED_TAG_NAMES)
+        tag_set = set(tags.ALLOWED_NAMES)
 
         for repo in report["repositories"]:
             name = repo["name"]

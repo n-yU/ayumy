@@ -6,16 +6,17 @@ from unittest.mock import MagicMock
 import pytest
 
 from config import CONFIG
+from report import summarizer
 from report.domain import summary
 from report.shared import dates
 from report.shared.notice import Notice
-from report.summarizer import SummaryClient, ValidationResult, tags
 from report.summarizer import client as summarizer_client
+from report.summarizer import tags
 
 
-def _make_client() -> SummaryClient:
+def _make_client() -> summarizer.Client:
     # Bypass Anthropic SDK init
-    client = SummaryClient.__new__(SummaryClient)
+    client = summarizer.Client.__new__(summarizer.Client)
     client._notice = Notice()
     return client
 
@@ -27,7 +28,7 @@ class TestBuildToolSchema:
         repo_props = schema["input_schema"]["properties"]["repositories"]["items"][
             "properties"
         ]
-        assert repo_props["tags"]["items"]["enum"] == list(tags.ALLOWED_TAG_NAMES)
+        assert repo_props["tags"]["items"]["enum"] == list(tags.ALLOWED_NAMES)
 
     def test_tags_field_carries_description_per_tag(self):
         client = _make_client()
@@ -35,14 +36,14 @@ class TestBuildToolSchema:
         tags_field = schema["input_schema"]["properties"]["repositories"]["items"][
             "properties"
         ]["tags"]
-        for tag in tags.TAG_DEFINITIONS:
+        for tag in tags.DEFINITIONS:
             assert tag.name in tags_field["description"]
             assert tag.description in tags_field["description"]
 
 
 class TestSystemPrompt:
     def test_lists_each_tag_with_description(self):
-        for tag in tags.TAG_DEFINITIONS:
+        for tag in tags.DEFINITIONS:
             assert tag.name in summarizer_client._SYSTEM_PROMPT
             assert tag.description in summarizer_client._SYSTEM_PROMPT
 
@@ -75,7 +76,7 @@ class TestBuildPrompt:
 class TestValidateReport:
     def setup_method(self):
         self.client = _make_client()
-        self.valid_tag = tags.ALLOWED_TAG_NAMES[0]
+        self.valid_tag = tags.ALLOWED_NAMES[0]
 
     def test_valid_report_unchanged(self):
         report = {
@@ -146,7 +147,7 @@ class TestGenerateSummary:
             10_000 * rates["input_usd_per_1m_tokens"]
             + 2_000 * rates["output_usd_per_1m_tokens"]
         ) / 1_000_000
-        assert isinstance(usage, summary.SummaryUsage)
+        assert isinstance(usage, summary.Usage)
         assert usage.input_tokens == 10_000
         assert usage.output_tokens == 2_000
         assert usage.spend_usd == pytest.approx(expected_spend)
@@ -212,9 +213,9 @@ class TestGenerateSummary:
 
 class TestValidationResult:
     def test_bool_empty(self):
-        assert not ValidationResult()
+        assert not summarizer.ValidationResult()
 
     def test_bool_with_invalid_tags(self):
-        result = ValidationResult()
+        result = summarizer.ValidationResult()
         result.invalid_tags = {"repo": ["bad"]}
         assert result

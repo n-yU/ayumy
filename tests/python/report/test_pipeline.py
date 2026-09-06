@@ -9,15 +9,14 @@ import botocore.exceptions
 import pytest
 
 from config import CONFIG
-from report import pipeline
+from report import pipeline, summarizer
 from report.domain import activity, summary
 from report.domain.session import SessionActivity
 from report.shared import dates
-from report.summarizer import ValidationResult
 
 from . import _builders
 
-_STUB_USAGE = summary.SummaryUsage(input_tokens=0, output_tokens=0, spend_usd=0.0)
+_STUB_USAGE = summary.Usage(input_tokens=0, output_tokens=0, spend_usd=0.0)
 
 
 def _repo(name, summary_lines=("work",), tags=()):
@@ -53,7 +52,7 @@ def _arrange_report_with_invalid_tags(clients):
         _builders.github("repo", commits=[_builders.commit(sha="abc", repo="repo")]),
     )
     _stub_summary(clients, [_repo("repo", tags=("BadTag",))])
-    invalid = ValidationResult()
+    invalid = summarizer.ValidationResult()
     invalid.invalid_tags = {"repo": ["BadTag"]}
     clients["summary_client"].validate_report.return_value = invalid
 
@@ -134,9 +133,7 @@ class TestProcessDate:
         _stub_summary(
             pipeline_clients,
             [_repo("my-repo")],
-            usage=summary.SummaryUsage(
-                input_tokens=1000, output_tokens=200, spend_usd=0.012
-            ),
+            usage=summary.Usage(input_tokens=1000, output_tokens=200, spend_usd=0.012),
         )
         pipeline.process_date(
             _builders.SINCE,
@@ -161,7 +158,7 @@ class TestProcessDate:
         _stub_summary(
             pipeline_clients, [_repo("repo", summary_lines=(), tags=("BadTag",))]
         )
-        invalid = ValidationResult()
+        invalid = summarizer.ValidationResult()
         invalid.invalid_tags = {"repo": ["BadTag"]}
         pipeline_clients["summary_client"].validate_report.return_value = invalid
         pipeline.process_date(
@@ -371,13 +368,13 @@ class TestRun:
     def run_patches(self):
         """Patched collaborators of run() with overridable defaults each test can adjust."""
         targets = {
-            "SummaryClient": "report.pipeline.SummaryClient",
-            "NotionClient": "report.pipeline.NotionClient",
-            "GitHubClient": "report.pipeline.GitHubClient",
-            "SessionClient": "report.pipeline.SessionClient",
-            "SessionStore": "report.pipeline.SessionStore",
-            "CostStore": "report.cost.CostStore",
-            "SlackClient": "report.pipeline.SlackClient",
+            "summary_client": "report.summarizer.Client",
+            "notion_client": "report.notion.Client",
+            "github_client": "report.github.Client",
+            "session_client": "report.session.Client",
+            "session_store": "report.session.Store",
+            "cost_store": "report.cost.Store",
+            "slack_client": "report.slack.Client",
             "require_env": "report.shared.env.require_env",
             "get_target_date_range": "report.shared.dates.get_target_date_range",
         }
@@ -391,23 +388,23 @@ class TestRun:
                 _builders.SINCE,
                 _builders.UNTIL,
             )
-            store = mocks["SessionStore"].return_value
+            store = mocks["session_store"].return_value
             store.ingest.return_value = []
             store.scan_backfill_dates.return_value = []
             store.fetch_sessions.return_value = SessionActivity({})
-            mocks["SessionClient"].return_value.delete_sessions.return_value = 0
+            mocks["session_client"].return_value.delete_sessions.return_value = 0
             mocks[
-                "GitHubClient"
+                "github_client"
             ].return_value.fetch_activity.return_value = activity.GitHubActivity({})
             yield mocks
 
     @pytest.fixture
     def slack_client(self, run_patches):
-        return run_patches["SlackClient"].return_value
+        return run_patches["slack_client"].return_value
 
     @pytest.fixture
     def session_store(self, run_patches):
-        return run_patches["SessionStore"].return_value
+        return run_patches["session_store"].return_value
 
     def test_processes_primary_date(self, session_store, slack_client):
         pipeline.run(source=None)
@@ -432,7 +429,7 @@ class TestRun:
     def test_marks_manual_runs_for_slack(self, run_patches, source, expected):
         pipeline.run(source=source)
 
-        assert run_patches["SlackClient"].call_args.kwargs["is_manual"] is expected
+        assert run_patches["slack_client"].call_args.kwargs["is_manual"] is expected
 
     def test_passes_memory_limit_to_metrics(self, slack_client):
         pipeline.run(source=None, memory_limit_mb=512)
@@ -456,7 +453,7 @@ class TestRun:
         slack_client.flush.assert_called_once()
 
     def test_omits_cost_when_compute_display_fails(self, run_patches, slack_client):
-        cost_store = run_patches["CostStore"].return_value
+        cost_store = run_patches["cost_store"].return_value
         cost_store.compute_display.side_effect = RuntimeError("dynamodb down")
         pipeline.run(source=None)
 
@@ -466,7 +463,7 @@ class TestRun:
         slack_client.send_notice_thread.assert_called_once()
 
     def test_survives_cost_store_init_failure(self, run_patches, slack_client):
-        run_patches["CostStore"].side_effect = RuntimeError("no env")
+        run_patches["cost_store"].side_effect = RuntimeError("no env")
         with pytest.raises(RuntimeError):
             pipeline.run(source=None)
 
@@ -566,7 +563,7 @@ class TestRun:
         self, run_patches, session_store, slack_client, caplog
     ):
         session_store.ingest.return_value = ["claude-sessions/proj/s1.jsonl"]
-        session_client = run_patches["SessionClient"].return_value
+        session_client = run_patches["session_client"].return_value
         session_client.delete_sessions.side_effect = botocore.exceptions.ClientError(
             {"Error": {"Code": "AccessDenied", "Message": "denied"}}, "DeleteObjects"
         )
@@ -593,7 +590,7 @@ class TestRun:
 
     def test_deletes_s3_after_ingest(self, run_patches, session_store):
         session_store.ingest.return_value = ["claude-sessions/proj/s1.jsonl"]
-        session_client = run_patches["SessionClient"].return_value
+        session_client = run_patches["session_client"].return_value
         session_client.delete_sessions.return_value = 1
         pipeline.run(source=None)
 
@@ -635,7 +632,7 @@ class TestRun:
     def test_target_date_uses_backfill_fetch(self, run_patches):
         """An explicit target_date takes the Hybrid path (is_backfill=True)."""
         _stub_date_range(run_patches, 25)
-        github_client = run_patches["GitHubClient"].return_value
+        github_client = run_patches["github_client"].return_value
         pipeline.run(source="manual", target_date="2026-03-25")
 
         for call in github_client.fetch_activity.call_args_list:
@@ -649,7 +646,7 @@ class TestRun:
             date(2026, 3, 26),
             date(2026, 3, 27),
         ]
-        github_client = run_patches["GitHubClient"].return_value
+        github_client = run_patches["github_client"].return_value
         pipeline.run(source=None)
 
         flags = [

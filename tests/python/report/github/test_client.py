@@ -1,4 +1,4 @@
-"""Tests for GitHubClient API wrappers."""
+"""Tests for the GitHub API wrappers."""
 
 from datetime import datetime
 from unittest.mock import MagicMock, patch

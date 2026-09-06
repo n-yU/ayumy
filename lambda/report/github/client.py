@@ -21,7 +21,7 @@ _PULL_EVENTS = ("created", "merged", "closed")
 _ISSUE_EVENTS = ("created", "closed")
 
 
-class GitHubClient:
+class Client:
     """GitHub activity fetcher via PyGithub."""
 
     def __init__(self, pat: str, notice: Notice | None = None) -> None:
@@ -150,7 +150,7 @@ class GitHubClient:
         session_issues: dict[str, list[int]] | None = None,
     ) -> activity.GitHubActivity:
         user = self.g.get_user()
-        data: dict[str, activity.RepoActivity] = {}
+        data: dict[str, activity.Repo] = {}
         session_pulls = session_pulls or {}
         session_issues = session_issues or {}
 

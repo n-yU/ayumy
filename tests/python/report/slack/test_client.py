@@ -1,4 +1,4 @@
-"""Tests for SlackClient message assembly and sending."""
+"""Tests for Slack message assembly and sending."""
 
 from datetime import datetime
 from unittest.mock import MagicMock
@@ -7,7 +7,7 @@ import pytest
 import slack_sdk.errors
 
 from config import CONFIG
-from report import cost
+from report import cost, summarizer
 from report.shared import dates
 from report.shared.notice import Notice, NoticeSource
 from report.slack import client as slack_client
@@ -17,7 +17,6 @@ from report.slack.blocks import (
     header_block,
     section_block,
 )
-from report.summarizer import ValidationResult
 
 from .. import _builders
 
@@ -33,7 +32,7 @@ DAYS_IN_MARCH = 31
 @pytest.fixture
 def client():
     stub = _builders.stub(
-        slack_client.SlackClient,
+        slack_client.Client,
         client=MagicMock(),
         channel=CHANNEL,
         is_manual=False,
@@ -88,7 +87,7 @@ def _queue_every_day(client):
 
 
 def _cost(spend_change_pct=8.0, call_count_change_pct=5.0):
-    return cost.CostDisplay(
+    return cost.Display(
         current_run_spend_usd=0.0340,
         monthly_spend_usd=1.23,
         spend_change_pct=spend_change_pct,
@@ -98,7 +97,7 @@ def _cost(spend_change_pct=8.0, call_count_change_pct=5.0):
 
 
 def _invalid_tags_result():
-    result = ValidationResult()
+    result = summarizer.ValidationResult()
     result.invalid_tags = {"repo": ["BadTag"]}
     return result
 

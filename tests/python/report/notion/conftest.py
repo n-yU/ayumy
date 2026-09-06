@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from report.notion import NotionClient
+from report import notion
 from report.shared.notice import Notice
 
 from .. import _builders
@@ -13,7 +13,7 @@ from .. import _builders
 @pytest.fixture
 def notion_client():
     return _builders.stub(
-        NotionClient,
+        notion.Client,
         client=MagicMock(),
         database_id="db-id",
         owner=_builders.OWNER,

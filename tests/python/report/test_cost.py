@@ -1,4 +1,4 @@
-"""Tests for CostStore."""
+"""Tests for the Claude API cost store."""
 
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -13,7 +13,7 @@ from report.domain import summary
 
 def _make_store():
     with patch("report.cost.boto3"):
-        store = cost.CostStore("table")
+        store = cost.Store("table")
     store.table = MagicMock()
     return store
 
@@ -29,9 +29,7 @@ class TestStartRecord:
         self.store = _make_store()
 
     def test_writes_row_without_reported_field(self):
-        usage = summary.SummaryUsage(
-            input_tokens=1000, output_tokens=200, spend_usd=0.012
-        )
+        usage = summary.Usage(input_tokens=1000, output_tokens=200, spend_usd=0.012)
 
         self.store.start_record(date(2026, 3, 28), usage)
 
@@ -46,7 +44,7 @@ class TestStartRecord:
     def test_year_month_and_sk_reflect_execution_time_in_jst(self):
         # 2026-07-01 UTC 14:30 = 2026-07-01 JST 23:30 → year_month "2026-07"
         frozen_utc = datetime(2026, 7, 1, 14, 30, 0, tzinfo=UTC)
-        usage = summary.SummaryUsage(input_tokens=0, output_tokens=0, spend_usd=0.0)
+        usage = summary.Usage(input_tokens=0, output_tokens=0, spend_usd=0.0)
 
         with patch("report.cost.datetime") as mock_dt:
             mock_dt.now.return_value = frozen_utc
@@ -61,7 +59,7 @@ class TestStartRecord:
     def test_jst_midnight_boundary_uses_next_calendar_day(self):
         # 2026-06-30 UTC 15:00 = 2026-07-01 JST 00:00 → year_month "2026-07"
         frozen_utc = datetime(2026, 6, 30, 15, 0, 0, tzinfo=UTC)
-        usage = summary.SummaryUsage(input_tokens=0, output_tokens=0, spend_usd=0.0)
+        usage = summary.Usage(input_tokens=0, output_tokens=0, spend_usd=0.0)
 
         with patch("report.cost.datetime") as mock_dt:
             mock_dt.now.return_value = frozen_utc
@@ -72,7 +70,7 @@ class TestStartRecord:
         assert item["sk"].startswith("2026-07-01#")
 
     def test_captures_active_model_and_pricing(self):
-        usage = summary.SummaryUsage(input_tokens=0, output_tokens=0, spend_usd=0.0)
+        usage = summary.Usage(input_tokens=0, output_tokens=0, spend_usd=0.0)
 
         self.store.start_record(date(2026, 3, 28), usage)
 
@@ -90,11 +88,11 @@ class TestRunSpendAccumulator:
     def test_accumulates_across_start_record_calls(self):
         self.store.start_record(
             date(2026, 3, 28),
-            summary.SummaryUsage(input_tokens=0, output_tokens=0, spend_usd=0.04),
+            summary.Usage(input_tokens=0, output_tokens=0, spend_usd=0.04),
         )
         self.store.start_record(
             date(2026, 3, 28),
-            summary.SummaryUsage(input_tokens=0, output_tokens=0, spend_usd=0.05),
+            summary.Usage(input_tokens=0, output_tokens=0, spend_usd=0.05),
         )
 
         assert self.store._run_spend_usd == 0.09
@@ -161,7 +159,7 @@ class TestComputeDisplay:
 
         display = self.store.compute_display(date(2026, 7, 5))
 
-        assert isinstance(display, cost.CostDisplay)
+        assert isinstance(display, cost.Display)
         assert display.current_run_spend_usd == 0.06
         assert display.monthly_spend_usd == pytest.approx(1.20)
         assert display.spend_change_pct == pytest.approx(20.0)

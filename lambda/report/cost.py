@@ -20,7 +20,7 @@ class MonthSummary:
 
 
 @dataclass(frozen=True)
-class CostDisplay:
+class Display:
     """Rendered inputs for the Slack cost line; `*_change_pct` fields are None when the prior period has no data."""
 
     current_run_spend_usd: float
@@ -36,14 +36,14 @@ def _pct_change(current: float, prev: float) -> float | None:
     return (current - prev) / prev * 100
 
 
-class CostStore:
-    """Client for persisting per-execution Claude API cost records."""
+class Store:
+    """Store for persisting per-execution Claude API cost records."""
 
     def __init__(self, table_name: str) -> None:
         self.table = boto3.resource("dynamodb").Table(table_name)
         self._run_spend_usd = 0.0
 
-    def start_record(self, target_date: date, usage: summary.SummaryUsage) -> None:
+    def start_record(self, target_date: date, usage: summary.Usage) -> None:
         """Record one Claude API call; `model` and pricing are snapshotted onto the row so later config changes do not affect historical spend."""
         executed_at_utc = datetime.now(UTC)
         executed_date_jst = executed_at_utc.astimezone(dates.JST).date()
@@ -85,7 +85,7 @@ class CostStore:
         spend = sum(float(item["spend_usd"]) for item in items)
         return MonthSummary(spend_usd=spend, call_count=len(items))
 
-    def compute_display(self, today: date) -> CostDisplay:
+    def compute_display(self, today: date) -> Display:
         """Build the Slack cost line inputs for the JST date `today`."""
         current = self.fetch_month_summary(today.strftime("%Y-%m"), through_date=today)
 
@@ -96,7 +96,7 @@ class CostStore:
             prev_last.strftime("%Y-%m"), through_date=prev_through
         )
 
-        return CostDisplay(
+        return Display(
             current_run_spend_usd=self._run_spend_usd,
             monthly_spend_usd=current.spend_usd,
             spend_change_pct=_pct_change(current.spend_usd, prev.spend_usd),

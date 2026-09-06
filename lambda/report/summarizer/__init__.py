@@ -1,5 +1,5 @@
-"""Summary generation subpackage: Claude API client (SummaryClient) + tag definitions."""
+"""Summary generation subpackage: Claude API client + tag definitions."""
 
-from .client import SummaryClient, ValidationResult
+from .client import Client, ValidationResult
 
-__all__ = ["SummaryClient", "ValidationResult"]
+__all__ = ["Client", "ValidationResult"]

@@ -6,18 +6,18 @@ from typing import TypedDict
 from config import CONFIG
 
 
-class RepoSummary(TypedDict):
+class Repo(TypedDict):
     name: str
     summary: list[str]
     tags: list[str]
 
 
-class ReportSummary(TypedDict):
-    repositories: list[RepoSummary]
+class Report(TypedDict):
+    repositories: list[Repo]
 
 
 @dataclass(frozen=True)
-class SummaryUsage:
+class Usage:
     """Token counts and USD spend for a single Claude API call.
 
     `spend_usd` is computed locally from the active model's configured rates,
@@ -29,7 +29,7 @@ class SummaryUsage:
     spend_usd: float
 
     @classmethod
-    def from_call(cls, input_tokens: int, output_tokens: int) -> "SummaryUsage":
+    def from_call(cls, input_tokens: int, output_tokens: int) -> "Usage":
         rates = CONFIG.claude.pricing[CONFIG.claude.model]
         spend_usd = (
             input_tokens * rates["input_usd_per_1m_tokens"]

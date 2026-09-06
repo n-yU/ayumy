@@ -1,14 +1,14 @@
-"""Tests for SessionClient."""
+"""Tests for the session S3 client."""
 
 import logging
 from unittest.mock import MagicMock, patch
 
-from report.session import SessionClient
+from report import session
 
 
 def _make_client():
     with patch("report.session.client.boto3"):
-        client = SessionClient("bucket")
+        client = session.Client("bucket")
     client.s3 = MagicMock()
     return client
 
