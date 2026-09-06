@@ -11,9 +11,9 @@ import jsonschema
 
 from config import CONFIG
 
-from .domain.summary import ReportSummary, SummaryUsage
-from .shared.dates import JST
-from .shared.notice import Notice, NoticeSource
+from ..domain.summary import ReportSummary, SummaryUsage
+from ..shared.dates import JST
+from ..shared.notice import Notice, NoticeSource
 from .tags import ALLOWED_TAG_NAMES, TAG_DEFINITIONS
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ TOOL_NAME = "submit_daily_report"
 _TAG_GUIDANCE = "\n".join(f"- {t.name}: {t.description}" for t in TAG_DEFINITIONS)
 # Template's `$` placeholders rather than `str.format`, so the braces in the prompt's own examples need no escaping
 _SYSTEM_PROMPT = Template(
-    (Path(__file__).parent / "prompts" / "summary_system.txt").read_text(
+    (Path(__file__).parent.parent / "prompts" / "summary_system.txt").read_text(
         encoding="utf-8"
     )
 ).substitute(tool_name=TOOL_NAME, tag_guidance=_TAG_GUIDANCE)
