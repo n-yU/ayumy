@@ -9,7 +9,7 @@ import pytest
 from config import CONFIG
 from config.config import NotionIcon
 from report.domain.session import SessionActivity
-from report.notion.client import _page_icon
+from report.notion import client
 
 from .._builders import (
     REPO,
@@ -490,14 +490,14 @@ class TestPageIcon:
             CONFIG, notion=replace(CONFIG.notion, repository_icons={REPO: icon})
         )
         with patch("report.notion.client.CONFIG", configured):
-            assert _page_icon(REPO) == {
+            assert client._page_icon(REPO) == {
                 "type": "icon",
                 "icon": {"name": "walk", "color": "blue"},
             }
 
     def test_falls_back_to_default_icon_for_unconfigured_repository(self):
         default = CONFIG.notion.default_icon
-        assert _page_icon("repo-without-an-entry") == {
+        assert client._page_icon("repo-without-an-entry") == {
             "type": "icon",
             "icon": {"name": default.name, "color": default.color},
         }
@@ -519,7 +519,7 @@ class TestCreatePage:
         )
 
         kwargs = notion_client.client.pages.create.call_args.kwargs
-        assert kwargs["icon"] == _page_icon(REPO)
+        assert kwargs["icon"] == client._page_icon(REPO)
 
 
 def _queried_page(page_id: str, repo: str | None, regens: int | None) -> dict:

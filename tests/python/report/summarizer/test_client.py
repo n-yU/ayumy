@@ -6,16 +6,11 @@ from unittest.mock import MagicMock
 import pytest
 
 from config import CONFIG
-from report.domain.summary import SummaryUsage
+from report.domain import summary
 from report.shared.dates import JST
 from report.shared.notice import Notice
-from report.summarizer.client import (
-    _SYSTEM_PROMPT,
-    _VALUE_REPR_LIMIT,
-    TOOL_NAME,
-    SummaryClient,
-    ValidationResult,
-)
+from report.summarizer import SummaryClient, ValidationResult
+from report.summarizer import client as summarizer_client
 from report.summarizer.tags import ALLOWED_TAG_NAMES, TAG_DEFINITIONS
 
 
@@ -49,8 +44,8 @@ class TestBuildToolSchema:
 class TestSystemPrompt:
     def test_lists_each_tag_with_description(self):
         for tag in TAG_DEFINITIONS:
-            assert tag.name in _SYSTEM_PROMPT
-            assert tag.description in _SYSTEM_PROMPT
+            assert tag.name in summarizer_client._SYSTEM_PROMPT
+            assert tag.description in summarizer_client._SYSTEM_PROMPT
 
     @pytest.mark.parametrize(
         "rule",
@@ -64,7 +59,7 @@ class TestSystemPrompt:
         ],
     )
     def test_states_each_notation_rule(self, rule):
-        assert rule in _SYSTEM_PROMPT
+        assert rule in summarizer_client._SYSTEM_PROMPT
 
 
 class TestBuildPrompt:
@@ -131,7 +126,7 @@ class TestGenerateSummary:
         }
         tool_use = MagicMock(type="tool_use", input=report)
         tool_use.name = (
-            TOOL_NAME  # `name` kwarg on MagicMock sets the mock label, not attr
+            summarizer_client.TOOL_NAME  # `name` kwarg on MagicMock sets the mock label, not attr
         )
         text_block = MagicMock(type="text")
         self._set_response([text_block, tool_use])
@@ -142,7 +137,7 @@ class TestGenerateSummary:
 
     def test_returns_usage_from_response(self):
         tool_use = MagicMock(type="tool_use", input={"repositories": []})
-        tool_use.name = TOOL_NAME
+        tool_use.name = summarizer_client.TOOL_NAME
         self._set_response([tool_use], input_tokens=10_000, output_tokens=2_000)
 
         _, usage = self.client.generate_summary(self.target, "gh", "sess")
@@ -152,7 +147,7 @@ class TestGenerateSummary:
             10_000 * rates["input_usd_per_1m_tokens"]
             + 2_000 * rates["output_usd_per_1m_tokens"]
         ) / 1_000_000
-        assert isinstance(usage, SummaryUsage)
+        assert isinstance(usage, summary.SummaryUsage)
         assert usage.input_tokens == 10_000
         assert usage.output_tokens == 2_000
         assert usage.spend_usd == pytest.approx(expected_spend)
@@ -161,12 +156,12 @@ class TestGenerateSummary:
         text_block = MagicMock(type="text")
         self._set_response([text_block])
 
-        with pytest.raises(ValueError, match=TOOL_NAME):
+        with pytest.raises(ValueError, match=summarizer_client.TOOL_NAME):
             self.client.generate_summary(self.target, "gh", "sess")
 
     def _set_tool_use_input(self, payload):
         tool_use = MagicMock(type="tool_use", input=payload)
-        tool_use.name = TOOL_NAME
+        tool_use.name = summarizer_client.TOOL_NAME
         self._set_response([tool_use])
 
     def test_raises_when_repositories_field_missing(self):
@@ -204,7 +199,7 @@ class TestGenerateSummary:
         assert "got=int" in str(exc.value)
 
     def test_truncates_long_instance_value_in_error_message(self):
-        long_value = "x" * (_VALUE_REPR_LIMIT * 2)
+        long_value = "x" * (summarizer_client._VALUE_REPR_LIMIT * 2)
         self._set_tool_use_input({"repositories": long_value})
 
         with pytest.raises(ValueError) as exc:
@@ -213,7 +208,7 @@ class TestGenerateSummary:
         summary_line = str(exc.value).split("\n", 1)[0]
         assert summary_line.endswith("...")
         value_portion = summary_line.split("value=", 1)[1]
-        assert len(value_portion) <= _VALUE_REPR_LIMIT + len("...")
+        assert len(value_portion) <= summarizer_client._VALUE_REPR_LIMIT + len("...")
 
 
 class TestValidationResult:

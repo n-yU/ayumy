@@ -5,7 +5,7 @@ from datetime import datetime
 
 import pytest
 
-from report.domain.activity import CommitInfo, GitHubActivity, IssueInfo, PullInfo
+from report.domain import activity
 from report.shared.dates import JST
 
 from .._builders import (
@@ -46,7 +46,7 @@ def _commit(**overrides):
         "url": "https://github.com/n-yU/my-repo/commit/abc1234deadbeef",
     }
     base.update(overrides)
-    return CommitInfo(**base)
+    return activity.CommitInfo(**base)
 
 
 def _pull(**overrides):
@@ -64,7 +64,7 @@ def _pull(**overrides):
         "merge_commit_sha": "deadbeef",
     }
     base.update(overrides)
-    return PullInfo(**base)
+    return activity.PullInfo(**base)
 
 
 def _issue(**overrides):
@@ -80,7 +80,7 @@ def _issue(**overrides):
         "state_reason": None,
     }
     base.update(overrides)
-    return IssueInfo(**base)
+    return activity.IssueInfo(**base)
 
 
 def _make_pr_mock(
@@ -128,7 +128,7 @@ class TestCommitInfo:
             date=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
         )
 
-        info = CommitInfo.from_search_commit(commit, pull_numbers=[42, 43])
+        info = activity.CommitInfo.from_search_commit(commit, pull_numbers=[42, 43])
 
         assert info.sha == "deadbeef"
         assert info.message == "Subject line"
@@ -138,7 +138,7 @@ class TestCommitInfo:
         assert info.pull_numbers == (42, 43)
 
     def test_from_search_commit_defaults_pull_numbers_to_empty(self):
-        info = CommitInfo.from_search_commit(make_commit_mock())
+        info = activity.CommitInfo.from_search_commit(make_commit_mock())
 
         assert info.pull_numbers == ()
 
@@ -222,7 +222,7 @@ class TestPullInfo:
 
     def test_from_pull_request_classifies_merged(self):
         pr = _make_pr_mock(merged_at_dt=datetime(2026, 3, 28, 10, 0, tzinfo=JST))
-        info = PullInfo.from_pull_request(pr)
+        info = activity.PullInfo.from_pull_request(pr)
         assert info.state == "merged"
         assert info.merged_at == "2026-03-28T10:00:00+09:00"
         assert info.merge_commit_sha == "merge-sha"
@@ -232,7 +232,7 @@ class TestPullInfo:
             pr_state="closed",
             closed_at_dt=datetime(2026, 3, 28, 10, 0, tzinfo=JST),
         )
-        info = PullInfo.from_pull_request(pr)
+        info = activity.PullInfo.from_pull_request(pr)
         assert info.state == "closed"
         assert info.merged_at is None
         # Unmerged: ignore the test-merge SHA returned by GitHub
@@ -240,7 +240,7 @@ class TestPullInfo:
 
     def test_from_pull_request_classifies_open(self):
         pr = _make_pr_mock(pr_state="open")
-        info = PullInfo.from_pull_request(pr)
+        info = activity.PullInfo.from_pull_request(pr)
         assert info.state == "open"
         assert info.merged_at is None
         assert info.closed_at is None
@@ -248,7 +248,7 @@ class TestPullInfo:
 
     def test_from_pull_request_extracts_labels_as_tuple(self):
         pr = _make_pr_mock(label_names=("bug", "ready"))
-        info = PullInfo.from_pull_request(pr)
+        info = activity.PullInfo.from_pull_request(pr)
         assert info.labels == ("bug", "ready")
 
 
@@ -313,7 +313,7 @@ class TestIssueInfo:
     def test_from_issue_extracts_labels_as_tuple(self):
         issue = make_issue_mock(7, labels=("bug", "priority:high"))
 
-        info = IssueInfo.from_issue(issue)
+        info = activity.IssueInfo.from_issue(issue)
 
         assert info.labels == ("bug", "priority:high")
         assert info.closed_at is None
@@ -326,7 +326,7 @@ class TestIssueInfo:
             state_reason="not_planned",
         )
 
-        info = IssueInfo.from_issue(issue)
+        info = activity.IssueInfo.from_issue(issue)
 
         assert info.closed_at == "2026-03-28T11:00:00+09:00"
         assert info.state_reason == "not_planned"
@@ -334,9 +334,9 @@ class TestIssueInfo:
 
 class TestGitHubActivityFormat:
     def test_empty_activity(self):
-        activity = GitHubActivity({})
+        github_activity = activity.GitHubActivity({})
         assert (
-            activity.format(SINCE, UNTIL)
+            github_activity.format(SINCE, UNTIL)
             == "# GitHub アクティビティ\nアクティビティなし"
         )
 
@@ -360,7 +360,7 @@ class TestGitHubActivityFormat:
                 ],
             },
         }
-        result = GitHubActivity(data).format(SINCE, UNTIL)
+        result = activity.GitHubActivity(data).format(SINCE, UNTIL)
         assert "## my-repo" in result
         assert "- Fix bug" in result
         assert "- [merged] #1 Add feature (enhancement)" in result
@@ -379,7 +379,7 @@ class TestGitHubActivityFormat:
                 "issues": [],
             },
         }
-        result = GitHubActivity(data).format(SINCE, UNTIL)
+        result = activity.GitHubActivity(data).format(SINCE, UNTIL)
         assert result.index("a-repo") < result.index("z-repo")
 
     def test_omits_items_completed_before_window(self):
@@ -400,7 +400,7 @@ class TestGitHubActivityFormat:
                 ],
             },
         }
-        result = GitHubActivity(data).format(SINCE, UNTIL)
+        result = activity.GitHubActivity(data).format(SINCE, UNTIL)
         assert result == "# GitHub アクティビティ\nアクティビティなし"
 
     def test_reports_items_completed_after_window_as_open(self):
@@ -419,16 +419,18 @@ class TestGitHubActivityFormat:
                 ],
             },
         }
-        result = GitHubActivity(data).format(SINCE, UNTIL)
+        result = activity.GitHubActivity(data).format(SINCE, UNTIL)
         assert "- [open] #1 Merged" in result
         assert "- [open] #2 Closed" in result
 
     def test_bool_and_contains(self):
-        activity = GitHubActivity({"repo": {"commits": [], "pulls": [], "issues": []}})
-        assert bool(activity)
-        assert "repo" in activity
-        assert "other" not in activity
-        assert not bool(GitHubActivity({}))
+        github_activity = activity.GitHubActivity(
+            {"repo": {"commits": [], "pulls": [], "issues": []}}
+        )
+        assert bool(github_activity)
+        assert "repo" in github_activity
+        assert "other" not in github_activity
+        assert not bool(activity.GitHubActivity({}))
 
 
 class TestMergeSessionCommits:
@@ -436,30 +438,30 @@ class TestMergeSessionCommits:
         pass
 
     def test_does_nothing_when_no_session_commits(self):
-        activity = GitHubActivity({})
-        activity.merge_session_commits(
+        github_activity = activity.GitHubActivity({})
+        github_activity.merge_session_commits(
             "my-repo",
             [_session(session_commits=[])],
             owner=OWNER,
             populate_pull_numbers=self._populate_no_op,
         )
-        assert activity.repos() == {}
+        assert github_activity.repos() == {}
 
     def test_adds_new_repo_when_missing(self):
-        activity = GitHubActivity({})
-        calls: list[tuple[str, list[CommitInfo]]] = []
+        github_activity = activity.GitHubActivity({})
+        calls: list[tuple[str, list[activity.CommitInfo]]] = []
 
         def populate(repo_name, commits):
             calls.append((repo_name, list(commits)))
 
-        activity.merge_session_commits(
+        github_activity.merge_session_commits(
             "my-repo",
             [_session(session_commits=[{"sha": "abc1234", "message": "Fix login"}])],
             owner=OWNER,
             populate_pull_numbers=populate,
         )
 
-        repo = activity.repos()["my-repo"]
+        repo = github_activity.repos()["my-repo"]
         assert len(repo["commits"]) == 1
         assert repo["commits"][0].sha == "abc1234"
         assert repo["commits"][0].message == "Fix login"
@@ -473,56 +475,56 @@ class TestMergeSessionCommits:
         assert len(calls) == 1 and calls[0][0] == "my-repo"
 
     def test_extends_existing_repo_with_new_commits(self):
-        existing = CommitInfo(
+        existing = activity.CommitInfo(
             sha="aaa1111",
             message="Existing",
             author="user",
             date="2026-03-28T09:00:00+09:00",
             url=f"https://github.com/{OWNER}/my-repo/commit/aaa1111",
         )
-        activity = GitHubActivity(
+        github_activity = activity.GitHubActivity(
             {"my-repo": {"commits": [existing], "pulls": [], "issues": []}}
         )
-        activity.merge_session_commits(
+        github_activity.merge_session_commits(
             "my-repo",
             [_session(session_commits=[{"sha": "bbb2222", "message": "New"}])],
             owner=OWNER,
             populate_pull_numbers=self._populate_no_op,
         )
-        commits = activity.repos()["my-repo"]["commits"]
+        commits = github_activity.repos()["my-repo"]["commits"]
         assert [c.sha for c in commits] == ["aaa1111", "bbb2222"]
 
     def test_drops_session_commit_already_covered_by_search(self):
         # GitHub search returns the full 40-char SHA; the session captures only the short prefix
         full_sha = "abc1234abcdef1234abcdef1234abcdef12345678"
-        existing = CommitInfo(
+        existing = activity.CommitInfo(
             sha=full_sha,
             message="Existing",
             author="user",
             date="2026-03-28T09:00:00+09:00",
             url=f"https://github.com/{OWNER}/my-repo/commit/{full_sha}",
         )
-        activity = GitHubActivity(
+        github_activity = activity.GitHubActivity(
             {"my-repo": {"commits": [existing], "pulls": [], "issues": []}}
         )
-        populate_calls: list[tuple[str, list[CommitInfo]]] = []
+        populate_calls: list[tuple[str, list[activity.CommitInfo]]] = []
 
         def populate(repo_name, commits):
             populate_calls.append((repo_name, list(commits)))
 
-        activity.merge_session_commits(
+        github_activity.merge_session_commits(
             "my-repo",
             [_session(session_commits=[{"sha": "abc1234", "message": "Same commit"}])],
             owner=OWNER,
             populate_pull_numbers=populate,
         )
-        commits = activity.repos()["my-repo"]["commits"]
+        commits = github_activity.repos()["my-repo"]["commits"]
         assert [c.sha for c in commits] == [full_sha]
         # populate must not be invoked when nothing is actually injected
         assert populate_calls == []
 
     def test_deduplicates_session_commits_across_sessions(self):
-        activity = GitHubActivity({})
+        github_activity = activity.GitHubActivity({})
         sessions = [
             _session(
                 start="2026-03-28T10:00:00+09:00",
@@ -545,21 +547,21 @@ class TestMergeSessionCommits:
                 ],
             ),
         ]
-        activity.merge_session_commits(
+        github_activity.merge_session_commits(
             "my-repo",
             sessions,
             owner=OWNER,
             populate_pull_numbers=self._populate_no_op,
         )
-        commits = activity.repos()["my-repo"]["commits"]
+        commits = github_activity.repos()["my-repo"]["commits"]
         assert len(commits) == 1
         # First-occurrence wins; the second session's duplicate is dropped entirely
         assert commits[0].message == "First"
         assert commits[0].date == "2026-03-28T10:30:00+09:00"
 
     def test_uses_per_commit_timestamp_when_present(self):
-        activity = GitHubActivity({})
-        activity.merge_session_commits(
+        github_activity = activity.GitHubActivity({})
+        github_activity.merge_session_commits(
             "my-repo",
             [
                 _session(
@@ -577,7 +579,7 @@ class TestMergeSessionCommits:
             owner=OWNER,
             populate_pull_numbers=self._populate_no_op,
         )
-        commits = activity.repos()["my-repo"]["commits"]
+        commits = github_activity.repos()["my-repo"]["commits"]
         # Per-commit timestamp wins; legacy entry falls back to the session start_time
         by_sha = {c.sha: c for c in commits}
         assert by_sha["aaa"].date == "2026-03-28T10:45:00+09:00"

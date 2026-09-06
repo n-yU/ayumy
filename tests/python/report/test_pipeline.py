@@ -9,10 +9,9 @@ import botocore.exceptions
 import pytest
 
 from config import CONFIG
-from report.domain.activity import GitHubActivity
+from report import pipeline
+from report.domain import activity, summary
 from report.domain.session import SessionActivity
-from report.domain.summary import SummaryUsage
-from report.pipeline import process_date, run
 from report.shared.dates import JST
 from report.summarizer import ValidationResult
 
@@ -28,15 +27,15 @@ from ._builders import (
     make_session_entry,
 )
 
-_STUB_USAGE = SummaryUsage(input_tokens=0, output_tokens=0, spend_usd=0.0)
+_STUB_USAGE = summary.SummaryUsage(input_tokens=0, output_tokens=0, spend_usd=0.0)
 
 
-def _repo(name, summary=("work",), tags=()):
-    return {"name": name, "summary": list(summary), "tags": list(tags)}
+def _repo(name, summary_lines=("work",), tags=()):
+    return {"name": name, "summary": list(summary_lines), "tags": list(tags)}
 
 
-def _stub_fetch_activity(clients, activity):
-    clients["github_client"].fetch_activity.return_value = activity
+def _stub_fetch_activity(clients, github_activity):
+    clients["github_client"].fetch_activity.return_value = github_activity
 
 
 def _stub_summary(clients, repos, *, usage=_STUB_USAGE, pages=()):
@@ -70,7 +69,7 @@ def _arrange_report_with_invalid_tags(clients):
 
 def _arrange_no_activity(clients):
     """Drive the paths that skip the summary; whether they end in the no-activity or session-only notification depends on the sessions passed in."""
-    _stub_fetch_activity(clients, GitHubActivity({}))
+    _stub_fetch_activity(clients, activity.GitHubActivity({}))
 
 
 def _fail_on_nth_fetch(store, n, message):
@@ -89,8 +88,8 @@ def _fail_on_nth_fetch(store, n, message):
 
 class TestProcessDate:
     def test_skips_when_no_activity(self, pipeline_clients):
-        _stub_fetch_activity(pipeline_clients, GitHubActivity({}))
-        process_date(SINCE, UNTIL, SessionActivity({}), **pipeline_clients)
+        _stub_fetch_activity(pipeline_clients, activity.GitHubActivity({}))
+        pipeline.process_date(SINCE, UNTIL, SessionActivity({}), **pipeline_clients)
 
         assert_skipped(pipeline_clients, SINCE)
 
@@ -103,7 +102,7 @@ class TestProcessDate:
             [_repo("my-repo")],
             pages=[("my-repo", "https://notion.so/page1")],
         )
-        process_date(SINCE, UNTIL, make_session("my-repo"), **pipeline_clients)
+        pipeline.process_date(SINCE, UNTIL, make_session("my-repo"), **pipeline_clients)
 
         assert_published(pipeline_clients)
         # Verify the (target_date, SINCE, UNTIL) trio is passed in order
@@ -117,9 +116,11 @@ class TestProcessDate:
         _stub_summary(
             pipeline_clients,
             [_repo("my-repo")],
-            usage=SummaryUsage(input_tokens=1000, output_tokens=200, spend_usd=0.012),
+            usage=summary.SummaryUsage(
+                input_tokens=1000, output_tokens=200, spend_usd=0.012
+            ),
         )
-        process_date(SINCE, UNTIL, make_session("my-repo"), **pipeline_clients)
+        pipeline.process_date(SINCE, UNTIL, make_session("my-repo"), **pipeline_clients)
 
         start = pipeline_clients["cost_store"].start_record
         start.assert_called_once()
@@ -132,11 +133,13 @@ class TestProcessDate:
             pipeline_clients,
             make_github("repo", commits=[make_commit(sha="abc", repo="repo")]),
         )
-        _stub_summary(pipeline_clients, [_repo("repo", summary=(), tags=("BadTag",))])
+        _stub_summary(
+            pipeline_clients, [_repo("repo", summary_lines=(), tags=("BadTag",))]
+        )
         invalid = ValidationResult()
         invalid.invalid_tags = {"repo": ["BadTag"]}
         pipeline_clients["summary_client"].validate_report.return_value = invalid
-        process_date(SINCE, UNTIL, make_session("repo"), **pipeline_clients)
+        pipeline.process_date(SINCE, UNTIL, make_session("repo"), **pipeline_clients)
 
         pipeline_clients["slack_client"].notify_validation_errors.assert_called_once()
 
@@ -173,7 +176,9 @@ class TestProcessDate:
         self, pipeline_clients, arrange, session, notification
     ):
         arrange(pipeline_clients)
-        process_date(SINCE, UNTIL, session(), **pipeline_clients, is_backfill=True)
+        pipeline.process_date(
+            SINCE, UNTIL, session(), **pipeline_clients, is_backfill=True
+        )
 
         notify = getattr(pipeline_clients["slack_client"], notification)
         assert notify.call_args.kwargs["is_backfill"] is True
@@ -187,7 +192,7 @@ class TestProcessDate:
             tools=("Bash",),
             session_commits=[{"sha": "a1b2c3d", "message": "Fix login bug"}],
         )
-        process_date(SINCE, UNTIL, session, **pipeline_clients)
+        pipeline.process_date(SINCE, UNTIL, session, **pipeline_clients)
 
         # End-to-end: the session commit reaches the activity that flows to Notion
         notion_args = pipeline_clients["notion_client"].create_report_pages.call_args[0]
@@ -205,8 +210,8 @@ class TestProcessDate:
         assert [c.sha for c in args[1]] == ["a1b2c3d"]
 
     def test_all_session_only_skips_summary(self, pipeline_clients):
-        _stub_fetch_activity(pipeline_clients, GitHubActivity({}))
-        process_date(SINCE, UNTIL, make_session("repo-a"), **pipeline_clients)
+        _stub_fetch_activity(pipeline_clients, activity.GitHubActivity({}))
+        pipeline.process_date(SINCE, UNTIL, make_session("repo-a"), **pipeline_clients)
 
         pipeline_clients["summary_client"].generate_summary.assert_not_called()
         pipeline_clients["cost_store"].start_record.assert_not_called()
@@ -247,7 +252,7 @@ class TestProcessDate:
             [_repo("repo-a")],
             pages=[("repo-a", "https://notion.so/a")],
         )
-        process_date(SINCE, UNTIL, session, **pipeline_clients)
+        pipeline.process_date(SINCE, UNTIL, session, **pipeline_clients)
 
         summary_args = pipeline_clients["summary_client"].generate_summary.call_args[0]
         formatted_sessions = summary_args[2]
@@ -281,8 +286,10 @@ class TestProcessDate:
                 ),
             ],
         )
-        _stub_fetch_activity(pipeline_clients, GitHubActivity({}))
-        process_date(SINCE, UNTIL, session, **pipeline_clients, is_backfill=True)
+        _stub_fetch_activity(pipeline_clients, activity.GitHubActivity({}))
+        pipeline.process_date(
+            SINCE, UNTIL, session, **pipeline_clients, is_backfill=True
+        )
 
         kwargs = pipeline_clients["github_client"].fetch_activity.call_args.kwargs
         assert kwargs["is_backfill"] is True
@@ -297,8 +304,8 @@ class TestProcessDate:
             session_pulls=[10],
             session_issues=[20],
         )
-        _stub_fetch_activity(pipeline_clients, GitHubActivity({}))
-        process_date(SINCE, UNTIL, session, **pipeline_clients)
+        _stub_fetch_activity(pipeline_clients, activity.GitHubActivity({}))
+        pipeline.process_date(SINCE, UNTIL, session, **pipeline_clients)
 
         kwargs = pipeline_clients["github_client"].fetch_activity.call_args.kwargs
         assert kwargs["session_pulls"] == {}
@@ -334,7 +341,7 @@ class TestRun:
             mocks["SessionClient"].return_value.delete_sessions.return_value = 0
             mocks[
                 "GitHubClient"
-            ].return_value.fetch_activity.return_value = GitHubActivity({})
+            ].return_value.fetch_activity.return_value = activity.GitHubActivity({})
             yield mocks
 
     @pytest.fixture
@@ -346,7 +353,7 @@ class TestRun:
         return run_patches["SessionStore"].return_value
 
     def test_processes_primary_date(self, session_store, slack_client):
-        run(source=None)
+        pipeline.run(source=None)
 
         session_store.scan_backfill_dates.assert_called_once()
         session_store.fetch_sessions.assert_called_once_with("2026-03-28")
@@ -366,12 +373,12 @@ class TestRun:
         ],
     )
     def test_marks_manual_runs_for_slack(self, run_patches, source, expected):
-        run(source=source)
+        pipeline.run(source=source)
 
         assert run_patches["SlackClient"].call_args.kwargs["is_manual"] is expected
 
     def test_passes_memory_limit_to_metrics(self, slack_client):
-        run(source=None, memory_limit_mb=512)
+        pipeline.run(source=None, memory_limit_mb=512)
 
         slack_client.notify_metrics.assert_called_once()
         assert slack_client.notify_metrics.call_args.kwargs["memory_limit_mb"] == 512
@@ -382,7 +389,7 @@ class TestRun:
         self, mock_get_version, slack_client
     ):
         mock_get_version.return_value = "0.2.1"
-        run(source=None, memory_limit_mb=512, timeout_seconds=300)
+        pipeline.run(source=None, memory_limit_mb=512, timeout_seconds=300)
 
         slack_client.notify_metrics.assert_called_once()
         call = slack_client.notify_metrics.call_args
@@ -394,7 +401,7 @@ class TestRun:
     def test_omits_cost_when_compute_display_fails(self, run_patches, slack_client):
         cost_store = run_patches["CostStore"].return_value
         cost_store.compute_display.side_effect = RuntimeError("dynamodb down")
-        run(source=None)
+        pipeline.run(source=None)
 
         slack_client.notify_metrics.assert_called_once()
         assert slack_client.notify_metrics.call_args.kwargs["cost_display"] is None
@@ -404,7 +411,7 @@ class TestRun:
     def test_survives_cost_store_init_failure(self, run_patches, slack_client):
         run_patches["CostStore"].side_effect = RuntimeError("no env")
         with pytest.raises(RuntimeError):
-            run(source=None)
+            pipeline.run(source=None)
 
         # Main-flow error still reaches Slack, and the metrics chain runs with no cost display
         slack_client.notify_error.assert_called_once()
@@ -417,7 +424,7 @@ class TestRun:
             date(2026, 3, 26),
             date(2026, 3, 27),
         ]
-        run(source=None)
+        pipeline.run(source=None)
 
         # 2 backfill dates + 1 primary = 3 calls
         assert session_store.fetch_sessions.call_count == 3
@@ -431,7 +438,7 @@ class TestRun:
             date(2026, 3, 26),
             date(2026, 3, 27),
         ]
-        run(source=None)
+        pipeline.run(source=None)
 
         assert (
             session_store.fetch_sessions.call_count == CONFIG.pipeline.max_backfill + 1
@@ -443,7 +450,7 @@ class TestRun:
             caplog.at_level(logging.ERROR, logger="report.pipeline"),
             pytest.raises(RuntimeError, match="DynamoDB error"),
         ):
-            run(source=None)
+            pipeline.run(source=None)
 
         slack_client.notify_error.assert_called_once()
         # Metrics should still be sent on failure (finally block)
@@ -459,7 +466,7 @@ class TestRun:
     def test_backfill_failure_does_not_stop_primary(self, session_store, slack_client):
         session_store.scan_backfill_dates.return_value = [date(2026, 3, 27)]
         _fail_on_nth_fetch(session_store, 1, "backfill error")
-        run(source=None)
+        pipeline.run(source=None)
 
         # Backfill failure logged as warning (no notify_error), primary still processed
         assert session_store.fetch_sessions.call_count == 2
@@ -468,7 +475,7 @@ class TestRun:
     def test_ingestion_failure_aborts_run(self, session_store, slack_client):
         session_store.ingest.side_effect = RuntimeError("DynamoDB error")
         with pytest.raises(RuntimeError, match="DynamoDB error"):
-            run(source=None)
+            pipeline.run(source=None)
 
         # Ingestion failure surfaces to the final fallback and Slack notification
         slack_client.notify_error.assert_called_once()
@@ -480,7 +487,7 @@ class TestRun:
     ):
         session_store.ingest.side_effect = RuntimeError("DynamoDB error")
         with pytest.raises(RuntimeError, match="DynamoDB error"):
-            run(source="manual", target_date="2026-03-25")
+            pipeline.run(source="manual", target_date="2026-03-25")
 
         assert slack_client.notify_error.call_args.kwargs["is_backfill"] is True
 
@@ -490,7 +497,7 @@ class TestRun:
         _stub_date_range(run_patches, 25)
         _fail_on_nth_fetch(session_store, 2, "middle day failure")
         with caplog.at_level(logging.WARNING, logger="report.pipeline"):
-            run(source="manual", target_date="2026-03-25..2026-03-27")
+            pipeline.run(source="manual", target_date="2026-03-25..2026-03-27")
 
         # All 3 dates attempted, failed day logged as warning, no Slack error notify
         assert session_store.fetch_sessions.call_count == 3
@@ -507,7 +514,7 @@ class TestRun:
             {"Error": {"Code": "AccessDenied", "Message": "denied"}}, "DeleteObjects"
         )
         with caplog.at_level(logging.WARNING, logger="report.pipeline"):
-            run(source=None)
+            pipeline.run(source=None)
 
         warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
         assert any("S3 deletion failed" in r.getMessage() for r in warnings)
@@ -515,13 +522,13 @@ class TestRun:
         session_store.scan_backfill_dates.assert_called_once()
 
     def test_marks_reported_after_success(self, session_store):
-        run(source=None)
+        pipeline.run(source=None)
 
         session_store.mark_reported.assert_called_once_with("2026-03-28")
 
     def test_passes_target_date_to_date_range(self, run_patches):
         _stub_date_range(run_patches, 25)
-        run(source="manual", target_date="2026-03-25")
+        pipeline.run(source="manual", target_date="2026-03-25")
 
         run_patches["get_target_date_range"].assert_called_once_with(
             "manual", target_date="2026-03-25"
@@ -531,7 +538,7 @@ class TestRun:
         session_store.ingest.return_value = ["claude-sessions/proj/s1.jsonl"]
         session_client = run_patches["SessionClient"].return_value
         session_client.delete_sessions.return_value = 1
-        run(source=None)
+        pipeline.run(source=None)
 
         session_client.delete_sessions.assert_called_once_with(
             ["claude-sessions/proj/s1.jsonl"],
@@ -542,7 +549,7 @@ class TestRun:
         """Manual run without --date passes get_target_date_range's partial_until (not full-day)."""
         partial_until = datetime(2026, 3, 28, 15, 30, tzinfo=JST)
         run_patches["get_target_date_range"].return_value = (SINCE, partial_until)
-        run(source="manual")
+        pipeline.run(source="manual")
 
         mock_process_date.assert_called_once()
         call_args = mock_process_date.call_args
@@ -551,14 +558,14 @@ class TestRun:
 
     def test_target_date_skips_backfill(self, run_patches, session_store):
         _stub_date_range(run_patches, 25)
-        run(source="manual", target_date="2026-03-25")
+        pipeline.run(source="manual", target_date="2026-03-25")
 
         session_store.scan_backfill_dates.assert_not_called()
         session_store.fetch_sessions.assert_called_once_with("2026-03-25")
 
     def test_date_range_processes_all_dates(self, run_patches, session_store):
         _stub_date_range(run_patches, 25)
-        run(source="manual", target_date="2026-03-25..2026-03-28")
+        pipeline.run(source="manual", target_date="2026-03-25..2026-03-28")
 
         session_store.scan_backfill_dates.assert_not_called()
         assert [
@@ -569,7 +576,7 @@ class TestRun:
         """An explicit target_date takes the Hybrid path (is_backfill=True)."""
         _stub_date_range(run_patches, 25)
         github_client = run_patches["GitHubClient"].return_value
-        run(source="manual", target_date="2026-03-25")
+        pipeline.run(source="manual", target_date="2026-03-25")
 
         for call in github_client.fetch_activity.call_args_list:
             assert call.kwargs.get("is_backfill") is True
@@ -583,7 +590,7 @@ class TestRun:
             date(2026, 3, 27),
         ]
         github_client = run_patches["GitHubClient"].return_value
-        run(source=None)
+        pipeline.run(source=None)
 
         flags = [
             (call.args[0], call.kwargs.get("is_backfill"))
