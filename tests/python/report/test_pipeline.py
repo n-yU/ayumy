@@ -70,14 +70,11 @@ def _assert_published(clients):
     clients["slack_client"].notify_validation_errors.assert_not_called()
 
 
-def _assert_skipped(clients, since):
+def _assert_skipped(clients):
     clients["summary_client"].generate_summary.assert_not_called()
     clients["notion_client"].create_report_pages.assert_not_called()
     clients["slack_client"].notify.assert_not_called()
     clients["slack_client"].notify_validation_errors.assert_not_called()
-    clients["slack_client"].notify_no_activity.assert_called_once_with(
-        since, is_backfill=False
-    )
 
 
 def _fail_on_nth_fetch(store, n, message):
@@ -95,13 +92,49 @@ def _fail_on_nth_fetch(store, n, message):
 
 
 class TestProcessDate:
-    def test_skips_when_no_activity(self, pipeline_clients):
+    def test_skips_when_no_activity(self, pipeline_clients, notify_flags):
         _stub_fetch_activity(pipeline_clients, activity.GitHubActivity({}))
-        pipeline.process_date(
-            _builders.SINCE, _builders.UNTIL, SessionActivity({}), **pipeline_clients
+        with notify_flags(no_activity=True):
+            pipeline.process_date(
+                _builders.SINCE,
+                _builders.UNTIL,
+                SessionActivity({}),
+                **pipeline_clients,
+            )
+
+        _assert_skipped(pipeline_clients)
+        pipeline_clients["slack_client"].notify_no_activity.assert_called_once_with(
+            _builders.SINCE, is_backfill=False
         )
 
-        _assert_skipped(pipeline_clients, _builders.SINCE)
+    @pytest.mark.parametrize(
+        "flag,session,notification",
+        [
+            pytest.param(
+                "no_activity",
+                lambda: SessionActivity({}),
+                "notify_no_activity",
+                id="no-activity",
+            ),
+            pytest.param(
+                "session_only",
+                lambda: _builders.session("repo-a"),
+                "notify_session_only",
+                id="session-only",
+            ),
+        ],
+    )
+    def test_suppresses_notification_when_disabled(
+        self, pipeline_clients, notify_flags, flag, session, notification
+    ):
+        _stub_fetch_activity(pipeline_clients, activity.GitHubActivity({}))
+        with notify_flags(**{flag: False}):
+            pipeline.process_date(
+                _builders.SINCE, _builders.UNTIL, session(), **pipeline_clients
+            )
+
+        _assert_skipped(pipeline_clients)
+        getattr(pipeline_clients["slack_client"], notification).assert_not_called()
 
     def test_generates_report_and_publishes(self, pipeline_clients):
         _stub_fetch_activity(
@@ -200,16 +233,17 @@ class TestProcessDate:
         ],
     )
     def test_forwards_backfill_flag_to_slack(
-        self, pipeline_clients, arrange, session, notification
+        self, pipeline_clients, notify_flags, arrange, session, notification
     ):
         arrange(pipeline_clients)
-        pipeline.process_date(
-            _builders.SINCE,
-            _builders.UNTIL,
-            session(),
-            **pipeline_clients,
-            is_backfill=True,
-        )
+        with notify_flags(no_activity=True, session_only=True):
+            pipeline.process_date(
+                _builders.SINCE,
+                _builders.UNTIL,
+                session(),
+                **pipeline_clients,
+                is_backfill=True,
+            )
 
         notify = getattr(pipeline_clients["slack_client"], notification)
         assert notify.call_args.kwargs["is_backfill"] is True
@@ -245,14 +279,15 @@ class TestProcessDate:
         assert args[0] == "my-repo"
         assert [c.sha for c in args[1]] == ["a1b2c3d"]
 
-    def test_all_session_only_skips_summary(self, pipeline_clients):
+    def test_all_session_only_skips_summary(self, pipeline_clients, notify_flags):
         _stub_fetch_activity(pipeline_clients, activity.GitHubActivity({}))
-        pipeline.process_date(
-            _builders.SINCE,
-            _builders.UNTIL,
-            _builders.session("repo-a"),
-            **pipeline_clients,
-        )
+        with notify_flags(session_only=True):
+            pipeline.process_date(
+                _builders.SINCE,
+                _builders.UNTIL,
+                _builders.session("repo-a"),
+                **pipeline_clients,
+            )
 
         pipeline_clients["summary_client"].generate_summary.assert_not_called()
         pipeline_clients["cost_store"].start_record.assert_not_called()

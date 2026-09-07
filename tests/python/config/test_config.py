@@ -20,6 +20,7 @@ class TestConfigShape:
     def test_all_sections_are_populated(self):
         assert isinstance(CONFIG.claude, config.ClaudeConfig)
         assert isinstance(CONFIG.slack, config.SlackConfig)
+        assert isinstance(CONFIG.slack.notify, config.SlackNotify)
         assert isinstance(CONFIG.github, config.GitHubConfig)
         assert isinstance(CONFIG.pipeline, config.PipelineConfig)
         assert isinstance(CONFIG.notion, config.NotionConfig)
@@ -46,6 +47,10 @@ class TestConfigValues:
         assert CONFIG.github.search_window_sec > 0
         assert CONFIG.pipeline.max_backfill > 0
         assert CONFIG.pipeline.max_range_days > 0
+
+    def test_notification_switches_are_booleans(self):
+        assert isinstance(CONFIG.slack.notify.no_activity, bool)
+        assert isinstance(CONFIG.slack.notify.session_only, bool)
 
     def test_active_model_has_pricing_entry(self):
         assert CONFIG.claude.model in CONFIG.claude.pricing

@@ -70,7 +70,8 @@ def process_date(
 
     if not session_activity and not github_activity:
         logger.info("No activity, skipping")
-        slack_client.notify_no_activity(since, is_backfill=is_backfill)
+        if CONFIG.slack.notify.no_activity:
+            slack_client.notify_no_activity(since, is_backfill=is_backfill)
         return
 
     session_only_repos = sorted(
@@ -87,9 +88,10 @@ def process_date(
             "All repos are session-only, skipping Claude summary: %s",
             session_only_repos,
         )
-        slack_client.notify_session_only(
-            since, session_only_repos, is_backfill=is_backfill
-        )
+        if CONFIG.slack.notify.session_only:
+            slack_client.notify_session_only(
+                since, session_only_repos, is_backfill=is_backfill
+            )
         return
 
     report, usage = summary_client.generate_summary(

@@ -1,13 +1,29 @@
 """Shared fixtures for tests/report/."""
 
-from unittest.mock import MagicMock
+from dataclasses import replace
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from report import summarizer
+from config import CONFIG
+from report import pipeline, summarizer
 from report.domain import summary
 
 from . import _builders
+
+
+@pytest.fixture
+def notify_flags():
+    """Override the notification switches the pipeline reads.
+
+    The config singleton is frozen, so a switch can only be changed by rebinding a rebuilt copy on the module holding the reference.
+    """
+
+    def _override(**flags):
+        slack = replace(CONFIG.slack, notify=replace(CONFIG.slack.notify, **flags))
+        return patch.object(pipeline, "CONFIG", replace(CONFIG, slack=slack))
+
+    return _override
 
 
 @pytest.fixture
