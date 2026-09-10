@@ -89,7 +89,10 @@ class TestLoader:
                     },
                 },
             },
-            "slack": {"headline_max": 1},
+            "slack": {
+                "headline_max": 1,
+                "notify": {"no_activity": False, "session_only": True},
+            },
             "github": {"search_batch": 1, "search_window_sec": 1},
             "pipeline": {"max_backfill": 1, "max_range_days": 1},
         }
@@ -108,3 +111,10 @@ class TestLoader:
         stub["notion"]["repository_icons"] = None
         with patch("config.config.yaml.safe_load", return_value=stub):
             assert config._load().notion.repository_icons == {}
+
+    def test_load_raises_when_notification_switches_are_missing(self):
+        stub = yaml.safe_load(TEMPLATE_PATH.read_text(encoding="utf-8"))
+        del stub["slack"]["notify"]
+        with patch("config.config.yaml.safe_load", return_value=stub):
+            with pytest.raises(KeyError, match="notify"):
+                config._load()
