@@ -428,6 +428,7 @@ class TestRun:
             store.scan_backfill_dates.return_value = []
             store.fetch_sessions.return_value = SessionActivity({})
             mocks["session_client"].return_value.delete_sessions.return_value = 0
+            mocks["slack_client"].return_value.has_pending.return_value = True
             mocks[
                 "github_client"
             ].return_value.fetch_activity.return_value = activity.GitHubActivity({})
@@ -453,6 +454,14 @@ class TestRun:
         assert peak_mb >= 0
         assert args.kwargs.get("memory_limit_mb") is None
         slack_client.flush.assert_called_once()
+
+    def test_skips_metrics_when_no_report_queued(self, slack_client):
+        slack_client.has_pending.return_value = False
+        pipeline.run(source=None)
+
+        slack_client.notify_metrics.assert_not_called()
+        slack_client.flush.assert_called_once()
+        slack_client.send_notice_thread.assert_called_once()
 
     @pytest.mark.parametrize(
         "source,expected",

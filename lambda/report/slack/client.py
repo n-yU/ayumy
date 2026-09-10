@@ -226,6 +226,9 @@ class Client:
 
         self._append_group([context_block("  |  ".join(parts))], fallback)
 
+    def has_pending(self) -> bool:
+        return bool(self._groups)
+
     def flush(self) -> None:
         for blocks, fallback in _pack_messages(self._groups, self._fallback_parts):
             self._send(fallback, blocks)

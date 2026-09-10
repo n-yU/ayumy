@@ -636,6 +636,22 @@ class TestBlockStructure:
                 assert "fields" not in block
 
 
+class TestHasPending:
+    def test_false_before_anything_is_queued(self, client):
+        assert client.has_pending() is False
+
+    def test_true_once_an_error_is_queued(self, client):
+        client.notify_error(_builders.TARGET_DATE, RuntimeError("fail"))
+
+        assert client.has_pending() is True
+
+    def test_false_after_flush(self, client):
+        client.notify_error(_builders.TARGET_DATE, RuntimeError("fail"))
+        client.flush()
+
+        assert client.has_pending() is False
+
+
 class TestFlush:
     def test_sends_combined_message(self, client):
         report = {"summary": "summary", "repositories": []}

@@ -275,13 +275,14 @@ def run(
                     logger=logger,
                     exc_info=True,
                 )
-        slack_client.notify_metrics(
-            elapsed,
-            peak_memory_mb,
-            env.get_version(),
-            cost_display=cost_display,
-            memory_limit_mb=memory_limit_mb,
-            timeout_seconds=timeout_seconds,
-        )
+        if slack_client.has_pending():
+            slack_client.notify_metrics(
+                elapsed,
+                peak_memory_mb,
+                env.get_version(),
+                cost_display=cost_display,
+                memory_limit_mb=memory_limit_mb,
+                timeout_seconds=timeout_seconds,
+            )
         slack_client.flush()
         slack_client.send_notice_thread(notice)
