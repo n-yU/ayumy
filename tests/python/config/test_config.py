@@ -59,7 +59,7 @@ class TestConfigValues:
         # `ayumy setup-hooks` appends entries at EOF instead of locating the map, so nothing may follow it
         last = TEMPLATE_PATH.read_text(encoding="utf-8").rstrip().splitlines()[-1]
         assert re.fullmatch(
-            r"    (# )?\S+: \{name: .+, color: \w+\}", last
+            r"    (# )?\S+: \{ name: .+, color: \w+ \}", last
         ) or re.fullmatch(r"  repository_icons:", last), last
 
     def test_unconfigured_repository_falls_back_to_the_default_icon(self):

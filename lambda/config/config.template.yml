@@ -38,4 +38,4 @@ notion:
   default_icon: { name: document, color: gray }
   # リポジトリ別ページアイコン
   repository_icons:
-    # ayumy: {name: walk, color: blue}
+    # ayumy: { name: walk, color: blue }

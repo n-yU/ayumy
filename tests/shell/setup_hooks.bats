@@ -140,9 +140,9 @@ make_fake_root() {
   fake_config="$fake_root/lambda/config/config.yml"
   cat > "$fake_config" <<'YAML'
 notion:
-  default_icon: {name: document, color: gray}
+  default_icon: { name: document, color: gray }
   repository_icons:
-    already-set: {name: walk, color: blue}
+    already-set: { name: walk, color: blue }
 YAML
 }
 
@@ -163,7 +163,7 @@ run_setup_with_answers() {
 
   run_setup_with_answers "person walking" "green"
   [ "$status" -eq 0 ]
-  grep -q "^    fresh-repo: {name: person walking, color: green}$" "$fake_config"
+  grep -q "^    fresh-repo: { name: person walking, color: green }$" "$fake_config"
 }
 
 @test "setup_hooks.sh: defaults the icon color when the answer is blank" {
@@ -173,7 +173,7 @@ run_setup_with_answers() {
 
   run_setup_with_answers "rocket" ""
   [ "$status" -eq 0 ]
-  grep -q "^    fresh-repo: {name: rocket, color: gray}$" "$fake_config"
+  grep -q "^    fresh-repo: { name: rocket, color: gray }$" "$fake_config"
 }
 
 @test "setup_hooks.sh: leaves an already configured repository untouched" {
