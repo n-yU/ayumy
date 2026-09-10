@@ -236,8 +236,11 @@ class Client:
         self._fallback_parts = []
 
     def send_notice_thread(self, notice: Notice) -> None:
-        """Posts as a reply to `parent_ts` so the warning digest stays attached to the daily summary."""
-        if not notice or self.parent_ts is None:
+        """Post the warning digest as a reply to `parent_ts`, or as its own message when no report was sent.
+
+        A top-level send sets `parent_ts`, so chunks after the first thread under the digest itself.
+        """
+        if not notice:
             return
         grouped: dict[str, list[str]] = defaultdict(list)
         for entry in notice.entries():
@@ -272,7 +275,7 @@ class Client:
                 kwargs["thread_ts"] = thread_ts
             response = self.client.chat_postMessage(**kwargs)
             if thread_ts is None:
-                # Warnings thread under the final message, which carries the execution metrics
+                # Warnings thread under the latest top-level message, which carries the execution metrics when a report was sent
                 self.parent_ts = response.get("ts")
         except slack_sdk.errors.SlackClientError as e:
             # Broad within Slack SDK errors: best-effort notification must not abort the pipeline

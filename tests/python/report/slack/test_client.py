@@ -53,7 +53,7 @@ def manual_client(client):
 
 @pytest.fixture
 def threaded_client(client):
-    """Return a client that already has a parent message, the state notice replies require."""
+    """Return a client that already has a parent message, the state in which notices go out as thread replies."""
     client.parent_ts = FIRST_TS
     return client
 
@@ -84,6 +84,14 @@ def _queue_every_day(client):
     """Queue one section per day of March, enough groups to exceed the per-message block limit."""
     for day in range(1, DAYS_IN_MARCH + 1):
         client.notify_no_activity(datetime(2026, 3, day, tzinfo=dates.JST))
+
+
+def _notice_over_block_limit():
+    """Build a notice whose every entry nearly fills a section, enough blocks to exceed the per-message limit."""
+    notice = Notice()
+    for i in range(slack_client.BLOCKS_MAX + 5):
+        notice.add(NoticeSource.SESSION, "x" * 2850, key=f"k{i}")
+    return notice
 
 
 def _cost(spend_change_pct=8.0, call_count_change_pct=5.0):
@@ -784,13 +792,23 @@ class TestSendNoticeThread:
 
         threaded_client.client.chat_postMessage.assert_not_called()
 
-    def test_does_not_send_when_parent_ts_missing(self, threaded_client):
-        threaded_client.parent_ts = None
+    def test_posts_as_own_message_when_parent_ts_missing(self, client):
         notice = Notice()
         notice.add(NoticeSource.SESSION, "Malformed JSONL line skipped", key="x")
-        threaded_client.send_notice_thread(notice)
+        client.send_notice_thread(notice)
 
-        threaded_client.client.chat_postMessage.assert_not_called()
+        kwargs = _get_send_kwargs(client)
+        assert "thread_ts" not in kwargs
+        assert "Warnings (1)" in _blocks_text(kwargs["blocks"])
+
+    def test_threads_overflow_under_own_message_when_parent_ts_missing(self, client):
+        client.send_notice_thread(_notice_over_block_limit())
+
+        first, *rest = _all_send_kwargs(client)
+        assert "thread_ts" not in first
+        assert rest
+        for kwargs in rest:
+            assert kwargs["thread_ts"] == FIRST_TS
 
     def test_posts_as_thread_reply(self, threaded_client):
         notice = Notice()
@@ -843,11 +861,7 @@ class TestSendNoticeThread:
             assert text.startswith("*session*")
 
     def test_splits_into_multiple_replies_over_block_limit(self, threaded_client):
-        notice = Notice()
-        # Each title nearly fills a section, so every entry lands in its own block
-        for i in range(slack_client.BLOCKS_MAX + 5):
-            notice.add(NoticeSource.SESSION, "x" * 2850, key=f"k{i}")
-        threaded_client.send_notice_thread(notice)
+        threaded_client.send_notice_thread(_notice_over_block_limit())
 
         sent = _all_send_kwargs(threaded_client)
         assert len(sent) > 1
