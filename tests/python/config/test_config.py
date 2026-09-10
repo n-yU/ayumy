@@ -20,6 +20,7 @@ class TestConfigShape:
     def test_all_sections_are_populated(self):
         assert isinstance(CONFIG.claude, config.ClaudeConfig)
         assert isinstance(CONFIG.slack, config.SlackConfig)
+        assert isinstance(CONFIG.slack.notify, config.SlackNotify)
         assert isinstance(CONFIG.github, config.GitHubConfig)
         assert isinstance(CONFIG.pipeline, config.PipelineConfig)
         assert isinstance(CONFIG.notion, config.NotionConfig)
@@ -47,6 +48,10 @@ class TestConfigValues:
         assert CONFIG.pipeline.max_backfill > 0
         assert CONFIG.pipeline.max_range_days > 0
 
+    def test_notification_switches_are_booleans(self):
+        assert isinstance(CONFIG.slack.notify.no_activity, bool)
+        assert isinstance(CONFIG.slack.notify.session_only, bool)
+
     def test_active_model_has_pricing_entry(self):
         assert CONFIG.claude.model in CONFIG.claude.pricing
 
@@ -54,7 +59,7 @@ class TestConfigValues:
         # `ayumy setup-hooks` appends entries at EOF instead of locating the map, so nothing may follow it
         last = TEMPLATE_PATH.read_text(encoding="utf-8").rstrip().splitlines()[-1]
         assert re.fullmatch(
-            r"    (# )?\S+: \{name: .+, color: \w+\}", last
+            r"    (# )?\S+: \{ name: .+, color: \w+ \}", last
         ) or re.fullmatch(r"  repository_icons:", last), last
 
     def test_unconfigured_repository_falls_back_to_the_default_icon(self):
@@ -84,7 +89,10 @@ class TestLoader:
                     },
                 },
             },
-            "slack": {"headline_max": 1},
+            "slack": {
+                "headline_max": 1,
+                "notify": {"no_activity": False, "session_only": True},
+            },
             "github": {"search_batch": 1, "search_window_sec": 1},
             "pipeline": {"max_backfill": 1, "max_range_days": 1},
         }
@@ -103,3 +111,10 @@ class TestLoader:
         stub["notion"]["repository_icons"] = None
         with patch("config.config.yaml.safe_load", return_value=stub):
             assert config._load().notion.repository_icons == {}
+
+    def test_load_raises_when_notification_switches_are_missing(self):
+        stub = yaml.safe_load(TEMPLATE_PATH.read_text(encoding="utf-8"))
+        del stub["slack"]["notify"]
+        with patch("config.config.yaml.safe_load", return_value=stub):
+            with pytest.raises(KeyError, match="notify"):
+                config._load()

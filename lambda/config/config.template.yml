@@ -15,6 +15,11 @@ claude:
 slack:
   # サマリ通知に記載するリポジトリごとの要約の文字数上限（Slack の本文は全体で最大 3000 文字まで）
   headline_max: 200
+  notify: # Notion ページを作成しないケースにおける通知有無
+    # アクティビティなし
+    no_activity: false
+    # Claude Code セッションあるが push なし
+    session_only: true
 
 github:
   # サマリ生成時に利用する検索 API の呼び出し上限
@@ -30,7 +35,7 @@ pipeline:
 
 notion:
   # サマリページのアイコンのデフォルト設定（name には Notion のアイコンピッカー上の名前を指定）
-  default_icon: {name: document, color: gray}
+  default_icon: { name: document, color: gray }
   # リポジトリ別ページアイコン
   repository_icons:
-    # ayumy: {name: walk, color: blue}
+    # ayumy: { name: walk, color: blue }

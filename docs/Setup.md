@@ -10,7 +10,7 @@ Ayumy を初めて動かすまでの構築手順。AWS・Notion・Slack・GitHub
    - 機能: コンテンツの読み取り・挿入・更新を有効化
 2. Notion にデータベースを作成し、Integration を接続
    - データベースページの URL から ID を取得: `https://www.notion.so/{database-id}?v=...`
-3. データベースに [Spec: Database Properties](Spec.md#database-properties) のプロパティを作成する。Repository / Tags の select オプションはレポート書き込み時に自動追加されるため事前作成は不要だが、配色を制御したい場合は手動で追加する（Tags の option 名はコード側 [lambda/report/summarizer/tags.py](../lambda/report/summarizer/tags.py) を参照）
+3. データベースに [Spec: Database Properties](Spec.md#database-properties) のプロパティを作成する。Repository / Tags の select オプションはレポート書き込み時に自動追加されるため事前作成は不要だが、配色を制御したい場合は手動で追加する（Tags のオプション名はコード側 [lambda/report/summarizer/tags.py](../lambda/report/summarizer/tags.py) を参照）
 4. AWS Secrets Manager（ap-northeast-1）に登録
    - シークレットのタイプ: その他のシークレットのタイプ
    - シークレット名: `ayumy/notion-secret`
@@ -31,7 +31,7 @@ Ayumy を初めて動かすまでの構築手順。AWS・Notion・Slack・GitHub
 1. リポジトリをクローン: `git clone https://github.com/{user}/ayumy.git ~/ayumy`
 2. クローンしたディレクトリで `make config-init` を実行し、設定ファイル `lambda/config/config.yml` を生成する
    - Lambda がこのファイルを読み込むため、生成しないままデプロイすると実行時に失敗する
-   - 中身は既定値のままでも動く。変更できる設定は [Manual: Config](Manual.md#config) を参照
+   - 中身はデフォルト値のままでも動く。変更できる設定は [Manual: Config](Manual.md#config) を参照
 
 ## 5. AWS SAM
 1. AWS SAM CLI をインストール: `brew install aws-sam-cli`
@@ -46,7 +46,7 @@ Ayumy を初めて動かすまでの構築手順。AWS・Notion・Slack・GitHub
    - Save arguments to configuration file: `Y`
 3. Outputs に表示される `ReportFunctionName` と `SessionBucketName` を控える（[8. Client Machine](#8-client-machine) で使用）
 
-2回目以降のデプロイは `make lambda-deploy` のみでよい。デプロイ用 S3 バケットを変更する場合は `samconfig.toml` の `s3_bucket` を編集し、`sam deploy --no-resolve-s3` で実行する
+2 回目以降のデプロイは `make lambda-deploy` のみでよい。デプロイ用 S3 バケットを変更する場合は `samconfig.toml` の `s3_bucket` を編集し、`sam deploy --no-resolve-s3` で実行する
 
 ## 6. GitHub PAT
 1. GitHub Settings → Developer settings → Fine-grained personal access tokens で PAT を作成

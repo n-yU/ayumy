@@ -14,8 +14,15 @@ class ClaudeConfig:
 
 
 @dataclass(frozen=True)
+class SlackNotify:
+    no_activity: bool
+    session_only: bool
+
+
+@dataclass(frozen=True)
 class SlackConfig:
     headline_max: int
+    notify: SlackNotify
 
 
 @dataclass(frozen=True)
@@ -62,15 +69,19 @@ def _load() -> Config:
         )
     with config_path.open() as f:
         data = yaml.safe_load(f)
+
     claude = ClaudeConfig(**data["claude"])
     if claude.model not in claude.pricing:
         raise ValueError(
             f"claude.model '{claude.model}' has no entry in claude.pricing"
         )
-    notion = data["notion"]
+    slack, notion = data["slack"], data["notion"]
     return Config(
         claude=claude,
-        slack=SlackConfig(**data["slack"]),
+        slack=SlackConfig(
+            headline_max=slack["headline_max"],
+            notify=SlackNotify(**slack["notify"]),
+        ),
         github=GitHubConfig(**data["github"]),
         pipeline=PipelineConfig(**data["pipeline"]),
         notion=NotionConfig(

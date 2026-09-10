@@ -62,7 +62,7 @@ template.yaml                        # AWS SAM テンプレート（Lambda, Even
 - **依存管理**: 直接依存は `lambda/requirements.in` / `lambda/requirements-dev.in` に記述し、`make lock` で `uv pip compile --generate-hashes` を呼んで hash 付きの `lambda/requirements.txt` / `lambda/requirements-dev.txt` を再生成する。Lambda デプロイ・CI・`make lambda-install` はいずれも生成された `.txt` を読むため、`.in` を変更したら必ず `make lock` を実行し `.txt` を commit する。`uv` のバージョンが異なると `.txt` の出力が変わり CI drift check が誤検知するため、ローカルでも CI 側（`.github/workflows/ci.yml` の `astral-sh/setup-uv`）と同じバージョンを使う
 - **避けるコマンド**: `uv run pytest` を使わない（CWD の `pyproject.toml` を project marker として検出し `uv.lock` を暗黙生成してしまうため。本リポジトリは `pip-compile` ベースの `requirements*.txt` を lock として運用し、`uv.lock` は管理対象外としている）
 - **言語**: Python 3.12、デプロイ依存: `requests`, `anthropic`, `PyGithub`、開発依存: 左記 + `boto3`
-- **Claude モデル**: 要約生成モデルは `lambda/config/config.yml` で定義（既定 `claude-sonnet-4-6`）。このファイルは追跡対象外で、[config.template.yml](lambda/config/config.template.yml) から `make config-init` で生成する
+- **Claude モデル**: 要約生成モデルは `lambda/config/config.yml` で定義（デフォルト `claude-sonnet-4-6`）。このファイルは追跡対象外で、[config.template.yml](lambda/config/config.template.yml) から `make config-init` で生成する
 - **GitHub API**: REST、Fine-grained PAT、セッションログから特定したリポジトリのみ対象
 - **Notion API**: Internal Integration Token、データベースプロパティは [Spec: Database Properties](docs/Spec.md#database-properties) に定義
 - **Hook 設計**: フォアグラウンド同期実行で、転送失敗時は非ゼロ終了で push を中止する（silent fail 防止）。セッション ID 単位の上書きで冪等性を担保
@@ -91,5 +91,4 @@ Lambda（環境変数 + Secrets Manager）:
 - [config.template.yml](lambda/config/config.template.yml) のコメントは、共通規約「コード内コメントは英語」の例外として日本語で書く。利用者が生成した config.yml を読みながら設定を変えるため、Manual.md と同じ運用者目線で書く
 - JSONL の生データは S3 バケットに保管し、リモートリポジトリには push しない
 - アクティビティの取得対象期間: 前日 JST 00:00:00 〜 当日 JST 00:00:00
-- アクティビティが 0 件の日はスキップまたは「活動なし」と記録
 - 各 commit における整合性チェック（共通 CLAUDE.md の Git 操作セクション参照）の対象に含めるドキュメントは [Spec.md](docs/Spec.md), [Initial-Development.md](docs/archive/Initial-Development.md), [README.md](README.md), [Setup.md](docs/Setup.md), [Manual.md](docs/Manual.md)

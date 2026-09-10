@@ -117,7 +117,7 @@ configure_icon() {
       ;;
   esac
 
-  printf '    %s: {name: %s, color: %s}\n' "$repo_name" "$name" "$color" >> "$CONFIG_FILE"
+  printf '    %s: { name: %s, color: %s }\n' "$repo_name" "$name" "$color" >> "$CONFIG_FILE"
   echo "[ayumy] recorded icon in $CONFIG_FILE; run 'make lambda-deploy' to apply"
 }
 

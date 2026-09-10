@@ -232,7 +232,7 @@ hook の配布方法（`ayumy setup-hooks` コマンドで設置）
 
 `ayumy setup-hooks` は過去に同コマンドが作成した旧 `post-commit` symlink（`readlink` の target が `ayumy/hooks/post-commit` の絶対パスと一致するもの）の除去も担当する。手動 `ln` で別パス表記により設置された legacy hook は対象外で、ユーザー側で削除する必要がある
 
-コマンド設置では hook を置いたあと、そのリポジトリの Notion ページアイコン（[Database Properties](#database-properties)）を対話で尋ね、設定ファイルの対応表に追記する。リポジトリを追加したときに設定が漏れないよう指定を必須とし、答えが空または色が不正なら非ゼロで終了する。既に設定があるリポジトリには尋ねず、origin remote が無いリポジトリはアイコンを紐づける先が無いため警告して飛ばす。設定ファイルが未生成のときは追記すると中身がアイコン 1 行だけのファイルになるため、生成用の make target を伝えて非ゼロで終了する
+コマンド設置では hook を置いたあと、そのリポジトリの Notion ページアイコン（[Database Properties](#database-properties)）を対話で尋ね、設定ファイルの対応表に追記する。リポジトリを追加したときに設定が漏れないよう指定を必須とし、答えが空または色が不正なら非ゼロで終了する。既に設定があるリポジトリには尋ねず、origin remote が無いリポジトリはアイコンを紐づける先が無いため警告して飛ばす。設定ファイルが未生成のまま追記すると中身がアイコン 1 行だけのファイルになるため、その場合は生成用の make target を伝えて非ゼロで終了する
 
 設置先は Git に hook の参照先を問い合わせて決めるため、通常のリポジトリに加えて worktree やサブモジュールでも同じ手順で設置できる。worktree で実行した場合は共通ディレクトリに設置され、同じリポジトリのすべての worktree に効く
 
@@ -400,7 +400,7 @@ GitHub アクティビティと Claude Code session ログの両方をコンテ�
 
 - 判定は session 由来 commit を GitHub アクティビティにマージした後の状態で行う
 - 対象日の全リポジトリが session-only の場合は Claude API 呼び出し自体を skip し、コスト記録も残さない
-- session-only 発生時は Slack 通知に反映する（[Slack Notification](#slack-notification)）
+- session-only 発生時の Slack 通知での扱いは [Slack Notification](#slack-notification) に従う
 - session store 側の "reported" スタンプは通常通り打つ。翌日以降 push で追いつけば `updated_at > reported_at` の backfill 判定でレポート生成が再走する
 
 Claude API の応答構造が想定を逸脱した場合、要約生成は原因を含む例外を投げ、[Classification Policy](#classification-policy) に沿って当該日のレポート生成を失敗させる。自動再試行は挟まず、運用者が `ayumy sync --report` で明示的に再実行する。検証範囲は必須項目と型に限定する
@@ -413,12 +413,14 @@ Notion への書き込み完了後、Slack Web API の `chat.postMessage` で指
 - 実行メトリクス: ayumy バージョン、経過時間（Lambda 実行時は timeout との比率）、ピークメモリ（Lambda 実行時は memory limit との比率）
 - Claude API コスト: 今回の実行の利用金額、当月累計・前月同期間比、当月の Claude API 呼び出し回数・前月同期間比。実行メトリクスと同じ context block に統合して 1 行で表示する。前月データが無く比率を計算できない項目は `(MoM ...)` 部分を丸ごと省略する（永続化された履歴の詳細は [Cost Execution Log Persistence](#cost-execution-log-persistence)）
 
-アクティビティが 0 件で Notion ページが作成されなかった場合は、正常稼働を示す簡易通知を送信する。処理中にエラーが発生した場合もエラー内容を通知する
+アクティビティが 0 件で Notion ページが作成されなかった場合は、正常稼働を示す簡易通知を送れる。処理中にエラーが発生した場合はエラー内容を通知する
 
 session-only の扱い（[Summary Generation](#summary-generation)）に応じて表示を分ける
 
 - 対象日の全リポジトリが session-only の場合は session-only 専用の簡易通知を送る
 - 部分的 session-only の場合は通常の Daily Report 通知の下部に session-only リポジトリ名を context として付記する
+
+アクティビティ 0 件と全リポジトリ session-only の簡易通知は、config でそれぞれ送るかどうかを切り替える。デフォルトではアクティビティ 0 件の通知を送らず、session-only の通知は送る。Daily Report のヘッダーを持つ通知が 1 件も無い run では、実行メトリクスだけのメッセージも送らない
 
 #### Run Origin Labels
 Daily Report のヘッダー末尾には実行の由来を示すラベルを付ける。手動実行では `[manual]`、未報告日の補完では `[backfill]` を並べ、両方に該当する場合は `[manual] [backfill]` となる。定期実行で補完対象でない日を処理した場合は無印とし、通常運用時の見た目を変えない
@@ -443,6 +445,7 @@ Classification Policy で warning に分類した失敗は 1 run 単位で集約
 - thread 投稿の本文は発生元ごとにグルーピングし、各 entry の件名と関連識別子（commit SHA、PR 番号、S3 key 等）を Block Kit で構造化する
 - 集約 warning が 0 件の run では thread 投稿しない
 - thread 投稿がブロック数上限を超える場合は複数の返信に分割する
+- 親メッセージが 1 件も無い run では、集約 warning を単独のメッセージとして投稿する。ブロック数上限で分割した続きは、その最初のメッセージへの thread 返信にする
 - thread 投稿の失敗は親通知の成功を壊さないよう独立して suppress する（ベストエフォート方針を継承）
 
 ### Cost Execution Log Persistence
@@ -498,7 +501,7 @@ Date × Repository 単位でページを作成する。1日に複数ページが
 | Regens | Number | ページを作り直した回数（初回生成は `0`） | `2` |
 | Version | Text | レポート生成時の ayumy バージョン | `0.2.0` |
 
-ページには絵文字ではなく Notion 組み込みのアイコンを設定し、データベースの一覧でリポジトリを見分けられるようにする。アイコンと色はリポジトリごとに `lambda/config/config.yml` の `notion` セクションで指定し、エントリの無いリポジトリには既定のアイコンを当てる。名前は Notion のアイコンピッカー上の表示名を受け付け、実在しない名前は API がエラーを返す
+ページには絵文字ではなく Notion 組み込みのアイコンを設定し、データベースの一覧でリポジトリを見分けられるようにする。アイコンと色はリポジトリごとに `lambda/config/config.yml` の `notion` セクションで指定し、エントリの無いリポジトリにはデフォルトのアイコンを当てる。名前は Notion のアイコンピッカー上の表示名を受け付け、実在しない名前は API がエラーを返す
 
 ### Page Body
 Notion ページの本文は Summary、ステータス別セクション、Timeline で構成する。Summary は Claude API が生成し、それ以外は GitHub アクティビティから決定論的に組み立てる。ブロックタイプは `heading_2` と `bulleted_list_item` を使い分け、Timeline では `bulleted_list_item` の `children` フィールドで PR 配下の commit をネストする
@@ -606,7 +609,7 @@ Lambda 関数の環境変数として設定する。機密情報は AWS Secrets 
 - **依存パッケージ**: 直接依存を [lambda/requirements.in](../lambda/requirements.in)（デプロイ）と [lambda/requirements-dev.in](../lambda/requirements-dev.in)（ローカル開発、`boto3` 等を追加）に定義し、`uv pip compile --generate-hashes` で hash 付き lock の [lambda/requirements.txt](../lambda/requirements.txt) と [lambda/requirements-dev.txt](../lambda/requirements-dev.txt) を生成する。Lambda デプロイ・CI・ローカル install はすべて生成済みの `.txt` を読む。`boto3` は Lambda ランタイム同梱版を利用するためデプロイ側には含めない
 - **IAM ロール**: S3 バケットへの読み書き、DynamoDB テーブルへの読み書き、Secrets Manager の読み取り、CloudWatch Logs への書き込み
 - **チューニング定数**: モデル ID・API throttle 値・truncation 長など「振る舞いを調整する値」を `lambda/config/config.yml` に集約する
-  - 追跡対象は既定値だけを持つ [lambda/config/config.template.yml](../lambda/config/config.template.yml) とし、使う人ごとの設定を書く `config.yml` は各自の手元で生成する。生成には `make config-init` を使い、既にあるファイルは上書きしない
+  - 追跡対象はデフォルト値だけを持つ [lambda/config/config.template.yml](../lambda/config/config.template.yml) とし、使う人ごとの設定を書く `config.yml` は各自の手元で生成する。生成には `make config-init` を使い、既にあるファイルは上書きしない
   - Lambda コールドスタート時に [lambda/config/config.py](../lambda/config/config.py) の loader が frozen dataclass singleton として読み込む。`config.yml` が無い場合は生成用の make target を伝えて失敗する
   - 環境依存値と secret は環境変数 / Secrets Manager 経由で扱い、config.yml には持ち込まない
 
@@ -635,7 +638,6 @@ make lambda-deploy
 
 ### Error Handling
 - API 呼び出し失敗時のリトライ処理
-- アクティビティが0件の日はスキップまたは「活動なし」と記録
 - pre-push hook は転送失敗時に非ゼロ終了し push を中止する。AWS 認証切れなど upload 不能な状態は push 時点で顕在化させ、silent fail を防ぐ
 - S3 転送失敗時、JSONL はソース側に残るため次回転送時にリトライ可能
 - AWS 認証情報が無効な場合は push が中止されるため、`aws login` 等で認証を修復してから再度 push する
