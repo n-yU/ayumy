@@ -400,7 +400,7 @@ GitHub アクティビティと Claude Code session ログの両方をコンテ�
 
 - 判定は session 由来 commit を GitHub アクティビティにマージした後の状態で行う
 - 対象日の全リポジトリが session-only の場合は Claude API 呼び出し自体を skip し、コスト記録も残さない
-- session-only 発生時は Slack 通知に反映する（[Slack Notification](#slack-notification)）
+- session-only 発生時の Slack 通知での扱いは [Slack Notification](#slack-notification) に従う
 - session store 側の "reported" スタンプは通常通り打つ。翌日以降 push で追いつけば `updated_at > reported_at` の backfill 判定でレポート生成が再走する
 
 Claude API の応答構造が想定を逸脱した場合、要約生成は原因を含む例外を投げ、[Classification Policy](#classification-policy) に沿って当該日のレポート生成を失敗させる。自動再試行は挟まず、運用者が `ayumy sync --report` で明示的に再実行する。検証範囲は必須項目と型に限定する
