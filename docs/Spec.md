@@ -623,6 +623,9 @@ AWS SAM（[template.yaml](../template.yaml)）で以下のリソースを管理�
 - IAM ロール
 - S3 バケット
 - DynamoDB テーブル
+- CloudWatch アラーム
+- SNS トピック
+- Amazon Q Developer in chat applications
 
 ```bash
 make lambda-deploy
