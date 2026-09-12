@@ -48,7 +48,7 @@ banned-from = [
 github = "gh"
 
 [tool.ruff.lint.isort]
-known-first-party = ["config", "report"]
+known-first-party = ["config", "handler", "report"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

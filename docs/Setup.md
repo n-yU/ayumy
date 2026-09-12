@@ -26,6 +26,10 @@ Ayumy を初めて動かすまでの構築手順。AWS・Notion・Slack・GitHub
    - シークレットのタイプ: その他のシークレットのタイプ
    - シークレット名: `ayumy/slack-bot-token`
    - プレーンテキストで Bot User OAuth Token を貼り付け
+7. [Amazon Q Developer in chat applications](https://console.aws.amazon.com/chatbot/) で Slack を認可する（Lambda が停止したときのアラーム通知に使う）
+   - Configure a chat client で Slack を選び、表示される Slack の認可画面で許可する
+   - 手順 4 と同じ channel で `/invite @Amazon Q` を実行する
+   - Workspace details に表示される Workspace ID を控える
 
 ## 4. Repository
 1. リポジトリをクローン: `git clone https://github.com/{user}/ayumy.git ~/ayumy`
@@ -40,6 +44,7 @@ Ayumy を初めて動かすまでの構築手順。AWS・Notion・Slack・GitHub
    - Region: `ap-northeast-1`
    - `NotionDatabaseId` に [2. Notion](#2-notion) で取得したデータベース ID を入力
    - `SlackChannelId` に [3. Slack](#3-slack) で取得した channel ID を入力
+   - `SlackWorkspaceId` に [3. Slack](#3-slack) で取得した Workspace ID を入力
    - Confirm changes before deploy: `Y`
    - Allow SAM CLI IAM role creation: `Y`
    - Disable rollback: `N`
@@ -47,6 +52,8 @@ Ayumy を初めて動かすまでの構築手順。AWS・Notion・Slack・GitHub
 3. Outputs に表示される `ReportFunctionName` と `SessionBucketName` を控える（[8. Client Machine](#8-client-machine) で使用）
 
 2 回目以降のデプロイは `make lambda-deploy` のみでよい。デプロイ用 S3 バケットを変更する場合は `samconfig.toml` の `s3_bucket` を編集し、`sam deploy --no-resolve-s3` で実行する
+
+ayumy を更新してパラメータが増えたときは、`samconfig.toml` の `parameter_overrides` に値を追記してからデプロイする
 
 ## 6. GitHub PAT
 1. GitHub Settings → Developer settings → Fine-grained personal access tokens で PAT を作成

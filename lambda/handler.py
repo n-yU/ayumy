@@ -24,15 +24,10 @@ def lambda_handler(event, context):
         try:
             resp = secrets_client.get_secret_value(SecretId=secret_id)
             os.environ[env_var] = resp["SecretString"]
-        except Exception as e:
-            # Broad: Lambda entry point, surface any failure as 500 to CloudWatch
-            logger.exception("Failed to retrieve secret %s: %s", secret_id, e)
-            return {
-                "statusCode": 500,
-                "body": json.dumps(
-                    {"error": f"Failed to retrieve secret: {secret_id}"}
-                ),
-            }
+        except Exception:
+            # Raised rather than returned: Slack has no client yet, so the Errors alarm is the only signal left
+            logger.exception("Failed to retrieve secret %s", secret_id)
+            raise
 
     source = "manual" if event.get("source") == "manual" else None
     target_date = event.get("target_date")

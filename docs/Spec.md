@@ -623,6 +623,9 @@ AWS SAM（[template.yaml](../template.yaml)）で以下のリソースを管理�
 - IAM ロール
 - S3 バケット
 - DynamoDB テーブル
+- CloudWatch アラーム
+- SNS トピック
+- Amazon Q Developer in chat applications
 
 ```bash
 make lambda-deploy
@@ -653,7 +656,7 @@ Lambda 側で発生する失敗は以下の 3 区分で扱う。`logger.warning`
 
 `except Exception` は原則使わず、想定する具体例外型を捕捉する。broad catch を残すのは以下のグループのみとし、いずれも「なぜ broad か」を示す inline comment を 1 行付与する。同一グループ内で複数の箇所が該当する場合もある
 
-- Lambda エントリ点（CloudWatch / 500 return のため）
+- Lambda エントリ点（CloudWatch へのログ出力と、失敗の再送出・500 return のため）
 - pipeline 最終 fallback（Slack 通知に届けるため）
 - pipeline 日次 loop（1 日分の失敗を error / warning に分類するため）
 - Slack 送信（ベストエフォート方針のため）
@@ -665,7 +668,14 @@ Lambda 側で発生する失敗は以下の 3 区分で扱う。`logger.warning`
 
 - 確認を要約生成の前に置くのは、生成した後に打ち切ると Claude API の費用が無駄になるため
 - 打ち切った日は未報告のまま残り、後続の実行で補完対象になる
-- メモリ超過とプロセスの強制終了は予測できないため、この手当ての対象外
+
+メモリ超過とプロセスの強制終了は予測できないため、CloudWatch のアラームで事後に検知する。関数のエラーメトリクスを監視し、ALARM への遷移を通知トピック経由で Slack に流す
+
+Lambda エントリ点は pipeline の失敗を 500 で返すため、このメトリクスには、通知経路が整う前に起きる秘密情報の取得失敗と、ランタイム側の終了が残る
+
+- 失敗が 1 件記録された時点で発報し、通知するのは ALARM への遷移のみとする
+- 実行のない時間帯は欠測をデータ不足として扱い、翌日以降の障害も遷移として拾えるようにする
+- Slack への配信は Amazon Q Developer in chat applications を経由する。ワークスペース側の認可は運用者の手作業となり、手順は [Setup.md](Setup.md) に置く
 
 ### Running Cost
 課金が発生するのは Anthropic API と AWS。GitHub API と Notion API は無料枠内で収まる
@@ -702,6 +712,8 @@ Lambda 側で発生する失敗は以下の 3 区分で扱う。`logger.warning`
 | S3 | 月数円（年間 1〜2 GB 程度） |
 | EventBridge Scheduler | 無料枠内 |
 | Secrets Manager | ~$0.40/月（シークレット4件） |
+| CloudWatch | 無料枠内（アラーム 1 件、無料枠は 10 件） |
+| SNS | 無料枠内（発行はアラーム発報時のみ） |
 
 </details>
 
