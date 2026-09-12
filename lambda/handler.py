@@ -44,6 +44,7 @@ def lambda_handler(event, context):
             target_date=target_date,
             memory_limit_mb=int(context.memory_limit_in_mb),
             timeout_seconds=timeout_seconds,
+            remaining_ms=context.get_remaining_time_in_millis,
         )
     except Exception:
         # Broad: Lambda entry point, return 500 so CloudWatch records the failure

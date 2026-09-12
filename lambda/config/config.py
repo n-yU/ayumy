@@ -35,6 +35,7 @@ class GitHubConfig:
 class PipelineConfig:
     max_backfill: int
     max_range_days: int
+    timeout_margin_sec: int
 
 
 @dataclass(frozen=True)
