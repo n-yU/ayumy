@@ -160,7 +160,7 @@ Resources:
       SlackChannelId: !Ref SlackChannelId
       SnsTopicArns:
         - !Ref AlarmTopic
-      # Omitting this would hand the channel AdministratorAccess, which forwarding notifications never needs
+      # Default guardrail is AdministratorAccess, so it is narrowed to match what the role already allows
       GuardrailPolicies:
         - arn:aws:iam::aws:policy/CloudWatchReadOnlyAccess
 
