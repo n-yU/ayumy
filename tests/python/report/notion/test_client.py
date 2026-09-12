@@ -226,7 +226,7 @@ class TestStatusSections:
 
 
 class TestTimelineSection:
-    def test_nests_non_merge_commits_under_their_pull(self, build_timeline):
+    def test_nests_commits_under_their_pull(self, build_timeline):
         blocks = build_timeline(
             commits=[
                 _builders.commit(
@@ -260,14 +260,44 @@ class TestTimelineSection:
         )
 
         assert _headings(blocks) == ["Timeline"]
-        # The merge commit stays at top level
-        assert _texts(blocks) == [
-            "🔀 #1: Add feature",
-            "🔸 ccc3333: Squash merge",
-        ]
+        assert _texts(blocks) == ["🔀 #1: Add feature"]
         assert [_text(c) for c in _children(blocks[1])] == [
             "🔸 aaa1111: branch commit 1",
             "🔸 bbb2222: branch commit 2",
+            "🔻 ccc3333: Squash merge",
+        ]
+
+    def test_pins_merge_commit_last_regardless_of_its_timestamp(self, build_timeline):
+        # A merge style that carries the original author date would otherwise sort the merge first
+        blocks = build_timeline(
+            commits=[
+                _builders.commit(
+                    "ccc3333",
+                    "Merge pull request #3",
+                    date="2026-03-28T09:00:00+09:00",
+                    pull_numbers=[3],
+                ),
+                _builders.commit(
+                    "aaa1111",
+                    "branch commit",
+                    date="2026-03-28T10:00:00+09:00",
+                    pull_numbers=[3],
+                ),
+            ],
+            pulls=[
+                _builders.pull(
+                    3,
+                    "Rebased feature",
+                    "merged",
+                    merged_at="2026-03-28T11:00:00+09:00",
+                    merge_commit_sha="ccc3333",
+                )
+            ],
+        )
+
+        assert [_text(c) for c in _children(blocks[1])] == [
+            "🔸 aaa1111: branch commit",
+            "🔻 ccc3333: Merge pull request #3",
         ]
 
     def test_sorts_nested_commits_by_instant_across_timezones(self, build_timeline):
@@ -311,7 +341,7 @@ class TestTimelineSection:
             "🔀 #5: PR five": [],
         }
 
-    def test_sorts_pull_header_before_its_merge_commit(self, build_timeline):
+    def test_renders_pull_whose_only_in_window_event_is_its_merge(self, build_timeline):
         # PR opened before the window, so only the squash merge commit lands in range
         blocks = build_timeline(
             commits=[
@@ -334,11 +364,8 @@ class TestTimelineSection:
             ],
         )
 
-        assert _texts(blocks) == [
-            "🔀 #2: Old PR finally merged",
-            "🔸 ccc3333: Squash merge",
-        ]
-        assert _children(blocks[1]) == []
+        assert _texts(blocks) == ["🔀 #2: Old PR finally merged"]
+        assert [_text(c) for c in _children(blocks[1])] == ["🔻 ccc3333: Squash merge"]
 
     def test_renders_direct_commit_at_top_level(self, build_timeline):
         blocks = build_timeline(commits=[_builders.commit("ddd4444", "Direct commit")])

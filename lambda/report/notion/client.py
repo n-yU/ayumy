@@ -146,7 +146,7 @@ class Client:
         since: datetime,
         until: datetime,
     ) -> list[dict]:
-        """Per 'Spec: Page Body': non-merge PR-linked commits nest under their PR via `children`; merge commits, direct commits, issue lines, and unmerged-closed PR lines sit at top level. PR header sorts before its merge commit at the same ts (secondary_priority=0)."""
+        """Per 'Spec: Page Body': PR-linked commits nest under their PR via `children`, the merge commit last; direct commits, issue lines, and unmerged-closed PR lines sit at top level. PR header sorts before other entries at the same ts (secondary_priority=0)."""
         pulls = repo_activity["pulls"]
         issues = repo_activity["issues"]
 
@@ -157,16 +157,18 @@ class Client:
         pr_nested_commits: dict[int, list[activity.CommitInfo]] = {
             n: [] for n in pr_by_number
         }
+        pr_merge_commit: dict[int, activity.CommitInfo] = {}
 
-        # secondary_priority is 0 for PR headers so they sort before adjacent merge commits at the same ts
+        # secondary_priority is 0 for PR headers so they sort before other entries at the same ts
         entries: list[tuple[datetime, int, dict]] = []
 
         for c in repo_activity["commits"]:
             if not c.is_in_range(since, until):
                 continue
             ts = datetime.fromisoformat(c.date)
-            if c.sha in merge_sha_to_pr:
-                entries.append((ts, 1, bulleted_link(c.label(), c.url, prefix="🔸 ")))
+            merged_pr = merge_sha_to_pr.get(c.sha)
+            if merged_pr is not None:
+                pr_merge_commit[merged_pr.number] = c
                 continue
             # Pick smallest PR number for deterministic nesting independent of pull_numbers order
             attached_prs = [n for n in c.pull_numbers if n in pr_by_number]
@@ -181,6 +183,7 @@ class Client:
                 pr_nested_commits[pr_number],
                 key=lambda c: datetime.fromisoformat(c.date),
             )
+            merge_commit = pr_merge_commit.get(pr_number)
             candidates: list[datetime] = []
             if activity.in_range(pr.created_at, since, until):
                 candidates.append(datetime.fromisoformat(pr.created_at))
@@ -188,6 +191,9 @@ class Client:
                 candidates.append(datetime.fromisoformat(nested[0].date))
             if activity.in_range(pr.merged_at, since, until):
                 candidates.append(datetime.fromisoformat(pr.merged_at))
+            # Keeps a merge commit whose author date lands in the window visible when the merge itself falls outside it
+            if merge_commit is not None:
+                candidates.append(datetime.fromisoformat(merge_commit.date))
             if (
                 pr.state == "closed"
                 and not pr.merged_at
@@ -197,6 +203,11 @@ class Client:
             if not candidates:
                 continue
             children = [bulleted_link(c.label(), c.url, prefix="🔸 ") for c in nested]
+            # Pinned last so the closing line of a PR reads the same regardless of merge style
+            if merge_commit is not None:
+                children.append(
+                    bulleted_link(merge_commit.label(), merge_commit.url, prefix="🔻 ")
+                )
             entries.append(
                 (
                     min(candidates),
