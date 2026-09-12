@@ -78,7 +78,7 @@ Summary 以外の各行の冒頭には以下の記号が付く。ステータス
 | Symbol | Meaning |
 |---|---|
 | `🟢` / `🟣` / `🔴` | PR の open / merged / closed |
-| `🟩` / `🟪` / `⬜` | Issue の open / close / close（not planned・duplicate） |
+| `🟩` / `🟪` / `⬜` | Issue の open / close / close（not planned, duplicate） |
 | `🔸` / `🔻` | commit / merge commit |
 
 ## Troubleshooting

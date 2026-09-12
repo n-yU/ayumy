@@ -537,7 +537,7 @@ Summary を除く各行の行頭には記号を置く。形が行の種別を、
 | Commit | ◆ | 通常 | `🔸` |
 | Commit | ▼ | merge | `🔻` |
 
-PR / Issue の状態は取得時点の state ではなく対象日ウィンドウ終了時点の状態を指し、判定は [Status Sections](#status-sections) と共通である。ウィンドウより前に完了した PR は Timeline にのみ残るため、その場合は完了時の状態を使う
+PR / Issue の状態判定は [Status Sections](#status-sections) と共通とする。ウィンドウより前に完了した PR は Timeline にのみ残るため、その場合は完了時の状態を使う
 
 #### Summary
 各項目は Claude が生成した文字列をそのまま載せず、インラインコード・太字・番号参照の 3 種の記法を解釈して rich_text に展開する。記法は先頭から順に切り出して入れ子にせず、ある記法の内側に書かれた記号は解釈せずそのまま残す。番号参照はリポジトリ名を伴わなければページのリポジトリ、伴えばそのリポジトリへリンクし、表示するテキストは書かれたまま残す
@@ -565,7 +565,7 @@ PR に関する行は親エントリ 1 か所に集約し、merge / close を示
 - Issue close（completed）: `🟪 close: #xx: Title`
 - Issue close（not_planned / duplicate）: `⬜ close (理由): #xx: Title`
 
-並び順は対象日ウィンドウ内における最初の活動時刻を基準に、PR ブロックと他のトップレベル要素を時系列で混ぜて並べる。PR ブロックの並び順キーは PR open（in range の場合）・最初の配下 commit・merge 時刻・merge commit の時刻のうち最も早いものを採る。merge commit の時刻を含めるのは、merge が対象日ウィンドウの外へずれても、ウィンドウ内に入った merge commit を PR ブロックごと残すためである。同時刻のタイブレークは PR 親エントリを他のトップレベル要素より先に置く
+並び順は対象日ウィンドウ内における最初の活動時刻を基準に、PR ブロックと他のトップレベル要素を時系列で混ぜて並べる。PR ブロックの並び順キーは PR open（in range の場合）, 最初の配下 commit, merge 時刻, merge commit の時刻のうち最も早いものを採る。merge commit の時刻を含めるのは、merge が対象日ウィンドウの外へずれても、ウィンドウ内に入った merge commit を PR ブロックごと残すためである。同時刻のタイブレークは PR 親エントリを他のトップレベル要素より先に置く
 
 ### Tag Classification
 タグは Claude API の要約生成時に自動判定させる。タグ名と判定基準（description）はコード側（[lambda/report/summarizer/tags.py](../lambda/report/summarizer/tags.py)）で single source of truth として管理する。Notion DB の multi-select オプションには description フィールドがないため、コード側に置いたうえで Claude API のシステムプロンプトに注入する
