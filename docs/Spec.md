@@ -107,7 +107,7 @@ S3 上のオブジェクトキー構造は [Directory Structure](#directory-stru
 
 ```
 ayumy/
-├── bin/ayumy           # CLI エントリポイント
+├── bin/ayumy           # CLI entrypoint
 ├── scripts/            # セッション転送・hook 設置スクリプト
 ├── hooks/pre-push      # 各リポジトリにシンボリックリンクで配置
 ├── lambda/
@@ -249,7 +249,7 @@ ayumy sync --report --date 2026-03-25                           # 指定日の�
 ayumy sync --report --date 2026-03-01..2026-03-05               # 日付範囲のレポートを一括生成
 ```
 
-`ayumy sync` は [bin/ayumy](../bin/ayumy) CLI を通じて [scripts/sync_session.sh](../scripts/sync_session.sh) を呼び出す。CLI はサブコマンドをディスパッチするエントリポイントであり、クライアントマシンのセットアップ時に PATH に追加する（例: `export PATH="$HOME/ayumy/bin:$PATH"`）。手動実行時はフォアグラウンドで実行し、転送結果を標準出力に表示する。`--report` 指定時は Lambda の実行結果も標準出力に表示する
+`ayumy sync` は [bin/ayumy](../bin/ayumy) CLI を通じて [scripts/sync_session.sh](../scripts/sync_session.sh) を呼び出す。CLI はサブコマンドをディスパッチする entrypoint であり、クライアントマシンのセットアップ時に PATH に追加する（例: `export PATH="$HOME/ayumy/bin:$PATH"`）。手動実行時はフォアグラウンドで実行し、転送結果を標準出力に表示する。`--report` 指定時は Lambda の実行結果も標準出力に表示する
 
 ### Security Notes
 - JSONL には会話の生データが含まれるため、会話中やツール実行時に機密情報（API キー、パスワード等）をログに残さないよう注意する
@@ -606,7 +606,7 @@ Lambda 関数の環境変数として設定する。機密情報は AWS Secrets 
 
 ### Lambda Function Configuration
 - **ランタイム**: Python 3.12
-- **ハンドラ**: [lambda/handler.py](../lambda/handler.py)（[lambda/report](../lambda/report) パッケージを呼び出すエントリポイント）
+- **ハンドラ**: [lambda/handler.py](../lambda/handler.py)（[lambda/report](../lambda/report) パッケージを呼び出す entrypoint）
 - **タイムアウト / メモリ**: [template.yaml](../template.yaml) で定義（タイムアウトは SAM パラメータ化、メモリは固定値）
 - **依存パッケージ**: 直接依存を [lambda/requirements.in](../lambda/requirements.in)（デプロイ）と [lambda/requirements-dev.in](../lambda/requirements-dev.in)（ローカル開発、`boto3` 等を追加）に定義し、`uv pip compile --generate-hashes` で hash 付き lock の [lambda/requirements.txt](../lambda/requirements.txt) と [lambda/requirements-dev.txt](../lambda/requirements-dev.txt) を生成する。Lambda デプロイ・CI・ローカル install はすべて生成済みの `.txt` を読む。`boto3` は Lambda ランタイム同梱版を利用するためデプロイ側には含めない
 - **IAM ロール**: S3 バケットへの読み書き、DynamoDB テーブルへの読み書き、Secrets Manager の読み取り、CloudWatch Logs への書き込み
@@ -656,7 +656,7 @@ Lambda 側で発生する失敗は以下の 3 区分で扱う。`logger.warning`
 
 `except Exception` は原則使わず、想定する具体例外型を捕捉する。broad catch を残すのは以下のグループのみとし、いずれも「なぜ broad か」を示す inline comment を 1 行付与する。同一グループ内で複数の箇所が該当する場合もある
 
-- Lambda エントリ点（CloudWatch へのログ出力と、失敗の再送出・500 return のため）
+- Lambda entrypoint（秘密情報の取得失敗をログに残して再送出するため）
 - pipeline 最終 fallback（Slack 通知に届けるため）
 - pipeline 日次 loop（1 日分の失敗を error / warning に分類するため）
 - Slack 送信（ベストエフォート方針のため）
@@ -671,11 +671,14 @@ Lambda 側で発生する失敗は以下の 3 区分で扱う。`logger.warning`
 
 メモリ超過とプロセスの強制終了は予測できないため、CloudWatch のアラームで事後に検知する。関数のエラーメトリクスを監視し、ALARM への遷移を通知トピック経由で Slack に流す
 
-Lambda エントリ点は pipeline の失敗を 500 で返すため、このメトリクスには、通知経路が整う前に起きる秘密情報の取得失敗と、ランタイム側の終了が残る
-
 - 失敗が 1 件記録された時点で発報し、通知するのは ALARM への遷移のみとする
 - 実行のない時間帯は欠測をデータ不足として扱い、翌日以降の障害も遷移として拾えるようにする
 - Slack への配信は Amazon Q Developer in chat applications を経由する。ワークスペース側の認可は運用者の手作業となり、手順は [Setup.md](Setup.md) に置く
+
+このメトリクスが拾うのはランタイム側の終了だけではない。Lambda entrypoint が 500 を返すのは失敗の通知が Slack に届いた場合に限り、届かないまま終わった失敗は再送出してメトリクスに残す
+
+- 通知を積んだだけでは Slack が受け取った証拠にならないため、送信が 1 件でも落ちた run は届かなかった側として扱う
+- 秘密情報の取得や対象日付の解釈など、Slack への通知経路が整う前に起きる失敗も同じく残る
 
 ### Running Cost
 課金が発生するのは Anthropic API と AWS。GitHub API と Notion API は無料枠内で収まる
