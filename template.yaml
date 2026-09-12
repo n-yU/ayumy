@@ -117,7 +117,7 @@ Resources:
     Properties:
       TopicName: ayumy-alarms
 
-  # Failures that reach Slack return 500, leaving Errors for re-raised failures and terminations
+  # Pipeline failures return 500, leaving Errors for secret retrieval and runtime terminations
   ReportFunctionErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
