@@ -560,7 +560,7 @@ PR に関する行は親エントリ 1 か所に集約し、merge / close を示
 
 最上位に置く要素の種類と表記は以下の通り
 
-- 直接 commit（PR に紐づかない default branch への commit）: `🔸 sha: message`
+- 直接 commit（PR に紐づかない commit）: `🔸 sha: message`
 - Issue open: `🟩 open: #xx: Title`
 - Issue close（completed）: `🟪 close: #xx: Title`
 - Issue close（not_planned / duplicate）: `⬜ close (理由): #xx: Title`
