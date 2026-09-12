@@ -90,11 +90,13 @@ class PullInfo:
         """Return the PR number and title used in status / timeline rows."""
         return f"#{self.number}: {self.title}"
 
+    def pending_prefix(self) -> str:
+        return "🟢 "
+
     def done_prefix(self) -> str:
-        """`closed` (unmerged) PRs are flagged as irregular."""
         if self.state == "merged":
-            return "✅ "
-        return "⚠️ (closed) "
+            return "🟣 "
+        return "🔴 "
 
     def has_event_in_range(self, since: datetime, until: datetime) -> bool:
         return any(
@@ -158,18 +160,21 @@ class IssueInfo:
         """Return the issue number and title used in status / timeline rows."""
         return f"#{self.number}: {self.title}"
 
+    def pending_prefix(self) -> str:
+        return "🟩 "
+
     def done_prefix(self) -> str:
-        """`not_planned` / `duplicate` are flagged; legacy `state_reason=None` is regular Done."""
+        """`not_planned` / `duplicate` share one symbol; legacy `state_reason=None` is regular Done."""
         label = _IRREGULAR_ISSUE_REASONS.get(self.state_reason or "")
         if label is None:
-            return "✅ "
-        return f"⚠️ ({label}) "
+            return "🟪 "
+        return f"⬜ ({label}) "
 
     def timeline_close_prefix(self) -> str:
         label = _IRREGULAR_ISSUE_REASONS.get(self.state_reason or "")
         if label is None:
-            return "✅ close: "
-        return f"⚠️ close ({label}): "
+            return "🟪 close: "
+        return f"⬜ close ({label}): "
 
     def has_event_in_range(self, since: datetime, until: datetime) -> bool:
         return any(

@@ -112,7 +112,7 @@ class Client:
             if state != "open":
                 done.append((label, pr.url, pr.done_prefix()))
             else:
-                in_progress.append((label, pr.url, ""))
+                in_progress.append((label, pr.url, pr.pending_prefix()))
 
         for issue in repo_activity["issues"]:
             label = issue.label()
@@ -122,9 +122,9 @@ class Client:
             if state != "open":
                 done.append((label, issue.url, issue.done_prefix()))
             elif activity.in_range(issue.created_at, since, until):
-                todo.append((label, issue.url, ""))
+                todo.append((label, issue.url, issue.pending_prefix()))
             else:
-                in_progress.append((label, issue.url, ""))
+                in_progress.append((label, issue.url, issue.pending_prefix()))
 
         blocks: list[dict] = []
         for heading, items in (
@@ -146,7 +146,7 @@ class Client:
         since: datetime,
         until: datetime,
     ) -> list[dict]:
-        """Per 'Spec: Page Body': PR-linked commits nest under their PR via `children`, the merge commit last; direct commits, issue lines, and unmerged-closed PR lines sit at top level. PR header sorts before other entries at the same ts (secondary_priority=0)."""
+        """Per 'Spec: Page Body': PR-linked commits nest under their PR via `children`, the merge commit last; direct commits and issue lines sit at top level. PR header sorts before other entries at the same ts (secondary_priority=0)."""
         pulls = repo_activity["pulls"]
         issues = repo_activity["issues"]
 
@@ -208,6 +208,7 @@ class Client:
                 children.append(
                     bulleted_link(merge_commit.label(), merge_commit.url, prefix="🔻 ")
                 )
+            state = pr.state_in_range(since, until)
             entries.append(
                 (
                     min(candidates),
@@ -215,24 +216,13 @@ class Client:
                     bulleted_link(
                         pr.label(),
                         pr.url,
-                        prefix="🔀 ",
+                        prefix=pr.pending_prefix()
+                        if state == "open"
+                        else pr.done_prefix(),
                         children=children or None,
                     ),
                 )
             )
-            # Unmerged-closed PR also gets a top-level close line
-            if pr.state == "closed" and activity.in_range(pr.closed_at, since, until):
-                entries.append(
-                    (
-                        datetime.fromisoformat(pr.closed_at),
-                        1,
-                        bulleted_link(
-                            pr.label(),
-                            pr.url,
-                            prefix="⚠️ close: ",
-                        ),
-                    )
-                )
 
         for issue in issues:
             label = issue.label()
@@ -241,7 +231,9 @@ class Client:
                     (
                         datetime.fromisoformat(issue.created_at),
                         1,
-                        bulleted_link(label, issue.url, prefix="🟢 open: "),
+                        bulleted_link(
+                            label, issue.url, prefix=f"{issue.pending_prefix()}open: "
+                        ),
                     )
                 )
             if activity.in_range(issue.closed_at, since, until):

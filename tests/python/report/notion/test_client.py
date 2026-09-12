@@ -95,8 +95,8 @@ class TestStatusSections:
 
         assert _headings(blocks) == ["Done"]
         assert _texts(blocks) == [
-            "✅ #1: Merged PR",
-            "⚠️ (not planned) #11: Not planned",
+            "🟣 #1: Merged PR",
+            "⬜ (not planned) #11: Not planned",
         ]
         assert _urls(blocks) == [
             f"https://github.com/{_builders.REPO_FULL_NAME}/pull/1",
@@ -120,9 +120,9 @@ class TestStatusSections:
 
         assert _headings(blocks) == ["In Progress"]
         assert _texts(blocks) == [
-            "#3: WIP",
-            "#4: Ready",
-            "#20: Old open issue",
+            "🟢 #3: WIP",
+            "🟢 #4: Ready",
+            "🟩 #20: Old open issue",
         ]
         assert _urls(blocks) == [
             f"https://github.com/{_builders.REPO_FULL_NAME}/pull/3",
@@ -144,8 +144,8 @@ class TestStatusSections:
 
         assert _headings(blocks) == ["In Progress", "TODO"]
         assert _texts(blocks) == [
-            "#31: Old open issue",
-            "#30: New issue",
+            "🟩 #31: Old open issue",
+            "🟩 #30: New issue",
         ]
         assert _urls(blocks) == [
             f"https://github.com/{_builders.REPO_FULL_NAME}/issues/31",
@@ -181,9 +181,9 @@ class TestStatusSections:
 
         assert _headings(blocks) == ["In Progress", "TODO"]
         assert _texts(blocks) == [
-            "#1: Merged next day",
-            "#11: Created earlier, closed later",
-            "#10: Created in window, closed later",
+            "🟢 #1: Merged next day",
+            "🟩 #11: Created earlier, closed later",
+            "🟩 #10: Created in window, closed later",
         ]
 
     @pytest.mark.parametrize(
@@ -260,7 +260,7 @@ class TestTimelineSection:
         )
 
         assert _headings(blocks) == ["Timeline"]
-        assert _texts(blocks) == ["🔀 #1: Add feature"]
+        assert _texts(blocks) == ["🟣 #1: Add feature"]
         assert [_text(c) for c in _children(blocks[1])] == [
             "🔸 aaa1111: branch commit 1",
             "🔸 bbb2222: branch commit 2",
@@ -337,8 +337,8 @@ class TestTimelineSection:
         )
 
         assert {_text(b): [_text(c) for c in _children(b)] for b in blocks[1:]} == {
-            "🔀 #2: PR two": ["🔸 aaa1111: shared commit"],
-            "🔀 #5: PR five": [],
+            "🟢 #2: PR two": ["🔸 aaa1111: shared commit"],
+            "🟢 #5: PR five": [],
         }
 
     def test_renders_pull_whose_only_in_window_event_is_its_merge(self, build_timeline):
@@ -364,7 +364,7 @@ class TestTimelineSection:
             ],
         )
 
-        assert _texts(blocks) == ["🔀 #2: Old PR finally merged"]
+        assert _texts(blocks) == ["🟣 #2: Old PR finally merged"]
         assert [_text(c) for c in _children(blocks[1])] == ["🔻 ccc3333: Squash merge"]
 
     def test_renders_direct_commit_at_top_level(self, build_timeline):
@@ -372,7 +372,7 @@ class TestTimelineSection:
 
         assert _texts(blocks) == ["🔸 ddd4444: Direct commit"]
 
-    def test_appends_close_line_for_unmerged_pull(self, build_timeline):
+    def test_marks_unmerged_closed_pull_on_its_block(self, build_timeline):
         blocks = build_timeline(
             pulls=[
                 _builders.pull(
@@ -385,10 +385,7 @@ class TestTimelineSection:
             ]
         )
 
-        assert _texts(blocks) == [
-            "🔀 #7: Rejected",
-            "⚠️ close: #7: Rejected",
-        ]
+        assert _texts(blocks) == ["🔴 #7: Rejected"]
 
     def test_renders_issue_open_and_close_lines(self, build_timeline):
         blocks = build_timeline(
@@ -408,8 +405,8 @@ class TestTimelineSection:
         )
 
         assert _texts(blocks) == [
-            "🟢 open: #5: New bug",
-            "⚠️ close (not planned): #7: Won't fix",
+            "🟩 open: #5: New bug",
+            "⬜ close (not planned): #7: Won't fix",
         ]
 
     def test_orders_entries_chronologically_across_types(self, build_timeline):
@@ -432,8 +429,8 @@ class TestTimelineSection:
         )
 
         assert _texts(blocks) == [
-            "🟢 open: #5: Bug",  # 08:00
-            "🔀 #1: Feature",  # sorts on the 09:00 open
+            "🟩 open: #5: Bug",  # 08:00
+            "🟢 #1: Feature",  # sorts on the 09:00 open
             "🔸 ddd4444: Direct",  # 12:00
         ]
         assert [_text(c) for c in _children(blocks[2])] == [

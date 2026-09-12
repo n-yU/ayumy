@@ -70,10 +70,16 @@ Notion ページは 1 日 × リポジトリ単位で作られる。GitHub ア�
 - **Summary** — Claude API が生成したリポジトリの作業要点（2〜5 項目）
 - **Done / In Progress / TODO** — PR / Issue をステータス別に列挙。Done に載るのは対象日にマージ・クローズされたものだけで、別の日に完了したものはそちらの日のページに載る。該当が無いセクションは表示しない
 - **Timeline** — 対象日の作業が時系列で並ぶ
-  - PR ブロックは冒頭に `🔀` が置かれ、配下にその PR の commit がネストされる。配下の最後の行は `🔻` が付いた merge commit で、その PR がマージされたことを示す
-  - main commit や Issue の open / close は最上位に `🔸` / `🟢` / `✅` などの prefix 付きで並ぶ
+  - PR ブロックの配下にその PR の commit がネストされる。配下の最後の行は `🔻` が付いた merge commit で、その PR がマージされたことを示す
+  - main commit や Issue の open / close は最上位に並ぶ
 
-ステータスの振り分け方と、イレギュラーな完了に付く prefix の規則は [Spec: Page Body](Spec.md#page-body) を参照。イレギュラーな完了とは unmerged close・not_planned・duplicate を指す
+Summary 以外の各行の冒頭には以下の記号が付く。ステータスの振り分け方は [Spec: Page Body](Spec.md#page-body) を参照
+
+| Symbol | Meaning |
+|---|---|
+| `🟢` / `🟣` / `🔴` | PR の open / merged / closed |
+| `🟩` / `🟪` / `⬜` | Issue の open / close / close（not planned・duplicate） |
+| `🔸` / `🔻` | commit / merge commit |
 
 ## Troubleshooting
 ### pre-push hook の再設置
