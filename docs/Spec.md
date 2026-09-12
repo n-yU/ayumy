@@ -565,7 +565,7 @@ PR に関する行は親エントリ 1 か所に集約し、merge / close を示
 - Issue close（completed）: `🟪 close: #xx: Title`
 - Issue close（not_planned / duplicate）: `⬜ close (理由): #xx: Title`
 
-並び順は対象日ウィンドウ内における最初の活動時刻を基準に、PR ブロックと他のトップレベル要素を時系列で混ぜて並べる。PR ブロックの並び順キーは PR open（in range の場合）, 最初の配下 commit, merge 時刻, merge commit の時刻のうち最も早いものを採る。merge commit の時刻を含めるのは、merge が対象日ウィンドウの外へずれても、ウィンドウ内に入った merge commit を PR ブロックごと残すためである。同時刻のタイブレークは PR 親エントリを他のトップレベル要素より先に置く
+並び順は対象日ウィンドウ内における最初の活動時刻を基準に、PR ブロックと他のトップレベル要素を時系列で混ぜて並べる。PR ブロックの並び順キーは PR open（in range の場合）, 最初の配下 commit, merge 時刻, merge commit の時刻, close 時刻（merge されなかった場合）のうち最も早いものを採る。merge commit の時刻を含めるのは、merge が対象日ウィンドウの外へずれても、ウィンドウ内に入った merge commit を PR ブロックごと残すためである。同時刻のタイブレークは PR 親エントリを他のトップレベル要素より先に置く
 
 ### Tag Classification
 タグは Claude API の要約生成時に自動判定させる。タグ名と判定基準（description）はコード側（[lambda/report/summarizer/tags.py](../lambda/report/summarizer/tags.py)）で single source of truth として管理する。Notion DB の multi-select オプションには description フィールドがないため、コード側に置いたうえで Claude API のシステムプロンプトに注入する
