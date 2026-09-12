@@ -367,6 +367,60 @@ class TestTimelineSection:
         assert _texts(blocks) == ["🟣 #2: Old PR finally merged"]
         assert [_text(c) for c in _children(blocks[1])] == ["🔻 ccc3333: Squash merge"]
 
+    def test_keeps_pull_merged_after_the_window_open(self, build_timeline):
+        # Merged just past midnight, so only the merge commit's author date lands in range
+        blocks = build_timeline(
+            commits=[
+                _builders.commit(
+                    "fff6666",
+                    "Squash merge",
+                    date="2026-03-28T23:00:00+09:00",
+                    pull_numbers=[10],
+                )
+            ],
+            pulls=[
+                _builders.pull(
+                    10,
+                    "Merged after midnight",
+                    "merged",
+                    created_at="2026-03-20T09:00:00+09:00",
+                    merged_at="2026-03-29T00:30:00+09:00",
+                    merge_commit_sha="fff6666",
+                )
+            ],
+        )
+
+        assert _texts(blocks) == ["🟢 #10: Merged after midnight"]
+        assert [_text(c) for c in _children(blocks[1])] == ["🔻 fff6666: Squash merge"]
+
+    def test_marks_pull_merged_before_the_window_as_merged(self, build_timeline):
+        # Merged on an earlier day; a later commit pulls the PR block onto this page
+        blocks = build_timeline(
+            commits=[
+                _builders.commit(
+                    "eee5555",
+                    "Follow-up on the branch",
+                    date="2026-03-28T10:00:00+09:00",
+                    pull_numbers=[9],
+                )
+            ],
+            pulls=[
+                _builders.pull(
+                    9,
+                    "Merged yesterday",
+                    "merged",
+                    created_at="2026-03-20T09:00:00+09:00",
+                    merged_at="2026-03-27T10:00:00+09:00",
+                    merge_commit_sha="zzz9999",
+                )
+            ],
+        )
+
+        assert _texts(blocks) == ["🟣 #9: Merged yesterday"]
+        assert [_text(c) for c in _children(blocks[1])] == [
+            "🔸 eee5555: Follow-up on the branch"
+        ]
+
     def test_renders_direct_commit_at_top_level(self, build_timeline):
         blocks = build_timeline(commits=[_builders.commit("ddd4444", "Direct commit")])
 
