@@ -41,8 +41,8 @@ def lambda_handler(event, context):
             timeout_seconds=timeout_seconds,
             remaining_ms=context.get_remaining_time_in_millis,
         )
-    except Exception:
-        # Broad: Lambda entry point, return 500 so CloudWatch records the failure
+    except pipeline.NotifiedFailure:
+        # Returned rather than raised: Slack already carries this failure, and the Errors alarm would only repeat it
         logger.exception("Report generation failed")
         return {
             "statusCode": 500,
