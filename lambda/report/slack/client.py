@@ -67,6 +67,7 @@ class Client:
         self.is_manual = is_manual
         self._groups: list[list[dict]] = []
         self._fallback_parts: list[str] = []
+        self._delivery_failed = False
         self.parent_ts: str | None = None
 
     def _append_group(self, blocks: list[dict], fallback: str) -> None:
@@ -242,6 +243,10 @@ class Client:
     def has_pending(self) -> bool:
         return bool(self._groups)
 
+    def has_delivery_failure(self) -> bool:
+        """Return whether any send was dropped, since queueing a notification is no proof that Slack received it."""
+        return self._delivery_failed
+
     def flush(self) -> None:
         for blocks, fallback in _pack_messages(self._groups, self._fallback_parts):
             self._send(fallback, blocks)
@@ -293,3 +298,4 @@ class Client:
         except slack_sdk.errors.SlackClientError as e:
             # Broad within Slack SDK errors: best-effort notification must not abort the pipeline
             logger.exception("Failed to send Slack notification: %r", e)
+            self._delivery_failed = True

@@ -19,6 +19,10 @@ from .shared.notice import Notice, NoticeSource
 logger = logging.getLogger(__name__)
 
 
+class NotifiedFailure(Exception):
+    """Raised in place of a failure whose notification reached Slack, so callers can tell it apart from a failure that left no trace there."""
+
+
 def process_date(
     since: datetime,
     until: datetime,
@@ -152,6 +156,10 @@ def run(
     `target_date` (`YYYY-MM-DD` or `YYYY-MM-DD..YYYY-MM-DD`) takes precedence and processes every given date as a backfill;
     otherwise processes the prior day (scheduled) or today's partial window (`source="manual"`) plus unreported backfill dates.
     `memory_limit_mb` / `timeout_seconds` / `remaining_ms` are None from the CLI.
+    A failure that never reached Slack propagates unchanged, leaving the caller to surface it through another channel.
+
+    Raises:
+        NotifiedFailure: If the failure was delivered to Slack.
     """
     start = time.monotonic()
     guard = timeout.Guard(remaining_ms, CONFIG.pipeline.timeout_margin_sec)
@@ -165,6 +173,8 @@ def run(
     )
     notice = Notice()
     cost_store: cost.Store | None = None
+    notified = False
+    failure: Exception | None = None
 
     try:
         session_client = session.Client(
@@ -245,7 +255,7 @@ def run(
                 if not target_date and d == primary_date:
                     logger.exception("Report generation failed for %s", date_str)
                     slack_client.notify_error(day_since, e)
-                    e._notified = True  # type: ignore[attr-defined]
+                    notified = True
                     raise
                 notice.add(
                     NoticeSource.PIPELINE,
@@ -258,10 +268,11 @@ def run(
 
     except Exception as e:
         # Broad: pipeline final fallback, ensures any uncaught failure reaches Slack
-        if not getattr(e, "_notified", False):
+        if not notified:
             # Every explicitly requested date is processed as a backfill, and `since` is the first of them
             slack_client.notify_error(since, e, is_backfill=bool(target_date))
-        raise
+        # Held instead of re-raised, so the send in the finally block happens before the failure leaves this function
+        failure = e
     finally:
         elapsed = time.monotonic() - start
         # macOS returns bytes, Linux returns kilobytes
@@ -301,3 +312,8 @@ def run(
             )
         slack_client.flush()
         slack_client.send_notice_thread(notice)
+
+    if failure is not None:
+        if slack_client.has_delivery_failure():
+            raise failure
+        raise NotifiedFailure(str(failure)) from failure

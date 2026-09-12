@@ -41,6 +41,12 @@ class TestLambdaHandler:
         with pytest.raises(RuntimeError, match="no such secret"):
             handler.lambda_handler({}, context)
 
-    def test_returns_500_when_report_fails(self, context):
-        with patch("handler.pipeline.run", side_effect=RuntimeError("boom")):
+    def test_returns_500_when_failure_reached_slack(self, context):
+        notified = handler.pipeline.NotifiedFailure("boom")
+        with patch("handler.pipeline.run", side_effect=notified):
             assert handler.lambda_handler({}, context)["statusCode"] == 500
+
+    def test_reraises_failure_that_never_reached_slack(self, context):
+        with patch("handler.pipeline.run", side_effect=RuntimeError("boom")):
+            with pytest.raises(RuntimeError, match="boom"):
+                handler.lambda_handler({}, context)

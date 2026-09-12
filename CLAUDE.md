@@ -15,7 +15,7 @@
 scripts/sync_session.sh              # セッション転送スクリプト（hook・手動共用）
 scripts/setup_hooks.sh               # hook の設置スクリプト
 hooks/pre-push                       # Git hook（各リポジトリにシンボリックリンクで配置）
-lambda/handler.py                    # Lambda ハンドラ（report パッケージを呼び出すエントリポイント）
+lambda/handler.py                    # Lambda ハンドラ（report パッケージを呼び出す entrypoint）
 lambda/config/                       # チューニング定数の YAML と loader（追跡対象は template のみ、config.yml は生成物）
 lambda/report/                       # メインパッケージ: GitHub API + Claude API + Notion API
 lambda/report/prompts/               # Claude API に渡すプロンプト本文（`string.Template` の `$` 記法で実行時に値を差し込む）

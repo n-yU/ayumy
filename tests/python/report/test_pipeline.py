@@ -446,6 +446,7 @@ class TestRun:
             store.fetch_sessions.return_value = SessionActivity({})
             mocks["session_client"].return_value.delete_sessions.return_value = 0
             mocks["slack_client"].return_value.has_pending.return_value = True
+            mocks["slack_client"].return_value.has_delivery_failure.return_value = False
             mocks[
                 "github_client"
             ].return_value.fetch_activity.return_value = activity.GitHubActivity({})
@@ -525,7 +526,7 @@ class TestRun:
 
     def test_survives_cost_store_init_failure(self, run_patches, slack_client):
         run_patches["cost_store"].side_effect = RuntimeError("no env")
-        with pytest.raises(RuntimeError):
+        with pytest.raises(pipeline.NotifiedFailure):
             pipeline.run(source=None)
 
         # Main-flow error still reaches Slack, and the metrics chain runs with no cost display
@@ -593,7 +594,7 @@ class TestRun:
         session_store.fetch_sessions.side_effect = RuntimeError("DynamoDB error")
         with (
             caplog.at_level(logging.ERROR, logger="report.pipeline"),
-            pytest.raises(RuntimeError, match="DynamoDB error"),
+            pytest.raises(pipeline.NotifiedFailure, match="DynamoDB error"),
         ):
             pipeline.run(source=None)
 
@@ -619,7 +620,7 @@ class TestRun:
 
     def test_ingestion_failure_aborts_run(self, session_store, slack_client):
         session_store.ingest.side_effect = RuntimeError("DynamoDB error")
-        with pytest.raises(RuntimeError, match="DynamoDB error"):
+        with pytest.raises(pipeline.NotifiedFailure, match="DynamoDB error"):
             pipeline.run(source=None)
 
         # Ingestion failure surfaces to the final fallback and Slack notification
@@ -627,11 +628,28 @@ class TestRun:
         assert slack_client.notify_error.call_args.kwargs["is_backfill"] is False
         session_store.scan_backfill_dates.assert_not_called()
 
+    def test_failure_stays_unwrapped_when_notification_is_dropped(
+        self, session_store, slack_client
+    ):
+        session_store.ingest.side_effect = RuntimeError("DynamoDB error")
+        slack_client.has_delivery_failure.return_value = True
+
+        with pytest.raises(RuntimeError, match="DynamoDB error"):
+            pipeline.run(source=None)
+
+    def test_failure_before_slack_client_stays_unwrapped(self, run_patches):
+        run_patches["slack_client"].side_effect = ValueError(
+            "SLACK_BOT_TOKEN is not set"
+        )
+
+        with pytest.raises(ValueError, match="SLACK_BOT_TOKEN is not set"):
+            pipeline.run(source=None)
+
     def test_target_date_failure_notifies_as_backfill(
         self, session_store, slack_client
     ):
         session_store.ingest.side_effect = RuntimeError("DynamoDB error")
-        with pytest.raises(RuntimeError, match="DynamoDB error"):
+        with pytest.raises(pipeline.NotifiedFailure, match="DynamoDB error"):
             pipeline.run(source="manual", target_date="2026-03-25")
 
         assert slack_client.notify_error.call_args.kwargs["is_backfill"] is True

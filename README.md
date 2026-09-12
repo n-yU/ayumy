@@ -58,7 +58,7 @@ flowchart TB
 ## Directory Structure
 ```
 ayumy/
-├── bin/ayumy           # CLI エントリポイント
+├── bin/ayumy           # CLI entrypoint
 ├── scripts/            # セッション転送・hook 設置スクリプト
 ├── hooks/pre-push      # 各リポジトリにシンボリックリンクで配置
 ├── lambda/             # Lambda ハンドラとメインパッケージ

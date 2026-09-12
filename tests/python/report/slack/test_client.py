@@ -38,6 +38,7 @@ def client():
         is_manual=False,
         _groups=[],
         _fallback_parts=[],
+        _delivery_failed=False,
         parent_ts=None,
     )
     stub.client.chat_postMessage.return_value = {"ok": True, "ts": FIRST_TS}
@@ -746,6 +747,14 @@ class TestFlush:
         )
         client.notify_error(_builders.TARGET_DATE, RuntimeError("fail"))
         client.flush()
+
+        assert client.has_delivery_failure()
+
+    def test_reports_no_delivery_failure_when_sends_succeed(self, client):
+        client.notify_error(_builders.TARGET_DATE, RuntimeError("fail"))
+        client.flush()
+
+        assert not client.has_delivery_failure()
 
     def test_propagates_unrelated_errors(self, client):
         client.client.chat_postMessage.side_effect = RuntimeError("boom")
