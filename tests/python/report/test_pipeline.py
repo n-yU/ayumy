@@ -566,8 +566,17 @@ class TestRun:
             pipeline.run(source=None, remaining_ms=lambda: 1_000)
 
         session_store.fetch_sessions.assert_not_called()
+        slack_client.notify_timeout.assert_called_once()
         slack_client.flush.assert_called_once()
         assert any("Aborting before timeout" in r.getMessage() for r in caplog.records)
+
+    def test_marks_abort_as_backfill_on_a_backfill_date(
+        self, session_store, slack_client
+    ):
+        session_store.scan_backfill_dates.return_value = [date(2026, 3, 27)]
+        pipeline.run(source=None, remaining_ms=lambda: 1_000)
+
+        assert slack_client.notify_timeout.call_args.kwargs["is_backfill"] is True
 
     def test_abort_leaves_later_dates_unprocessed(self, session_store):
         session_store.scan_backfill_dates.return_value = [

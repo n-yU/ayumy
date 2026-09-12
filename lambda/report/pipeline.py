@@ -236,6 +236,9 @@ def run(
                 store.mark_reported(date_str)
             except timeout.Approaching as e:
                 logger.warning("Aborting before timeout at %s: %s", date_str, e)
+                slack_client.notify_timeout(
+                    day_since, str(e), is_backfill=date_str in backfill_set
+                )
                 break
             except Exception as e:
                 # Broad: pipeline loop classifies per-day failure into error or warning
