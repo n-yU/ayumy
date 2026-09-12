@@ -518,10 +518,26 @@ Notion ページの本文は Summary、ステータス別セクション、Timel
 [heading_2]            TODO（該当がある場合のみ）
 [bulleted_list_item]   対象日に新規作成された Issue（バックログ）
 [heading_2]            Timeline（該当がある場合のみ）
-[bulleted_list_item]   PR ブロック親 + 配下 commit を `children` でネスト、merge commit / 直接 commit / Issue open / close / unmerged PR close を最上位に時系列で混ぜて配置
+[bulleted_list_item]   PR ブロック親 + 配下 commit を `children` でネスト、直接 commit と Issue open / close を最上位に時系列で混ぜて配置
 ```
 
 GitHub アイテムへのリンクは PR / Issue が `#xx: Title`、commit が `{sha-prefix}: {commit message}` の形式とし、それぞれ GitHub URL でリンク化する。ページはリポジトリ単位で作られ、リポジトリ名は Repository プロパティと Name タイトルに出るため、本文の各行では省く
+
+#### Row Symbols
+Summary を除く各行の行頭には記号を置く。形が行の種別を、色が状態を指す。色は GitHub が PR / Issue の状態に使う色に合わせ、読み手が GitHub 上の見え方から状態を推測できるようにする
+
+| Type | Shape | State | Symbol |
+|---|---|---|---|
+| PR | ● | open | `🟢` |
+| PR | ● | merged | `🟣` |
+| PR | ● | closed（unmerged） | `🔴` |
+| Issue | ■ | open | `🟩` |
+| Issue | ■ | close（completed） | `🟪` |
+| Issue | ■ | close（not_planned / duplicate） | `⬜` |
+| Commit | ◆ | 通常 | `🔸` |
+| Commit | ▼ | merge | `🔻` |
+
+PR / Issue の状態判定は [Status Sections](#status-sections) と共通とする。ウィンドウより前に完了した PR は Timeline にのみ残るため、その場合は完了時の状態を使う
 
 #### Summary
 各項目は Claude が生成した文字列をそのまま載せず、インラインコード・太字・番号参照の 3 種の記法を解釈して rich_text に展開する。記法は先頭から順に切り出して入れ子にせず、ある記法の内側に書かれた記号は解釈せずそのまま残す。番号参照はリポジトリ名を伴わなければページのリポジトリ、伴えばそのリポジトリへリンクし、表示するテキストは書かれたまま残す
@@ -535,25 +551,21 @@ GitHub アイテムへのリンクは PR / Issue が `#xx: Title`、commit が `
 - In Progress: 対象日終了時点で未完了の PR（draft 含む）、対象日より前に作成された未完了 Issue
 - TODO: 対象日に新規作成され、対象日終了時点で未完了の Issue
 
-Done セクションの各項目には状態を示す prefix を付ける。通常完了したものには `✅ `、イレギュラーな完了には `⚠️ (理由) ` を付け、後者は以下を区別する
-
-- マージされず close された PR: `⚠️ (closed) `
-- `not_planned` で close された Issue: `⚠️ (not planned) `
-- `duplicate` で close された Issue: `⚠️ (duplicate) `
+各項目には [Row Symbols](#row-symbols) の記号を prefix として付ける。Done の Issue のうち `not_planned` / `duplicate` で close されたものは同じ記号を共有するため、記号に続けて `(理由) ` を添えて区別する
 
 #### Timeline
-Timeline は `bulleted_list_item` のネスト構造で表現する。PR 親エントリは進行中・merged を問わず `🔀 #xx: Title` の形式で表示し、その PR に紐づく非 merge commit を `children` フィールドにネストする。merge commit（PR の `merge_commit_sha` と一致する commit）は PR 配下にネストせず最上位に配置し、`🔸 sha: message` の形式で表示する。これは「PR の `close` 行は merge commit の存在で自明」という規則を反映するため、merge commit 自体が PR close のマーカーとして機能する
+Timeline は `bulleted_list_item` のネスト構造で表現する。PR 親エントリは `{状態記号} #xx: Title` の形式で表示し、その PR に紐づく commit を `children` フィールドにネストする。配下は commit の時刻順に並べ、merge commit（PR の `merge_commit_sha` と一致する commit）だけは時刻によらず末尾へ固定する。merge 方式によって merge commit の author 時刻が PR 内 commit より早くなる場合があり、末尾固定にすることで「配下の最後の行が merge」という読み方が保たれる
+
+PR に関する行は親エントリ 1 か所に集約し、merge / close を示す行を最上位に別途置かない。PR が merge されたか close されたかは親エントリの記号が示す
 
 最上位に置く要素の種類と表記は以下の通り
 
-- merge commit: `🔸 sha: message`
-- 直接 commit（PR に紐づかない default branch への commit）: `🔸 sha: message`
-- Issue open: `🟢 open: #xx: Title`
-- Issue close（completed）: `✅ close: #xx: Title`
-- Issue close（not_planned / duplicate）: `⚠️ close (理由): #xx: Title`
-- merge せず close された PR: `⚠️ close: #xx: Title`（PR 親エントリとは別に top-level に配置）
+- 直接 commit（PR に紐づかない commit）: `🔸 sha: message`
+- Issue open: `🟩 open: #xx: Title`
+- Issue close（completed）: `🟪 close: #xx: Title`
+- Issue close（not_planned / duplicate）: `⬜ close (理由): #xx: Title`
 
-並び順は対象日ウィンドウ内における最初の活動時刻を基準に、PR ブロックと他のトップレベル要素を時系列で混ぜて並べる。PR ブロックの並び順キーは PR open（in range の場合）・最初の配下 commit・merge 時刻のうち最も早いものを採る。同時刻のタイブレークは PR 親エントリ → 同じ時刻の merge commit の順とする
+並び順は対象日ウィンドウ内における最初の活動時刻を基準に、PR ブロックと他のトップレベル要素を時系列で混ぜて並べる。PR ブロックの並び順キーは PR open（in range の場合）, 最初の配下 commit, merge 時刻, merge commit の時刻, close 時刻（merge されなかった場合）のうち最も早いものを採る。merge commit の時刻を含めるのは、merge が対象日ウィンドウの外へずれても、ウィンドウ内に入った merge commit を PR ブロックごと残すためである。同時刻のタイブレークは PR 親エントリを他のトップレベル要素より先に置く
 
 ### Tag Classification
 タグは Claude API の要約生成時に自動判定させる。タグ名と判定基準（description）はコード側（[lambda/report/summarizer/tags.py](../lambda/report/summarizer/tags.py)）で single source of truth として管理する。Notion DB の multi-select オプションには description フィールドがないため、コード側に置いたうえで Claude API のシステムプロンプトに注入する

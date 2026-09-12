@@ -95,8 +95,8 @@ class TestStatusSections:
 
         assert _headings(blocks) == ["Done"]
         assert _texts(blocks) == [
-            "✅ #1: Merged PR",
-            "⚠️ (not planned) #11: Not planned",
+            "🟣 #1: Merged PR",
+            "⬜ (not planned) #11: Not planned",
         ]
         assert _urls(blocks) == [
             f"https://github.com/{_builders.REPO_FULL_NAME}/pull/1",
@@ -120,9 +120,9 @@ class TestStatusSections:
 
         assert _headings(blocks) == ["In Progress"]
         assert _texts(blocks) == [
-            "#3: WIP",
-            "#4: Ready",
-            "#20: Old open issue",
+            "🟢 #3: WIP",
+            "🟢 #4: Ready",
+            "🟩 #20: Old open issue",
         ]
         assert _urls(blocks) == [
             f"https://github.com/{_builders.REPO_FULL_NAME}/pull/3",
@@ -144,8 +144,8 @@ class TestStatusSections:
 
         assert _headings(blocks) == ["In Progress", "TODO"]
         assert _texts(blocks) == [
-            "#31: Old open issue",
-            "#30: New issue",
+            "🟩 #31: Old open issue",
+            "🟩 #30: New issue",
         ]
         assert _urls(blocks) == [
             f"https://github.com/{_builders.REPO_FULL_NAME}/issues/31",
@@ -181,9 +181,9 @@ class TestStatusSections:
 
         assert _headings(blocks) == ["In Progress", "TODO"]
         assert _texts(blocks) == [
-            "#1: Merged next day",
-            "#11: Created earlier, closed later",
-            "#10: Created in window, closed later",
+            "🟢 #1: Merged next day",
+            "🟩 #11: Created earlier, closed later",
+            "🟩 #10: Created in window, closed later",
         ]
 
     @pytest.mark.parametrize(
@@ -226,7 +226,7 @@ class TestStatusSections:
 
 
 class TestTimelineSection:
-    def test_nests_non_merge_commits_under_their_pull(self, build_timeline):
+    def test_nests_commits_under_their_pull(self, build_timeline):
         blocks = build_timeline(
             commits=[
                 _builders.commit(
@@ -260,14 +260,44 @@ class TestTimelineSection:
         )
 
         assert _headings(blocks) == ["Timeline"]
-        # The merge commit stays at top level
-        assert _texts(blocks) == [
-            "🔀 #1: Add feature",
-            "🔸 ccc3333: Squash merge",
-        ]
+        assert _texts(blocks) == ["🟣 #1: Add feature"]
         assert [_text(c) for c in _children(blocks[1])] == [
             "🔸 aaa1111: branch commit 1",
             "🔸 bbb2222: branch commit 2",
+            "🔻 ccc3333: Squash merge",
+        ]
+
+    def test_pins_merge_commit_last_regardless_of_its_timestamp(self, build_timeline):
+        # A merge style that carries the original author date would otherwise sort the merge first
+        blocks = build_timeline(
+            commits=[
+                _builders.commit(
+                    "ccc3333",
+                    "Merge pull request #3",
+                    date="2026-03-28T09:00:00+09:00",
+                    pull_numbers=[3],
+                ),
+                _builders.commit(
+                    "aaa1111",
+                    "branch commit",
+                    date="2026-03-28T10:00:00+09:00",
+                    pull_numbers=[3],
+                ),
+            ],
+            pulls=[
+                _builders.pull(
+                    3,
+                    "Rebased feature",
+                    "merged",
+                    merged_at="2026-03-28T11:00:00+09:00",
+                    merge_commit_sha="ccc3333",
+                )
+            ],
+        )
+
+        assert [_text(c) for c in _children(blocks[1])] == [
+            "🔸 aaa1111: branch commit",
+            "🔻 ccc3333: Merge pull request #3",
         ]
 
     def test_sorts_nested_commits_by_instant_across_timezones(self, build_timeline):
@@ -307,11 +337,11 @@ class TestTimelineSection:
         )
 
         assert {_text(b): [_text(c) for c in _children(b)] for b in blocks[1:]} == {
-            "🔀 #2: PR two": ["🔸 aaa1111: shared commit"],
-            "🔀 #5: PR five": [],
+            "🟢 #2: PR two": ["🔸 aaa1111: shared commit"],
+            "🟢 #5: PR five": [],
         }
 
-    def test_sorts_pull_header_before_its_merge_commit(self, build_timeline):
+    def test_renders_pull_whose_only_in_window_event_is_its_merge(self, build_timeline):
         # PR opened before the window, so only the squash merge commit lands in range
         blocks = build_timeline(
             commits=[
@@ -334,18 +364,69 @@ class TestTimelineSection:
             ],
         )
 
-        assert _texts(blocks) == [
-            "🔀 #2: Old PR finally merged",
-            "🔸 ccc3333: Squash merge",
+        assert _texts(blocks) == ["🟣 #2: Old PR finally merged"]
+        assert [_text(c) for c in _children(blocks[1])] == ["🔻 ccc3333: Squash merge"]
+
+    def test_keeps_pull_merged_after_the_window_open(self, build_timeline):
+        # Merged just past midnight, so only the merge commit's author date lands in range
+        blocks = build_timeline(
+            commits=[
+                _builders.commit(
+                    "fff6666",
+                    "Squash merge",
+                    date="2026-03-28T23:00:00+09:00",
+                    pull_numbers=[10],
+                )
+            ],
+            pulls=[
+                _builders.pull(
+                    10,
+                    "Merged after midnight",
+                    "merged",
+                    created_at="2026-03-20T09:00:00+09:00",
+                    merged_at="2026-03-29T00:30:00+09:00",
+                    merge_commit_sha="fff6666",
+                )
+            ],
+        )
+
+        assert _texts(blocks) == ["🟢 #10: Merged after midnight"]
+        assert [_text(c) for c in _children(blocks[1])] == ["🔻 fff6666: Squash merge"]
+
+    def test_marks_pull_merged_before_the_window_as_merged(self, build_timeline):
+        # Merged on an earlier day; a later commit pulls the PR block onto this page
+        blocks = build_timeline(
+            commits=[
+                _builders.commit(
+                    "eee5555",
+                    "Follow-up on the branch",
+                    date="2026-03-28T10:00:00+09:00",
+                    pull_numbers=[9],
+                )
+            ],
+            pulls=[
+                _builders.pull(
+                    9,
+                    "Merged yesterday",
+                    "merged",
+                    created_at="2026-03-20T09:00:00+09:00",
+                    merged_at="2026-03-27T10:00:00+09:00",
+                    merge_commit_sha="zzz9999",
+                )
+            ],
+        )
+
+        assert _texts(blocks) == ["🟣 #9: Merged yesterday"]
+        assert [_text(c) for c in _children(blocks[1])] == [
+            "🔸 eee5555: Follow-up on the branch"
         ]
-        assert _children(blocks[1]) == []
 
     def test_renders_direct_commit_at_top_level(self, build_timeline):
         blocks = build_timeline(commits=[_builders.commit("ddd4444", "Direct commit")])
 
         assert _texts(blocks) == ["🔸 ddd4444: Direct commit"]
 
-    def test_appends_close_line_for_unmerged_pull(self, build_timeline):
+    def test_marks_unmerged_closed_pull_on_its_block(self, build_timeline):
         blocks = build_timeline(
             pulls=[
                 _builders.pull(
@@ -358,10 +439,7 @@ class TestTimelineSection:
             ]
         )
 
-        assert _texts(blocks) == [
-            "🔀 #7: Rejected",
-            "⚠️ close: #7: Rejected",
-        ]
+        assert _texts(blocks) == ["🔴 #7: Rejected"]
 
     def test_renders_issue_open_and_close_lines(self, build_timeline):
         blocks = build_timeline(
@@ -381,8 +459,8 @@ class TestTimelineSection:
         )
 
         assert _texts(blocks) == [
-            "🟢 open: #5: New bug",
-            "⚠️ close (not planned): #7: Won't fix",
+            "🟩 open: #5: New bug",
+            "⬜ close (not planned): #7: Won't fix",
         ]
 
     def test_orders_entries_chronologically_across_types(self, build_timeline):
@@ -405,8 +483,8 @@ class TestTimelineSection:
         )
 
         assert _texts(blocks) == [
-            "🟢 open: #5: Bug",  # 08:00
-            "🔀 #1: Feature",  # sorts on the 09:00 open
+            "🟩 open: #5: Bug",  # 08:00
+            "🟢 #1: Feature",  # sorts on the 09:00 open
             "🔸 ddd4444: Direct",  # 12:00
         ]
         assert [_text(c) for c in _children(blocks[2])] == [

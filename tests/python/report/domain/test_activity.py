@@ -154,11 +154,14 @@ class TestPullInfo:
         pr = _pull(number=42, title="Add feature")
         assert pr.label() == "#42: Add feature"
 
+    def test_pending_prefix_for_open(self):
+        assert _pull(state="open").pending_prefix() == "🟢 "
+
     def test_done_prefix_for_merged(self):
-        assert _pull(state="merged").done_prefix() == "✅ "
+        assert _pull(state="merged").done_prefix() == "🟣 "
 
     def test_done_prefix_for_closed(self):
-        assert _pull(state="closed").done_prefix() == "⚠️ (closed) "
+        assert _pull(state="closed").done_prefix() == "🔴 "
 
     @pytest.mark.parametrize(
         "created_at,merged_at,closed_at,expected",
@@ -250,13 +253,16 @@ class TestIssueInfo:
         issue = _issue(number=7, title="Bug report")
         assert issue.label() == "#7: Bug report"
 
+    def test_pending_prefix_for_open(self):
+        assert _issue(state="open").pending_prefix() == "🟩 "
+
     @pytest.mark.parametrize(
         "state_reason,expected",
         [
-            (None, "✅ "),
-            ("completed", "✅ "),
-            ("not_planned", "⚠️ (not planned) "),
-            ("duplicate", "⚠️ (duplicate) "),
+            (None, "🟪 "),
+            ("completed", "🟪 "),
+            ("not_planned", "⬜ (not planned) "),
+            ("duplicate", "⬜ (duplicate) "),
         ],
     )
     def test_done_prefix(self, state_reason, expected):
@@ -265,10 +271,10 @@ class TestIssueInfo:
     @pytest.mark.parametrize(
         "state_reason,expected",
         [
-            (None, "✅ close: "),
-            ("completed", "✅ close: "),
-            ("not_planned", "⚠️ close (not planned): "),
-            ("duplicate", "⚠️ close (duplicate): "),
+            (None, "🟪 close: "),
+            ("completed", "🟪 close: "),
+            ("not_planned", "⬜ close (not planned): "),
+            ("duplicate", "⬜ close (duplicate): "),
         ],
     )
     def test_timeline_close_prefix(self, state_reason, expected):
