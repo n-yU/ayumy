@@ -13,6 +13,9 @@ Parameters:
     Type: Number
     Default: 300
     Description: Lambda function timeout in seconds
+  SlackWorkspaceId:
+    Type: String
+    Description: Slack workspace ID copied from the Amazon Q Developer in chat applications console
 
 Globals:
   Function:
@@ -134,6 +137,32 @@ Resources:
       TreatMissingData: missing
       AlarmActions:
         - !Ref AlarmTopic
+
+  AlarmChatbotRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: chatbot.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchReadOnlyAccess
+
+  AlarmSlackChannel:
+    Type: AWS::Chatbot::SlackChannelConfiguration
+    Properties:
+      ConfigurationName: ayumy-alarms
+      IamRoleArn: !GetAtt AlarmChatbotRole.Arn
+      SlackWorkspaceId: !Ref SlackWorkspaceId
+      SlackChannelId: !Ref SlackChannelId
+      SnsTopicArns:
+        - !Ref AlarmTopic
+      # Omitting this would hand the channel AdministratorAccess, which forwarding notifications never needs
+      GuardrailPolicies:
+        - arn:aws:iam::aws:policy/CloudWatchReadOnlyAccess
 
 Outputs:
   ReportFunctionName:
