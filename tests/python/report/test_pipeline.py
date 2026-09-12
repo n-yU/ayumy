@@ -12,7 +12,7 @@ from config import CONFIG
 from report import pipeline, summarizer
 from report.domain import activity, summary
 from report.domain.session import SessionActivity
-from report.shared import dates
+from report.shared import dates, timeout
 
 from . import _builders
 
@@ -157,6 +157,23 @@ class TestProcessDate:
         # Verify the (target_date, since, until) trio is passed in order
         notion_args = pipeline_clients["notion_client"].create_report_pages.call_args[0]
         assert notion_args[:3] == (_builders.SINCE, _builders.SINCE, _builders.UNTIL)
+
+    def test_aborts_before_generating_a_summary(self, pipeline_clients):
+        _stub_fetch_activity(
+            pipeline_clients,
+            _builders.github("my-repo", commits=[_builders.commit(sha="abc")]),
+        )
+        pipeline_clients["guard"] = timeout.Guard(lambda: 1_000, 60)
+
+        with pytest.raises(timeout.Approaching):
+            pipeline.process_date(
+                _builders.SINCE,
+                _builders.UNTIL,
+                _builders.session("my-repo"),
+                **pipeline_clients,
+            )
+
+        pipeline_clients["summary_client"].generate_summary.assert_not_called()
 
     def test_records_cost_after_summary_generation(self, pipeline_clients):
         _stub_fetch_activity(
@@ -541,6 +558,36 @@ class TestRun:
         assert (
             session_store.fetch_sessions.call_count == CONFIG.pipeline.max_backfill + 1
         )
+
+    def test_aborts_without_processing_when_time_is_short(
+        self, session_store, slack_client, caplog
+    ):
+        with caplog.at_level(logging.WARNING, logger="report.pipeline"):
+            pipeline.run(source=None, remaining_ms=lambda: 1_000)
+
+        session_store.fetch_sessions.assert_not_called()
+        slack_client.notify_timeout.assert_called_once()
+        slack_client.flush.assert_called_once()
+        assert any("Aborting before timeout" in r.getMessage() for r in caplog.records)
+
+    def test_marks_abort_as_backfill_on_a_backfill_date(
+        self, session_store, slack_client
+    ):
+        session_store.scan_backfill_dates.return_value = [date(2026, 3, 27)]
+        pipeline.run(source=None, remaining_ms=lambda: 1_000)
+
+        assert slack_client.notify_timeout.call_args.kwargs["is_backfill"] is True
+
+    def test_abort_leaves_later_dates_unprocessed(self, session_store):
+        session_store.scan_backfill_dates.return_value = [
+            date(2026, 3, 26),
+            date(2026, 3, 27),
+        ]
+        remaining = iter([90_000, 1_000])
+        pipeline.run(source=None, remaining_ms=lambda: next(remaining))
+
+        # Aborted on the second of the 2 backfill dates, leaving it and the primary date untouched
+        assert session_store.fetch_sessions.call_count == 1
 
     def test_notify_on_primary_failure(self, session_store, slack_client, caplog):
         session_store.fetch_sessions.side_effect = RuntimeError("DynamoDB error")

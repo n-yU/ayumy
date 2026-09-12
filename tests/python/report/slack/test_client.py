@@ -504,6 +504,19 @@ class TestNotifyError:
         assert "something went wrong" in text
 
 
+class TestNotifyTimeout:
+    def test_sends_abort_message(self, client):
+        client.notify_timeout(_builders.TARGET_DATE, "12.3s left, below the 60s margin")
+        client.flush()
+
+        kwargs = _get_send_kwargs(client)
+        text = _blocks_text(kwargs["blocks"])
+        assert "2026-03-28" in text
+        assert "12.3s left, below the 60s margin" in text
+        assert "picked up by a later run" in text
+        assert kwargs["text"]
+
+
 class TestRunLabels:
     @pytest.mark.parametrize(
         "is_manual,is_backfill,expected",

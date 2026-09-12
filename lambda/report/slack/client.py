@@ -189,6 +189,19 @@ class Client:
             "❌", date_str, str(error), str(error), is_backfill=is_backfill
         )
 
+    def notify_timeout(
+        self, target_date: datetime, reason: str, *, is_backfill: bool = False
+    ) -> None:
+        """Send when the run stops itself short of the Lambda timeout, which leaves this date and any later ones unreported."""
+        date_str = target_date.astimezone(dates.JST).strftime("%Y-%m-%d")
+        body = (
+            f"Aborted before timeout ({reason})\n"
+            "Unreported dates are picked up by a later run"
+        )
+        self._append_report_section(
+            "⏱️", date_str, body, "Aborted before timeout", is_backfill=is_backfill
+        )
+
     def notify_metrics(
         self,
         elapsed: float,

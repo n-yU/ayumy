@@ -4,6 +4,7 @@ import logging
 import platform
 import resource
 import time
+from collections.abc import Callable
 from datetime import datetime
 
 import botocore.exceptions
@@ -12,7 +13,7 @@ from config import CONFIG
 
 from . import cost, github, notion, session, slack, summarizer
 from .domain.session import SessionActivity
-from .shared import dates, env
+from .shared import dates, env, timeout
 from .shared.notice import Notice, NoticeSource
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,7 @@ def process_date(
     summary_client: summarizer.Client,
     cost_store: cost.Store,
     slack_client: slack.Client,
+    guard: timeout.Guard,
     *,
     is_backfill: bool = False,
 ) -> None:
@@ -94,6 +96,9 @@ def process_date(
             )
         return
 
+    # Checked here rather than after generation, so an abort does not discard a summary already paid for
+    guard.check()
+
     report, usage = summary_client.generate_summary(
         since,
         github_activity.format(since, until),
@@ -140,14 +145,16 @@ def run(
     target_date: str | None = None,
     memory_limit_mb: int | None = None,
     timeout_seconds: int | None = None,
+    remaining_ms: Callable[[], int] | None = None,
 ) -> None:
     """Run the report generation for every date this invocation covers.
 
     `target_date` (`YYYY-MM-DD` or `YYYY-MM-DD..YYYY-MM-DD`) takes precedence and processes every given date as a backfill;
     otherwise processes the prior day (scheduled) or today's partial window (`source="manual"`) plus unreported backfill dates.
-    `memory_limit_mb` / `timeout_seconds` are None from the CLI.
+    `memory_limit_mb` / `timeout_seconds` / `remaining_ms` are None from the CLI.
     """
     start = time.monotonic()
+    guard = timeout.Guard(remaining_ms, CONFIG.pipeline.timeout_margin_sec)
     since, until = dates.get_target_date_range(source, target_date=target_date)
     primary_date = since.astimezone(dates.JST).date()
 
@@ -212,6 +219,7 @@ def run(
                 day_since, day_until = dates.date_to_range(d)
             date_str = d.isoformat()
             try:
+                guard.check()
                 session_activity = store.fetch_sessions(date_str)
                 process_date(
                     day_since,
@@ -222,9 +230,16 @@ def run(
                     summary_client,
                     cost_store,
                     slack_client,
+                    guard,
                     is_backfill=date_str in backfill_set,
                 )
                 store.mark_reported(date_str)
+            except timeout.Approaching as e:
+                logger.warning("Aborting before timeout at %s: %s", date_str, e)
+                slack_client.notify_timeout(
+                    day_since, str(e), is_backfill=date_str in backfill_set
+                )
+                break
             except Exception as e:
                 # Broad: pipeline loop classifies per-day failure into error or warning
                 if not target_date and d == primary_date:

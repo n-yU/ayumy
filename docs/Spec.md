@@ -415,6 +415,8 @@ Notion への書き込み完了後、Slack Web API の `chat.postMessage` で指
 
 アクティビティが 0 件で Notion ページが作成されなかった場合は、正常稼働を示す簡易通知を送れる。処理中にエラーが発生した場合はエラー内容を通知する
 
+残り実行時間が閾値を下回って処理を打ち切った場合は、打ち切った日付と理由を通知する（[Abrupt Termination](#abrupt-termination)）
+
 session-only の扱い（[Summary Generation](#summary-generation)）に応じて表示を分ける
 
 - 対象日の全リポジトリが session-only の場合は session-only 専用の簡易通知を送る
@@ -655,6 +657,15 @@ Lambda 側で発生する失敗は以下の 3 区分で扱う。`logger.warning`
 - pipeline 最終 fallback（Slack 通知に届けるため）
 - pipeline 日次 loop（1 日分の失敗を error / warning に分類するため）
 - Slack 送信（ベストエフォート方針のため）
+
+#### Abrupt Termination
+上記 3 区分はいずれも Python の例外として捕まる失敗を前提とし、コード内でどう扱うかの判断規則になっている。Lambda のタイムアウト・メモリ超過・プロセスの強制終了では処理が最後まで到達せず、通知を送る後処理も走らないため、これらは分類の外側にある
+
+このうちタイムアウトは残り実行時間から予測できる。各日の処理に入る前と要約生成に入る前に残り時間を確認し、閾値を下回っていれば通知を積んでから処理を打ち切る。閾値は config で調整する
+
+- 確認を要約生成の前に置くのは、生成した後に打ち切ると Claude API の費用が無駄になるため
+- 打ち切った日は未報告のまま残り、後続の実行で補完対象になる
+- メモリ超過とプロセスの強制終了は予測できないため、この手当ての対象外
 
 ### Running Cost
 課金が発生するのは Anthropic API と AWS。GitHub API と Notion API は無料枠内で収まる

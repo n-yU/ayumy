@@ -32,6 +32,8 @@ pipeline:
   max_backfill: 3
   # date option を利用した複数日生成時の日数上限
   max_range_days: 31
+  # Lambda の残り実行時間がこの秒数を切った場合、Slack 通知を送信して処理を打ち切る
+  timeout_margin_sec: 60
 
 notion:
   # サマリページのアイコンのデフォルト設定（name には Notion のアイコンピッカー上の名前を指定）

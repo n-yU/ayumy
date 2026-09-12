@@ -8,6 +8,7 @@ import pytest
 from config import CONFIG
 from report import pipeline, summarizer
 from report.domain import summary
+from report.shared import timeout
 
 from . import _builders
 
@@ -44,4 +45,5 @@ def pipeline_clients():
         "summary_client": summary_client,
         "cost_store": cost_store,
         "slack_client": MagicMock(),
+        "guard": timeout.Guard(None, CONFIG.pipeline.timeout_margin_sec),
     }

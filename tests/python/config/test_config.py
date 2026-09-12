@@ -47,6 +47,7 @@ class TestConfigValues:
         assert CONFIG.github.search_window_sec > 0
         assert CONFIG.pipeline.max_backfill > 0
         assert CONFIG.pipeline.max_range_days > 0
+        assert CONFIG.pipeline.timeout_margin_sec > 0
 
     def test_notification_switches_are_booleans(self):
         assert isinstance(CONFIG.slack.notify.no_activity, bool)
