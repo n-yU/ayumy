@@ -117,7 +117,7 @@ Resources:
     Properties:
       TopicName: ayumy-alarms
 
-  # The handler returns 500 on ordinary failures, leaving Errors to signal runtime-level termination alone
+  # Failures that reach Slack return 500, so Errors holds only what Slack never heard about
   ReportFunctionErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
