@@ -94,6 +94,35 @@ class TestFetchCommits:
         assert result[0].sha == "aaa"
 
 
+class TestFetchPullCommits:
+    def test_tags_each_commit_with_pull_number(self, github_client, repo):
+        repo.get_pull.return_value.get_commits.return_value = [
+            _builders.commit_mock(sha="aaa"),
+            _builders.commit_mock(sha="bbb"),
+        ]
+
+        result = github_client.fetch_pull_commits(repo, 7, SINCE, UNTIL)
+
+        repo.get_pull.assert_called_once_with(7)
+        assert [c.sha for c in result] == ["aaa", "bbb"]
+        assert all(c.pull_numbers == (7,) for c in result)
+        # Not a Search API call, so it must not consume the search throttle budget
+        assert github_client._search_count == 0
+
+    def test_filters_commits_outside_window(self, github_client, repo):
+        repo.get_pull.return_value.get_commits.return_value = [
+            _builders.commit_mock(
+                sha="before", date=datetime(2026, 3, 27, 23, 59, tzinfo=dates.JST)
+            ),
+            _builders.commit_mock(sha="start", date=SINCE),
+            _builders.commit_mock(sha="end", date=UNTIL),
+        ]
+
+        result = github_client.fetch_pull_commits(repo, 7, SINCE, UNTIL)
+
+        assert [c.sha for c in result] == ["start"]
+
+
 class TestFetchPulls:
     def test_returns_pull_info_for_pr_updated_in_window(self, github_client, repo):
         repo.get_pulls.return_value = [

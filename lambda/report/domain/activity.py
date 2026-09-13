@@ -51,12 +51,12 @@ class CommitInfo:
         return in_range(self.date, since, until)
 
     @classmethod
-    def from_search_commit(
+    def from_commit(
         cls,
         commit: Commit,
         pull_numbers: Iterable[int] = (),
     ) -> CommitInfo:
-        """Build a CommitInfo from a Search API commit; `pull_numbers` is supplied separately because resolving associated PRs requires an extra API call."""
+        """Build a CommitInfo from a commit returned by the Search or pull commits API; `pull_numbers` is supplied separately because the commit payload does not carry its associated PRs."""
         return cls(
             sha=commit.sha,
             message=commit.commit.message.split("\n")[0],

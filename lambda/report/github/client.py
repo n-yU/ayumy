@@ -69,10 +69,25 @@ class Client:
             if author_date < since or author_date >= until:
                 continue
             results.append(
-                activity.CommitInfo.from_search_commit(
+                activity.CommitInfo.from_commit(
                     c, pull_numbers=self._fetch_pulls_for_commit(repo, c.sha)
                 )
             )
+        return results
+
+    def fetch_pull_commits(
+        self, repo: Repository, number: int, since: datetime, until: datetime
+    ) -> list[activity.CommitInfo]:
+        """Fetch commits of PR `number` authored within the window, each tagged with that PR.
+
+        Unlike Search, the pull commits API keeps returning commits after their branch is deleted.
+        """
+        results: list[activity.CommitInfo] = []
+        for c in repo.get_pull(number).get_commits():
+            author_date = c.commit.author.date
+            if author_date < since or author_date >= until:
+                continue
+            results.append(activity.CommitInfo.from_commit(c, pull_numbers=(number,)))
         return results
 
     def fetch_pulls(

@@ -111,7 +111,7 @@ class TestCommitInfo:
             is expected
         )
 
-    def test_from_search_commit_extracts_first_message_line(self):
+    def test_from_commit_extracts_first_message_line(self):
         commit = _builders.commit_mock(
             sha="deadbeef",
             message="Subject line\n\nBody paragraph",
@@ -119,7 +119,7 @@ class TestCommitInfo:
             date=datetime(2026, 3, 28, 10, 0, tzinfo=dates.JST),
         )
 
-        info = activity.CommitInfo.from_search_commit(commit, pull_numbers=[42, 43])
+        info = activity.CommitInfo.from_commit(commit, pull_numbers=[42, 43])
 
         assert info.sha == "deadbeef"
         assert info.message == "Subject line"
@@ -130,8 +130,8 @@ class TestCommitInfo:
         )
         assert info.pull_numbers == (42, 43)
 
-    def test_from_search_commit_defaults_pull_numbers_to_empty(self):
-        info = activity.CommitInfo.from_search_commit(_builders.commit_mock())
+    def test_from_commit_defaults_pull_numbers_to_empty(self):
+        info = activity.CommitInfo.from_commit(_builders.commit_mock())
 
         assert info.pull_numbers == ()
 
