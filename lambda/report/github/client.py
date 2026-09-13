@@ -69,10 +69,25 @@ class Client:
             if author_date < since or author_date >= until:
                 continue
             results.append(
-                activity.CommitInfo.from_search_commit(
+                activity.CommitInfo.from_commit(
                     c, pull_numbers=self._fetch_pulls_for_commit(repo, c.sha)
                 )
             )
+        return results
+
+    def fetch_pull_commits(
+        self, repo: Repository, number: int, since: datetime, until: datetime
+    ) -> list[activity.CommitInfo]:
+        """Fetch commits of PR `number` authored within the window, each tagged with that PR.
+
+        Unlike Search, the pull commits API keeps returning commits after their branch is deleted.
+        """
+        results: list[activity.CommitInfo] = []
+        for c in repo.get_pull(number).get_commits():
+            author_date = c.commit.author.date
+            if author_date < since or author_date >= until:
+                continue
+            results.append(activity.CommitInfo.from_commit(c, pull_numbers=(number,)))
         return results
 
     def fetch_pulls(
@@ -172,6 +187,10 @@ class Client:
                 is_backfill=is_backfill,
                 session_numbers=session_issues.get(name),
             )
+            for pr in pulls:
+                commits = self._merge_commits(
+                    commits, self.fetch_pull_commits(repo, pr.number, since, until)
+                )
 
             if commits or pulls or issues:
                 data[repo.name] = {
@@ -180,6 +199,23 @@ class Client:
                     "issues": issues,
                 }
         return activity.GitHubActivity(data)
+
+    @staticmethod
+    def _merge_commits(
+        commits: list[activity.CommitInfo], extra: list[activity.CommitInfo]
+    ) -> list[activity.CommitInfo]:
+        """Append `extra` commits absent from `commits` by full SHA, unioning PR numbers for SHAs both lists hold."""
+        # Rebase merges create new SHAs on the base branch, so a rebased PR's commits may appear twice
+        merged = {c.sha: c for c in commits}
+        for c in extra:
+            existing = merged.get(c.sha)
+            if existing is None:
+                merged[c.sha] = c
+            else:
+                merged[c.sha] = existing.with_pull_numbers(
+                    sorted({*existing.pull_numbers, *c.pull_numbers})
+                )
+        return list(merged.values())
 
     def _search_pulls_by_event(
         self,

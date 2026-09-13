@@ -259,6 +259,18 @@ ayumy sync --report --date 2026-03-01..2026-03-05               # 日付範囲�
 
 ## Stage 2: Data Integration, Summarization, and Notion Writing
 ### GitHub Activity Fetch
+対象リポジトリは S3 上の session ログから特定する。各プロジェクトディレクトリの `.ayumy_repo` メタデータファイルからリポジトリ名を読み取り、そのリポジトリのみ `GET /repos/{owner}/{repo}` で取得する
+
+| Activity | Endpoint | Filter |
+|---|---|---|
+| Commits | `GET /search/commits` | `repo:{full_name} author-date:{since_date}..{until_date}` |
+| Pull Requests | `GET /repos/{owner}/{repo}/pulls` | `state=all`, `sort=updated`, 前日以降 |
+| PR Commits | `GET /repos/{owner}/{repo}/pulls/{N}/commits` | 取得した PR ごと |
+| Issues | `GET /repos/{owner}/{repo}/issues` | `since`, `state=all`, PR を除外 |
+
+Search API の呼び出しは、secondary rate limit に対応するため、一定時間ウィンドウ内のリクエスト数を制御する共通の throttle で管理する
+
+#### Target Window
 対象期間は実行方式によって異なる
 
 | Execution Mode | Range |
@@ -267,24 +279,14 @@ ayumy sync --report --date 2026-03-01..2026-03-05               # 日付範囲�
 | 手動実行（`ayumy sync --report`） | 当日 JST 00:00:00 〜 現在時刻 |
 | 日付指定（`ayumy sync --report --date DATE`） | 指定日 JST 00:00:00 〜 翌日 JST 00:00:00（各日付ごと） |
 
-- Lambda event の `source` フィールドで実行方式を判定する（`"manual"` → 手動、それ以外 → 定期）
-- `target_date` フィールドが指定されている場合は `source` に関わらずその日付の全日範囲を対象とする
-- `target_date` は `YYYY-MM-DD` または `YYYY-MM-DD..YYYY-MM-DD` 形式。範囲指定時は各日付に対して順にレポートを生成する
-- `target_date` 指定時は backfill（未レポート日の自動検出）をスキップし、指定された日付のみを処理する
+Lambda event の `source` が `"manual"` なら手動実行、それ以外なら定期実行として扱う。`target_date` が指定されている場合は `source` に関わらず指定日ごとに全日範囲を順に処理し、未レポート日の自動検出（backfill）は行わない
 
-対象リポジトリは S3 上の session ログから特定する。各プロジェクトディレクトリの `.ayumy_repo` メタデータファイルからリポジトリ名を読み取り、そのリポジトリのみ `GET /repos/{owner}/{repo}` で取得する
+#### Commit Fetch
+GitHub Search の date 比較は UTC 解釈のため、JST の 1 日分は連続する 2 つの UTC 日付にまたがる。検索範囲を JST 境界より広く取り、取得後にタイムゾーン対応の `since <= author_date < until` で絞り込む。手動実行時の部分日もこの絞り込みで扱える
 
-| Activity | Endpoint | Filter |
-|---|---|---|
-| Commits | `GET /search/commits` | `repo:{full_name} author-date:{since_date}..{until_date}` |
-| Pull Requests | `GET /repos/{owner}/{repo}/pulls` | `state=all`, `sort=updated`, 前日以降 |
-| Issues | `GET /repos/{owner}/{repo}/issues` | `since`, `state=all`, PR を除外 |
+Search は squash merge 後にブランチが削除された PR の commit を返さない。これを補うため、取得した PR ごとに commit 一覧も取得し、同じ絞り込みをかけてから SHA 単位で Search の結果と統合する。どちらの経路でも取れなかった commit は、session JSONL の `tool_result` から抽出した commit 情報で補完する（[Session Write to DynamoDB](#session-write-to-dynamodb)）
 
-Commits は Search Commits API を使用する。GitHub Search の date 比較は UTC 解釈のため、JST の 1 日分は連続する 2 つの UTC 日付にまたがる。検索範囲を JST 境界より広く取り、取得後にタイムゾーン対応の `since <= author_date < until` で絞り込む。これにより手動実行時の部分日（当日 00:00 〜 現在時刻）にも対応する。squash merge で `author-date` が書き換えられた commit は Search では検出できない。これらは session JSONL の `tool_result` から抽出した commit 情報で補完する（[Session Write to DynamoDB](#session-write-to-dynamodb)）
-
-各 commit には紐づく PR 番号も付与する。この番号は Notion Timeline で commit を親 PR ブロック配下にネストする際の参照キーになる。Hybrid 経路の PR 取得（[Hybrid Backfill Fetch](#hybrid-backfill-fetch)）でも再利用する
-
-Search API の secondary rate limit に対応するため、一定時間ウィンドウ内でのリクエスト数を制御する throttle 処理を行う
+各 commit には紐づく PR 番号を付与する。この番号は Notion Timeline で commit を親 PR ブロック配下にネストする際の参照キーになり、Search で取得した commit の番号は Hybrid 経路の PR 取得にも使う
 
 #### Hybrid Backfill Fetch
 PR/Issue の `updated_at` 経路は対象日以降に状態が更新されると `updated_at` がウィンドウから外れて取得対象から漏れる。例えば T 日に open された PR が T+1 日に merge された場合、T 日の再生成では PR が取得できず Timeline に PR ブロックが現れない
@@ -304,8 +306,6 @@ Search クエリの日付範囲は UTC/JST の境界ずれを吸収するため�
 
 - commit 由来 PR — 対象日に commit が存在する事実をもって採用する
 - session 由来 PR/Issue — session 中に対象日に操作された事実をもって採用する
-
-Hybrid 経路の Search 呼び出しは commit 取得の Search 呼び出しと共通の throttle で管理する
 
 ### Session Log Read
 DynamoDB の `ayumy-sessions` テーブルから対象日付をパーティションキーとして Query し、session メタデータを取得する。結果をリポジトリ別にグルーピングし、各リポジトリ内の session を `start_time` 順にソートする
@@ -585,7 +585,7 @@ ayumy sync --report --date 2026-03-01..2026-03-05  # 日付範囲のレポート
 ```
 - `aws lambda invoke --invocation-type Event` で Lambda 関数を `{"source": "manual"}` ペイロード付きで非同期呼び出しする
 - `--date` 指定時はペイロードに `"target_date"` を追加する（`"YYYY-MM-DD"` または `"YYYY-MM-DD..YYYY-MM-DD"`）
-- 対象期間の判定は [GitHub Activity Fetch](#github-activity-fetch) に従う
+- 対象期間の判定は [Target Window](#target-window) に従う
 - 実行結果は Slack 通知で確認する
 
 ### Environment Variables

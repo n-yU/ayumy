@@ -94,6 +94,35 @@ class TestFetchCommits:
         assert result[0].sha == "aaa"
 
 
+class TestFetchPullCommits:
+    def test_tags_each_commit_with_pull_number(self, github_client, repo):
+        repo.get_pull.return_value.get_commits.return_value = [
+            _builders.commit_mock(sha="aaa"),
+            _builders.commit_mock(sha="bbb"),
+        ]
+
+        result = github_client.fetch_pull_commits(repo, 7, SINCE, UNTIL)
+
+        repo.get_pull.assert_called_once_with(7)
+        assert [c.sha for c in result] == ["aaa", "bbb"]
+        assert all(c.pull_numbers == (7,) for c in result)
+        # Not a Search API call, so it must not consume the search throttle budget
+        assert github_client._search_count == 0
+
+    def test_filters_commits_outside_window(self, github_client, repo):
+        repo.get_pull.return_value.get_commits.return_value = [
+            _builders.commit_mock(
+                sha="before", date=datetime(2026, 3, 27, 23, 59, tzinfo=dates.JST)
+            ),
+            _builders.commit_mock(sha="start", date=SINCE),
+            _builders.commit_mock(sha="end", date=UNTIL),
+        ]
+
+        result = github_client.fetch_pull_commits(repo, 7, SINCE, UNTIL)
+
+        assert [c.sha for c in result] == ["start"]
+
+
 class TestFetchPulls:
     def test_returns_pull_info_for_pr_updated_in_window(self, github_client, repo):
         repo.get_pulls.return_value = [
@@ -560,3 +589,65 @@ class TestFetchActivityBackfill:
         activity_repo.get_issues.assert_not_called()
         # 5 search calls expected (created/merged/closed PR + created/closed issue)
         assert github_client.g.search_issues.call_count == 5
+
+
+class TestFetchActivityPullCommits:
+    @pytest.fixture(autouse=True)
+    def _no_issues(self, activity_repo):
+        activity_repo.get_issues.return_value = []
+
+    def test_adds_pull_commits_missing_from_search(self, github_client, activity_repo):
+        github_client.g.search_commits.return_value = []
+        activity_repo.get_pulls.return_value = [_builders.pull_mock(200)]
+        activity_repo.get_pull.return_value.get_commits.return_value = [
+            _builders.commit_mock(sha="aaa")
+        ]
+
+        result = github_client.fetch_activity(SINCE, UNTIL, ["repo"])
+
+        commits = result.repos()[_builders.REPO]["commits"]
+        assert [(c.sha, c.pull_numbers) for c in commits] == [("aaa", (200,))]
+
+    def test_unions_pull_numbers_for_sha_found_by_both_paths(
+        self, github_client, activity_repo
+    ):
+        github_client.g.search_commits.return_value = [_builders.commit_mock(sha="aaa")]
+        activity_repo.get_commit.return_value.get_pulls.return_value = [
+            _builders.number_mock(5)
+        ]
+        activity_repo.get_pulls.return_value = [_builders.pull_mock(7)]
+        activity_repo.get_pull.return_value.get_commits.return_value = [
+            _builders.commit_mock(sha="aaa")
+        ]
+
+        result = github_client.fetch_activity(SINCE, UNTIL, ["repo"])
+
+        commits = result.repos()[_builders.REPO]["commits"]
+        assert [(c.sha, c.pull_numbers) for c in commits] == [("aaa", (5, 7))]
+
+    @pytest.mark.parametrize(
+        ("search_results", "session_pulls"),
+        [
+            pytest.param(
+                [[_builders.number_mock(200)], [], [], [], []], {}, id="search_derived"
+            ),
+            pytest.param([[], [], [], [], []], {"repo": [200]}, id="session_derived"),
+        ],
+    )
+    def test_restores_commits_of_backfill_pulls(
+        self, github_client, activity_repo, search_results, session_pulls
+    ):
+        github_client.g.search_commits.return_value = []
+        # Hybrid path searches PR events 3 times, then issue events 2 times
+        github_client.g.search_issues.side_effect = search_results
+        activity_repo.get_pull.return_value = _builders.pull_mock(200)
+        activity_repo.get_pull.return_value.get_commits.return_value = [
+            _builders.commit_mock(sha="aaa")
+        ]
+
+        result = github_client.fetch_activity(
+            SINCE, UNTIL, ["repo"], is_backfill=True, session_pulls=session_pulls
+        )
+
+        commits = result.repos()[_builders.REPO]["commits"]
+        assert [(c.sha, c.pull_numbers) for c in commits] == [("aaa", (200,))]
