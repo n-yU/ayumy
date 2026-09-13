@@ -1,10 +1,12 @@
 """Tests for the session DynamoDB store."""
 
 import logging
-from datetime import date
+from datetime import date, datetime
 
 import botocore.exceptions
 import pytest
+
+from report.shared import dates
 
 from . import _builders
 
@@ -244,9 +246,33 @@ class TestFetchSessions:
         activity = store.fetch_sessions("2026-03-28")
 
         session = activity.get("repo")[0]
-        assert session["session_commits"] == commits
+        assert session["session_commits"] == [
+            {
+                "sha": "a1b2c3d",
+                "message": "Fix the bug",
+                "timestamp": datetime(2026, 3, 28, 10, 30, tzinfo=dates.JST),
+            },
+        ]
         assert session["session_pulls"] == [87, 82]
         assert session["session_issues"] == [84]
+
+    def test_parses_session_timestamps(self, store):
+        store.table.query.return_value = {"Items": [_item()]}
+
+        session = store.fetch_sessions("2026-03-28").get("repo")[0]
+
+        assert session["start_time"] == datetime(2026, 3, 28, 10, 0, tzinfo=dates.JST)
+        assert session["end_time"] == datetime(2026, 3, 28, 11, 0, tzinfo=dates.JST)
+
+    def test_leaves_timestamp_absent_on_legacy_session_commit(self, store):
+        legacy_commit = {"sha": "a1b2c3d", "message": "Fix the bug"}
+        store.table.query.return_value = {
+            "Items": [_item(session_commits=[legacy_commit])]
+        }
+
+        session = store.fetch_sessions("2026-03-28").get("repo")[0]
+
+        assert session["session_commits"] == [legacy_commit]
 
     def test_raises_when_session_keys_missing(self, store):
         item = _item()

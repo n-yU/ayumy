@@ -9,7 +9,7 @@ import boto3
 import boto3.dynamodb.conditions as conditions
 import botocore.exceptions
 
-from ..domain.session import SessionActivity, SessionInfo
+from ..domain.session import SessionActivity, SessionCommit, SessionInfo
 from ..shared.notice import Notice
 from .parser import SessionLogParser
 
@@ -24,6 +24,14 @@ def _content_hash(fields: dict) -> str:
         content, sort_keys=True, ensure_ascii=False, separators=(",", ":")
     )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _session_commit(item: dict) -> SessionCommit:
+    """Convert a stored session commit, leaving `timestamp` absent on legacy items that never recorded it."""
+    commit: SessionCommit = {"sha": item["sha"], "message": item["message"]}
+    if "timestamp" in item:
+        commit["timestamp"] = datetime.fromisoformat(item["timestamp"])
+    return commit
 
 
 class Store:
@@ -103,11 +111,13 @@ class Store:
             session_info: SessionInfo = {
                 "session_id": session_id,
                 "project": item["project"],
-                "start_time": item["start_time"],
-                "end_time": item["end_time"],
+                "start_time": datetime.fromisoformat(item["start_time"]),
+                "end_time": datetime.fromisoformat(item["end_time"]),
                 "user_messages": item["user_messages"],
                 "tools_used": item["tools_used"],
-                "session_commits": item["session_commits"],
+                "session_commits": [
+                    _session_commit(c) for c in item["session_commits"]
+                ],
                 "session_pulls": [int(n) for n in item["session_pulls"]],
                 "session_issues": [int(n) for n in item["session_issues"]],
             }

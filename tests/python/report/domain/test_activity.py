@@ -1,19 +1,17 @@
 """Tests for report.domain.activity dataclasses and the repo-keyed container."""
 
 import dataclasses
-from datetime import datetime
 
 import pytest
 
 from report.domain import activity
-from report.shared import dates
 
 from .. import _builders
 
 
 def _session(
     *,
-    start="2026-03-28T10:00:00+09:00",
+    start=_builders.SESSION_START,
     session_commits=(),
 ):
     return _builders.session_entry(
@@ -30,7 +28,7 @@ def _commit(**overrides):
         "sha": "abc1234deadbeef",
         "message": "Fix bug",
         "author": "user",
-        "date": "2026-03-28T10:00:00+09:00",
+        "date": _builders.jst(2026, 3, 28, 10),
         "url": "https://github.com/n-yU/my-repo/commit/abc1234deadbeef",
     }
     base.update(overrides)
@@ -46,9 +44,9 @@ def _pull(**overrides):
         "labels": (),
         "draft": False,
         "url": "https://github.com/n-yU/my-repo/pull/42",
-        "created_at": "2026-03-28T09:00:00+09:00",
-        "merged_at": "2026-03-28T10:00:00+09:00",
-        "closed_at": "2026-03-28T10:00:00+09:00",
+        "created_at": _builders.jst(2026, 3, 28, 9),
+        "merged_at": _builders.jst(2026, 3, 28, 10),
+        "closed_at": _builders.jst(2026, 3, 28, 10),
         "merge_commit_sha": "deadbeef",
     }
     base.update(overrides)
@@ -63,8 +61,8 @@ def _issue(**overrides):
         "author": "user",
         "labels": (),
         "url": "https://github.com/n-yU/my-repo/issues/7",
-        "created_at": "2026-03-28T09:00:00+09:00",
-        "closed_at": "2026-03-28T11:00:00+09:00",
+        "created_at": _builders.jst(2026, 3, 28, 9),
+        "closed_at": _builders.jst(2026, 3, 28, 11),
         "state_reason": None,
     }
     base.update(overrides)
@@ -97,18 +95,17 @@ class TestCommitInfo:
         assert c.label() == "abc1234: Fix bug"
 
     @pytest.mark.parametrize(
-        "date_str,expected",
+        "date,expected",
         [
-            ("2026-03-28T10:00:00+09:00", True),
-            ("2026-03-28T00:00:00+09:00", True),
-            ("2026-03-27T23:59:59+09:00", False),
-            ("2026-03-29T00:00:00+09:00", False),
+            (_builders.jst(2026, 3, 28, 10), True),
+            (_builders.jst(2026, 3, 28), True),
+            (_builders.jst(2026, 3, 27, 23, 59, 59), False),
+            (_builders.jst(2026, 3, 29), False),
         ],
     )
-    def test_is_in_range(self, date_str, expected):
+    def test_is_in_range(self, date, expected):
         assert (
-            _commit(date=date_str).is_in_range(_builders.SINCE, _builders.UNTIL)
-            is expected
+            _commit(date=date).is_in_range(_builders.SINCE, _builders.UNTIL) is expected
         )
 
     def test_from_commit_extracts_first_message_line(self):
@@ -116,7 +113,7 @@ class TestCommitInfo:
             sha="deadbeef",
             message="Subject line\n\nBody paragraph",
             author="alice",
-            date=datetime(2026, 3, 28, 10, 0, tzinfo=dates.JST),
+            date=_builders.jst(2026, 3, 28, 10),
         )
 
         info = activity.CommitInfo.from_commit(commit, pull_numbers=[42, 43])
@@ -124,7 +121,7 @@ class TestCommitInfo:
         assert info.sha == "deadbeef"
         assert info.message == "Subject line"
         assert info.author == "alice"
-        assert info.date == "2026-03-28T10:00:00+09:00"
+        assert info.date == _builders.jst(2026, 3, 28, 10)
         assert (
             info.url == f"https://github.com/{_builders.REPO_FULL_NAME}/commit/deadbeef"
         )
@@ -166,11 +163,11 @@ class TestPullInfo:
     @pytest.mark.parametrize(
         "created_at,merged_at,closed_at,expected",
         [
-            ("2026-03-28T05:00:00+09:00", None, None, True),
-            ("2026-03-27T05:00:00+09:00", "2026-03-28T05:00:00+09:00", None, True),
-            ("2026-03-27T05:00:00+09:00", None, "2026-03-28T05:00:00+09:00", True),
-            ("2026-03-27T05:00:00+09:00", None, None, False),
-            ("2026-03-29T05:00:00+09:00", None, None, False),
+            (_builders.jst(2026, 3, 28, 5), None, None, True),
+            (_builders.jst(2026, 3, 27, 5), _builders.jst(2026, 3, 28, 5), None, True),
+            (_builders.jst(2026, 3, 27, 5), None, _builders.jst(2026, 3, 28, 5), True),
+            (_builders.jst(2026, 3, 27, 5), None, None, False),
+            (_builders.jst(2026, 3, 29, 5), None, None, False),
         ],
     )
     def test_has_event_in_range(self, created_at, merged_at, closed_at, expected):
@@ -183,33 +180,33 @@ class TestPullInfo:
             ("open", None, None, "open"),
             (
                 "merged",
-                "2026-03-28T10:00:00+09:00",
-                "2026-03-28T10:00:00+09:00",
+                _builders.jst(2026, 3, 28, 10),
+                _builders.jst(2026, 3, 28, 10),
                 "merged",
             ),
-            ("closed", None, "2026-03-28T10:00:00+09:00", "closed"),
-            ("merged", "2026-03-27T10:00:00+09:00", "2026-03-27T10:00:00+09:00", None),
-            ("closed", None, "2026-03-27T10:00:00+09:00", None),
+            ("closed", None, _builders.jst(2026, 3, 28, 10), "closed"),
             (
                 "merged",
-                "2026-03-29T10:00:00+09:00",
-                "2026-03-29T10:00:00+09:00",
+                _builders.jst(2026, 3, 27, 10),
+                _builders.jst(2026, 3, 27, 10),
+                None,
+            ),
+            ("closed", None, _builders.jst(2026, 3, 27, 10), None),
+            (
+                "merged",
+                _builders.jst(2026, 3, 29, 10),
+                _builders.jst(2026, 3, 29, 10),
                 "open",
             ),
-            ("closed", None, "2026-03-29T10:00:00+09:00", "open"),
+            ("closed", None, _builders.jst(2026, 3, 29, 10), "open"),
             # since is inclusive, until is exclusive
             (
                 "merged",
-                "2026-03-28T00:00:00+09:00",
-                "2026-03-28T00:00:00+09:00",
+                _builders.jst(2026, 3, 28),
+                _builders.jst(2026, 3, 28),
                 "merged",
             ),
-            (
-                "merged",
-                "2026-03-29T00:00:00+09:00",
-                "2026-03-29T00:00:00+09:00",
-                "open",
-            ),
+            ("merged", _builders.jst(2026, 3, 29), _builders.jst(2026, 3, 29), "open"),
         ],
     )
     def test_state_in_range(self, state, merged_at, closed_at, expected):
@@ -217,16 +214,16 @@ class TestPullInfo:
         assert pr.state_in_range(_builders.SINCE, _builders.UNTIL) == expected
 
     def test_from_pull_request_classifies_merged(self):
-        pr = _make_pr_mock(merged_at_dt=datetime(2026, 3, 28, 10, 0, tzinfo=dates.JST))
+        pr = _make_pr_mock(merged_at_dt=_builders.jst(2026, 3, 28, 10))
         info = activity.PullInfo.from_pull_request(pr)
         assert info.state == "merged"
-        assert info.merged_at == "2026-03-28T10:00:00+09:00"
+        assert info.merged_at == _builders.jst(2026, 3, 28, 10)
         assert info.merge_commit_sha == "merge-sha"
 
     def test_from_pull_request_classifies_closed_unmerged(self):
         pr = _make_pr_mock(
             pr_state="closed",
-            closed_at_dt=datetime(2026, 3, 28, 10, 0, tzinfo=dates.JST),
+            closed_at_dt=_builders.jst(2026, 3, 28, 10),
         )
         info = activity.PullInfo.from_pull_request(pr)
         assert info.state == "closed"
@@ -283,10 +280,10 @@ class TestIssueInfo:
     @pytest.mark.parametrize(
         "created_at,closed_at,expected",
         [
-            ("2026-03-28T05:00:00+09:00", None, True),
-            ("2026-03-27T05:00:00+09:00", "2026-03-28T05:00:00+09:00", True),
-            ("2026-03-27T05:00:00+09:00", None, False),
-            ("2026-03-29T05:00:00+09:00", None, False),
+            (_builders.jst(2026, 3, 28, 5), None, True),
+            (_builders.jst(2026, 3, 27, 5), _builders.jst(2026, 3, 28, 5), True),
+            (_builders.jst(2026, 3, 27, 5), None, False),
+            (_builders.jst(2026, 3, 29, 5), None, False),
         ],
     )
     def test_has_event_in_range(self, created_at, closed_at, expected):
@@ -297,12 +294,12 @@ class TestIssueInfo:
         "state,closed_at,expected",
         [
             ("open", None, "open"),
-            ("closed", "2026-03-28T10:00:00+09:00", "closed"),
-            ("closed", "2026-03-27T10:00:00+09:00", None),
-            ("closed", "2026-03-29T10:00:00+09:00", "open"),
+            ("closed", _builders.jst(2026, 3, 28, 10), "closed"),
+            ("closed", _builders.jst(2026, 3, 27, 10), None),
+            ("closed", _builders.jst(2026, 3, 29, 10), "open"),
             # since is inclusive, until is exclusive
-            ("closed", "2026-03-28T00:00:00+09:00", "closed"),
-            ("closed", "2026-03-29T00:00:00+09:00", "open"),
+            ("closed", _builders.jst(2026, 3, 28), "closed"),
+            ("closed", _builders.jst(2026, 3, 29), "open"),
         ],
     )
     def test_state_in_range(self, state, closed_at, expected):
@@ -318,16 +315,16 @@ class TestIssueInfo:
         assert info.closed_at is None
         assert info.state == "open"
 
-    def test_from_issue_serializes_closed_at(self):
+    def test_from_issue_keeps_closed_at(self):
         issue = _builders.issue_mock(
             7,
-            closed_at=datetime(2026, 3, 28, 11, 0, tzinfo=dates.JST),
+            closed_at=_builders.jst(2026, 3, 28, 11),
             state_reason="not_planned",
         )
 
         info = activity.IssueInfo.from_issue(issue)
 
-        assert info.closed_at == "2026-03-28T11:00:00+09:00"
+        assert info.closed_at == _builders.jst(2026, 3, 28, 11)
         assert info.state_reason == "not_planned"
 
 
@@ -349,12 +346,15 @@ class TestGitHubActivityFormat:
                         "Add feature",
                         "merged",
                         labels=("enhancement",),
-                        merged_at="2026-03-28T10:00:00+09:00",
+                        merged_at=_builders.jst(2026, 3, 28, 10),
                     )
                 ],
                 "issues": [
                     _builders.issue(
-                        2, "Bug report", "closed", closed_at="2026-03-28T11:00:00+09:00"
+                        2,
+                        "Bug report",
+                        "closed",
+                        closed_at=_builders.jst(2026, 3, 28, 11),
                     )
                 ],
             },
@@ -386,17 +386,17 @@ class TestGitHubActivityFormat:
             "my-repo": {
                 "commits": [
                     _builders.commit(
-                        message="Yesterday", date="2026-03-27T10:00:00+09:00"
+                        message="Yesterday", date=_builders.jst(2026, 3, 27, 10)
                     )
                 ],
                 "pulls": [
                     _builders.pull(
-                        1, "Merged", "merged", merged_at="2026-03-27T10:00:00+09:00"
+                        1, "Merged", "merged", merged_at=_builders.jst(2026, 3, 27, 10)
                     )
                 ],
                 "issues": [
                     _builders.issue(
-                        2, "Closed", "closed", closed_at="2026-03-27T11:00:00+09:00"
+                        2, "Closed", "closed", closed_at=_builders.jst(2026, 3, 27, 11)
                     )
                 ],
             },
@@ -410,12 +410,12 @@ class TestGitHubActivityFormat:
                 "commits": [],
                 "pulls": [
                     _builders.pull(
-                        1, "Merged", "merged", merged_at="2026-03-29T10:00:00+09:00"
+                        1, "Merged", "merged", merged_at=_builders.jst(2026, 3, 29, 10)
                     )
                 ],
                 "issues": [
                     _builders.issue(
-                        2, "Closed", "closed", closed_at="2026-03-29T11:00:00+09:00"
+                        2, "Closed", "closed", closed_at=_builders.jst(2026, 3, 29, 11)
                     )
                 ],
             },
@@ -480,7 +480,7 @@ class TestMergeSessionCommits:
             sha="aaa1111",
             message="Existing",
             author="user",
-            date="2026-03-28T09:00:00+09:00",
+            date=_builders.jst(2026, 3, 28, 9),
             url=f"https://github.com/{_builders.OWNER}/my-repo/commit/aaa1111",
         )
         github_activity = activity.GitHubActivity(
@@ -502,7 +502,7 @@ class TestMergeSessionCommits:
             sha=full_sha,
             message="Existing",
             author="user",
-            date="2026-03-28T09:00:00+09:00",
+            date=_builders.jst(2026, 3, 28, 9),
             url=f"https://github.com/{_builders.OWNER}/my-repo/commit/{full_sha}",
         )
         github_activity = activity.GitHubActivity(
@@ -528,22 +528,22 @@ class TestMergeSessionCommits:
         github_activity = activity.GitHubActivity({})
         sessions = [
             _session(
-                start="2026-03-28T10:00:00+09:00",
+                start=_builders.jst(2026, 3, 28, 10),
                 session_commits=[
                     {
                         "sha": "aaa1111",
                         "message": "First",
-                        "timestamp": "2026-03-28T10:30:00+09:00",
+                        "timestamp": _builders.jst(2026, 3, 28, 10, 30),
                     },
                 ],
             ),
             _session(
-                start="2026-03-28T12:00:00+09:00",
+                start=_builders.jst(2026, 3, 28, 12),
                 session_commits=[
                     {
                         "sha": "aaa1111",
                         "message": "Duplicate",
-                        "timestamp": "2026-03-28T12:30:00+09:00",
+                        "timestamp": _builders.jst(2026, 3, 28, 12, 30),
                     },
                 ],
             ),
@@ -558,7 +558,7 @@ class TestMergeSessionCommits:
         assert len(commits) == 1
         # First-occurrence wins; the second session's duplicate is dropped entirely
         assert commits[0].message == "First"
-        assert commits[0].date == "2026-03-28T10:30:00+09:00"
+        assert commits[0].date == _builders.jst(2026, 3, 28, 10, 30)
 
     def test_uses_per_commit_timestamp_when_present(self):
         github_activity = activity.GitHubActivity({})
@@ -566,12 +566,12 @@ class TestMergeSessionCommits:
             "my-repo",
             [
                 _session(
-                    start="2026-03-28T10:00:00+09:00",
+                    start=_builders.jst(2026, 3, 28, 10),
                     session_commits=[
                         {
                             "sha": "aaa",
                             "message": "C1",
-                            "timestamp": "2026-03-28T10:45:00+09:00",
+                            "timestamp": _builders.jst(2026, 3, 28, 10, 45),
                         },
                         {"sha": "bbb", "message": "C2"},
                     ],
@@ -583,5 +583,5 @@ class TestMergeSessionCommits:
         commits = github_activity.repos()["my-repo"]["commits"]
         # Per-commit timestamp wins; legacy entry falls back to the session start_time
         by_sha = {c.sha: c for c in commits}
-        assert by_sha["aaa"].date == "2026-03-28T10:45:00+09:00"
-        assert by_sha["bbb"].date == "2026-03-28T10:00:00+09:00"
+        assert by_sha["aaa"].date == _builders.jst(2026, 3, 28, 10, 45)
+        assert by_sha["bbb"].date == _builders.jst(2026, 3, 28, 10)

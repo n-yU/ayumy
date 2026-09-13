@@ -10,9 +10,17 @@ from report.shared import dates
 OWNER = "n-yU"
 REPO = "my-repo"
 REPO_FULL_NAME = f"{OWNER}/{REPO}"
-MOCK_CREATED_AT = datetime(2026, 3, 28, 9, 0, tzinfo=dates.JST)
-CREATED_AT = MOCK_CREATED_AT.isoformat()
-COMPLETED_AT = datetime(2026, 3, 28, 10, 0, tzinfo=dates.JST).isoformat()
+
+
+def jst(year, month, day, hour=0, minute=0, second=0):
+    return datetime(year, month, day, hour, minute, second, tzinfo=dates.JST)
+
+
+CREATED_AT = jst(2026, 3, 28, 9)
+COMMITTED_AT = jst(2026, 3, 28, 10)
+COMPLETED_AT = jst(2026, 3, 28, 10)
+SESSION_START = jst(2026, 3, 28, 10)
+SESSION_END = jst(2026, 3, 28, 11)
 
 SINCE = datetime(2026, 3, 28, 0, 0, tzinfo=dates.JST)
 UNTIL = datetime(2026, 3, 29, 0, 0, tzinfo=dates.JST)
@@ -26,7 +34,7 @@ def commit(
     sha="abc1234",
     message="Fix bug",
     *,
-    date="2026-03-28T10:00:00+09:00",
+    date=COMMITTED_AT,
     author="user",
     repo=REPO,
     url=None,
@@ -121,8 +129,8 @@ def session_entry(
     *,
     session_id="s1",
     project=REPO,
-    start="2026-03-28T10:00:00+09:00",
-    end="2026-03-28T11:00:00+09:00",
+    start=SESSION_START,
+    end=SESSION_END,
     messages=("Fix bug",),
     tools=("Edit",),
     session_commits=None,
@@ -191,7 +199,7 @@ def commit_mock(
     sha="abc1234",
     *,
     message="Fix bug",
-    date=MOCK_CREATED_AT,
+    date=CREATED_AT,
     author="user",
     repo=REPO,
 ):
@@ -207,7 +215,7 @@ def commit_mock(
 def pull_mock(
     number=1,
     *,
-    created_at=MOCK_CREATED_AT,
+    created_at=CREATED_AT,
     updated_at=None,
     merged_at=None,
     closed_at=None,
@@ -240,7 +248,7 @@ def pull_mock(
 def issue_mock(
     number=1,
     *,
-    created_at=MOCK_CREATED_AT,
+    created_at=CREATED_AT,
     updated_at=None,
     closed_at=None,
     state=None,

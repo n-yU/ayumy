@@ -20,10 +20,10 @@ if TYPE_CHECKING:
 _IRREGULAR_ISSUE_REASONS = {"not_planned": "not planned", "duplicate": "duplicate"}
 
 
-def in_range(iso_timestamp: str | None, since: datetime, until: datetime) -> bool:
-    if not iso_timestamp:
+def in_range(timestamp: datetime | None, since: datetime, until: datetime) -> bool:
+    if timestamp is None:
         return False
-    return since <= datetime.fromisoformat(iso_timestamp) < until
+    return since <= timestamp < until
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,7 +33,7 @@ class CommitInfo:
     sha: str
     message: str
     author: str
-    date: str
+    date: datetime
     url: str
     pull_numbers: tuple[int, ...] = ()
 
@@ -61,7 +61,7 @@ class CommitInfo:
             sha=commit.sha,
             message=commit.commit.message.split("\n")[0],
             author=commit.commit.author.name,
-            date=commit.commit.author.date.isoformat(),
+            date=commit.commit.author.date,
             url=commit.html_url,
             pull_numbers=tuple(pull_numbers),
         )
@@ -81,9 +81,9 @@ class PullInfo:
     labels: tuple[str, ...]
     draft: bool
     url: str
-    created_at: str
-    merged_at: str | None
-    closed_at: str | None
+    created_at: datetime
+    merged_at: datetime | None
+    closed_at: datetime | None
     merge_commit_sha: str | None
 
     def label(self) -> str:
@@ -105,7 +105,7 @@ class PullInfo:
         )
 
     @property
-    def completed_at(self) -> str | None:
+    def completed_at(self) -> datetime | None:
         return self.merged_at or self.closed_at
 
     def state_in_range(self, since: datetime, until: datetime) -> str | None:
@@ -114,7 +114,7 @@ class PullInfo:
         A PR completed after the window is reported as `open` because the completion belongs to the day it happened.
         """
         completed = self.completed_at
-        if completed is None or datetime.fromisoformat(completed) >= until:
+        if completed is None or completed >= until:
             return "open"
         return self.state if in_range(completed, since, until) else None
 
@@ -134,9 +134,9 @@ class PullInfo:
             labels=tuple(label.name for label in pr.labels),
             draft=bool(pr.draft),
             url=pr.html_url,
-            created_at=pr.created_at.isoformat(),
-            merged_at=pr.merged_at.isoformat() if pr.merged_at else None,
-            closed_at=pr.closed_at.isoformat() if pr.closed_at else None,
+            created_at=pr.created_at,
+            merged_at=pr.merged_at,
+            closed_at=pr.closed_at,
             # Skip GitHub's "test merge" SHA returned for unmerged PRs
             merge_commit_sha=pr.merge_commit_sha if pr.merged_at else None,
         )
@@ -152,8 +152,8 @@ class IssueInfo:
     author: str
     labels: tuple[str, ...]
     url: str
-    created_at: str
-    closed_at: str | None
+    created_at: datetime
+    closed_at: datetime | None
     state_reason: str | None
 
     def label(self) -> str:
@@ -182,7 +182,7 @@ class IssueInfo:
         )
 
     @property
-    def completed_at(self) -> str | None:
+    def completed_at(self) -> datetime | None:
         return self.closed_at
 
     def state_in_range(self, since: datetime, until: datetime) -> str | None:
@@ -191,7 +191,7 @@ class IssueInfo:
         An issue closed after the window is reported as `open` because the close belongs to the day it happened.
         """
         completed = self.completed_at
-        if completed is None or datetime.fromisoformat(completed) >= until:
+        if completed is None or completed >= until:
             return "open"
         return self.state if in_range(completed, since, until) else None
 
@@ -204,8 +204,8 @@ class IssueInfo:
             author=issue.user.login,
             labels=tuple(label.name for label in issue.labels),
             url=issue.html_url,
-            created_at=issue.created_at.isoformat(),
-            closed_at=issue.closed_at.isoformat() if issue.closed_at else None,
+            created_at=issue.created_at,
+            closed_at=issue.closed_at,
             state_reason=issue.state_reason,
         )
 
