@@ -589,3 +589,38 @@ class TestFetchActivityBackfill:
         activity_repo.get_issues.assert_not_called()
         # 5 search calls expected (created/merged/closed PR + created/closed issue)
         assert github_client.g.search_issues.call_count == 5
+
+
+class TestFetchActivityPullCommits:
+    @pytest.fixture(autouse=True)
+    def _no_issues(self, activity_repo):
+        activity_repo.get_issues.return_value = []
+
+    def test_adds_pull_commits_missing_from_search(self, github_client, activity_repo):
+        github_client.g.search_commits.return_value = []
+        activity_repo.get_pulls.return_value = [_builders.pull_mock(200)]
+        activity_repo.get_pull.return_value.get_commits.return_value = [
+            _builders.commit_mock(sha="aaa")
+        ]
+
+        result = github_client.fetch_activity(SINCE, UNTIL, ["repo"])
+
+        commits = result.repos()[_builders.REPO]["commits"]
+        assert [(c.sha, c.pull_numbers) for c in commits] == [("aaa", (200,))]
+
+    def test_unions_pull_numbers_for_sha_found_by_both_paths(
+        self, github_client, activity_repo
+    ):
+        github_client.g.search_commits.return_value = [_builders.commit_mock(sha="aaa")]
+        activity_repo.get_commit.return_value.get_pulls.return_value = [
+            _builders.number_mock(5)
+        ]
+        activity_repo.get_pulls.return_value = [_builders.pull_mock(7)]
+        activity_repo.get_pull.return_value.get_commits.return_value = [
+            _builders.commit_mock(sha="aaa")
+        ]
+
+        result = github_client.fetch_activity(SINCE, UNTIL, ["repo"])
+
+        commits = result.repos()[_builders.REPO]["commits"]
+        assert [(c.sha, c.pull_numbers) for c in commits] == [("aaa", (5, 7))]

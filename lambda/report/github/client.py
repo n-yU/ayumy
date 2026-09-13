@@ -187,6 +187,10 @@ class Client:
                 is_backfill=is_backfill,
                 session_numbers=session_issues.get(name),
             )
+            for pr in pulls:
+                commits = self._merge_commits(
+                    commits, self.fetch_pull_commits(repo, pr.number, since, until)
+                )
 
             if commits or pulls or issues:
                 data[repo.name] = {
@@ -195,6 +199,22 @@ class Client:
                     "issues": issues,
                 }
         return activity.GitHubActivity(data)
+
+    @staticmethod
+    def _merge_commits(
+        commits: list[activity.CommitInfo], extra: list[activity.CommitInfo]
+    ) -> list[activity.CommitInfo]:
+        """Append `extra` commits absent from `commits` by full SHA, unioning PR numbers for SHAs both lists hold."""
+        merged = {c.sha: c for c in commits}
+        for c in extra:
+            existing = merged.get(c.sha)
+            if existing is None:
+                merged[c.sha] = c
+            else:
+                merged[c.sha] = existing.with_pull_numbers(
+                    sorted({*existing.pull_numbers, *c.pull_numbers})
+                )
+        return list(merged.values())
 
     def _search_pulls_by_event(
         self,
