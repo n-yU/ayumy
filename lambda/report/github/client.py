@@ -205,6 +205,7 @@ class Client:
         commits: list[activity.CommitInfo], extra: list[activity.CommitInfo]
     ) -> list[activity.CommitInfo]:
         """Append `extra` commits absent from `commits` by full SHA, unioning PR numbers for SHAs both lists hold."""
+        # Rebase merges create new SHAs on the base branch, so a rebased PR's commits may appear twice
         merged = {c.sha: c for c in commits}
         for c in extra:
             existing = merged.get(c.sha)
