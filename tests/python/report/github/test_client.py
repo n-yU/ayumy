@@ -624,3 +624,30 @@ class TestFetchActivityPullCommits:
 
         commits = result.repos()[_builders.REPO]["commits"]
         assert [(c.sha, c.pull_numbers) for c in commits] == [("aaa", (5, 7))]
+
+    @pytest.mark.parametrize(
+        ("search_results", "session_pulls"),
+        [
+            pytest.param(
+                [[_builders.number_mock(200)], [], [], [], []], {}, id="search_derived"
+            ),
+            pytest.param([[], [], [], [], []], {"repo": [200]}, id="session_derived"),
+        ],
+    )
+    def test_restores_commits_of_backfill_pulls(
+        self, github_client, activity_repo, search_results, session_pulls
+    ):
+        github_client.g.search_commits.return_value = []
+        # Hybrid path searches PR events 3 times, then issue events 2 times
+        github_client.g.search_issues.side_effect = search_results
+        activity_repo.get_pull.return_value = _builders.pull_mock(200)
+        activity_repo.get_pull.return_value.get_commits.return_value = [
+            _builders.commit_mock(sha="aaa")
+        ]
+
+        result = github_client.fetch_activity(
+            SINCE, UNTIL, ["repo"], is_backfill=True, session_pulls=session_pulls
+        )
+
+        commits = result.repos()[_builders.REPO]["commits"]
+        assert [(c.sha, c.pull_numbers) for c in commits] == [("aaa", (200,))]
