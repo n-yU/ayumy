@@ -50,7 +50,7 @@ session 転送に続けてレポート生成まで走らせるときや、既存
 | `ayumy sync --report --date 2026-03-25` | 指定日のレポートを生成・再生成 |
 | `ayumy sync --report --date 2026-03-01..2026-03-05` | 日付範囲を一括生成 |
 
-`--report` 指定時の Lambda 呼び出しは非同期のため、コマンド自体はすぐ完了する。結果は Slack 通知で確認する。実行方式別の対象期間は [Spec: GitHub Activity Fetch](Spec.md#github-activity-fetch) を参照
+`--report` 指定時の Lambda 呼び出しは非同期のため、コマンド自体はすぐ完了する。結果は Slack 通知で確認する。実行方式別の対象期間は [Spec: Target Window](Spec.md#target-window) を参照
 
 ## Config
 - 使用する Claude モデルなど各種設定は `lambda/config/config.yml` で変更できる
