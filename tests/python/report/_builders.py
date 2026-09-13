@@ -19,6 +19,8 @@ def jst(year, month, day, hour=0, minute=0, second=0):
 CREATED_AT = jst(2026, 3, 28, 9)
 COMMITTED_AT = jst(2026, 3, 28, 10)
 COMPLETED_AT = jst(2026, 3, 28, 10)
+SESSION_START = jst(2026, 3, 28, 10)
+SESSION_END = jst(2026, 3, 28, 11)
 
 SINCE = datetime(2026, 3, 28, 0, 0, tzinfo=dates.JST)
 UNTIL = datetime(2026, 3, 29, 0, 0, tzinfo=dates.JST)
@@ -127,8 +129,8 @@ def session_entry(
     *,
     session_id="s1",
     project=REPO,
-    start="2026-03-28T10:00:00+09:00",
-    end="2026-03-28T11:00:00+09:00",
+    start=SESSION_START,
+    end=SESSION_END,
     messages=("Fix bug",),
     tools=("Edit",),
     session_commits=None,

@@ -328,8 +328,8 @@ class TestProcessDate:
                     _builders.session_entry(
                         session_id="sb",
                         project="repo-b",
-                        start="2026-03-28T12:00:00+09:00",
-                        end="2026-03-28T13:00:00+09:00",
+                        start=_builders.jst(2026, 3, 28, 12),
+                        end=_builders.jst(2026, 3, 28, 13),
                         messages=("design work on repo-b",),
                         tools=("Read",),
                     )
@@ -374,8 +374,8 @@ class TestProcessDate:
                 _builders.session_entry(
                     session_id="s2",
                     project="repo-a",
-                    start="2026-03-28T12:00:00+09:00",
-                    end="2026-03-28T13:00:00+09:00",
+                    start=_builders.jst(2026, 3, 28, 12),
+                    end=_builders.jst(2026, 3, 28, 13),
                     messages=("msg",),
                     tools=(),
                     session_pulls=[20, 21],

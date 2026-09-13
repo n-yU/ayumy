@@ -255,9 +255,7 @@ class GitHubActivity:
                         sha=c["sha"],
                         message=c["message"],
                         author="",
-                        date=datetime.fromisoformat(
-                            c.get("timestamp") or s["start_time"]
-                        ),
+                        date=c.get("timestamp") or s["start_time"],
                         url=f"https://github.com/{owner}/{repo_name}/commit/{c['sha']}",
                     )
                 )

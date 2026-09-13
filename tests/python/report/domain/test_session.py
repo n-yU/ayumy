@@ -1,8 +1,10 @@
 """Tests for SessionActivity formatting and repo exclusion."""
 
-import pytest
+from datetime import UTC, datetime
 
 from report.domain.session import SessionActivity
+
+from .. import _builders
 
 
 class TestSessionActivityFormat:
@@ -16,8 +18,8 @@ class TestSessionActivityFormat:
                 {
                     "session_id": "abc",
                     "project": "my-repo",
-                    "start_time": "2026-03-28T10:00:00+09:00",
-                    "end_time": "2026-03-28T11:30:00+09:00",
+                    "start_time": _builders.jst(2026, 3, 28, 10),
+                    "end_time": _builders.jst(2026, 3, 28, 11, 30),
                     "user_messages": ["Fix the bug"],
                     "tools_used": ["Read", "Edit"],
                 }
@@ -29,13 +31,12 @@ class TestSessionActivityFormat:
         assert "- ユーザー: Fix the bug" in result
         assert "- ツール使用: Read, Edit" in result
 
-    def test_format_time_empty_raises(self):
-        with pytest.raises(ValueError, match="Session timestamp is missing"):
-            SessionActivity._format_time("")
-
     def test_format_time_utc_to_jst(self):
         # UTC 15:00 = JST 00:00
-        assert SessionActivity._format_time("2026-03-28T15:00:00+00:00") == "00:00"
+        assert (
+            SessionActivity._format_time(datetime(2026, 3, 28, 15, 0, tzinfo=UTC))
+            == "00:00"
+        )
 
     def test_get_with_default(self):
         activity = SessionActivity({"repo": []})

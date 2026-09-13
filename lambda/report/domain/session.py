@@ -12,14 +12,14 @@ class SessionCommit(TypedDict):
 
     sha: str
     message: str
-    timestamp: NotRequired[str]
+    timestamp: NotRequired[datetime]
 
 
 class SessionInfo(TypedDict):
     session_id: str
     project: str
-    start_time: str
-    end_time: str
+    start_time: datetime
+    end_time: datetime
     user_messages: list[str]
     tools_used: list[str]
     session_commits: list[SessionCommit]
@@ -80,9 +80,5 @@ class SessionActivity:
         return "\n".join(lines)
 
     @staticmethod
-    def _format_time(iso_timestamp: str) -> str:
-        # Parser fills `start_time` / `end_time` for every session item, so an empty value indicates a parser regression
-        if not iso_timestamp:
-            raise ValueError("Session timestamp is missing")
-        dt = datetime.fromisoformat(iso_timestamp).astimezone(dates.JST)
-        return dt.strftime("%H:%M")
+    def _format_time(timestamp: datetime) -> str:
+        return timestamp.astimezone(dates.JST).strftime("%H:%M")

@@ -11,7 +11,7 @@ from .. import _builders
 
 def _session(
     *,
-    start="2026-03-28T10:00:00+09:00",
+    start=_builders.SESSION_START,
     session_commits=(),
 ):
     return _builders.session_entry(
@@ -528,22 +528,22 @@ class TestMergeSessionCommits:
         github_activity = activity.GitHubActivity({})
         sessions = [
             _session(
-                start="2026-03-28T10:00:00+09:00",
+                start=_builders.jst(2026, 3, 28, 10),
                 session_commits=[
                     {
                         "sha": "aaa1111",
                         "message": "First",
-                        "timestamp": "2026-03-28T10:30:00+09:00",
+                        "timestamp": _builders.jst(2026, 3, 28, 10, 30),
                     },
                 ],
             ),
             _session(
-                start="2026-03-28T12:00:00+09:00",
+                start=_builders.jst(2026, 3, 28, 12),
                 session_commits=[
                     {
                         "sha": "aaa1111",
                         "message": "Duplicate",
-                        "timestamp": "2026-03-28T12:30:00+09:00",
+                        "timestamp": _builders.jst(2026, 3, 28, 12, 30),
                     },
                 ],
             ),
@@ -566,12 +566,12 @@ class TestMergeSessionCommits:
             "my-repo",
             [
                 _session(
-                    start="2026-03-28T10:00:00+09:00",
+                    start=_builders.jst(2026, 3, 28, 10),
                     session_commits=[
                         {
                             "sha": "aaa",
                             "message": "C1",
-                            "timestamp": "2026-03-28T10:45:00+09:00",
+                            "timestamp": _builders.jst(2026, 3, 28, 10, 45),
                         },
                         {"sha": "bbb", "message": "C2"},
                     ],
