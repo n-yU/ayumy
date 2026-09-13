@@ -2,6 +2,7 @@
 
 import re
 from dataclasses import replace
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -87,7 +88,7 @@ class TestStatusSections:
                     11,
                     "Not planned",
                     "closed",
-                    closed_at="2026-03-28T13:00:00+09:00",
+                    closed_at=_builders.jst(2026, 3, 28, 13),
                     state_reason="not_planned",
                 ),
             ],
@@ -113,7 +114,10 @@ class TestStatusSections:
             ],
             issues=[
                 _builders.issue(
-                    20, "Old open issue", "open", created_at="2026-03-20T09:00:00+09:00"
+                    20,
+                    "Old open issue",
+                    "open",
+                    created_at=_builders.jst(2026, 3, 20, 9),
                 )
             ],
         )
@@ -134,10 +138,13 @@ class TestStatusSections:
         blocks = build_status(
             issues=[
                 _builders.issue(
-                    30, "New issue", "open", created_at="2026-03-28T11:00:00+09:00"
+                    30, "New issue", "open", created_at=_builders.jst(2026, 3, 28, 11)
                 ),
                 _builders.issue(
-                    31, "Old open issue", "open", created_at="2026-03-20T09:00:00+09:00"
+                    31,
+                    "Old open issue",
+                    "open",
+                    created_at=_builders.jst(2026, 3, 20, 9),
                 ),
             ],
         )
@@ -159,7 +166,7 @@ class TestStatusSections:
                     1,
                     "Merged next day",
                     "merged",
-                    merged_at="2026-03-29T10:00:00+09:00",
+                    merged_at=_builders.jst(2026, 3, 29, 10),
                 )
             ],
             issues=[
@@ -167,14 +174,14 @@ class TestStatusSections:
                     10,
                     "Created in window, closed later",
                     "closed",
-                    closed_at="2026-03-29T12:00:00+09:00",
+                    closed_at=_builders.jst(2026, 3, 29, 12),
                 ),
                 _builders.issue(
                     11,
                     "Created earlier, closed later",
                     "closed",
-                    created_at="2026-03-20T09:00:00+09:00",
-                    closed_at="2026-03-29T13:00:00+09:00",
+                    created_at=_builders.jst(2026, 3, 20, 9),
+                    closed_at=_builders.jst(2026, 3, 29, 13),
                 ),
             ],
         )
@@ -197,13 +204,13 @@ class TestStatusSections:
                             1,
                             "Merged earlier",
                             "merged",
-                            merged_at="2026-03-27T10:00:00+09:00",
+                            merged_at=_builders.jst(2026, 3, 27, 10),
                         ),
                         _builders.pull(
                             2,
                             "Rejected earlier",
                             "closed",
-                            closed_at="2026-03-27T11:00:00+09:00",
+                            closed_at=_builders.jst(2026, 3, 27, 11),
                         ),
                     ],
                     "issues": [
@@ -211,7 +218,7 @@ class TestStatusSections:
                             10,
                             "Closed earlier",
                             "closed",
-                            closed_at="2026-03-27T12:00:00+09:00",
+                            closed_at=_builders.jst(2026, 3, 27, 12),
                         )
                     ],
                 },
@@ -232,19 +239,19 @@ class TestTimelineSection:
                 _builders.commit(
                     "aaa1111",
                     "branch commit 1",
-                    date="2026-03-28T09:30:00+09:00",
+                    date=_builders.jst(2026, 3, 28, 9, 30),
                     pull_numbers=[1],
                 ),
                 _builders.commit(
                     "bbb2222",
                     "branch commit 2",
-                    date="2026-03-28T10:00:00+09:00",
+                    date=_builders.jst(2026, 3, 28, 10),
                     pull_numbers=[1],
                 ),
                 _builders.commit(
                     "ccc3333",
                     "Squash merge",
-                    date="2026-03-28T11:00:00+09:00",
+                    date=_builders.jst(2026, 3, 28, 11),
                     pull_numbers=[1],
                 ),
             ],
@@ -253,7 +260,7 @@ class TestTimelineSection:
                     1,
                     "Add feature",
                     "merged",
-                    merged_at="2026-03-28T11:00:00+09:00",
+                    merged_at=_builders.jst(2026, 3, 28, 11),
                     merge_commit_sha="ccc3333",
                 )
             ],
@@ -274,13 +281,13 @@ class TestTimelineSection:
                 _builders.commit(
                     "ccc3333",
                     "Merge pull request #3",
-                    date="2026-03-28T09:00:00+09:00",
+                    date=_builders.jst(2026, 3, 28, 9),
                     pull_numbers=[3],
                 ),
                 _builders.commit(
                     "aaa1111",
                     "branch commit",
-                    date="2026-03-28T10:00:00+09:00",
+                    date=_builders.jst(2026, 3, 28, 10),
                     pull_numbers=[3],
                 ),
             ],
@@ -289,7 +296,7 @@ class TestTimelineSection:
                     3,
                     "Rebased feature",
                     "merged",
-                    merged_at="2026-03-28T11:00:00+09:00",
+                    merged_at=_builders.jst(2026, 3, 28, 11),
                     merge_commit_sha="ccc3333",
                 )
             ],
@@ -301,20 +308,19 @@ class TestTimelineSection:
         ]
 
     def test_sorts_nested_commits_by_instant_across_timezones(self, build_timeline):
-        # ISO string order would put +00:00 first,
-        # but 10:00+09:00 (= 01:00 UTC) precedes 09:00+00:00 (= 18:00 JST)
+        # 10:00 JST (= 01:00 UTC) precedes 09:00 UTC (= 18:00 JST) despite its later wall-clock hour
         blocks = build_timeline(
             commits=[
                 _builders.commit(
                     "bbb2222",
                     "later in time",
-                    date="2026-03-28T09:00:00+00:00",
+                    date=datetime(2026, 3, 28, 9, 0, tzinfo=UTC),
                     pull_numbers=[1],
                 ),
                 _builders.commit(
                     "aaa1111",
                     "earlier in time",
-                    date="2026-03-28T10:00:00+09:00",
+                    date=_builders.jst(2026, 3, 28, 10),
                     pull_numbers=[1],
                 ),
             ],
@@ -348,7 +354,7 @@ class TestTimelineSection:
                 _builders.commit(
                     "ccc3333",
                     "Squash merge",
-                    date="2026-03-28T11:00:00+09:00",
+                    date=_builders.jst(2026, 3, 28, 11),
                     pull_numbers=[2],
                 )
             ],
@@ -357,8 +363,8 @@ class TestTimelineSection:
                     2,
                     "Old PR finally merged",
                     "merged",
-                    created_at="2026-03-20T09:00:00+09:00",
-                    merged_at="2026-03-28T11:00:00+09:00",
+                    created_at=_builders.jst(2026, 3, 20, 9),
+                    merged_at=_builders.jst(2026, 3, 28, 11),
                     merge_commit_sha="ccc3333",
                 )
             ],
@@ -374,7 +380,7 @@ class TestTimelineSection:
                 _builders.commit(
                     "fff6666",
                     "Squash merge",
-                    date="2026-03-28T23:00:00+09:00",
+                    date=_builders.jst(2026, 3, 28, 23),
                     pull_numbers=[10],
                 )
             ],
@@ -383,8 +389,8 @@ class TestTimelineSection:
                     10,
                     "Merged after midnight",
                     "merged",
-                    created_at="2026-03-20T09:00:00+09:00",
-                    merged_at="2026-03-29T00:30:00+09:00",
+                    created_at=_builders.jst(2026, 3, 20, 9),
+                    merged_at=_builders.jst(2026, 3, 29, 0, 30),
                     merge_commit_sha="fff6666",
                 )
             ],
@@ -400,7 +406,7 @@ class TestTimelineSection:
                 _builders.commit(
                     "eee5555",
                     "Follow-up on the branch",
-                    date="2026-03-28T10:00:00+09:00",
+                    date=_builders.jst(2026, 3, 28, 10),
                     pull_numbers=[9],
                 )
             ],
@@ -409,8 +415,8 @@ class TestTimelineSection:
                     9,
                     "Merged yesterday",
                     "merged",
-                    created_at="2026-03-20T09:00:00+09:00",
-                    merged_at="2026-03-27T10:00:00+09:00",
+                    created_at=_builders.jst(2026, 3, 20, 9),
+                    merged_at=_builders.jst(2026, 3, 27, 10),
                     merge_commit_sha="zzz9999",
                 )
             ],
@@ -433,8 +439,8 @@ class TestTimelineSection:
                     7,
                     "Rejected",
                     "closed",
-                    created_at="2026-03-27T09:00:00+09:00",
-                    closed_at="2026-03-28T15:00:00+09:00",
+                    created_at=_builders.jst(2026, 3, 27, 9),
+                    closed_at=_builders.jst(2026, 3, 28, 15),
                 )
             ]
         )
@@ -445,14 +451,14 @@ class TestTimelineSection:
         blocks = build_timeline(
             issues=[
                 _builders.issue(
-                    5, "New bug", "open", created_at="2026-03-28T08:00:00+09:00"
+                    5, "New bug", "open", created_at=_builders.jst(2026, 3, 28, 8)
                 ),
                 _builders.issue(
                     7,
                     "Won't fix",
                     "closed",
-                    created_at="2026-03-20T09:00:00+09:00",
-                    closed_at="2026-03-28T14:00:00+09:00",
+                    created_at=_builders.jst(2026, 3, 20, 9),
+                    closed_at=_builders.jst(2026, 3, 28, 14),
                     state_reason="not_planned",
                 ),
             ]
@@ -469,15 +475,17 @@ class TestTimelineSection:
                 _builders.commit(
                     "aaa1111",
                     "commit on PR#1",
-                    date="2026-03-28T10:30:00+09:00",
+                    date=_builders.jst(2026, 3, 28, 10, 30),
                     pull_numbers=[1],
                 ),
-                _builders.commit("ddd4444", "Direct", date="2026-03-28T12:00:00+09:00"),
+                _builders.commit(
+                    "ddd4444", "Direct", date=_builders.jst(2026, 3, 28, 12)
+                ),
             ],
             pulls=[_builders.pull(1, "Feature", "open")],
             issues=[
                 _builders.issue(
-                    5, "Bug", "open", created_at="2026-03-28T08:00:00+09:00"
+                    5, "Bug", "open", created_at=_builders.jst(2026, 3, 28, 8)
                 )
             ],
         )
@@ -499,7 +507,10 @@ class TestTimelineSection:
                 {
                     "pulls": [
                         _builders.pull(
-                            8, "Touched", "open", created_at="2026-03-20T09:00:00+09:00"
+                            8,
+                            "Touched",
+                            "open",
+                            created_at=_builders.jst(2026, 3, 20, 9),
                         )
                     ]
                 },
@@ -522,7 +533,7 @@ class TestBuildChildren:
             commits=[_builders.commit("deadbeef00", "Commit msg")],
             pulls=[
                 _builders.pull(
-                    1, "Merged", "merged", merged_at="2026-03-28T11:00:00+09:00"
+                    1, "Merged", "merged", merged_at=_builders.jst(2026, 3, 28, 11)
                 )
             ],
             issues=[_builders.issue(5, "Open today", "open")],
@@ -694,7 +705,7 @@ class TestCreateReportPagesWiring:
             commits=[
                 _builders.commit("aaa1111", "In window"),
                 _builders.commit(
-                    "bbb2222", "Previous day", date="2026-03-27T10:00:00+09:00"
+                    "bbb2222", "Previous day", date=_builders.jst(2026, 3, 27, 10)
                 ),
             ],
             pulls=[
@@ -703,13 +714,13 @@ class TestCreateReportPagesWiring:
                     2,
                     "Merged before window",
                     "merged",
-                    merged_at="2026-03-27T10:00:00+09:00",
+                    merged_at=_builders.jst(2026, 3, 27, 10),
                 ),
                 _builders.pull(
                     3,
                     "Merged after window",
                     "merged",
-                    merged_at="2026-03-29T10:00:00+09:00",
+                    merged_at=_builders.jst(2026, 3, 29, 10),
                 ),
             ],
             issues=[
@@ -717,13 +728,13 @@ class TestCreateReportPagesWiring:
                     10,
                     "Closed in window",
                     "closed",
-                    closed_at="2026-03-28T12:00:00+09:00",
+                    closed_at=_builders.jst(2026, 3, 28, 12),
                 ),
                 _builders.issue(
                     11,
                     "Closed before window",
                     "closed",
-                    closed_at="2026-03-27T12:00:00+09:00",
+                    closed_at=_builders.jst(2026, 3, 27, 12),
                 ),
             ],
         )

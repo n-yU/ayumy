@@ -165,7 +165,6 @@ class Client:
         for c in repo_activity["commits"]:
             if not c.is_in_range(since, until):
                 continue
-            ts = datetime.fromisoformat(c.date)
             merged_pr = merge_sha_to_pr.get(c.sha)
             if merged_pr is not None:
                 pr_merge_commit[merged_pr.number] = c
@@ -176,30 +175,29 @@ class Client:
             if attached_pr is not None:
                 pr_nested_commits[attached_pr].append(c)
             else:
-                entries.append((ts, 1, bulleted_link(c.label(), c.url, prefix="🔸 ")))
+                entries.append(
+                    (c.date, 1, bulleted_link(c.label(), c.url, prefix="🔸 "))
+                )
 
         for pr_number, pr in pr_by_number.items():
-            nested = sorted(
-                pr_nested_commits[pr_number],
-                key=lambda c: datetime.fromisoformat(c.date),
-            )
+            nested = sorted(pr_nested_commits[pr_number], key=lambda c: c.date)
             merge_commit = pr_merge_commit.get(pr_number)
             candidates: list[datetime] = []
             if activity.in_range(pr.created_at, since, until):
-                candidates.append(datetime.fromisoformat(pr.created_at))
+                candidates.append(pr.created_at)
             if nested:
-                candidates.append(datetime.fromisoformat(nested[0].date))
+                candidates.append(nested[0].date)
             if activity.in_range(pr.merged_at, since, until):
-                candidates.append(datetime.fromisoformat(pr.merged_at))
+                candidates.append(pr.merged_at)
             # Keeps a merge commit whose author date lands in the window visible when the merge itself falls outside it
             if merge_commit is not None:
-                candidates.append(datetime.fromisoformat(merge_commit.date))
+                candidates.append(merge_commit.date)
             if (
                 pr.state == "closed"
                 and not pr.merged_at
                 and activity.in_range(pr.closed_at, since, until)
             ):
-                candidates.append(datetime.fromisoformat(pr.closed_at))
+                candidates.append(pr.closed_at)
             if not candidates:
                 continue
             children = [bulleted_link(c.label(), c.url, prefix="🔸 ") for c in nested]
@@ -229,7 +227,7 @@ class Client:
             if activity.in_range(issue.created_at, since, until):
                 entries.append(
                     (
-                        datetime.fromisoformat(issue.created_at),
+                        issue.created_at,
                         1,
                         bulleted_link(
                             label, issue.url, prefix=f"{issue.pending_prefix()}open: "
@@ -239,7 +237,7 @@ class Client:
             if activity.in_range(issue.closed_at, since, until):
                 entries.append(
                     (
-                        datetime.fromisoformat(issue.closed_at),
+                        issue.closed_at,
                         1,
                         bulleted_link(
                             label,

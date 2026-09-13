@@ -141,9 +141,9 @@ class TestFetchPulls:
         assert result[0].state == "merged"
         assert result[0].draft is False
         assert result[0].url == f"https://github.com/{_builders.REPO_FULL_NAME}/pull/1"
-        assert result[0].created_at == "2026-03-27T09:00:00+09:00"
-        assert result[0].merged_at == "2026-03-28T10:00:00+09:00"
-        assert result[0].closed_at == "2026-03-28T10:00:00+09:00"
+        assert result[0].created_at == datetime(2026, 3, 27, 9, 0, tzinfo=dates.JST)
+        assert result[0].merged_at == datetime(2026, 3, 28, 10, 0, tzinfo=dates.JST)
+        assert result[0].closed_at == datetime(2026, 3, 28, 10, 0, tzinfo=dates.JST)
 
     def test_breaks_on_old_prs(self, github_client, repo):
         repo.get_pulls.return_value = [
@@ -175,7 +175,7 @@ class TestFetchIssues:
         assert (
             result[0].url == f"https://github.com/{_builders.REPO_FULL_NAME}/issues/5"
         )
-        assert result[0].created_at == "2026-03-28T10:00:00+09:00"
+        assert result[0].created_at == datetime(2026, 3, 28, 10, 0, tzinfo=dates.JST)
         assert result[0].closed_at is None
 
 
@@ -364,11 +364,7 @@ class TestFetchPullsBackfill:
         )
 
         # Commits already carry pull_numbers populated by fetch_commits
-        commits = [
-            _builders.commit(
-                sha="deadbee", date=in_range.isoformat(), pull_numbers=[1, 4]
-            )
-        ]
+        commits = [_builders.commit(sha="deadbee", date=in_range, pull_numbers=[1, 4])]
         result = github_client.fetch_pulls(
             repo, SINCE, UNTIL, is_backfill=True, commits=commits
         )
