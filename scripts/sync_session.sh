@@ -4,6 +4,7 @@ umask 077
 
 CLAUDE_PROJECTS_DIR="$HOME/.claude/projects"
 MARKER_NAME=".ayumy_last_sync"
+REPO_NAME=".ayumy_repo"
 
 # --- helpers ---
 
@@ -17,6 +18,7 @@ Usage: sync_session.sh [--project <name>] [--cwd <dir>] [--all] [--report] [--da
 Options:
   --project <name>    Sync a specific project
   --cwd <dir>         Sync the projects holding sessions opened in <dir>
+  --repo <name>       Record <name> as the repository of the synced projects (requires --cwd)
   --all               Sync all projects
   --report            Invoke Lambda to generate report after sync
   --date DATE         Generate report for a specific date or range (requires --report)
@@ -108,10 +110,10 @@ sync_project() {
   done <<< "$files"
 
   # Upload repo name metadata if available
-  local repo_file="$project_dir/.ayumy_repo"
+  local repo_file="$project_dir/$REPO_NAME"
   if [[ -f "$repo_file" ]]; then
-    if ! aws s3 cp "$repo_file" "${dest_prefix}.ayumy_repo" --quiet; then
-      err "$project_name: failed to upload .ayumy_repo metadata"
+    if ! aws s3 cp "$repo_file" "${dest_prefix}${REPO_NAME}" --quiet; then
+      err "$project_name: failed to upload $REPO_NAME metadata"
       return 2
     fi
   fi
@@ -126,6 +128,7 @@ sync_project() {
 mode=""
 project_name=""
 target_cwd=""
+repo_name=""
 report=false
 target_date=""
 
@@ -146,6 +149,11 @@ while [[ $# -gt 0 ]]; do
       mode="cwd"
       target_cwd="${2:-}"
       [[ -z "$target_cwd" ]] && { err "--cwd requires a directory"; usage; }
+      shift 2
+      ;;
+    --repo)
+      repo_name="${2:-}"
+      [[ -z "$repo_name" ]] && { err "--repo requires a name"; usage; }
       shift 2
       ;;
     --all)
@@ -175,6 +183,11 @@ done
 
 if [[ -n "$target_date" && "$report" != true ]]; then
   err "--date requires --report"
+  usage
+fi
+
+if [[ -n "$repo_name" && "$mode" != "cwd" ]]; then
+  err "--repo requires --cwd"
   usage
 fi
 
@@ -231,13 +244,22 @@ case "$mode" in
     rc=0; sync_project "$project_dir" || rc=$?
     [[ "$rc" -eq 0 || "$rc" -eq 1 ]] || exit "$rc"
     ;;
-  cwd)
+  cwd|"")
+    if [[ -z "$mode" ]]; then
+      target_cwd=$(git rev-parse --show-toplevel 2>/dev/null) || {
+        err "not in a git repository (use --project, --cwd or --all)"
+        exit 1
+      }
+    fi
     # Sessions of a deleted worktree stay resolvable, so the directory need not exist
     dirs="$(resolve_project_dirs "$target_cwd" || true)"
     if [[ -z "$dirs" ]]; then
       log "no sessions recorded for $target_cwd"
     else
       while IFS= read -r project_dir; do
+        if [[ -n "$repo_name" ]]; then
+          echo "$repo_name" > "$project_dir/$REPO_NAME"
+        fi
         rc=0; sync_project "$project_dir" || rc=$?
         [[ "$rc" -eq 0 || "$rc" -eq 1 ]] || exit "$rc"
       done <<< "$dirs"
@@ -255,21 +277,6 @@ case "$mode" in
       fi
     done
     log "synced $synced project(s)"
-    ;;
-  "")
-    # Auto-detect from current directory
-    git_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
-      err "not in a git repository (use --project or --all)"
-      exit 1
-    }
-    project_name=$(path_to_project_name "$git_root")
-    project_dir="$CLAUDE_PROJECTS_DIR/$project_name"
-    if [[ ! -d "$project_dir" ]]; then
-      err "no Claude sessions found for $git_root"
-      exit 1
-    fi
-    rc=0; sync_project "$project_dir" || rc=$?
-    [[ "$rc" -eq 0 || "$rc" -eq 1 ]] || exit "$rc"
     ;;
 esac
 

@@ -231,6 +231,40 @@ make_cwd_project() {
   grep -q "^aws s3 cp $PROJECTS_DIR/-path-to-repo-worktrees-topic/sess.jsonl " "$AWS_STUB_LOG"
 }
 
+@test "sync_session.sh: --repo records the name in every resolved project" {
+  make_cwd_project "derived-a" "/path/to/repo.worktrees/topic"
+  make_cwd_project "derived-b" "/path/to/repo.worktrees/topic"
+  run "$SCRIPT" --cwd /path/to/repo.worktrees/topic --repo my-repo
+  [ "$status" -eq 0 ]
+  [ "$(cat "$PROJECTS_DIR/derived-a/.ayumy_repo")" = "my-repo" ]
+  [ "$(cat "$PROJECTS_DIR/derived-b/.ayumy_repo")" = "my-repo" ]
+}
+
+@test "sync_session.sh: --repo without --cwd is rejected" {
+  run "$SCRIPT" --all --repo my-repo
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"--repo requires --cwd"* ]]
+}
+
+@test "sync_session.sh: --repo without a name is rejected" {
+  run "$SCRIPT" --cwd /path/to/repo --repo
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"--repo requires a name"* ]]
+}
+
+@test "sync_session.sh: no args resolves the project from the git root" {
+  make_cwd_project "-path-to-repo-worktrees-topic" "/path/to/repo.worktrees/topic"
+  GIT_STUB_TOPLEVEL="/path/to/repo.worktrees/topic" run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  grep -q "^aws s3 cp $PROJECTS_DIR/-path-to-repo-worktrees-topic/sess.jsonl " "$AWS_STUB_LOG"
+}
+
+@test "sync_session.sh: no args outside a git repository is rejected" {
+  run "$SCRIPT"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"not in a git repository"* ]]
+}
+
 @test "sync_session.sh: --cwd without a matching session uploads nothing" {
   make_cwd_project "-other-repo" "/other/repo"
   run "$SCRIPT" --cwd /path/to/repo
