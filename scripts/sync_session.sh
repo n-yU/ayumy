@@ -53,14 +53,17 @@ resolve_project_dirs() {
   fi
 
   # Claude Code rewrites dots as well as separators, so the derived name misses directories that exist
-  local rc=1 candidate
+  local rc=1 candidate f
   for candidate in "$CLAUDE_PROJECTS_DIR"/*/; do
     [[ -d "$candidate" ]] || continue
-    # -s silences the literal glob left behind by a project holding no JSONL
-    if grep -q -s -F -- "\"cwd\":\"$target\"" "$candidate"*.jsonl; then
+    for f in "$candidate"*.jsonl; do
+      [[ -f "$f" ]] || continue
+      # The first recorded cwd is the project's own; later entries can sit in another repository
+      [[ "$(grep -o -m 1 '"cwd":"[^"][^"]*"' "$f" || true)" == "\"cwd\":\"$target\"" ]] || continue
       echo "${candidate%/}"
       rc=0
-    fi
+      break
+    done
   done
   return "$rc"
 }

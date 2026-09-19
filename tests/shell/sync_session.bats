@@ -227,6 +227,24 @@ make_cwd_project() {
   grep -q "^aws s3 cp $PROJECTS_DIR/-path-to-repo-worktrees-topic/sess.jsonl " "$AWS_STUB_LOG"
 }
 
+@test "sync_session.sh: --cwd ignores a project whose later entries visit the directory" {
+  make_project "-path-to-other"
+  printf '{"type":"user","cwd":"/path/to/other"}\n{"type":"user","cwd":"/path/to/repo.worktrees/topic"}\n' > "$proj_dir/sess.jsonl"
+  make_cwd_project "-path-to-repo-worktrees-topic" "/path/to/repo.worktrees/topic"
+  run "$SCRIPT" --cwd /path/to/repo.worktrees/topic
+  [ "$status" -eq 0 ]
+  grep -q "^aws s3 cp $PROJECTS_DIR/-path-to-repo-worktrees-topic/sess.jsonl " "$AWS_STUB_LOG"
+  ! grep -q "^aws s3 cp $PROJECTS_DIR/-path-to-other/" "$AWS_STUB_LOG"
+}
+
+@test "sync_session.sh: --cwd resolves when the first entry records no cwd" {
+  make_project "-path-to-repo-worktrees-topic"
+  printf '{"type":"queue-operation"}\n{"type":"user","cwd":"/path/to/repo.worktrees/topic"}\n' > "$proj_dir/sess.jsonl"
+  run "$SCRIPT" --cwd /path/to/repo.worktrees/topic
+  [ "$status" -eq 0 ]
+  grep -q "^aws s3 cp $PROJECTS_DIR/-path-to-repo-worktrees-topic/sess.jsonl " "$AWS_STUB_LOG"
+}
+
 @test "sync_session.sh: --cwd uploads every project recording the same cwd" {
   make_cwd_project "derived-a" "/path/to/repo.worktrees/topic"
   make_cwd_project "derived-b" "/path/to/repo.worktrees/topic"
