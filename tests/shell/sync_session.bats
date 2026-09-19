@@ -271,6 +271,36 @@ make_cwd_project() {
   [[ "$output" == *"absolute path"* ]]
 }
 
+@test "sync_session.sh: --cwd / does not resolve the projects root" {
+  make_cwd_project "-path-to-repo" "/path/to/repo"
+  run "$SCRIPT" --cwd /
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"no sessions recorded"* ]]
+  ! grep -q "^aws s3 cp " "$AWS_STUB_LOG"
+}
+
+@test "sync_session.sh: --cwd ignores repeated trailing slashes" {
+  make_cwd_project "-path-to-repo-worktrees-topic" "/path/to/repo.worktrees/topic"
+  run "$SCRIPT" --cwd /path/to/repo.worktrees/topic///
+  [ "$status" -eq 0 ]
+  grep -q "^aws s3 cp $PROJECTS_DIR/-path-to-repo-worktrees-topic/sess.jsonl " "$AWS_STUB_LOG"
+}
+
+@test "sync_session.sh: --cwd rejects a derived name holding another path's sessions" {
+  make_cwd_project "-path-to-foo-bar" "/path/to/foo.bar"
+  run "$SCRIPT" --cwd /path/to/foo-bar
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"no sessions recorded"* ]]
+  ! grep -q "^aws s3 cp " "$AWS_STUB_LOG"
+}
+
+@test "sync_session.sh: --cwd accepts a derived name holding the same path's sessions" {
+  make_cwd_project "-path-to-foo-bar" "/path/to/foo.bar"
+  run "$SCRIPT" --cwd /path/to/foo.bar
+  [ "$status" -eq 0 ]
+  grep -q "^aws s3 cp $PROJECTS_DIR/-path-to-foo-bar/sess.jsonl " "$AWS_STUB_LOG"
+}
+
 @test "sync_session.sh: --cwd ignores a trailing slash on the directory" {
   make_cwd_project "-path-to-repo-worktrees-topic" "/path/to/repo.worktrees/topic"
   run "$SCRIPT" --cwd /path/to/repo.worktrees/topic/

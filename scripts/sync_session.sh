@@ -42,28 +42,41 @@ path_to_project_name() {
   echo "$1" | sed 's|/|-|g'
 }
 
+# Report whether $1 holds a session opened in $2.
+project_opened_in() {
+  local project_dir="$1" target="$2" f
+
+  for f in "$project_dir"/*.jsonl; do
+    [[ -f "$f" ]] || continue
+    # The first recorded cwd is the project's own; later entries can sit in another repository
+    [[ "$(grep -o -m 1 '"cwd":"[^"][^"]*"' "$f" || true)" == "\"cwd\":\"$target\"" ]] || continue
+    return 0
+  done
+  return 1
+}
+
 # Print the project directories holding sessions opened in $1, one per line.
 resolve_project_dirs() {
-  local target="${1%/}"
-  local derived="$CLAUDE_PROJECTS_DIR/$(path_to_project_name "$target")"
+  local target="$1"
+  # Keep the root itself while dropping every other trailing slash, so the derived name matches Claude Code's
+  while [[ "$target" == */ && "$target" != "/" ]]; do
+    target="${target%/}"
+  done
 
-  if [[ -d "$derived" ]]; then
+  local derived="$CLAUDE_PROJECTS_DIR/$(path_to_project_name "$target")"
+  if [[ -d "$derived" ]] && project_opened_in "$derived" "$target"; then
     echo "$derived"
     return 0
   fi
 
   # Claude Code rewrites dots as well as separators, so the derived name misses directories that exist
-  local rc=1 candidate f
+  local rc=1 candidate
   for candidate in "$CLAUDE_PROJECTS_DIR"/*/; do
     [[ -d "$candidate" ]] || continue
-    for f in "$candidate"*.jsonl; do
-      [[ -f "$f" ]] || continue
-      # The first recorded cwd is the project's own; later entries can sit in another repository
-      [[ "$(grep -o -m 1 '"cwd":"[^"][^"]*"' "$f" || true)" == "\"cwd\":\"$target\"" ]] || continue
+    if project_opened_in "${candidate%/}" "$target"; then
       echo "${candidate%/}"
       rc=0
-      break
-    done
+    fi
   done
   return "$rc"
 }
