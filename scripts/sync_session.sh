@@ -36,12 +36,6 @@ USAGE
 log() { echo "[ayumy] $*"; }
 err() { echo "[ayumy] ERROR: $*" >&2; }
 
-# Convert an absolute path to the Claude project directory name.
-# e.g. /Users/username/Documents/github/ayumy -> -Users-username-Documents-github-ayumy
-path_to_project_name() {
-  echo "$1" | sed 's|/|-|g'
-}
-
 # Report whether $1 holds a session opened in $2.
 project_opened_in() {
   local project_dir="$1" target="$2" f
@@ -58,25 +52,19 @@ project_opened_in() {
 # Print the project directories holding sessions opened in $1, one per line.
 resolve_project_dirs() {
   local target="$1"
-  # Keep the root itself while dropping every other trailing slash, so the derived name matches Claude Code's
+  # Keep the root itself while dropping every other trailing slash, since a recorded cwd carries none
   while [[ "$target" == */ && "$target" != "/" ]]; do
     target="${target%/}"
   done
 
-  local derived="$CLAUDE_PROJECTS_DIR/$(path_to_project_name "$target")"
-  if [[ -d "$derived" ]] && project_opened_in "$derived" "$target"; then
-    echo "$derived"
-    return 0
-  fi
-
-  # Claude Code rewrites dots as well as separators, so the derived name misses directories that exist
+  # Claude Code rewrites dots as well as separators, so a name built from the path cannot be trusted
   local rc=1 candidate
   for candidate in "$CLAUDE_PROJECTS_DIR"/*/; do
+    candidate="${candidate%/}"
     [[ -d "$candidate" ]] || continue
-    if project_opened_in "${candidate%/}" "$target"; then
-      echo "${candidate%/}"
-      rc=0
-    fi
+    project_opened_in "$candidate" "$target" || continue
+    echo "$candidate"
+    rc=0
   done
   return "$rc"
 }

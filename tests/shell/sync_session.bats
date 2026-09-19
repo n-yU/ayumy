@@ -213,14 +213,14 @@ make_cwd_project() {
   printf '{"type":"user","cwd":"%s"}\n' "$2" > "$proj_dir/sess.jsonl"
 }
 
-@test "sync_session.sh: --cwd uploads the project whose derived name exists" {
+@test "sync_session.sh: --cwd uploads the project recording the directory" {
   make_cwd_project "-path-to-repo" "/path/to/repo"
   run "$SCRIPT" --cwd /path/to/repo
   [ "$status" -eq 0 ]
   grep -q "^aws s3 cp $PROJECTS_DIR/-path-to-repo/sess.jsonl " "$AWS_STUB_LOG"
 }
 
-@test "sync_session.sh: --cwd falls back to the recorded cwd when the derived name misses" {
+@test "sync_session.sh: --cwd resolves a path whose name Claude Code rewrites" {
   make_cwd_project "-path-to-repo-worktrees-topic" "/path/to/repo.worktrees/topic"
   run "$SCRIPT" --cwd /path/to/repo.worktrees/topic
   [ "$status" -eq 0 ]
@@ -286,7 +286,7 @@ make_cwd_project() {
   grep -q "^aws s3 cp $PROJECTS_DIR/-path-to-repo-worktrees-topic/sess.jsonl " "$AWS_STUB_LOG"
 }
 
-@test "sync_session.sh: --cwd rejects a derived name holding another path's sessions" {
+@test "sync_session.sh: --cwd ignores a project recording a different path under the same name" {
   make_cwd_project "-path-to-foo-bar" "/path/to/foo.bar"
   run "$SCRIPT" --cwd /path/to/foo-bar
   [ "$status" -eq 0 ]
@@ -294,11 +294,13 @@ make_cwd_project() {
   ! grep -q "^aws s3 cp " "$AWS_STUB_LOG"
 }
 
-@test "sync_session.sh: --cwd accepts a derived name holding the same path's sessions" {
-  make_cwd_project "-path-to-foo-bar" "/path/to/foo.bar"
-  run "$SCRIPT" --cwd /path/to/foo.bar
+@test "sync_session.sh: --cwd uploads projects beyond the one named after the directory" {
+  make_cwd_project "-path-to-repo" "/path/to/repo"
+  make_cwd_project "-path-to-repo-legacy" "/path/to/repo"
+  run "$SCRIPT" --cwd /path/to/repo
   [ "$status" -eq 0 ]
-  grep -q "^aws s3 cp $PROJECTS_DIR/-path-to-foo-bar/sess.jsonl " "$AWS_STUB_LOG"
+  grep -q "^aws s3 cp $PROJECTS_DIR/-path-to-repo/sess.jsonl " "$AWS_STUB_LOG"
+  grep -q "^aws s3 cp $PROJECTS_DIR/-path-to-repo-legacy/sess.jsonl " "$AWS_STUB_LOG"
 }
 
 @test "sync_session.sh: --cwd ignores a trailing slash on the directory" {
