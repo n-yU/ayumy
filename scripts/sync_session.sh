@@ -12,10 +12,11 @@ usage() {
   local dest=1
   [[ "$code" -ne 0 ]] && dest=2
   cat >&"$dest" <<'USAGE'
-Usage: sync_session.sh [--project <name>] [--all] [--report] [--date DATE]
+Usage: sync_session.sh [--project <name>] [--cwd <dir>] [--all] [--report] [--date DATE]
 
 Options:
   --project <name>    Sync a specific project
+  --cwd <dir>         Sync the projects holding sessions opened in <dir>
   --all               Sync all projects
   --report            Invoke Lambda to generate report after sync
   --date DATE         Generate report for a specific date or range (requires --report)
@@ -37,6 +38,29 @@ err() { echo "[ayumy] ERROR: $*" >&2; }
 # e.g. /Users/username/Documents/github/ayumy -> -Users-username-Documents-github-ayumy
 path_to_project_name() {
   echo "$1" | sed 's|/|-|g'
+}
+
+# Print the project directories holding sessions opened in $1, one per line.
+resolve_project_dirs() {
+  local target="${1%/}"
+  local derived="$CLAUDE_PROJECTS_DIR/$(path_to_project_name "$target")"
+
+  if [[ -d "$derived" ]]; then
+    echo "$derived"
+    return 0
+  fi
+
+  # Claude Code rewrites dots as well as separators, so the derived name misses directories that exist
+  local rc=1 candidate
+  for candidate in "$CLAUDE_PROJECTS_DIR"/*/; do
+    [[ -d "$candidate" ]] || continue
+    # -s silences the literal glob left behind by a project holding no JSONL
+    if grep -q -s -F -- "\"cwd\":\"$target\"" "$candidate"*.jsonl; then
+      echo "${candidate%/}"
+      rc=0
+    fi
+  done
+  return "$rc"
 }
 
 find_changed_sessions() {
@@ -101,6 +125,7 @@ sync_project() {
 
 mode=""
 project_name=""
+target_cwd=""
 report=false
 target_date=""
 
@@ -110,14 +135,21 @@ while [[ $# -gt 0 ]]; do
       usage 0
       ;;
     --project)
-      [[ -n "$mode" && "$mode" != "project" ]] && { err "conflicting options: --project and --all"; usage; }
+      [[ -n "$mode" && "$mode" != "project" ]] && { err "conflicting options: --project and --$mode"; usage; }
       mode="project"
       project_name="${2:-}"
       [[ -z "$project_name" ]] && { err "--project requires a name"; usage; }
       shift 2
       ;;
+    --cwd)
+      [[ -n "$mode" && "$mode" != "cwd" ]] && { err "conflicting options: --cwd and --$mode"; usage; }
+      mode="cwd"
+      target_cwd="${2:-}"
+      [[ -z "$target_cwd" ]] && { err "--cwd requires a directory"; usage; }
+      shift 2
+      ;;
     --all)
-      [[ -n "$mode" && "$mode" != "all" ]] && { err "conflicting options: --project and --all"; usage; }
+      [[ -n "$mode" && "$mode" != "all" ]] && { err "conflicting options: --all and --$mode"; usage; }
       mode="all"
       shift
       ;;
@@ -198,6 +230,18 @@ case "$mode" in
     fi
     rc=0; sync_project "$project_dir" || rc=$?
     [[ "$rc" -eq 0 || "$rc" -eq 1 ]] || exit "$rc"
+    ;;
+  cwd)
+    # Sessions of a deleted worktree stay resolvable, so the directory need not exist
+    dirs="$(resolve_project_dirs "$target_cwd" || true)"
+    if [[ -z "$dirs" ]]; then
+      log "no sessions recorded for $target_cwd"
+    else
+      while IFS= read -r project_dir; do
+        rc=0; sync_project "$project_dir" || rc=$?
+        [[ "$rc" -eq 0 || "$rc" -eq 1 ]] || exit "$rc"
+      done <<< "$dirs"
+    fi
     ;;
   all)
     synced=0
