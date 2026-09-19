@@ -29,14 +29,15 @@ Ayumy の構築後の日常運用ガイド。基本的な操作・Notion レポ�
 ### pre-push hook による自動転送
 - `ayumy setup-hooks` で設置した pre-push hook が、各リポジトリの push を契機に未同期 session を S3 に転送する
 - 転送が終わるまで push は完了しない。AWS 認証切れ等の場合は転送に失敗して push は中止される
-- 対応する Claude session が存在しないリポジトリでは hook は何もせず通常通り push を通す
+- 対応する Claude session が存在しないリポジトリでは、その旨を表示して通常通り push を通す
+- worktree で開いた session も、その worktree からの push で転送される
 
 ### 手動同期
 push せずに session だけ転送したいときや、hook を経由しないタイミングで同期したいときに使う
 
 | Command | Behavior |
 |---|---|
-| `ayumy sync` | 現在のディレクトリに対応するプロジェクトを同期 |
+| `ayumy sync` | 現在のリポジトリ（worktree を含む）に対応するプロジェクトを同期 |
 | `ayumy sync --all` | 全プロジェクトの未同期分を一括同期 |
 | `ayumy sync --project <name>` | 特定プロジェクト（`~/.claude/projects/` 配下のディレクトリ名）を同期 |
 

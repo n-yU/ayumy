@@ -4,6 +4,7 @@ umask 077
 
 CLAUDE_PROJECTS_DIR="$HOME/.claude/projects"
 MARKER_NAME=".ayumy_last_sync"
+REPO_NAME=".ayumy_repo"
 
 # --- helpers ---
 
@@ -12,10 +13,12 @@ usage() {
   local dest=1
   [[ "$code" -ne 0 ]] && dest=2
   cat >&"$dest" <<'USAGE'
-Usage: sync_session.sh [--project <name>] [--all] [--report] [--date DATE]
+Usage: sync_session.sh [--project <name>] [--cwd <dir>] [--repo <name>] [--all] [--report] [--date DATE]
 
 Options:
   --project <name>    Sync a specific project
+  --cwd <dir>         Sync the projects holding sessions opened in <dir>
+  --repo <name>       Record <name> as the repository of the synced projects (requires --cwd)
   --all               Sync all projects
   --report            Invoke Lambda to generate report after sync
   --date DATE         Generate report for a specific date or range (requires --report)
@@ -34,9 +37,63 @@ log() { echo "[ayumy] $*"; }
 err() { echo "[ayumy] ERROR: $*" >&2; }
 
 # Convert an absolute path to the Claude project directory name.
-# e.g. /Users/username/Documents/github/ayumy -> -Users-username-Documents-github-ayumy
+# e.g. /Users/username/repo.worktrees/topic -> -Users-username-repo-worktrees-topic
 path_to_project_name() {
-  echo "$1" | sed 's|/|-|g'
+  echo "$1" | sed 's|[/.]|-|g'
+}
+
+# Report whether $1 holds sessions and none of them records a cwd.
+project_predates_cwd() {
+  local project_dir="$1" f found=1
+
+  for f in "$project_dir"/*.jsonl; do
+    [[ -f "$f" ]] || continue
+    found=0
+    grep -q -m 1 '"cwd":"[^"][^"]*"' "$f" || continue
+    return 1
+  done
+  return "$found"
+}
+
+# Report whether $1 holds a session opened in $2.
+project_opened_in() {
+  local project_dir="$1" target="$2" f
+
+  for f in "$project_dir"/*.jsonl; do
+    [[ -f "$f" ]] || continue
+    # The first recorded cwd is the project's own; later entries can sit in another repository
+    [[ "$(grep -o -m 1 '"cwd":"[^"][^"]*"' "$f" || true)" == "\"cwd\":\"$target\"" ]] || continue
+    return 0
+  done
+  return 1
+}
+
+# Print the project directories holding sessions opened in $1, one per line.
+resolve_project_dirs() {
+  local target="$1"
+  # Keep the root itself while dropping every other trailing slash, since a recorded cwd carries none
+  while [[ "$target" == */ && "$target" != "/" ]]; do
+    target="${target%/}"
+  done
+
+  # Claude Code rewrites dots as well as separators, so a name built from the path cannot be trusted
+  local rc=1 candidate
+  for candidate in "$CLAUDE_PROJECTS_DIR"/*/; do
+    candidate="${candidate%/}"
+    [[ -d "$candidate" ]] || continue
+    project_opened_in "$candidate" "$target" || continue
+    echo "$candidate"
+    rc=0
+  done
+  [[ "$rc" -eq 0 ]] && return 0
+
+  # Sessions predating the cwd field cannot be matched by content, so fall back to the name Claude Code derives
+  local derived="$CLAUDE_PROJECTS_DIR/$(path_to_project_name "$target")"
+  if [[ -d "$derived" ]] && project_predates_cwd "$derived"; then
+    echo "$derived"
+    return 0
+  fi
+  return 1
 }
 
 find_changed_sessions() {
@@ -66,6 +123,17 @@ sync_project() {
   local files
   files=$(find_changed_sessions "$project_dir")
 
+  local dest_prefix="s3://$AYUMY_S3_BUCKET/claude-sessions/$project_name/"
+
+  # Uploaded ahead of the JSONL check so a repo name recorded after the last sync still reaches S3
+  local repo_file="$project_dir/$REPO_NAME"
+  if [[ -f "$repo_file" ]]; then
+    if ! aws s3 cp "$repo_file" "${dest_prefix}${REPO_NAME}" --quiet; then
+      err "$project_name: failed to upload $REPO_NAME metadata"
+      return 2
+    fi
+  fi
+
   if [[ -z "$files" ]]; then
     log "$project_name: no changes"
     return 1
@@ -75,22 +143,12 @@ sync_project() {
   file_count=$(echo "$files" | wc -l | tr -d ' ')
   log "$project_name: syncing $file_count session(s)"
 
-  local dest_prefix="s3://$AYUMY_S3_BUCKET/claude-sessions/$project_name/"
   while IFS= read -r f; do
     if ! aws s3 cp "$f" "$dest_prefix" --quiet; then
       err "$project_name: failed to upload $(basename -- "$f")"
       return 2
     fi
   done <<< "$files"
-
-  # Upload repo name metadata if available
-  local repo_file="$project_dir/.ayumy_repo"
-  if [[ -f "$repo_file" ]]; then
-    if ! aws s3 cp "$repo_file" "${dest_prefix}.ayumy_repo" --quiet; then
-      err "$project_name: failed to upload .ayumy_repo metadata"
-      return 2
-    fi
-  fi
 
   mv "$tmp_marker" "$project_dir/$MARKER_NAME"
   log "$project_name: done"
@@ -101,6 +159,9 @@ sync_project() {
 
 mode=""
 project_name=""
+target_cwd=""
+repo_name=""
+dirs=""
 report=false
 target_date=""
 
@@ -110,14 +171,26 @@ while [[ $# -gt 0 ]]; do
       usage 0
       ;;
     --project)
-      [[ -n "$mode" && "$mode" != "project" ]] && { err "conflicting options: --project and --all"; usage; }
+      [[ -n "$mode" && "$mode" != "project" ]] && { err "conflicting options: --project and --$mode"; usage; }
       mode="project"
       project_name="${2:-}"
       [[ -z "$project_name" ]] && { err "--project requires a name"; usage; }
       shift 2
       ;;
+    --cwd)
+      [[ -n "$mode" && "$mode" != "cwd" ]] && { err "conflicting options: --cwd and --$mode"; usage; }
+      mode="cwd"
+      target_cwd="${2:-}"
+      [[ -z "$target_cwd" ]] && { err "--cwd requires a directory"; usage; }
+      shift 2
+      ;;
+    --repo)
+      repo_name="${2:-}"
+      [[ -z "$repo_name" ]] && { err "--repo requires a name"; usage; }
+      shift 2
+      ;;
     --all)
-      [[ -n "$mode" && "$mode" != "all" ]] && { err "conflicting options: --project and --all"; usage; }
+      [[ -n "$mode" && "$mode" != "all" ]] && { err "conflicting options: --all and --$mode"; usage; }
       mode="all"
       shift
       ;;
@@ -144,6 +217,41 @@ done
 if [[ -n "$target_date" && "$report" != true ]]; then
   err "--date requires --report"
   usage
+fi
+
+if [[ -n "$repo_name" && "$mode" != "cwd" ]]; then
+  err "--repo requires --cwd"
+  usage
+fi
+
+# --- resolve targets for the working-directory modes ---
+
+# Resolved before the AWS checks so a repository holding no sessions never blocks a push
+if [[ "$mode" == "cwd" || -z "$mode" ]]; then
+  if [[ -z "$mode" ]]; then
+    target_cwd=$(git rev-parse --show-toplevel 2>/dev/null) || {
+      err "not in a git repository (use --project, --cwd or --all)"
+      exit 1
+    }
+  fi
+  if [[ -d "$target_cwd" ]]; then
+    # A session records the canonical path, which `..` segments and relative forms do not match
+    target_cwd="$(cd -- "$target_cwd" 2>/dev/null && pwd)" || {
+      err "--cwd could not be resolved: $target_cwd"
+      exit 1
+    }
+  elif [[ "$target_cwd" != /* ]]; then
+    # A deleted worktree keeps its sessions, so only an existing directory can be made absolute
+    err "--cwd must be an absolute path when the directory does not exist"
+    exit 1
+  fi
+  # Sessions of a deleted worktree stay resolvable, so the directory need not exist
+  dirs="$(resolve_project_dirs "$target_cwd" || true)"
+  if [[ -z "$dirs" ]]; then
+    log "no sessions recorded for $target_cwd"
+    # Reporting still needs the AWS checks below, so only a plain sync stops here
+    [[ "$report" == true ]] || exit 0
+  fi
 fi
 
 # --- validation ---
@@ -182,7 +290,8 @@ if [[ "$report" == true ]]; then
   fi
 fi
 
-if [[ ! -d "$CLAUDE_PROJECTS_DIR" ]]; then
+# A missing directory is an absence of sessions for the working-directory modes, where failing here would block the push
+if [[ ! -d "$CLAUDE_PROJECTS_DIR" && ( "$mode" == "project" || "$mode" == "all" ) ]]; then
   err "$CLAUDE_PROJECTS_DIR does not exist"
   exit 1
 fi
@@ -199,6 +308,16 @@ case "$mode" in
     rc=0; sync_project "$project_dir" || rc=$?
     [[ "$rc" -eq 0 || "$rc" -eq 1 ]] || exit "$rc"
     ;;
+  cwd|"")
+    while IFS= read -r project_dir; do
+      [[ -n "$project_dir" ]] || continue
+      if [[ -n "$repo_name" ]]; then
+        echo "$repo_name" > "$project_dir/$REPO_NAME"
+      fi
+      rc=0; sync_project "$project_dir" || rc=$?
+      [[ "$rc" -eq 0 || "$rc" -eq 1 ]] || exit "$rc"
+    done <<< "$dirs"
+    ;;
   all)
     synced=0
     for project_dir in "$CLAUDE_PROJECTS_DIR"/*/; do
@@ -211,21 +330,6 @@ case "$mode" in
       fi
     done
     log "synced $synced project(s)"
-    ;;
-  "")
-    # Auto-detect from current directory
-    git_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
-      err "not in a git repository (use --project or --all)"
-      exit 1
-    }
-    project_name=$(path_to_project_name "$git_root")
-    project_dir="$CLAUDE_PROJECTS_DIR/$project_name"
-    if [[ ! -d "$project_dir" ]]; then
-      err "no Claude sessions found for $git_root"
-      exit 1
-    fi
-    rc=0; sync_project "$project_dir" || rc=$?
-    [[ "$rc" -eq 0 || "$rc" -eq 1 ]] || exit "$rc"
     ;;
 esac
 

@@ -69,6 +69,18 @@ teardown() {
   [[ "$output" == *"--date must be YYYY-MM-DD"* ]]
 }
 
+@test "sync_session.sh: --cwd + --all conflict is rejected" {
+  run "$SCRIPT" --cwd /path/to/repo --all
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"conflicting options"* ]]
+}
+
+@test "sync_session.sh: --cwd without a directory is rejected" {
+  run "$SCRIPT" --cwd
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"--cwd requires a directory"* ]]
+}
+
 @test "sync_session.sh: --project without a name is rejected" {
   run "$SCRIPT" --project
   [ "$status" -ne 0 ]
@@ -172,6 +184,18 @@ teardown() {
   grep -q "^aws s3 cp $proj_dir/.ayumy_repo " "$AWS_STUB_LOG"
 }
 
+@test "sync_session.sh: .ayumy_repo metadata is uploaded even without JSONL changes" {
+  make_project
+  echo '{}' > "$proj_dir/x.jsonl"
+  touch -t 202001010000 "$proj_dir/x.jsonl"
+  touch -t 202401010000 "$proj_dir/.ayumy_last_sync"
+  echo 'my-repo' > "$proj_dir/.ayumy_repo"
+  run "$SCRIPT" --project myproj
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"no changes"* ]]
+  grep -q "^aws s3 cp $proj_dir/.ayumy_repo " "$AWS_STUB_LOG"
+}
+
 @test "sync_session.sh: .ayumy_repo upload failure surfaces as exit 2" {
   make_project
   echo '{}' > "$proj_dir/a.jsonl"
@@ -179,6 +203,222 @@ teardown() {
   AWS_STUB_S3_FAIL_PATTERN=".ayumy_repo" run "$SCRIPT" --project myproj
   [ "$status" -eq 2 ]
   [[ "$output" == *".ayumy_repo metadata"* ]]
+}
+
+# --- --cwd resolution ---
+
+# Create a project dir whose session log records $2 as the working directory.
+make_cwd_project() {
+  make_project "$1"
+  printf '{"type":"user","cwd":"%s"}\n' "$2" > "$proj_dir/sess.jsonl"
+}
+
+@test "sync_session.sh: --cwd uploads the project recording the directory" {
+  make_cwd_project "-path-to-repo" "/path/to/repo"
+  run "$SCRIPT" --cwd /path/to/repo
+  [ "$status" -eq 0 ]
+  grep -q "^aws s3 cp $PROJECTS_DIR/-path-to-repo/sess.jsonl " "$AWS_STUB_LOG"
+}
+
+@test "sync_session.sh: --cwd resolves a path whose name Claude Code rewrites" {
+  make_cwd_project "-path-to-repo-worktrees-topic" "/path/to/repo.worktrees/topic"
+  run "$SCRIPT" --cwd /path/to/repo.worktrees/topic
+  [ "$status" -eq 0 ]
+  grep -q "^aws s3 cp $PROJECTS_DIR/-path-to-repo-worktrees-topic/sess.jsonl " "$AWS_STUB_LOG"
+}
+
+@test "sync_session.sh: --cwd ignores a project whose later entries visit the directory" {
+  make_project "-path-to-other"
+  printf '{"type":"user","cwd":"/path/to/other"}\n{"type":"user","cwd":"/path/to/repo.worktrees/topic"}\n' > "$proj_dir/sess.jsonl"
+  make_cwd_project "-path-to-repo-worktrees-topic" "/path/to/repo.worktrees/topic"
+  run "$SCRIPT" --cwd /path/to/repo.worktrees/topic
+  [ "$status" -eq 0 ]
+  grep -q "^aws s3 cp $PROJECTS_DIR/-path-to-repo-worktrees-topic/sess.jsonl " "$AWS_STUB_LOG"
+  ! grep -q "^aws s3 cp $PROJECTS_DIR/-path-to-other/" "$AWS_STUB_LOG"
+}
+
+@test "sync_session.sh: --cwd resolves when the first entry records no cwd" {
+  make_project "-path-to-repo-worktrees-topic"
+  printf '{"type":"queue-operation"}\n{"type":"user","cwd":"/path/to/repo.worktrees/topic"}\n' > "$proj_dir/sess.jsonl"
+  run "$SCRIPT" --cwd /path/to/repo.worktrees/topic
+  [ "$status" -eq 0 ]
+  grep -q "^aws s3 cp $PROJECTS_DIR/-path-to-repo-worktrees-topic/sess.jsonl " "$AWS_STUB_LOG"
+}
+
+@test "sync_session.sh: --cwd uploads every project recording the same cwd" {
+  make_cwd_project "derived-a" "/path/to/repo.worktrees/topic"
+  make_cwd_project "derived-b" "/path/to/repo.worktrees/topic"
+  run "$SCRIPT" --cwd /path/to/repo.worktrees/topic
+  [ "$status" -eq 0 ]
+  grep -q "^aws s3 cp $PROJECTS_DIR/derived-a/sess.jsonl " "$AWS_STUB_LOG"
+  grep -q "^aws s3 cp $PROJECTS_DIR/derived-b/sess.jsonl " "$AWS_STUB_LOG"
+}
+
+@test "sync_session.sh: --cwd resolves a relative directory to its absolute path" {
+  mkdir -p "$TMPDIR_TEST/work.dir"
+  local abs
+  abs="$(cd "$TMPDIR_TEST/work.dir" && pwd)"
+  make_cwd_project "derived-name" "$abs"
+  cd "$TMPDIR_TEST"
+  run "$SCRIPT" --cwd work.dir
+  [ "$status" -eq 0 ]
+  grep -q "^aws s3 cp $PROJECTS_DIR/derived-name/sess.jsonl " "$AWS_STUB_LOG"
+}
+
+@test "sync_session.sh: --cwd resolves an absolute path containing parent segments" {
+  mkdir -p "$TMPDIR_TEST/work" "$TMPDIR_TEST/other"
+  local abs
+  abs="$(cd "$TMPDIR_TEST/work" && pwd)"
+  make_cwd_project "derived-name" "$abs"
+  run "$SCRIPT" --cwd "$abs/../work"
+  [ "$status" -eq 0 ]
+  grep -q "^aws s3 cp $PROJECTS_DIR/derived-name/sess.jsonl " "$AWS_STUB_LOG"
+}
+
+@test "sync_session.sh: --cwd with an unresolvable relative path is rejected" {
+  run "$SCRIPT" --cwd no/such/dir
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"absolute path"* ]]
+}
+
+@test "sync_session.sh: --cwd / does not resolve the projects root" {
+  make_cwd_project "-path-to-repo" "/path/to/repo"
+  run "$SCRIPT" --cwd /
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"no sessions recorded"* ]]
+  ! grep -q "^aws s3 cp " "$AWS_STUB_LOG"
+}
+
+@test "sync_session.sh: --cwd ignores repeated trailing slashes" {
+  make_cwd_project "-path-to-repo-worktrees-topic" "/path/to/repo.worktrees/topic"
+  run "$SCRIPT" --cwd /path/to/repo.worktrees/topic///
+  [ "$status" -eq 0 ]
+  grep -q "^aws s3 cp $PROJECTS_DIR/-path-to-repo-worktrees-topic/sess.jsonl " "$AWS_STUB_LOG"
+}
+
+@test "sync_session.sh: --cwd resolves a project whose sessions record no cwd" {
+  make_project "-path-to-repo"
+  printf '{"type":"user","message":{"content":"legacy"}}\n' > "$proj_dir/sess.jsonl"
+  run "$SCRIPT" --cwd /path/to/repo
+  [ "$status" -eq 0 ]
+  grep -q "^aws s3 cp $PROJECTS_DIR/-path-to-repo/sess.jsonl " "$AWS_STUB_LOG"
+}
+
+@test "sync_session.sh: --cwd resolves a dotted path whose sessions record no cwd" {
+  make_project "-path-to-repo-worktrees-topic"
+  printf '{"type":"user","message":{"content":"legacy"}}\n' > "$proj_dir/sess.jsonl"
+  run "$SCRIPT" --cwd /path/to/repo.worktrees/topic
+  [ "$status" -eq 0 ]
+  grep -q "^aws s3 cp $PROJECTS_DIR/-path-to-repo-worktrees-topic/sess.jsonl " "$AWS_STUB_LOG"
+}
+
+@test "sync_session.sh: --cwd ignores a project holding no sessions" {
+  make_project "-path-to-repo"
+  run "$SCRIPT" --cwd /path/to/repo
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"no sessions recorded"* ]]
+  ! grep -q "^aws s3 cp " "$AWS_STUB_LOG"
+}
+
+@test "sync_session.sh: --cwd ignores a project recording a different path under the same name" {
+  make_cwd_project "-path-to-foo-bar" "/path/to/foo.bar"
+  run "$SCRIPT" --cwd /path/to/foo-bar
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"no sessions recorded"* ]]
+  ! grep -q "^aws s3 cp " "$AWS_STUB_LOG"
+}
+
+@test "sync_session.sh: --cwd uploads projects beyond the one named after the directory" {
+  make_cwd_project "-path-to-repo" "/path/to/repo"
+  make_cwd_project "-path-to-repo-legacy" "/path/to/repo"
+  run "$SCRIPT" --cwd /path/to/repo
+  [ "$status" -eq 0 ]
+  grep -q "^aws s3 cp $PROJECTS_DIR/-path-to-repo/sess.jsonl " "$AWS_STUB_LOG"
+  grep -q "^aws s3 cp $PROJECTS_DIR/-path-to-repo-legacy/sess.jsonl " "$AWS_STUB_LOG"
+}
+
+@test "sync_session.sh: --cwd ignores a trailing slash on the directory" {
+  make_cwd_project "-path-to-repo-worktrees-topic" "/path/to/repo.worktrees/topic"
+  run "$SCRIPT" --cwd /path/to/repo.worktrees/topic/
+  [ "$status" -eq 0 ]
+  grep -q "^aws s3 cp $PROJECTS_DIR/-path-to-repo-worktrees-topic/sess.jsonl " "$AWS_STUB_LOG"
+}
+
+@test "sync_session.sh: --repo records the name in every resolved project" {
+  make_cwd_project "derived-a" "/path/to/repo.worktrees/topic"
+  make_cwd_project "derived-b" "/path/to/repo.worktrees/topic"
+  run "$SCRIPT" --cwd /path/to/repo.worktrees/topic --repo my-repo
+  [ "$status" -eq 0 ]
+  [ "$(cat "$PROJECTS_DIR/derived-a/.ayumy_repo")" = "my-repo" ]
+  [ "$(cat "$PROJECTS_DIR/derived-b/.ayumy_repo")" = "my-repo" ]
+}
+
+@test "sync_session.sh: --repo without --cwd is rejected" {
+  run "$SCRIPT" --all --repo my-repo
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"--repo requires --cwd"* ]]
+}
+
+@test "sync_session.sh: --repo without a name is rejected" {
+  run "$SCRIPT" --cwd /path/to/repo --repo
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"--repo requires a name"* ]]
+}
+
+@test "sync_session.sh: no args resolves the project from the git root" {
+  make_cwd_project "-path-to-repo-worktrees-topic" "/path/to/repo.worktrees/topic"
+  GIT_STUB_TOPLEVEL="/path/to/repo.worktrees/topic" run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  grep -q "^aws s3 cp $PROJECTS_DIR/-path-to-repo-worktrees-topic/sess.jsonl " "$AWS_STUB_LOG"
+}
+
+@test "sync_session.sh: no args outside a git repository is rejected" {
+  run "$SCRIPT"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"not in a git repository"* ]]
+}
+
+@test "sync_session.sh: --cwd without a projects directory uploads nothing" {
+  rm -rf "$PROJECTS_DIR"
+  run "$SCRIPT" --cwd /path/to/repo
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"no sessions recorded"* ]]
+}
+
+@test "sync_session.sh: --all without a projects directory is rejected" {
+  rm -rf "$PROJECTS_DIR"
+  run "$SCRIPT" --all
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"does not exist"* ]]
+}
+
+@test "sync_session.sh: --cwd without sessions succeeds before the bucket check" {
+  unset AYUMY_S3_BUCKET
+  run "$SCRIPT" --cwd /path/to/repo
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"no sessions recorded"* ]]
+}
+
+@test "sync_session.sh: --cwd with sessions still requires the bucket" {
+  make_cwd_project "-path-to-repo" "/path/to/repo"
+  unset AYUMY_S3_BUCKET
+  run "$SCRIPT" --cwd /path/to/repo
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"AYUMY_S3_BUCKET is not set"* ]]
+}
+
+@test "sync_session.sh: --cwd without sessions still reports when requested" {
+  AYUMY_LAMBDA_FUNCTION="fn" run "$SCRIPT" --cwd /path/to/repo --report
+  [ "$status" -eq 0 ]
+  grep -q 'aws lambda invoke' "$AWS_STUB_LOG"
+}
+
+@test "sync_session.sh: --cwd without a matching session uploads nothing" {
+  make_cwd_project "-other-repo" "/other/repo"
+  run "$SCRIPT" --cwd /path/to/repo
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"no sessions recorded"* ]]
+  ! grep -q "^aws s3 cp " "$AWS_STUB_LOG"
 }
 
 # --- --report path ---
