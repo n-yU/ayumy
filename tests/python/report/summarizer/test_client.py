@@ -94,6 +94,32 @@ class TestGenerateSummary:
 
         assert result == report
 
+    def _call_kwargs(self) -> dict:
+        tool_use = MagicMock(type="tool_use", input={"repositories": []})
+        tool_use.name = resources.TOOL_NAME
+        self._set_response([tool_use])
+        self.client.generate_summary(self.target, "gh", "sess")
+        return self.client.client.messages.create.call_args.kwargs
+
+    def test_sends_prompt_and_tool_from_resources(self):
+        kwargs = self._call_kwargs()
+
+        assert kwargs["system"] == resources.SYSTEM_PROMPT
+        assert kwargs["tools"] == [resources.TOOL_DEFINITION]
+        assert kwargs["tool_choice"] == {"type": "tool", "name": resources.TOOL_NAME}
+        assert kwargs["messages"] == [
+            {
+                "role": "user",
+                "content": self.client.build_prompt(self.target, "gh", "sess"),
+            }
+        ]
+
+    def test_sends_configured_model_and_token_cap(self):
+        kwargs = self._call_kwargs()
+
+        assert kwargs["model"] == CONFIG.claude.model
+        assert kwargs["max_tokens"] == CONFIG.claude.max_tokens
+
     def test_returns_usage_from_response(self):
         tool_use = MagicMock(type="tool_use", input={"repositories": []})
         tool_use.name = resources.TOOL_NAME
