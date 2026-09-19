@@ -37,9 +37,9 @@ log() { echo "[ayumy] $*"; }
 err() { echo "[ayumy] ERROR: $*" >&2; }
 
 # Convert an absolute path to the Claude project directory name.
-# e.g. /Users/username/Documents/github/ayumy -> -Users-username-Documents-github-ayumy
+# e.g. /Users/username/repo.worktrees/topic -> -Users-username-repo-worktrees-topic
 path_to_project_name() {
-  echo "$1" | sed 's|/|-|g'
+  echo "$1" | sed 's|[/.]|-|g'
 }
 
 # Report whether $1 holds sessions and none of them records a cwd.
