@@ -279,6 +279,27 @@ make_cwd_project() {
   [[ "$output" == *"does not exist"* ]]
 }
 
+@test "sync_session.sh: --cwd without sessions succeeds before the bucket check" {
+  unset AYUMY_S3_BUCKET
+  run "$SCRIPT" --cwd /path/to/repo
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"no sessions recorded"* ]]
+}
+
+@test "sync_session.sh: --cwd with sessions still requires the bucket" {
+  make_cwd_project "-path-to-repo" "/path/to/repo"
+  unset AYUMY_S3_BUCKET
+  run "$SCRIPT" --cwd /path/to/repo
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"AYUMY_S3_BUCKET is not set"* ]]
+}
+
+@test "sync_session.sh: --cwd without sessions still reports when requested" {
+  AYUMY_LAMBDA_FUNCTION="fn" run "$SCRIPT" --cwd /path/to/repo --report
+  [ "$status" -eq 0 ]
+  grep -q 'aws lambda invoke' "$AWS_STUB_LOG"
+}
+
 @test "sync_session.sh: --cwd without a matching session uploads nothing" {
   make_cwd_project "-other-repo" "/other/repo"
   run "$SCRIPT" --cwd /path/to/repo

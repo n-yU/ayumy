@@ -129,6 +129,7 @@ mode=""
 project_name=""
 target_cwd=""
 repo_name=""
+dirs=""
 report=false
 target_date=""
 
@@ -191,6 +192,25 @@ if [[ -n "$repo_name" && "$mode" != "cwd" ]]; then
   usage
 fi
 
+# --- resolve targets for the working-directory modes ---
+
+# Resolved before the AWS checks so a repository holding no sessions never blocks a push
+if [[ "$mode" == "cwd" || -z "$mode" ]]; then
+  if [[ -z "$mode" ]]; then
+    target_cwd=$(git rev-parse --show-toplevel 2>/dev/null) || {
+      err "not in a git repository (use --project, --cwd or --all)"
+      exit 1
+    }
+  fi
+  # Sessions of a deleted worktree stay resolvable, so the directory need not exist
+  dirs="$(resolve_project_dirs "$target_cwd" || true)"
+  if [[ -z "$dirs" ]]; then
+    log "no sessions recorded for $target_cwd"
+    # Reporting still needs the AWS checks below, so only a plain sync stops here
+    [[ "$report" == true ]] || exit 0
+  fi
+fi
+
 # --- validation ---
 
 if ! command -v aws &>/dev/null; then
@@ -246,25 +266,14 @@ case "$mode" in
     [[ "$rc" -eq 0 || "$rc" -eq 1 ]] || exit "$rc"
     ;;
   cwd|"")
-    if [[ -z "$mode" ]]; then
-      target_cwd=$(git rev-parse --show-toplevel 2>/dev/null) || {
-        err "not in a git repository (use --project, --cwd or --all)"
-        exit 1
-      }
-    fi
-    # Sessions of a deleted worktree stay resolvable, so the directory need not exist
-    dirs="$(resolve_project_dirs "$target_cwd" || true)"
-    if [[ -z "$dirs" ]]; then
-      log "no sessions recorded for $target_cwd"
-    else
-      while IFS= read -r project_dir; do
-        if [[ -n "$repo_name" ]]; then
-          echo "$repo_name" > "$project_dir/$REPO_NAME"
-        fi
-        rc=0; sync_project "$project_dir" || rc=$?
-        [[ "$rc" -eq 0 || "$rc" -eq 1 ]] || exit "$rc"
-      done <<< "$dirs"
-    fi
+    while IFS= read -r project_dir; do
+      [[ -n "$project_dir" ]] || continue
+      if [[ -n "$repo_name" ]]; then
+        echo "$repo_name" > "$project_dir/$REPO_NAME"
+      fi
+      rc=0; sync_project "$project_dir" || rc=$?
+      [[ "$rc" -eq 0 || "$rc" -eq 1 ]] || exit "$rc"
+    done <<< "$dirs"
     ;;
   all)
     synced=0
