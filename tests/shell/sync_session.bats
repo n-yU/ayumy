@@ -265,6 +265,16 @@ make_cwd_project() {
   grep -q "^aws s3 cp $PROJECTS_DIR/derived-name/sess.jsonl " "$AWS_STUB_LOG"
 }
 
+@test "sync_session.sh: --cwd resolves an absolute path containing parent segments" {
+  mkdir -p "$TMPDIR_TEST/work" "$TMPDIR_TEST/other"
+  local abs
+  abs="$(cd "$TMPDIR_TEST/work" && pwd)"
+  make_cwd_project "derived-name" "$abs"
+  run "$SCRIPT" --cwd "$abs/../work"
+  [ "$status" -eq 0 ]
+  grep -q "^aws s3 cp $PROJECTS_DIR/derived-name/sess.jsonl " "$AWS_STUB_LOG"
+}
+
 @test "sync_session.sh: --cwd with an unresolvable relative path is rejected" {
   run "$SCRIPT" --cwd no/such/dir
   [ "$status" -ne 0 ]

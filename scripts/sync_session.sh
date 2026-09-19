@@ -234,12 +234,16 @@ if [[ "$mode" == "cwd" || -z "$mode" ]]; then
       exit 1
     }
   fi
-  if [[ "$target_cwd" != /* ]]; then
-    # A deleted worktree keeps its sessions, so only an existing directory can be made absolute
+  if [[ -d "$target_cwd" ]]; then
+    # A session records the canonical path, which `..` segments and relative forms do not match
     target_cwd="$(cd -- "$target_cwd" 2>/dev/null && pwd)" || {
-      err "--cwd must be an absolute path when the directory does not exist"
+      err "--cwd could not be resolved: $target_cwd"
       exit 1
     }
+  elif [[ "$target_cwd" != /* ]]; then
+    # A deleted worktree keeps its sessions, so only an existing directory can be made absolute
+    err "--cwd must be an absolute path when the directory does not exist"
+    exit 1
   fi
   # Sessions of a deleted worktree stay resolvable, so the directory need not exist
   dirs="$(resolve_project_dirs "$target_cwd" || true)"
