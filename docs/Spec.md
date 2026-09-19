@@ -144,7 +144,7 @@ Claude Code session の JSONL を S3 バケットに転送する。クライア�
 ### Data Source
 Claude Code は会話を `~/.claude/projects/` 以下にローカル保存している
 
-- 各プロジェクトがディレクトリとして存在（パスのスラッシュがダッシュに置換された名前）
+- 各プロジェクトがディレクトリとして存在（パスのスラッシュとドットがダッシュに置換された名前。置換対象の文字は公開されていない）
 - 個別 session は JSONL ファイル（`{session-id}.jsonl`）として保存
 - メタデータ（session ID、タイムスタンプ、ブランチ等）は JSONL の各エントリに埋め込まれている
 - 外部インデックスファイルは存在しない
@@ -200,16 +200,20 @@ Claude Code が生成するため、タイムスタンプのフォーマット�
 hook と手動実行の両方から呼ばれる共通スクリプト
 
 ```
-sync_session.sh [--project <project-name>] [--all] [--report] [--date DATE]
+sync_session.sh [--project <project-name>] [--cwd <dir>] [--repo <name>] [--all] [--report] [--date DATE]
 ```
 
 | Option | Behavior |
 |---|---|
 | `--project <name>` | 指定プロジェクトの差分 session のみ転送。`<name>` は `~/.claude/projects/` 以下のディレクトリ名（例: `-Users-username-Documents-github-repo`） |
+| `--cwd <dir>` | `<dir>` で開いた session を持つプロジェクトの差分 session を転送 |
+| `--repo <name>` | 転送するプロジェクトに `<name>` をリポジトリ名として記録する（`--cwd` と併用する） |
 | `--all` | 全プロジェクトから差分 session を一括転送 |
 | `--report` | S3 転送後に Lambda 関数を呼び出してレポート生成を実行 |
 | `--date DATE` | 指定日または日付範囲のレポートを生成・再生成（`--report` 必須）。`YYYY-MM-DD` または `YYYY-MM-DD..YYYY-MM-DD` 形式 |
 | 引数なし | カレントディレクトリに対応するプロジェクトを自動判定 |
+
+`--cwd` と引数なしでのプロジェクト特定は、作業ディレクトリのパスから組み立てた名前で完全一致を試し、一致するディレクトリが無いときだけ各プロジェクトの JSONL が記録する `cwd` と照合する。Claude Code が置換する文字は公開されておらず、組み立てた名前だけでは worktree のようなドットを含むパスを取りこぼすためである。照合で複数のプロジェクトが該当した場合はそのすべてを転送し、1 つも該当しない場合はその旨を表示して正常終了する
 
 要件
 
@@ -220,10 +224,11 @@ sync_session.sh [--project <project-name>] [--all] [--report] [--date DATE]
 ### Pre-push Hook
 `ayumy/hooks/pre-push` として管理し、各リポジトリの `.git/hooks/pre-push` にシンボリックリンクで配置する
 
-hook はリポジトリパスからプロジェクト名を解決し、`sync_session.sh --project {name}` をフォアグラウンドで呼び出すラッパーである
+hook はリポジトリのルートと push 先のリポジトリ名を `sync_session.sh --cwd {dir} --repo {name}` としてフォアグラウンドで呼び出すラッパーである。プロジェクトの特定とリポジトリ名の記録は転送スクリプト側が担う
 
 - 転送に失敗した場合は非ゼロ終了で push を中止する。これにより AWS 認証切れなど upload 不能な状態を push 時点で顕在化させる
-- 当該リポジトリに対応する Claude session が存在しない（`~/.claude/projects/` 配下にディレクトリが無い）場合は何もせず exit 0 とし、push を通す
+- 当該リポジトリに対応する Claude session が存在しない場合はその旨を表示して exit 0 とし、push を通す
+- リポジトリ名は push 先の remote URL から解決する。remote URL を引けない場合は `--repo` を渡さず、リポジトリ名の記録を省く
 
 hook の配布方法（`ayumy setup-hooks` コマンドで設置）
 
