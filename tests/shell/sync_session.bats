@@ -286,6 +286,22 @@ make_cwd_project() {
   grep -q "^aws s3 cp $PROJECTS_DIR/-path-to-repo-worktrees-topic/sess.jsonl " "$AWS_STUB_LOG"
 }
 
+@test "sync_session.sh: --cwd resolves a project whose sessions record no cwd" {
+  make_project "-path-to-repo"
+  printf '{"type":"user","message":{"content":"legacy"}}\n' > "$proj_dir/sess.jsonl"
+  run "$SCRIPT" --cwd /path/to/repo
+  [ "$status" -eq 0 ]
+  grep -q "^aws s3 cp $PROJECTS_DIR/-path-to-repo/sess.jsonl " "$AWS_STUB_LOG"
+}
+
+@test "sync_session.sh: --cwd ignores a project holding no sessions" {
+  make_project "-path-to-repo"
+  run "$SCRIPT" --cwd /path/to/repo
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"no sessions recorded"* ]]
+  ! grep -q "^aws s3 cp " "$AWS_STUB_LOG"
+}
+
 @test "sync_session.sh: --cwd ignores a project recording a different path under the same name" {
   make_cwd_project "-path-to-foo-bar" "/path/to/foo.bar"
   run "$SCRIPT" --cwd /path/to/foo-bar

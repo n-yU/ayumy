@@ -36,6 +36,25 @@ USAGE
 log() { echo "[ayumy] $*"; }
 err() { echo "[ayumy] ERROR: $*" >&2; }
 
+# Convert an absolute path to the Claude project directory name.
+# e.g. /Users/username/Documents/github/ayumy -> -Users-username-Documents-github-ayumy
+path_to_project_name() {
+  echo "$1" | sed 's|/|-|g'
+}
+
+# Report whether $1 holds sessions and none of them records a cwd.
+project_predates_cwd() {
+  local project_dir="$1" f found=1
+
+  for f in "$project_dir"/*.jsonl; do
+    [[ -f "$f" ]] || continue
+    found=0
+    grep -q -m 1 '"cwd":"[^"][^"]*"' "$f" || continue
+    return 1
+  done
+  return "$found"
+}
+
 # Report whether $1 holds a session opened in $2.
 project_opened_in() {
   local project_dir="$1" target="$2" f
@@ -66,7 +85,15 @@ resolve_project_dirs() {
     echo "$candidate"
     rc=0
   done
-  return "$rc"
+  [[ "$rc" -eq 0 ]] && return 0
+
+  # Sessions predating the cwd field cannot be matched by content, so fall back to the name Claude Code derives
+  local derived="$CLAUDE_PROJECTS_DIR/$(path_to_project_name "$target")"
+  if [[ -d "$derived" ]] && project_predates_cwd "$derived"; then
+    echo "$derived"
+    return 0
+  fi
+  return 1
 }
 
 find_changed_sessions() {
