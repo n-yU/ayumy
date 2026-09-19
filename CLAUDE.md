@@ -19,6 +19,7 @@ lambda/handler.py                    # Lambda ハンドラ（report パッケー
 lambda/config/                       # チューニング定数の YAML と loader（追跡対象は template のみ、config.yml は生成物）
 lambda/report/                       # メインパッケージ: GitHub API + Claude API + Notion API
 lambda/report/prompts/               # Claude API に渡すプロンプト本文（`string.Template` の `$` 記法で実行時に値を差し込む）
+lambda/report/schemas/               # Claude API に渡す tool 定義
 lambda/requirements.in               # Lambda デプロイ依存の source（直接依存のみ、バージョン範囲指定）
 lambda/requirements-dev.in           # ローカル開発依存の source（boto3 等を追加、`-r requirements.in` で本体を参照）
 lambda/requirements.txt              # `requirements.in` から `uv pip compile --generate-hashes` で生成した hash 付き lock

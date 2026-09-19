@@ -2,8 +2,6 @@
 
 import logging
 from datetime import datetime
-from pathlib import Path
-from string import Template
 from typing import cast
 
 import anthropic
@@ -14,42 +12,16 @@ from config import CONFIG
 from ..domain import summary
 from ..shared import dates
 from ..shared.notice import Notice, NoticeSource
-from . import tags
+from . import resources, tags
 
 logger = logging.getLogger(__name__)
 
-TOOL_NAME = "submit_daily_report"
-_TAG_GUIDANCE = "\n".join(f"- {t.name}: {t.description}" for t in tags.DEFINITIONS)
-# Template's `$` placeholders rather than `str.format`, so the braces in the prompt's own examples need no escaping
-_SYSTEM_PROMPT = Template(
-    (Path(__file__).parent.parent / "prompts" / "summary_system.txt").read_text(
-        encoding="utf-8"
-    )
-).substitute(tool_name=TOOL_NAME, tag_guidance=_TAG_GUIDANCE)
-_RESPONSE_SHAPE_SCHEMA = {
-    "type": "object",
-    "required": ["repositories"],
-    "properties": {
-        "repositories": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "required": ["name", "summary", "tags"],
-                "properties": {
-                    "name": {"type": "string"},
-                    "summary": {"type": "array", "items": {"type": "string"}},
-                    "tags": {"type": "array", "items": {"type": "string"}},
-                },
-            },
-        },
-    },
-}
 _VALUE_REPR_LIMIT = 200
 
 
 def _validate_response_shape(payload: object) -> summary.Report:
     try:
-        jsonschema.validate(payload, _RESPONSE_SHAPE_SCHEMA)
+        jsonschema.validate(payload, resources.RESPONSE_SHAPE)
     except jsonschema.ValidationError as e:
         path = "/".join(str(p) for p in e.absolute_path) or "<root>"
         value_repr = repr(e.instance)
@@ -81,47 +53,6 @@ class Client:
         self.client = anthropic.Anthropic(api_key=api_key)
         self._notice = notice or Notice()
 
-    def _build_tool_schema(self) -> dict:
-        """Build the tool definition the model fills in; the `tags` enum bars it from emitting values outside the code-defined allowlist."""
-        return {
-            "name": TOOL_NAME,
-            "description": "日次の開発アクティビティ要約を構造化された形で提出する",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "repositories": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "name": {"type": "string"},
-                                "summary": {
-                                    "type": "array",
-                                    "items": {"type": "string"},
-                                    "minItems": 2,
-                                    "maxItems": 5,
-                                },
-                                "tags": {
-                                    "type": "array",
-                                    "description": (
-                                        "その日の作業内容を表す tag のリスト。"
-                                        "enum で指定された値のみ使用可:\n"
-                                        f"{_TAG_GUIDANCE}"
-                                    ),
-                                    "items": {
-                                        "type": "string",
-                                        "enum": list(tags.ALLOWED_NAMES),
-                                    },
-                                },
-                            },
-                            "required": ["name", "summary", "tags"],
-                        },
-                    },
-                },
-                "required": ["repositories"],
-            },
-        }
-
     def build_prompt(
         self,
         target_date: datetime,
@@ -152,14 +83,13 @@ class Client:
                 or if the tool_use input violates the expected shape.
         """
         prompt = self.build_prompt(target_date, formatted_github, formatted_sessions)
-        tool = self._build_tool_schema()
 
         message = self.client.messages.create(
             model=CONFIG.claude.model,
             max_tokens=CONFIG.claude.max_tokens,
-            system=_SYSTEM_PROMPT,
-            tools=[tool],
-            tool_choice={"type": "tool", "name": TOOL_NAME},
+            system=resources.SYSTEM_PROMPT,
+            tools=[resources.TOOL_DEFINITION],
+            tool_choice={"type": "tool", "name": resources.TOOL_NAME},
             messages=[{"role": "user", "content": prompt}],
         )
 
@@ -168,10 +98,15 @@ class Client:
         )
 
         for block in message.content:
-            if getattr(block, "type", None) == "tool_use" and block.name == TOOL_NAME:
+            if (
+                getattr(block, "type", None) == "tool_use"
+                and block.name == resources.TOOL_NAME
+            ):
                 return _validate_response_shape(block.input), usage
 
-        raise ValueError(f"Claude API response missing tool_use block for {TOOL_NAME}.")
+        raise ValueError(
+            f"Claude API response missing tool_use block for {resources.TOOL_NAME}."
+        )
 
     def validate_report(self, report: summary.Report) -> ValidationResult:
         """Strips disallowed tags from `report` in place."""

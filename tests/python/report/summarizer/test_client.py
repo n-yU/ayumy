@@ -1,4 +1,4 @@
-"""Tests for report.summarizer.client logic and its system prompt."""
+"""Tests for report.summarizer.client logic."""
 
 from datetime import datetime
 from unittest.mock import MagicMock
@@ -11,7 +11,7 @@ from report.domain import summary
 from report.shared import dates
 from report.shared.notice import Notice
 from report.summarizer import client as summarizer_client
-from report.summarizer import tags
+from report.summarizer import resources, tags
 
 
 def _make_client() -> summarizer.Client:
@@ -19,47 +19,6 @@ def _make_client() -> summarizer.Client:
     client = summarizer.Client.__new__(summarizer.Client)
     client._notice = Notice()
     return client
-
-
-class TestBuildToolSchema:
-    def test_enforces_allowed_tags_via_enum(self):
-        client = _make_client()
-        schema = client._build_tool_schema()
-        repo_props = schema["input_schema"]["properties"]["repositories"]["items"][
-            "properties"
-        ]
-        assert repo_props["tags"]["items"]["enum"] == list(tags.ALLOWED_NAMES)
-
-    def test_tags_field_carries_description_per_tag(self):
-        client = _make_client()
-        schema = client._build_tool_schema()
-        tags_field = schema["input_schema"]["properties"]["repositories"]["items"][
-            "properties"
-        ]["tags"]
-        for tag in tags.DEFINITIONS:
-            assert tag.name in tags_field["description"]
-            assert tag.description in tags_field["description"]
-
-
-class TestSystemPrompt:
-    def test_lists_each_tag_with_description(self):
-        for tag in tags.DEFINITIONS:
-            assert tag.name in summarizer_client._SYSTEM_PROMPT
-            assert tag.description in summarizer_client._SYSTEM_PROMPT
-
-    @pytest.mark.parametrize(
-        "rule",
-        [
-            pytest.param("種別を置くことは", id="no_kind_prefix"),
-            pytest.param("カッコで囲まず", id="no_parenthesized_number"),
-            pytest.param("claude-config#12", id="cross_repository_number"),
-            pytest.param("PR-3 / Phase 2 / Commit 1", id="plan_identifier"),
-            pytest.param("(#180: PR-2)", id="unopened_pull_binding"),
-            pytest.param("**...**", id="allowed_decoration"),
-        ],
-    )
-    def test_states_each_notation_rule(self, rule):
-        assert rule in summarizer_client._SYSTEM_PROMPT
 
 
 class TestBuildPrompt:
@@ -126,7 +85,7 @@ class TestGenerateSummary:
         }
         tool_use = MagicMock(type="tool_use", input=report)
         tool_use.name = (
-            summarizer_client.TOOL_NAME  # `name` kwarg on MagicMock sets the mock label, not attr
+            resources.TOOL_NAME  # `name` kwarg on MagicMock sets the mock label, not attr
         )
         text_block = MagicMock(type="text")
         self._set_response([text_block, tool_use])
@@ -135,9 +94,35 @@ class TestGenerateSummary:
 
         assert result == report
 
+    def _call_kwargs(self) -> dict:
+        tool_use = MagicMock(type="tool_use", input={"repositories": []})
+        tool_use.name = resources.TOOL_NAME
+        self._set_response([tool_use])
+        self.client.generate_summary(self.target, "gh", "sess")
+        return self.client.client.messages.create.call_args.kwargs
+
+    def test_sends_prompt_and_tool_from_resources(self):
+        kwargs = self._call_kwargs()
+
+        assert kwargs["system"] == resources.SYSTEM_PROMPT
+        assert kwargs["tools"] == [resources.TOOL_DEFINITION]
+        assert kwargs["tool_choice"] == {"type": "tool", "name": resources.TOOL_NAME}
+        assert kwargs["messages"] == [
+            {
+                "role": "user",
+                "content": self.client.build_prompt(self.target, "gh", "sess"),
+            }
+        ]
+
+    def test_sends_configured_model_and_token_cap(self):
+        kwargs = self._call_kwargs()
+
+        assert kwargs["model"] == CONFIG.claude.model
+        assert kwargs["max_tokens"] == CONFIG.claude.max_tokens
+
     def test_returns_usage_from_response(self):
         tool_use = MagicMock(type="tool_use", input={"repositories": []})
-        tool_use.name = summarizer_client.TOOL_NAME
+        tool_use.name = resources.TOOL_NAME
         self._set_response([tool_use], input_tokens=10_000, output_tokens=2_000)
 
         _, usage = self.client.generate_summary(self.target, "gh", "sess")
@@ -156,12 +141,12 @@ class TestGenerateSummary:
         text_block = MagicMock(type="text")
         self._set_response([text_block])
 
-        with pytest.raises(ValueError, match=summarizer_client.TOOL_NAME):
+        with pytest.raises(ValueError, match=resources.TOOL_NAME):
             self.client.generate_summary(self.target, "gh", "sess")
 
     def _set_tool_use_input(self, payload):
         tool_use = MagicMock(type="tool_use", input=payload)
-        tool_use.name = summarizer_client.TOOL_NAME
+        tool_use.name = resources.TOOL_NAME
         self._set_response([tool_use])
 
     def test_raises_when_repositories_field_missing(self):
