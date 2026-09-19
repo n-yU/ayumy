@@ -13,7 +13,7 @@ usage() {
   local dest=1
   [[ "$code" -ne 0 ]] && dest=2
   cat >&"$dest" <<'USAGE'
-Usage: sync_session.sh [--project <name>] [--cwd <dir>] [--all] [--report] [--date DATE]
+Usage: sync_session.sh [--project <name>] [--cwd <dir>] [--repo <name>] [--all] [--report] [--date DATE]
 
 Options:
   --project <name>    Sync a specific project
