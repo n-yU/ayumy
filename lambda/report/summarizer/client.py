@@ -16,30 +16,12 @@ from . import resources, tags
 
 logger = logging.getLogger(__name__)
 
-_RESPONSE_SHAPE_SCHEMA = {
-    "type": "object",
-    "required": ["repositories"],
-    "properties": {
-        "repositories": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "required": ["name", "summary", "tags"],
-                "properties": {
-                    "name": {"type": "string"},
-                    "summary": {"type": "array", "items": {"type": "string"}},
-                    "tags": {"type": "array", "items": {"type": "string"}},
-                },
-            },
-        },
-    },
-}
 _VALUE_REPR_LIMIT = 200
 
 
 def _validate_response_shape(payload: object) -> summary.Report:
     try:
-        jsonschema.validate(payload, _RESPONSE_SHAPE_SCHEMA)
+        jsonschema.validate(payload, resources.RESPONSE_SHAPE)
     except jsonschema.ValidationError as e:
         path = "/".join(str(p) for p in e.absolute_path) or "<root>"
         value_repr = repr(e.instance)

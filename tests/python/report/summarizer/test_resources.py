@@ -1,5 +1,6 @@
 """Tests for the assets report.summarizer.resources loads and fills in."""
 
+import jsonschema
 import pytest
 
 from report.summarizer import resources, tags
@@ -51,6 +52,39 @@ class TestToolDefinition:
         summary_field = self._repo_properties()["summary"]
         assert summary_field["minItems"] == 2
         assert summary_field["maxItems"] == 5
+
+
+class TestResponseShape:
+    def _repo_properties(self) -> dict:
+        return resources.RESPONSE_SHAPE["properties"]["repositories"]["items"][
+            "properties"
+        ]
+
+    def test_keeps_structure_of_tool_definition(self):
+        assert resources.RESPONSE_SHAPE["required"] == ["repositories"]
+        items = resources.RESPONSE_SHAPE["properties"]["repositories"]["items"]
+        assert items["required"] == ["name", "summary", "tags"]
+        assert sorted(self._repo_properties()) == ["name", "summary", "tags"]
+
+    def test_drops_item_count_bounds(self):
+        summary_field = self._repo_properties()["summary"]
+        assert "minItems" not in summary_field
+        assert "maxItems" not in summary_field
+
+    def test_drops_allowed_tags_enum(self):
+        assert "enum" not in self._repo_properties()["tags"]["items"]
+
+    def test_drops_constraint_keyword_it_has_never_seen(self):
+        schema = {"type": "string", "pattern": "^x$"}
+        assert resources._shape_only(schema) == {"type": "string"}
+
+    def test_accepts_tag_outside_allowlist(self):
+        report = {
+            "repositories": [
+                {"name": "repo", "summary": ["s1"], "tags": ["InvalidTag"]}
+            ]
+        }
+        jsonschema.validate(report, resources.RESPONSE_SHAPE)
 
 
 class TestSystemPrompt:
