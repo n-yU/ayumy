@@ -49,7 +49,7 @@ def _shape_only(schema: dict) -> dict:
     """Strip `schema` down to the structure it describes, dropping what it constrains.
 
     The response is checked against the result rather than the tool definition itself,
-    so a tag outside the allowlist is stripped with a notice instead of failing the whole run.
+    so a report that breaks a constraint still reaches the reader instead of failing the whole run.
     """
     shape = {}
     for keyword, value in schema.items():

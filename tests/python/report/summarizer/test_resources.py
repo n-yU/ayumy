@@ -81,7 +81,19 @@ class TestResponseShape:
     def test_accepts_tag_outside_allowlist(self):
         report = {
             "repositories": [
-                {"name": "repo", "summary": ["s1"], "tags": ["InvalidTag"]}
+                {"name": "repo", "summary": ["s1", "s2"], "tags": ["InvalidTag"]}
+            ]
+        }
+        jsonschema.validate(report, resources.RESPONSE_SHAPE)
+
+    def test_accepts_summary_outside_item_count_bounds(self):
+        report = {
+            "repositories": [
+                {
+                    "name": "repo",
+                    "summary": ["only one"],
+                    "tags": [tags.ALLOWED_NAMES[0]],
+                }
             ]
         }
         jsonschema.validate(report, resources.RESPONSE_SHAPE)
