@@ -265,6 +265,20 @@ make_cwd_project() {
   [[ "$output" == *"not in a git repository"* ]]
 }
 
+@test "sync_session.sh: --cwd without a projects directory uploads nothing" {
+  rm -rf "$PROJECTS_DIR"
+  run "$SCRIPT" --cwd /path/to/repo
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"no sessions recorded"* ]]
+}
+
+@test "sync_session.sh: --all without a projects directory is rejected" {
+  rm -rf "$PROJECTS_DIR"
+  run "$SCRIPT" --all
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"does not exist"* ]]
+}
+
 @test "sync_session.sh: --cwd without a matching session uploads nothing" {
   make_cwd_project "-other-repo" "/other/repo"
   run "$SCRIPT" --cwd /path/to/repo

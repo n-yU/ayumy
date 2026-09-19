@@ -227,7 +227,8 @@ if [[ "$report" == true ]]; then
   fi
 fi
 
-if [[ ! -d "$CLAUDE_PROJECTS_DIR" ]]; then
+# A missing directory is an absence of sessions for the working-directory modes, where failing here would block the push
+if [[ ! -d "$CLAUDE_PROJECTS_DIR" && ( "$mode" == "project" || "$mode" == "all" ) ]]; then
   err "$CLAUDE_PROJECTS_DIR does not exist"
   exit 1
 fi
