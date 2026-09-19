@@ -92,6 +92,17 @@ sync_project() {
   local files
   files=$(find_changed_sessions "$project_dir")
 
+  local dest_prefix="s3://$AYUMY_S3_BUCKET/claude-sessions/$project_name/"
+
+  # Uploaded ahead of the JSONL check so a repo name recorded after the last sync still reaches S3
+  local repo_file="$project_dir/$REPO_NAME"
+  if [[ -f "$repo_file" ]]; then
+    if ! aws s3 cp "$repo_file" "${dest_prefix}${REPO_NAME}" --quiet; then
+      err "$project_name: failed to upload $REPO_NAME metadata"
+      return 2
+    fi
+  fi
+
   if [[ -z "$files" ]]; then
     log "$project_name: no changes"
     return 1
@@ -101,22 +112,12 @@ sync_project() {
   file_count=$(echo "$files" | wc -l | tr -d ' ')
   log "$project_name: syncing $file_count session(s)"
 
-  local dest_prefix="s3://$AYUMY_S3_BUCKET/claude-sessions/$project_name/"
   while IFS= read -r f; do
     if ! aws s3 cp "$f" "$dest_prefix" --quiet; then
       err "$project_name: failed to upload $(basename -- "$f")"
       return 2
     fi
   done <<< "$files"
-
-  # Upload repo name metadata if available
-  local repo_file="$project_dir/$REPO_NAME"
-  if [[ -f "$repo_file" ]]; then
-    if ! aws s3 cp "$repo_file" "${dest_prefix}${REPO_NAME}" --quiet; then
-      err "$project_name: failed to upload $REPO_NAME metadata"
-      return 2
-    fi
-  fi
 
   mv "$tmp_marker" "$project_dir/$MARKER_NAME"
   log "$project_name: done"

@@ -184,6 +184,18 @@ teardown() {
   grep -q "^aws s3 cp $proj_dir/.ayumy_repo " "$AWS_STUB_LOG"
 }
 
+@test "sync_session.sh: .ayumy_repo metadata is uploaded even without JSONL changes" {
+  make_project
+  echo '{}' > "$proj_dir/x.jsonl"
+  touch -t 202001010000 "$proj_dir/x.jsonl"
+  touch -t 202401010000 "$proj_dir/.ayumy_last_sync"
+  echo 'my-repo' > "$proj_dir/.ayumy_repo"
+  run "$SCRIPT" --project myproj
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"no changes"* ]]
+  grep -q "^aws s3 cp $proj_dir/.ayumy_repo " "$AWS_STUB_LOG"
+}
+
 @test "sync_session.sh: .ayumy_repo upload failure surfaces as exit 2" {
   make_project
   echo '{}' > "$proj_dir/a.jsonl"
