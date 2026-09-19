@@ -254,6 +254,23 @@ make_cwd_project() {
   grep -q "^aws s3 cp $PROJECTS_DIR/derived-b/sess.jsonl " "$AWS_STUB_LOG"
 }
 
+@test "sync_session.sh: --cwd resolves a relative directory to its absolute path" {
+  mkdir -p "$TMPDIR_TEST/work.dir"
+  local abs
+  abs="$(cd "$TMPDIR_TEST/work.dir" && pwd)"
+  make_cwd_project "derived-name" "$abs"
+  cd "$TMPDIR_TEST"
+  run "$SCRIPT" --cwd work.dir
+  [ "$status" -eq 0 ]
+  grep -q "^aws s3 cp $PROJECTS_DIR/derived-name/sess.jsonl " "$AWS_STUB_LOG"
+}
+
+@test "sync_session.sh: --cwd with an unresolvable relative path is rejected" {
+  run "$SCRIPT" --cwd no/such/dir
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"absolute path"* ]]
+}
+
 @test "sync_session.sh: --cwd ignores a trailing slash on the directory" {
   make_cwd_project "-path-to-repo-worktrees-topic" "/path/to/repo.worktrees/topic"
   run "$SCRIPT" --cwd /path/to/repo.worktrees/topic/
