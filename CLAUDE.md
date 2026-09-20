@@ -87,10 +87,9 @@ Lambda（環境変数 + Secrets Manager）:
 
 ## 開発メモ
 - 仕様書は [Spec.md](docs/Spec.md)（日本語）— すべての要件の原典
-- 初期開発手順は [Initial-Development.md](docs/archive/Initial-Development.md) — フェーズ別の実装計画と v1 からの変遷を記録
 - [Manual.md](docs/Manual.md) は運用者目線で書く。実装寄りの用語（「振る舞いを調整する値」等）や構造の説明（「〜に集約されている」等）は使わず、「何ができるか」「どこで変更するか」を具体的に示す。実装・仕様レベルの細部は Spec.md 側に委ねる
   - 見出しは H2 を英語、H3 以下を日本語で書く
 - [config.template.yml](lambda/config/config.template.yml) のコメントは、共通規約「コード内コメントは英語」の例外として日本語で書く。利用者が生成した config.yml を読みながら設定を変えるため、Manual.md と同じ運用者目線で書く
 - JSONL の生データは S3 バケットに保管し、リモートリポジトリには push しない
 - アクティビティの取得対象期間: 前日 JST 00:00:00 〜 当日 JST 00:00:00
-- 各 commit における整合性チェック（共通 CLAUDE.md の Git 操作セクション参照）の対象に含めるドキュメントは [Spec.md](docs/Spec.md), [Initial-Development.md](docs/archive/Initial-Development.md), [README.md](README.md), [Setup.md](docs/Setup.md), [Manual.md](docs/Manual.md)
+- 各 commit における整合性チェック（共通 CLAUDE.md の Git 操作セクション参照）の対象に含めるドキュメントは [Spec.md](docs/Spec.md), [README.md](README.md), [Setup.md](docs/Setup.md), [Manual.md](docs/Manual.md)

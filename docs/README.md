@@ -1,5 +1,5 @@
 # Docs
-Ayumy のドキュメント一覧。役割を終えたドキュメントは [archive/](archive/) を参照
+Ayumy Documents
 
 | File | Description |
 |---|---|
