@@ -1,6 +1,7 @@
 """Tests for report.summarizer.client logic."""
 
 from datetime import datetime
+from typing import cast
 from unittest.mock import MagicMock
 
 import anthropic
@@ -39,7 +40,7 @@ class TestValidateReport:
         self.valid_tag = tags.ALLOWED_NAMES[0]
 
     def test_valid_report_unchanged(self):
-        report = {
+        report: summary.Report = {
             "repositories": [
                 {
                     "name": "repo",
@@ -53,7 +54,7 @@ class TestValidateReport:
         assert report["repositories"][0]["tags"] == [self.valid_tag]
 
     def test_invalid_tags_removed(self):
-        report = {
+        report: summary.Report = {
             "repositories": [
                 {
                     "name": "repo",
@@ -78,7 +79,8 @@ class TestGenerateSummary:
         message = MagicMock(content=blocks)
         message.usage.input_tokens = input_tokens
         message.usage.output_tokens = output_tokens
-        self.client.client.messages.create.return_value = message
+        create = cast(MagicMock, self.client.client.messages.create)
+        create.return_value = message
 
     def test_returns_input_from_tool_use_block(self):
         report = {
@@ -102,7 +104,8 @@ class TestGenerateSummary:
         tool_use.name = resources.TOOL_NAME
         self._set_response([tool_use])
         self.client.generate_summary(self.target, "gh", "sess")
-        return self.client.client.messages.create.call_args.kwargs
+        create = cast(MagicMock, self.client.client.messages.create)
+        return dict(create.call_args.kwargs)
 
     def test_sends_prompt_and_tool_from_resources(self):
         kwargs = self._call_kwargs()
