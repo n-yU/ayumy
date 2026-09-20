@@ -72,7 +72,7 @@ Claude Code session の JSONL を S3 バケットに転送する。クライア�
 
 いずれも共通の転送スクリプト [scripts/sync_session.sh](../scripts/sync_session.sh) を使用する。`--report` 指定時は転送完了後に `aws lambda invoke` で Lambda 関数を呼び出す
 
-S3 上のオブジェクトキーは `claude-sessions/{project-name}/{session-id}.jsonl` とする。Stage 2 はこのキー構造を前提に project 単位で session を読み、DynamoDB へ書き込んだ後に削除する
+S3 上のオブジェクトキーは `claude-sessions/{project-name}/{session-id}.jsonl` とする。Stage 2 はこのキー構造を前提に project 単位で session を読み、取り込んだ後に削除する（[Processed JSONL Cleanup](#processed-jsonl-cleanup)）
 
 ### Data Source
 Claude Code は会話を `~/.claude/projects/` 以下にローカル保存している
