@@ -21,9 +21,11 @@ teardown_shell_test() {
 
 # Create a session project dir under PROJECTS_DIR and set proj_dir to its path.
 # PROJECTS_DIR comes from the calling suite's setup, so fail rather than build a rootless path.
+# A repository name is recorded because a project without one is never transferred.
 make_project() {
   proj_dir="${PROJECTS_DIR:?PROJECTS_DIR must be set by setup}/${1:-myproj}"
   mkdir -p "$proj_dir"
+  echo 'stub-repo' > "$proj_dir/.ayumy_repo"
 }
 
 # Create a repo with an empty hooks dir under TMPDIR_TEST, point the git stub at it,

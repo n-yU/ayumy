@@ -138,7 +138,7 @@ teardown() {
   run "$SCRIPT" --project myproj
   [ "$status" -eq 0 ]
   local count
-  count=$(grep -c "^aws s3 cp $proj_dir/" "$AWS_STUB_LOG" || true)
+  count=$(grep -c "^aws s3 cp $proj_dir/.*\.jsonl " "$AWS_STUB_LOG" || true)
   [ "$count" -eq 2 ]
   [ -f "$proj_dir/.ayumy_last_sync" ]
 }
@@ -163,7 +163,7 @@ teardown() {
   run "$SCRIPT" --project myproj
   [ "$status" -eq 0 ]
   [[ "$output" == *"no changes"* ]]
-  ! grep -q "^aws s3 cp " "$AWS_STUB_LOG"
+  ! grep -q "^aws s3 cp $proj_dir/x.jsonl " "$AWS_STUB_LOG"
 }
 
 @test "sync_session.sh: s3 cp failure surfaces as exit 2" {
@@ -174,7 +174,7 @@ teardown() {
   [[ "$output" == *"failed to upload"* ]]
 }
 
-@test "sync_session.sh: .ayumy_repo metadata is uploaded alongside JSONL when present" {
+@test "sync_session.sh: .ayumy_repo metadata is uploaded alongside JSONL" {
   make_project
   echo '{}' > "$proj_dir/a.jsonl"
   echo 'my-repo' > "$proj_dir/.ayumy_repo"
@@ -207,9 +207,15 @@ teardown() {
 
 # --- repository name resolution ---
 
+# Create a project dir with no repository name recorded, so the transfer has to resolve one.
+make_unrecorded_project() {
+  make_cwd_project "$1" "$2"
+  rm "$proj_dir/.ayumy_repo"
+}
+
 @test "sync_session.sh: repository name is resolved from the session cwd when unrecorded" {
   mkdir -p "$TMPDIR_TEST/workdir"
-  make_cwd_project "myproj" "$TMPDIR_TEST/workdir"
+  make_unrecorded_project "myproj" "$TMPDIR_TEST/workdir"
   GIT_STUB_REMOTE_URL="git@github.com:my-org/my-repo.git" run "$SCRIPT" --project myproj
   [ "$status" -eq 0 ]
   [ "$(cat "$proj_dir/.ayumy_repo")" = "my-repo" ]
@@ -225,24 +231,42 @@ teardown() {
   [ "$(cat "$proj_dir/.ayumy_repo")" = "recorded-repo" ]
 }
 
-@test "sync_session.sh: repository name is unresolved when the session directory is gone" {
-  make_cwd_project "myproj" "$TMPDIR_TEST/removed-worktree"
+@test "sync_session.sh: project whose session directory is gone is skipped" {
+  make_unrecorded_project "myproj" "$TMPDIR_TEST/removed-worktree"
   GIT_STUB_REMOTE_URL="git@github.com:my-org/my-repo.git" run "$SCRIPT" --project myproj
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"skipped (repository unresolved)"* ]]
   [ ! -f "$proj_dir/.ayumy_repo" ]
+  ! grep -q "^aws s3 cp " "$AWS_STUB_LOG"
 }
 
-@test "sync_session.sh: repository name is unresolved outside a git repository" {
+@test "sync_session.sh: project opened outside a git repository is skipped" {
   mkdir -p "$TMPDIR_TEST/workdir"
-  make_cwd_project "myproj" "$TMPDIR_TEST/workdir"
+  make_unrecorded_project "myproj" "$TMPDIR_TEST/workdir"
   run "$SCRIPT" --project myproj
-  [ ! -f "$proj_dir/.ayumy_repo" ]
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"skipped (repository unresolved)"* ]]
+  ! grep -q "^aws s3 cp " "$AWS_STUB_LOG"
 }
 
-@test "sync_session.sh: repository name is unresolved without a recorded cwd" {
+@test "sync_session.sh: project without a recorded cwd is skipped" {
   make_project
+  rm "$proj_dir/.ayumy_repo"
   echo '{"type":"user"}' > "$proj_dir/sess.jsonl"
   GIT_STUB_REMOTE_URL="git@github.com:my-org/my-repo.git" run "$SCRIPT" --project myproj
-  [ ! -f "$proj_dir/.ayumy_repo" ]
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"skipped (repository unresolved)"* ]]
+  ! grep -q "^aws s3 cp " "$AWS_STUB_LOG"
+}
+
+@test "sync_session.sh: --all leaves a skipped project out of the count" {
+  make_project "kept"
+  echo '{}' > "$proj_dir/a.jsonl"
+  make_unrecorded_project "dropped" "$TMPDIR_TEST/removed-worktree"
+  run "$SCRIPT" --all
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"synced 1 project(s)"* ]]
+  [[ "$output" == *"dropped: skipped (repository unresolved)"* ]]
 }
 
 # --- --cwd resolution ---
