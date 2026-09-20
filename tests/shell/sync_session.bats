@@ -222,6 +222,15 @@ make_unrecorded_project() {
   grep -q "^aws s3 cp $proj_dir/.ayumy_repo " "$AWS_STUB_LOG"
 }
 
+@test "sync_session.sh: repository name is resolved from a session beyond the first" {
+  mkdir -p "$TMPDIR_TEST/workdir"
+  make_unrecorded_project "myproj" "$TMPDIR_TEST/removed-worktree"
+  printf '{"type":"user","cwd":"%s"}\n' "$TMPDIR_TEST/workdir" > "$proj_dir/zz.jsonl"
+  GIT_STUB_REMOTE_URL="git@github.com:my-org/my-repo.git" run "$SCRIPT" --project myproj
+  [ "$status" -eq 0 ]
+  [ "$(cat "$proj_dir/.ayumy_repo")" = "my-repo" ]
+}
+
 @test "sync_session.sh: recorded repository name is left untouched" {
   mkdir -p "$TMPDIR_TEST/workdir"
   make_cwd_project "myproj" "$TMPDIR_TEST/workdir"

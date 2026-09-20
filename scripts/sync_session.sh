@@ -77,31 +77,24 @@ project_opened_in() {
   return 1
 }
 
-# Print the directory $1 was opened in.
-project_cwd() {
-  local project_dir="$1" f cwd
+# Print the repository name of the directory $1 was opened in.
+resolve_repo_name() {
+  local project_dir="$1" f cwd url name
 
+  # Every session records the same directory, so any of them that still exists answers
   for f in "$project_dir"/*.jsonl; do
     [[ -f "$f" ]] || continue
     cwd="$(session_cwd "$f")" || continue
-    echo "$cwd"
+    # A worktree removed after its sessions were recorded leaves nothing to ask
+    [[ -d "$cwd" ]] || continue
+    url="$(cd -- "$cwd" 2>/dev/null && git remote get-url origin 2>/dev/null)" || continue
+    # Kept in step with the name the hook derives from the push destination
+    name="$(echo "$url" | sed 's|.*[:/]||; s|\.git$||')"
+    [[ -n "$name" ]] || continue
+    echo "$name"
     return 0
   done
   return 1
-}
-
-# Print the repository name of the directory $1 was opened in.
-resolve_repo_name() {
-  local project_dir="$1" cwd url name
-
-  cwd="$(project_cwd "$project_dir")" || return 1
-  # A worktree removed after its sessions were recorded leaves nothing to ask
-  [[ -d "$cwd" ]] || return 1
-  url="$(cd -- "$cwd" 2>/dev/null && git remote get-url origin 2>/dev/null)" || return 1
-  # Kept in step with the name the hook derives from the push destination
-  name="$(echo "$url" | sed 's|.*[:/]||; s|\.git$||')"
-  [[ -n "$name" ]] || return 1
-  echo "$name"
 }
 
 # Print the project directories holding sessions opened in $1, one per line.
