@@ -1,18 +1,16 @@
 # Spec
-Ayumy の全要件を記す。アーキテクチャ・データフロー・外部 API 連携・Notion DB スキーマ・コスト見積もりを含む
+Ayumy の仕様のうち、コードや設定を読んでも分からない内容を記す。外部との契約・設計判断とその理由・外部仕様の観測結果を扱う
 
 - [Overview](#overview)
 - [Goals](#goals)
 - [System Components](#system-components)
   - [Architecture](#architecture)
   - [External Services and APIs](#external-services-and-apis)
-  - [Directory Structure](#directory-structure)
 - [Stage 1: Session Log Transfer](#stage-1-session-log-transfer)
   - [Stage 1 Overview](#stage-1-overview)
   - [Data Source](#data-source)
   - [Transfer Script](#transfer-script)
   - [Pre-push Hook](#pre-push-hook)
-  - [Manual Sync](#manual-sync)
   - [Security Notes](#security-notes)
 - [Stage 2: Data Integration, Summarization, and Notion Writing](#stage-2-data-integration-summarization-and-notion-writing)
   - [GitHub Activity Fetch](#github-activity-fetch)
@@ -28,16 +26,9 @@ Ayumy の全要件を記す。アーキテクチャ・データフロー・外�
   - [Tag Classification](#tag-classification)
 - [AWS Lambda Configuration](#aws-lambda-configuration)
   - [Lambda Execution Modes](#lambda-execution-modes)
-  - [Environment Variables](#environment-variables)
   - [Lambda Function Configuration](#lambda-function-configuration)
-  - [Deployment](#deployment)
 - [Operational Considerations](#operational-considerations)
-  - [Network Requirements](#network-requirements)
-  - [API Rate Limits](#api-rate-limits)
   - [Error Handling](#error-handling)
-  - [Running Cost](#running-cost)
-  - [Storage Management](#storage-management)
-- [Future Extensions](#future-extensions)
 
 ## Overview
 GitHub 上の日次開発アクティビティ（Commit, Pull Request, Issue）と Claude Code での会話記録を自動収集するシステム。集めた内容は Claude API が自然言語で要約し、Notion データベースに記録する。対象リポジトリは S3 上の session ログから特定する
@@ -55,40 +46,9 @@ GitHub 上の日次開発アクティビティ（Commit, Pull Request, Issue）�
 - [Stage 1: Session Log Transfer](#stage-1-session-log-transfer) — クライアントマシンで動き、session ログを S3 バケットへ送る
 - [Stage 2: Data Integration, Summarization, and Notion Writing](#stage-2-data-integration-summarization-and-notion-writing) — AWS Lambda で動き、S3 の session ログを DynamoDB に取り込んでレポートを生成する
 
-```mermaid
-flowchart TB
-    subgraph Client[Client Machine]
-        Hook[git push → pre-push hook]
-        Sync[ayumy sync]
-        Report[ayumy sync --report]
-    end
+2 段階に分けるのは、session ログがクライアントマシンにしか存在せず、集約と要約はクライアントの稼働状態に左右されない実行環境を必要とするためである。全体の構成図は [README.md](../README.md) に置く
 
-    S3[(S3 Bucket<br/>session logs)]
-    Schedule[EventBridge<br/>daily at JST 00:00]
-    Lambda[AWS Lambda<br/>report]
-    DDB[(DynamoDB<br/>session metadata + cost log)]
-
-    subgraph External[External APIs]
-        GH[GitHub API]
-        Claude[Claude API]
-        Notion[Notion]
-        Slack[Slack API]
-    end
-
-    Hook --> S3
-    Sync --> S3
-    Report --> S3
-    Report -.->|invoke| Lambda
-    Schedule --> Lambda
-    Lambda <--> S3
-    Lambda <--> DDB
-    Lambda --> GH
-    Lambda --> Claude
-    Lambda --> Notion
-    Lambda --> Slack
-```
-
-S3 上のオブジェクトキー構造は [Directory Structure](#directory-structure)、DynamoDB テーブル設計は [Session Write to DynamoDB](#session-write-to-dynamodb) を参照
+DynamoDB テーブル設計は [Session Write to DynamoDB](#session-write-to-dynamodb) と [Cost Execution Log Persistence](#cost-execution-log-persistence) を参照
 
 ### External Services and APIs
 | Service | Purpose | Authentication |
@@ -102,35 +62,6 @@ S3 上のオブジェクトキー構造は [Directory Structure](#directory-stru
 | AWS Lambda | レポート生成の実行環境 | IAM ロール |
 | Amazon EventBridge Scheduler | 日次の定期実行 | — |
 
-### Directory Structure
-**ayumy リポジトリ（GitHub）** — スクリプトと設定のみで、session データは含まない
-
-```
-ayumy/
-├── bin/ayumy           # CLI entrypoint
-├── scripts/            # セッション転送・hook 設置スクリプト
-├── hooks/pre-push      # 各リポジトリにシンボリックリンクで配置
-├── lambda/
-│   ├── handler.py      # Lambda ハンドラ
-│   ├── config/         # チューニング定数の YAML と loader
-│   └── report/         # メインパッケージ
-├── template.yaml       # AWS SAM テンプレート
-├── docs/
-└── README.md
-```
-
-**S3 バケット**
-
-```
-s3://{bucket}/
-└── claude-sessions/                  # クライアントマシンから転送された JSONL（DynamoDB 書き込み後に削除）
-    ├── {project-name}/
-    │   └── {session-id}.jsonl
-    └── ...
-```
-
-実行ログは CloudWatch Logs に出力する
-
 ## Stage 1: Session Log Transfer
 ### Stage 1 Overview
 Claude Code session の JSONL を S3 バケットに転送する。クライアント側のスクリプト（`scripts/`, `hooks/`, `bin/ayumy`）は macOS のみサポートする
@@ -141,6 +72,8 @@ Claude Code session の JSONL を S3 バケットに転送する。クライア�
 
 いずれも共通の転送スクリプト [scripts/sync_session.sh](../scripts/sync_session.sh) を使用する。`--report` 指定時は転送完了後に `aws lambda invoke` で Lambda 関数を呼び出す
 
+S3 上のオブジェクトキーは `claude-sessions/{project-name}/{session-id}.jsonl` とする。Stage 2 はこのキー構造を前提に project 単位で session を読み、取り込んだ後に削除する（[Processed JSONL Cleanup](#processed-jsonl-cleanup)）
+
 ### Data Source
 Claude Code は会話を `~/.claude/projects/` 以下にローカル保存している
 
@@ -149,46 +82,9 @@ Claude Code は会話を `~/.claude/projects/` 以下にローカル保存して
 - メタデータ（session ID、タイムスタンプ、ブランチ等）は JSONL の各エントリに埋め込まれている
 - 外部インデックスファイルは存在しない
 
-JSONL の各エントリは Claude Code が生成するデータの観測に基づく構造を持つ（公式仕様は存在しない）
+JSONL の構造に公式仕様は無く、パース処理は観測に基づいて書かれている。Claude Code が生成するためタイムスタンプの形式は安定しており、解釈の失敗を想定した例外処理は置かない。一方、JSON として壊れた行は warning に記録して読み飛ばす。作業ディレクトリの値が想定した型でない場合は warning に記録し、値を空として処理を続ける
 
-<details>
-<summary>JSONL Entry Fields</summary>
-
-| Field | Type | Description |
-|---|---|---|
-| `type` | String | エントリ種別（`"user"`, `"assistant"`, `"summary"` 等） |
-| `timestamp` | String | ISO 8601 形式のタイムスタンプ（例: `"2026-03-28T10:00:00+09:00"`）。常に存在するが、不正な値は観測されていない |
-| `cwd` | String | エントリ発生時の作業ディレクトリ絶対パス。`type=user` / `type=assistant` の各エントリに付与される。session 抽出時に project の作業ディレクトリの根拠として用い、Bash tool_use 内の `cd` で別リポジトリへ移動したかどうかを判定する基準にする（[Session Write to DynamoDB](#session-write-to-dynamodb)） |
-| `message.content` | String / List | 文字列またはブロックのリスト。`type=user` は通常文字列だが `tool_result` を含むリストの場合もある |
-
-`type=assistant` の `message.content` リスト内のブロック
-
-| Field | Type | Description |
-|---|---|---|
-| `type` | String | ブロック種別（`"text"`, `"tool_use"` 等） |
-| `name` | String | `type=tool_use` の場合のツール名 |
-| `id` | String | `type=tool_use` の識別子。後続の `type=user` ブロックの `tool_use_id` から参照され、tool_use と tool_result を突き合わせる |
-| `input.command` | String | `name="Bash"` の場合の実行コマンド文字列。冒頭の `cd <path>` を解釈し、その tool_use における `cd` 反映後の作業ディレクトリを求める（[Session Write to DynamoDB](#session-write-to-dynamodb)） |
-
-`type=user` の `message.content` がリストの場合のブロック
-
-| Field | Type | Description |
-|---|---|---|
-| `type` | String | ブロック種別（`"tool_result"` 等） |
-| `tool_use_id` | String | 対応する assistant の `tool_use.id`。別リポジトリでの実行かどうかの判定で、対応する tool_use の `cd` 反映後の作業ディレクトリを引くために使う（[Session Write to DynamoDB](#session-write-to-dynamodb)） |
-| `content` | String | ツール実行結果のテキスト |
-| `is_error` | Boolean | エラー結果かどうか |
-
-`tool_result` の `content` に `[... <short-sha>] <message>` 形式の行が含まれる場合、git commit の実行結果として SHA と commit message を抽出する
-
-- 1つの `tool_result` に複数の commit 行が含まれる場合は全て抽出する
-- pre-commit hook の出力が先行する場合にも対応する（行単位でパターンを検索）
-- 通常の `[branch sha]` 形式に加え、`[branch (root-commit) sha]` や `[detached HEAD sha]` にも対応する
-- これにより squash merge で GitHub API から取得できない commit を補完する
-
-</details>
-
-Claude Code が生成するため、タイムスタンプのフォーマットは安定しており、パース失敗を想定した防御的な例外処理は行わない
+各エントリが持つ作業ディレクトリに、Bash ツールの実行コマンド冒頭の `cd` を反映して実際の実行先を求め、そのコマンドが project の作業ディレクトリで動いたかを判定する。ツールの実行結果に現れる git commit の出力からは SHA と commit message を取り出し、squash merge で GitHub API から取得できない commit を補う（[Session Write to DynamoDB](#session-write-to-dynamodb)）
 
 転送対象の session は、マーカーファイル（`.ayumy_last_sync`）との mtime 比較で決定する
 
@@ -197,21 +93,7 @@ Claude Code が生成するため、タイムスタンプのフォーマット�
 - これにより、転送中に更新されたファイルが次回検出漏れしないようにする
 
 ### Transfer Script
-hook と手動実行の両方から呼ばれる共通スクリプト
-
-```
-sync_session.sh [--project <project-name>] [--cwd <dir>] [--repo <name>] [--all] [--report] [--date DATE]
-```
-
-| Option | Behavior |
-|---|---|
-| `--project <name>` | 指定プロジェクトの差分 session のみ転送。`<name>` は `~/.claude/projects/` 以下のディレクトリ名（例: `-Users-username-Documents-github-repo`） |
-| `--cwd <dir>` | `<dir>` で開いた session を持つプロジェクトの差分 session を転送 |
-| `--repo <name>` | 転送するプロジェクトに `<name>` をリポジトリ名として記録する（`--cwd` と併用する） |
-| `--all` | 全プロジェクトから差分 session を一括転送 |
-| `--report` | S3 転送後に Lambda 関数を呼び出してレポート生成を実行 |
-| `--date DATE` | 指定日または日付範囲のレポートを生成・再生成（`--report` 必須）。`YYYY-MM-DD` または `YYYY-MM-DD..YYYY-MM-DD` 形式 |
-| 引数なし | カレントディレクトリに対応するプロジェクトを自動判定 |
+hook と手動実行の両方から呼ばれる共通スクリプトで、受け付けるオプションは `--help` で確認できる
 
 `--cwd` と引数なしでのプロジェクト特定は、各プロジェクトの JSONL が最初に記録する `cwd` と照合して行う。ディレクトリ名は作業ディレクトリのパスから作られるが、Claude Code が置換する文字は公開されておらず、パスから組み立てた名前では worktree のようなドットを含むパスを取りこぼすためである。照合で複数のプロジェクトが該当した場合はそのすべてを転送し、1 つも該当しない場合はその旨を表示して正常終了する。`cwd` を 1 つも記録していない古い session だけを持つプロジェクトは照合できないため、その場合に限りパスから組み立てた名前のディレクトリを使う
 
@@ -219,11 +101,7 @@ sync_session.sh [--project <project-name>] [--cwd <dir>] [--repo <name>] [--all]
 
 リポジトリ名を解決できないプロジェクトは転送せず、飛ばしたことを表示する。Lambda 側でも取り込まずに飛ばすため、転送しても削除対象に入らないまま S3 に残り続けるからである
 
-要件
-
-- **環境変数 `AYUMY_S3_BUCKET`**: session ログの保管先 S3 バケット名
-- **AWS 認証情報**: AWS CLI が使用可能な状態であること（`~/.aws/credentials` または環境変数）
-- **冪等性**: `aws s3 cp` による上書きで同じ JSONL の複数回転送でも問題ない
+転送は session ID 単位の上書きで行い、同じ JSONL を何度送っても結果が変わらないようにする
 
 ### Pre-push Hook
 `ayumy/hooks/pre-push` として管理し、各リポジトリの `.git/hooks/pre-push` にシンボリックリンクで配置する
@@ -234,31 +112,11 @@ hook はリポジトリのルートと push 先のリポジトリ名を `sync_se
 - 当該リポジトリに対応する Claude session が存在しない場合はその旨を表示して exit 0 とし、push を通す
 - リポジトリ名は push 先の remote URL から解決する。remote URL を引けない場合は `--repo` を渡さず、記録は転送スクリプト側の解決に任せる
 
-hook の配布方法（`ayumy setup-hooks` コマンドで設置）
+設置は `ayumy setup-hooks` が担う。過去に同コマンドが作成した旧 `post-commit` symlink は、参照先が一致するものに限って併せて除去する。手動で別のパス表記を使って設置した hook は一致しないため対象外で、運用者が自分で削除する
 
-- **コマンド設置**: 対象リポジトリで `ayumy setup-hooks` を実行
-- **手動設置**: 対象リポジトリで `ln -s {AYUMY_REPO}/hooks/pre-push "$(git rev-parse --git-path hooks)/pre-push"` を実行
-
-`ayumy setup-hooks` は過去に同コマンドが作成した旧 `post-commit` symlink（`readlink` の target が `ayumy/hooks/post-commit` の絶対パスと一致するもの）の除去も担当する。手動 `ln` で別パス表記により設置された legacy hook は対象外で、ユーザー側で削除する必要がある
-
-コマンド設置では hook を置いたあと、そのリポジトリの Notion ページアイコン（[Database Properties](#database-properties)）を対話で尋ね、設定ファイルの対応表に追記する。リポジトリを追加したときに設定が漏れないよう指定を必須とし、答えが空または色が不正なら非ゼロで終了する。既に設定があるリポジトリには尋ねず、origin remote が無いリポジトリはアイコンを紐づける先が無いため警告して飛ばす。設定ファイルが未生成のまま追記すると中身がアイコン 1 行だけのファイルになるため、その場合は生成用の make target を伝えて非ゼロで終了する
+設置では hook を置いたあと、そのリポジトリの Notion ページアイコン（[Database Properties](#database-properties)）を対話で尋ね、設定ファイルの対応表に追記する。リポジトリを追加したときに設定が漏れないよう指定を必須とし、答えが空または色が不正なら非ゼロで終了する。既に設定があるリポジトリには尋ねず、origin remote が無いリポジトリはアイコンを紐づける先が無いため警告して飛ばす。設定ファイルが未生成のまま追記すると中身がアイコン 1 行だけのファイルになるため、その場合は生成用の make target を伝えて非ゼロで終了する
 
 設置先は Git に hook の参照先を問い合わせて決めるため、通常のリポジトリに加えて worktree やサブモジュールでも同じ手順で設置できる。worktree で実行した場合は共通ディレクトリに設置され、同じリポジトリのすべての worktree に効く
-
-### Manual Sync
-push せずに作業を中断する場合や、hook で転送されなかった session を補完する
-
-```bash
-ayumy sync                                                      # current directory のプロジェクトを同期
-ayumy sync --all                                                # 全プロジェクトの未同期分を一括同期
-ayumy sync --project -Users-username-Documents-github-my-project # 特定プロジェクトを指定
-ayumy sync --report                                             # 同期後にレポート生成（Lambda 実行）まで行う
-ayumy sync --all --report                                       # 全プロジェクト同期 + レポート生成
-ayumy sync --report --date 2026-03-25                           # 指定日のレポートを生成・再生成
-ayumy sync --report --date 2026-03-01..2026-03-05               # 日付範囲のレポートを一括生成
-```
-
-`ayumy sync` は [bin/ayumy](../bin/ayumy) CLI を通じて [scripts/sync_session.sh](../scripts/sync_session.sh) を呼び出す。CLI はサブコマンドをディスパッチする entrypoint であり、クライアントマシンのセットアップ時に PATH に追加する（例: `export PATH="$HOME/ayumy/bin:$PATH"`）。手動実行時はフォアグラウンドで実行し、転送結果を標準出力に表示する。`--report` 指定時は Lambda の実行結果も標準出力に表示する
 
 ### Security Notes
 - JSONL には会話の生データが含まれるため、会話中やツール実行時に機密情報（API キー、パスワード等）をログに残さないよう注意する
@@ -268,16 +126,9 @@ ayumy sync --report --date 2026-03-01..2026-03-05               # 日付範囲�
 
 ## Stage 2: Data Integration, Summarization, and Notion Writing
 ### GitHub Activity Fetch
-対象リポジトリは S3 上の session ログから特定する。各プロジェクトディレクトリの `.ayumy_repo` メタデータファイルからリポジトリ名を読み取り、そのリポジトリのみ `GET /repos/{owner}/{repo}` で取得する
+対象リポジトリは S3 上の session ログから特定する。各プロジェクトディレクトリの `.ayumy_repo` メタデータファイルからリポジトリ名を読み取り、そのリポジトリだけを取得対象とする。所有するリポジトリをすべて調べないのは、session の無いリポジトリまで API を呼ぶ必要が無いためである
 
-| Activity | Endpoint | Filter |
-|---|---|---|
-| Commits | `GET /search/commits` | `repo:{full_name} author-date:{since_date}..{until_date}` |
-| Pull Requests | `GET /repos/{owner}/{repo}/pulls` | `state=all`, `sort=updated`, 前日以降 |
-| PR Commits | `GET /repos/{owner}/{repo}/pulls/{N}/commits` | 取得した PR ごと |
-| Issues | `GET /repos/{owner}/{repo}/issues` | `since`, `state=all`, PR を除外 |
-
-Search API の呼び出しは、secondary rate limit に対応するため、一定時間ウィンドウ内のリクエスト数を制御する共通の throttle で管理する
+commit は Search API で対象期間を指定して集め、PR と Issue は更新日時を起点に取得する。Search API の呼び出しは secondary rate limit を受けるため、一定時間あたりのリクエスト数を共通の throttle で抑える
 
 #### Target Window
 対象期間は実行方式によって異なる
@@ -364,8 +215,6 @@ DynamoDB の `ayumy-sessions` テーブルから対象日付をパーティシ�
 - これによりバックフィル検出（[Session Log Read](#session-log-read)）が同じ日を再び拾わなくなる
 
 ### Summary Generation
-使用モデル: `claude-sonnet-4-6`
-
 GitHub アクティビティと Claude Code session ログの両方をコンテキストとして渡し、リポジトリごとの要約を生成する。GitHub アクティビティは Notion 本文と同じ対象日基準で絞り、対象日に完了していないアイテムを完了として渡さない。文体は常体で統一し、ですます調は使用しない
 
 - **リポジトリ別の要点**: 各リポジトリで行われた作業の要点を 2〜5 項目の箇条書きで記述する。最初の項目はそのリポジトリの最重要の要点として単独でも通じる内容にする（Slack 通知ではこの項目を 1 文サマリとして流用する）
@@ -375,33 +224,6 @@ GitHub アクティビティと Claude Code session ログの両方をコンテ�
 番号と識別子の書き方は [システムプロンプト](../lambda/report/prompts/summary_system.txt) で指定し、そちらを single source of truth とする。装飾として使わせる記法は [Page Body の Summary](#summary) が解釈するものに揃える
 
 出力がルールから外れた場合の後処理は設けない。種別の前置を機械的に削ると「その PR #155 では」のような自然な文まで削ることになり、表示が冗長になる程度の実害と釣り合わない
-
-<details>
-<summary>Summary Prompt Format</summary>
-
-```
-以下は {日付} の GitHub アクティビティおよび Claude Code での作業記録です。
-日本語で簡潔に要約してください。
-
----
-# GitHub アクティビティ
-## {リポジトリ名}
-### Commits
-- {コミットメッセージ}
-### Pull Requests
-- [merged] #12 機能Aの追加
-### Issues
-- [closed] #8 バグ修正
-
----
-# Claude Code セッション
-## プロジェクト: {project-name}
-### セッション 1 (14:00 - 15:30)
-- ユーザー: 認証機能のリファクタリングについて相談
-- ツール使用: ファイル編集 (auth.ts, middleware.ts)
-```
-
-</details>
 
 出力にはリポジトリごとの作業要点（箇条書き）とタグの提案を含める
 
@@ -450,10 +272,8 @@ Daily Report のヘッダー末尾には実行の由来を示すラベルを付�
 #### Warning Thread
 Classification Policy で warning に分類した失敗は 1 run 単位で集約する。上記の親メッセージを送信した後、その最後のメッセージの `ts` を `thread_ts` に指定して thread 返信として投稿する。運用者は CloudWatch の `logger.warning` 出力に加え、Slack の thread でも警告を把握できる
 
-- 集約は明示的な `add()` 呼び出しで行い、logging.Handler 経由の自動収集はしない（第三者ライブラリの warning 混入を避けるため）
-- `add()` 内部で `logger.warning` を発火するため、各呼び出し箇所は 1 行で CloudWatch と aggregator の両方に届く
-- 発生元は限定的な値しか取らないため `StrEnum` で集約し、表記揺れを防ぐ
-- thread 投稿の本文は発生元ごとにグルーピングし、各 entry の件名と関連識別子（commit SHA、PR 番号、S3 key 等）を Block Kit で構造化する
+- 集約は明示的な呼び出しで行い、logging のハンドラ経由で自動収集しない。第三者ライブラリが出力する warning まで拾ってしまうためである
+- thread 投稿の本文は発生元ごとにまとめ、各項目の件名と関連識別子（commit SHA、PR 番号、S3 key 等）を並べる
 - 集約 warning が 0 件の run では thread 投稿しない
 - thread 投稿がブロック数上限を超える場合は複数の返信に分割する
 - 親メッセージが 1 件も無い run では、集約 warning を単独のメッセージとして投稿する。ブロック数上限で分割した続きは、その最初のメッセージへの thread 返信にする
@@ -533,18 +353,7 @@ Notion ページの本文は Summary、ステータス別セクション、Timel
 GitHub アイテムへのリンクは PR / Issue が `#xx: Title`、commit が `{sha-prefix}: {commit message}` の形式とし、それぞれ GitHub URL でリンク化する。ページはリポジトリ単位で作られ、リポジトリ名は Repository プロパティと Name タイトルに出るため、本文の各行では省く
 
 #### Row Symbols
-Summary を除く各行の行頭には記号を置く。形が行の種別を、色が状態を指す。色は GitHub が PR / Issue の状態に使う色に合わせ、読み手が GitHub 上の見え方から状態を推測できるようにする
-
-| Type | Shape | State | Symbol |
-|---|---|---|---|
-| PR | ● | open | `🟢` |
-| PR | ● | merged | `🟣` |
-| PR | ● | closed（unmerged） | `🔴` |
-| Issue | ■ | open | `🟩` |
-| Issue | ■ | close（completed） | `🟪` |
-| Issue | ■ | close（not_planned / duplicate） | `⬜` |
-| Commit | ◆ | 通常 | `🔸` |
-| Commit | ▼ | merge | `🔻` |
+Summary を除く各行の行頭には記号を置く。形が行の種別を、色が状態を指す。色は GitHub が PR / Issue の状態に使う色に合わせ、読み手が GitHub 上の見え方から状態を推測できるようにする。記号の一覧は [Manual.md](Manual.md) に置く
 
 PR / Issue の状態判定は [Status Sections](#status-sections) と共通とする。ウィンドウより前に完了した PR は Timeline にのみ残るため、その場合は完了時の状態を使う
 
@@ -583,91 +392,28 @@ PR に関する行は親エントリ 1 か所に集約し、merge / close を示
 ### Lambda Execution Modes
 レポート生成は AWS Lambda で実行する。日次の定期実行に加え、`ayumy sync --report` による手動実行にも対応する
 
-**定期実行（EventBridge Scheduler）**
-毎日 JST 00:00（UTC 15:00）に EventBridge Scheduler が Lambda 関数を呼び出す
+定期実行では毎日 JST 00:00（UTC 15:00）に EventBridge Scheduler が Lambda 関数を呼び出す
 
-**手動実行**
-```bash
-ayumy sync --report                    # クライアントマシンから（S3 転送 + Lambda 実行）
-ayumy sync --report --date 2026-03-25  # 指定日のレポートを生成・再生成
-ayumy sync --report --date 2026-03-01..2026-03-05  # 日付範囲のレポートを一括生成
-```
-- `aws lambda invoke --invocation-type Event` で Lambda 関数を `{"source": "manual"}` ペイロード付きで非同期呼び出しする
-- `--date` 指定時はペイロードに `"target_date"` を追加する（`"YYYY-MM-DD"` または `"YYYY-MM-DD..YYYY-MM-DD"`）
+手動実行は、クライアント側が Lambda に渡す event で定期実行と区別する
+
+- 実行方式は `source` で示し、手動実行では `"manual"` を渡す
+- 日付を指定した実行では `target_date` に単一日または範囲を渡す
 - 対象期間の判定は [Target Window](#target-window) に従う
-- 実行結果は Slack 通知で確認する
-
-### Environment Variables
-Lambda 関数の環境変数として設定する。機密情報は AWS Secrets Manager に保管し、Lambda から参照する
-
-<details>
-<summary>Lambda Environment Variables</summary>
-
-**Lambda 環境変数**
-
-| Variable | Description |
-|---|---|
-| `AYUMY_S3_BUCKET` | session ログの保管先 S3 バケット名 |
-| `AYUMY_DYNAMO_TABLE` | session メタデータの DynamoDB テーブル名 |
-| `AYUMY_COST_TABLE` | Claude API コスト実行ログの DynamoDB テーブル名 |
-| `AYUMY_LAMBDA_TIMEOUT` | Lambda 関数の timeout 秒数（template.yaml の `LambdaTimeoutSeconds` パラメータと連動） |
-| `NOTION_DATABASE_ID` | 書き込み先の Notion データベース ID |
-| `SLACK_CHANNEL` | 通知先 Slack channel ID |
-
-**Secrets Manager に保管**
-
-| Secret | Description |
-|---|---|
-| `GITHUB_PAT` | GitHub Fine-grained PAT（全 owner リポジトリへの read 権限） |
-| `ANTHROPIC_API_KEY` | Anthropic API キー |
-| `NOTION_SECRET` | Notion Internal Integration トークン |
-| `SLACK_BOT_TOKEN` | Slack Bot User OAuth Token |
-
-</details>
+- 呼び出しは非同期で行い、実行結果は Slack 通知で確認する。同期呼び出しでは Lambda の実行時間が AWS CLI の read timeout を超えるとエラーになるためである
 
 ### Lambda Function Configuration
-- **ランタイム**: Python 3.12
-- **ハンドラ**: [lambda/handler.py](../lambda/handler.py)（[lambda/report](../lambda/report) パッケージを呼び出す entrypoint）
-- **タイムアウト / メモリ**: [template.yaml](../template.yaml) で定義（タイムアウトは SAM パラメータ化、メモリは固定値）
-- **依存パッケージ**: 直接依存を [lambda/requirements.in](../lambda/requirements.in)（デプロイ）と [lambda/requirements-dev.in](../lambda/requirements-dev.in)（ローカル開発、`boto3` 等を追加）に定義し、`uv pip compile --generate-hashes` で hash 付き lock の [lambda/requirements.txt](../lambda/requirements.txt) と [lambda/requirements-dev.txt](../lambda/requirements-dev.txt) を生成する。Lambda デプロイ・CI・ローカル install はすべて生成済みの `.txt` を読む。`boto3` は Lambda ランタイム同梱版を利用するためデプロイ側には含めない
-- **IAM ロール**: S3 バケットへの読み書き、DynamoDB テーブルへの読み書き、Secrets Manager の読み取り、CloudWatch Logs への書き込み
-- **チューニング定数**: モデル ID・API throttle 値・truncation 長など「振る舞いを調整する値」を `lambda/config/config.yml` に集約する
-  - 追跡対象はデフォルト値だけを持つ [lambda/config/config.template.yml](../lambda/config/config.template.yml) とし、使う人ごとの設定を書く `config.yml` は各自の手元で生成する。生成には `make config-init` を使い、既にあるファイルは上書きしない
-  - Lambda コールドスタート時に [lambda/config/config.py](../lambda/config/config.py) の loader が frozen dataclass singleton として読み込む。`config.yml` が無い場合は生成用の make target を伝えて失敗する
-  - 環境依存値と secret は環境変数 / Secrets Manager 経由で扱い、config.yml には持ち込まない
+ランタイム・タイムアウト・メモリ・IAM ロールは [template.yaml](../template.yaml) で定義し、依存パッケージは `lambda/requirements` の各ファイルで管理する
 
-### Deployment
-AWS SAM（[template.yaml](../template.yaml)）で以下のリソースを管理する
+値の置き場所は 3 つに分ける
 
-- Lambda 関数
-- EventBridge Scheduler
-- IAM ロール
-- S3 バケット
-- DynamoDB テーブル
-- CloudWatch アラーム
-- SNS トピック
-- Amazon Q Developer in chat applications
+- **config.yml**: モデル ID・API throttle 値・truncation 長など、利用者が振る舞いを調整する値。追跡対象はデフォルト値だけを持つ [config.template.yml](../lambda/config/config.template.yml) とし、利用者ごとの設定を書く `config.yml` は各自の手元で生成する。既にあるファイルは上書きしない
+- **環境変数**: 環境ごとに変わる値。S3 バケット名・DynamoDB テーブル名・Notion データベース ID など
+- **Secrets Manager**: 外部サービスの認証情報
 
-```bash
-make lambda-deploy
-```
+config.yml には環境依存値と認証情報を書かない
 
 ## Operational Considerations
-### Network Requirements
-- クライアントマシンからインターネットへのアクセス（S3 への転送、Lambda の呼び出し）
-- 外出先からも転送可能（VPN 不要）
-
-### API Rate Limits
-- GitHub API: 認証済みで 5,000 リクエスト/時
-- Anthropic API: プランに応じたレートリミットあり（1日数回程度なら問題なし）
-- Notion API: 3 リクエスト/秒（1ページの書き込みのみであるため問題なし）
-
 ### Error Handling
-- API 呼び出し失敗時のリトライ処理
-- pre-push hook は転送失敗時に非ゼロ終了し push を中止する。AWS 認証切れなど upload 不能な状態は push 時点で顕在化させ、silent fail を防ぐ
-- S3 転送失敗時、JSONL はソース側に残るため次回転送時にリトライ可能
-- AWS 認証情報が無効な場合は push が中止されるため、`aws login` 等で認証を修復してから再度 push する
-
 #### Classification Policy
 Lambda 側で発生する失敗は以下の 3 区分で扱う。`logger.warning` / `logger.error` / `raise` のいずれを選ぶかはこの分類に従う
 
@@ -700,55 +446,3 @@ Lambda 側で発生する失敗は以下の 3 区分で扱う。`logger.warning`
 
 - 通知を積んだだけでは Slack が受け取った証拠にならないため、失敗で終わった run は送信が 1 件でも落ちていれば届かなかった側として扱う。警告として記録したうえで最後まで到達した run はこの判定の対象外とする
 - 秘密情報の取得や対象日付の解釈など、Slack への通知経路が整う前に起きる失敗も同じく残る
-
-### Running Cost
-課金が発生するのは Anthropic API と AWS。GitHub API と Notion API は無料枠内で収まる
-
-<details>
-<summary>Running Cost Breakdown</summary>
-
-**Anthropic API（`claude-sonnet-4-6`）**
-- 入力: $3 / 1M tokens、出力: $15 / 1M tokens
-- 実行時のトークン → USD 換算に使う単価は `lambda/config/config.yml` の `claude.pricing` に定義する
-
-**1日あたりのトークン使用量（目安）**
-
-| Item | Tokens |
-|---|---|
-| 入力（プロンプト + GitHub アクティビティ + JSONL 抽出データ） | ~10,000 |
-| 出力（構造化された日本語要約） | ~1,500 |
-
-**コスト概算**
-
-| Period | Cost |
-|---|---|
-| 1日 | ~$0.05（入力 $0.03 + 出力 $0.02） |
-| 1ヶ月 | ~$1.5 |
-| 1年 | ~$18 |
-
-※ 大量の session ログがある日はトークン数が増加する。上記は平均的な開発日の見積もり
-
-**AWS**
-
-| Service | Estimate |
-|---|---|
-| Lambda | 無料枠内（月100万リクエスト、1日1〜数回の実行） |
-| S3 | 月数円（年間 1〜2 GB 程度） |
-| EventBridge Scheduler | 無料枠内 |
-| Secrets Manager | ~$0.40/月（シークレット4件） |
-| CloudWatch | 無料枠内（アラーム 1 件、無料枠は 10 件） |
-| SNS | 無料枠内（発行はアラーム発報時のみ） |
-
-</details>
-
-### Storage Management
-- session ログは S3 経由で DynamoDB に永続化し、クライアントマシンのディスクを消費しない
-- DynamoDB 書き込み後に S3 上の JSONL は削除されるため、S3 ストレージの増加は一時的
-- 実行ログは CloudWatch Logs に出力し、保持期間を設定して管理する
-
-## Future Extensions
-- **クライアントマシン側の定期自動同期**: cron で `ayumy sync --all` を定期実行し、手動同期の手間を省く
-- **複数クライアントマシン対応**: 競合解決（ファイル名にホスト名を含める等）
-- **週次・月次レポート**: 日次データを集約した定期サマリー
-- **ダッシュボード**: Notion データベースのビューを活用した可視化
-- **claude.ai の会話記録**: データエクスポート機能との連携

@@ -51,7 +51,7 @@ ayumy リポジトリの PR レビューにおいて、過去の PR で繰り返
 - 規模は小さい（1日あたりセッション数件・対象リポは1桁・コミットも数十件以下）
 - パイプライン: pre-push hook → S3（JSONL）→ DynamoDB → GitHub / Notion / Anthropic API → Notion DB + Slack
 - 実行環境は AWS Lambda（SAM デプロイ）、ローカル CLI は `python -m report`
-- 仕様の原典は docs/Spec.md（日本語）。コードと食い違う場合は Spec.md を正とする
+- 仕様の原典は docs/Spec.md（日本語）。外部との契約・設計判断・外部仕様の観測結果を扱い、コードから読み取れる列挙は持たない。Spec.md が扱う範囲でコードと食い違う場合は Spec.md を正とする
 
 ### クライアント側ツールの環境前提
 クライアント側のビルド・開発ツール（Makefile, scripts/, hooks/, bin/ayumy）は macOS のみサポートしており、Lambda 実行環境には持ち込まない。以下は対応不要
