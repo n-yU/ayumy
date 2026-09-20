@@ -51,6 +51,21 @@ template.yaml                        # AWS SAM テンプレート（Lambda, Even
 - 落とすと役割が読めなくなる名前（`SessionLogParser` / `GitHubActivity`）。前者は解析する主体だと読めなくなり、後者はモジュール名の後ろに置くと名前空間の区切りに見える
 - `config` モジュールの型。最上位の型は落とすと何も残らず、セクションごとの型だけ落とすと同じモジュールの中で不揃いになる
 
+### 型注釈
+`dict` / `list` を型引数なしで書かない。中身が定まらない場合も `dict[str, Any]` と書く
+
+同じ用途が繰り返し現れるなら `type` 文で別名を与え、注釈から用途が読めるようにする
+- 別名は使う側ではなく、その形を組み立てるモジュールに置く（Notion / Slack の block はそれぞれの `blocks`、DynamoDB の項目は両方の store から使うため `domain/dynamo.py`）
+- 1 度しか現れない用途には別名を作らず `dict[str, Any]` と書く
+- 別名の実体は `dict[str, Any]` とし、TypedDict にはしない。組み立てる箇所が 1 つに集まっており、構造を型で追っても検査できる範囲が増えないため
+
+自分自身のクラスを返すメソッドは `typing.Self` を返し、インスタンスの生成には `type(self)` / `cls` を使う
+
+型注釈にしか使わない import は置き場所を分ける
+- `TYPE_CHECKING` の下に置くのは、読み込みの重い第三者ライブラリの型に限る
+- 標準ライブラリと自リポジトリのモジュールは通常の import にする
+- `from __future__ import annotations` を入れるのは、`TYPE_CHECKING` の下で取り込んだ名前を関数の注釈に使うファイルだけ
+
 ## 技術詳細
 - **実行環境**: AWS Lambda（SAM でデプロイ）
 - **クライアント対応 OS**: クライアント側のスクリプト（`scripts/`, `hooks/`, `bin/ayumy`）は macOS のみサポート

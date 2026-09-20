@@ -1,8 +1,12 @@
 """Slack block builders: mrkdwn conversion / block dict builders / text shaping."""
 
+from typing import Any
+
 from config import CONFIG
 
 from ..shared import inline
+
+type Block = dict[str, Any]
 
 SECTION_TEXT_MAX = 2900  # Slack section text limit is 3000; cap below to leave room for headers and continuation prefixes
 
@@ -37,22 +41,22 @@ def to_mrkdwn(text: str, owner: str, repo: str) -> str:
     return "".join(parts)
 
 
-def divider() -> dict:
+def divider() -> Block:
     return {"type": "divider"}
 
 
-def header_block(text: str) -> dict:
+def header_block(text: str) -> Block:
     return {
         "type": "header",
         "text": {"type": "plain_text", "text": text},
     }
 
 
-def section_block(text: str) -> dict:
+def section_block(text: str) -> Block:
     return {"type": "section", "text": {"type": "mrkdwn", "text": text}}
 
 
-def context_block(text: str) -> dict:
+def context_block(text: str) -> Block:
     return {"type": "context", "elements": [{"type": "mrkdwn", "text": text}]}
 
 

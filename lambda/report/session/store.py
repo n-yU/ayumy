@@ -9,6 +9,7 @@ import boto3
 import boto3.dynamodb.conditions as conditions
 import botocore.exceptions
 
+from ..domain import dynamo
 from ..domain.session import SessionActivity, SessionCommit, SessionInfo
 from ..shared.notice import Notice
 from .client import Client
@@ -17,7 +18,7 @@ from .parser import SessionLogParser
 logger = logging.getLogger(__name__)
 
 
-def _content_hash(fields: dict) -> str:
+def _content_hash(fields: dynamo.Item) -> str:
     """Return the SHA-256 hash of the attributes that feed a report."""
     # `updated_at` is stamped on every ingest, so including it would make every hash unique
     content = {k: v for k, v in fields.items() if k != "updated_at"}
@@ -27,7 +28,7 @@ def _content_hash(fields: dict) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def _session_commit(item: dict) -> SessionCommit:
+def _session_commit(item: dynamo.Item) -> SessionCommit:
     """Convert a stored session commit, leaving `timestamp` absent on legacy items that never recorded it."""
     commit: SessionCommit = {"sha": item["sha"], "message": item["message"]}
     if "timestamp" in item:
@@ -56,7 +57,7 @@ class Store:
         self._write_items(items)
         return keys
 
-    def _write_items(self, items: list[dict]) -> None:
+    def _write_items(self, items: list[dynamo.Item]) -> None:
         """Uses `update_item` to preserve existing `reported_at` values across re-ingestion.
 
         Writes are conditional on `content_hash` so that re-ingesting a date whose content is unchanged leaves `updated_at` alone,

@@ -9,7 +9,7 @@ import json
 import re
 from pathlib import Path
 from string import Template
-from typing import cast
+from typing import Any, cast
 
 from . import tags
 
@@ -45,7 +45,7 @@ def _fill(node: object) -> object:
     return node
 
 
-def _shape_only(schema: dict) -> dict:
+def _shape_only(schema: dict[str, Any]) -> dict[str, Any]:
     """Strip `schema` down to the structure it describes, dropping what it constrains.
 
     The response is checked against the result rather than the tool definition itself,
@@ -70,5 +70,7 @@ def _read(*parts: str) -> str:
 
 # Template's `$` placeholders rather than `str.format`, so the braces in the prompt's own examples need no escaping
 SYSTEM_PROMPT = Template(_read("prompts", "summary_system.txt")).substitute(_VALUES)
-TOOL_DEFINITION = cast(dict, _fill(json.loads(_read("schemas", "summary_tool.json"))))
+TOOL_DEFINITION = cast(
+    dict[str, Any], _fill(json.loads(_read("schemas", "summary_tool.json")))
+)
 RESPONSE_SHAPE = _shape_only(TOOL_DEFINITION["input_schema"])

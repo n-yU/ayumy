@@ -3,18 +3,17 @@
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Callable, Iterable, KeysView
 from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, ClassVar, TypedDict, TypeGuard
 
-if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, KeysView
+from .session import SessionInfo
 
+if TYPE_CHECKING:
     from github.Commit import Commit
     from github.Issue import Issue
     from github.PullRequest import PullRequest
-
-    from .session import SessionInfo
 
 
 _IRREGULAR_ISSUE_REASONS = {"not_planned": "not planned", "duplicate": "duplicate"}

@@ -2,7 +2,7 @@
 
 from collections.abc import Container, KeysView
 from datetime import datetime
-from typing import NotRequired, TypedDict, overload
+from typing import NotRequired, Self, TypedDict, overload
 
 from ..shared import dates
 
@@ -56,9 +56,9 @@ class SessionActivity:
     ) -> list[SessionInfo] | None:
         return self._data.get(key, default)
 
-    def without(self, repos: Container[str]) -> "SessionActivity":
-        """Return a new SessionActivity with the given repos removed; used to strip session-only entries from the Claude prompt input."""
-        return SessionActivity(
+    def without(self, repos: Container[str]) -> Self:
+        """Return a new instance with the given repos removed; used to strip session-only entries from the Claude prompt input."""
+        return type(self)(
             {name: entries for name, entries in self._data.items() if name not in repos}
         )
 

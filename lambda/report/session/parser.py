@@ -8,7 +8,9 @@ from collections import defaultdict
 from datetime import UTC, datetime
 from os.path import normpath
 from pathlib import Path, PurePosixPath
+from typing import Any
 
+from ..domain import dynamo
 from ..shared import dates
 from ..shared.notice import Notice, NoticeSource
 from .client import Client
@@ -137,12 +139,14 @@ class SessionLogParser:
     def __init__(self, notice: Notice | None = None) -> None:
         self._notice = notice or Notice()
 
-    def build_items(self, session_client: Client) -> tuple[list[dict], list[str]]:
+    def build_items(
+        self, session_client: Client
+    ) -> tuple[list[dynamo.Item], list[str]]:
         """Groups by (JST date, repo, session_id). Entries without timestamps and projects without `.ayumy_repo` are skipped."""
         # MULTILINE lets the commit summary line match even when hook output precedes it
         commit_pattern = re.compile(r"^\[.+\s+([0-9a-f]+)\]\s+(.+)", re.MULTILINE)
 
-        groups: dict[tuple[str, str, str], dict] = defaultdict(
+        groups: dict[tuple[str, str, str], dict[str, Any]] = defaultdict(
             lambda: {
                 "project": "",
                 "timestamps": [],
