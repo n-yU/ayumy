@@ -82,7 +82,7 @@ Claude Code は会話を `~/.claude/projects/` 以下にローカル保存して
 - メタデータ（session ID、タイムスタンプ、ブランチ等）は JSONL の各エントリに埋め込まれている
 - 外部インデックスファイルは存在しない
 
-JSONL の構造に公式仕様は無く、パース処理は観測に基づいて書かれている。Claude Code が生成するためタイムスタンプの形式は安定しており、解釈の失敗を想定した例外処理は置かない。一方、壊れた行や型の合わない値は warning として記録し、その行だけ読み飛ばす
+JSONL の構造に公式仕様は無く、パース処理は観測に基づいて書かれている。Claude Code が生成するためタイムスタンプの形式は安定しており、解釈の失敗を想定した例外処理は置かない。一方、JSON として壊れた行は warning に記録して読み飛ばす。作業ディレクトリの値が想定した型でない場合は warning に記録し、値を空として処理を続ける
 
 各エントリが持つ作業ディレクトリに、Bash ツールの実行コマンド冒頭の `cd` を反映して実際の実行先を求め、そのコマンドが project の作業ディレクトリで動いたかを判定する。ツールの実行結果に現れる git commit の出力からは SHA と commit message を取り出し、squash merge で GitHub API から取得できない commit を補う（[Session Write to DynamoDB](#session-write-to-dynamodb)）
 
