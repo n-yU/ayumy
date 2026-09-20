@@ -39,6 +39,9 @@ jobs:
       - name: Lint
         run: python -m ruff check lambda tests
 
+      - name: Type check
+        run: python -m mypy
+
       - name: Run Python tests with coverage
         run: |
           python -m pytest tests/python/ -v \

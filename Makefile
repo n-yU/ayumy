@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help help-% config-init config-diff lambda-install lambda-invoke lambda-deploy lock test test-python test-shell test-cov format format-check lint lint-fix scan-sessions aws-auth-check
+.PHONY: help help-% config-init config-diff lambda-install lambda-invoke lambda-deploy lock test test-python test-shell test-cov format format-check lint lint-fix typecheck scan-sessions aws-auth-check
 
 FORMAT_TARGETS := lambda tests
 CONFIG_FILE := lambda/config/config.yml
@@ -86,11 +86,15 @@ format-check: lambda-install ## Check formatting and lint violations without mod
 	.venv/bin/python -m ruff format --check --diff $(FORMAT_TARGETS)
 	.venv/bin/python -m ruff check $(FORMAT_TARGETS)
 
-lint: lambda-install ## Run Ruff lint checks
+lint: lambda-install ## Run Ruff lint checks and mypy type checks
 	.venv/bin/python -m ruff check $(FORMAT_TARGETS)
+	.venv/bin/python -m mypy
 
 lint-fix: lambda-install ## Apply auto-fixable Ruff lint fixes
 	.venv/bin/python -m ruff check --fix $(FORMAT_TARGETS)
+
+typecheck: lambda-install ## Run mypy type checks only
+	.venv/bin/python -m mypy
 
 ##@ AWS
 

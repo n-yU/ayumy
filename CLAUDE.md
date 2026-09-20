@@ -56,14 +56,15 @@ template.yaml                        # AWS SAM テンプレート（Lambda, Even
 - **クライアント対応 OS**: クライアント側のスクリプト（`scripts/`, `hooks/`, `bin/ayumy`）は macOS のみサポート
 - **ローカル開発**: uv で `.venv` を管理。shell テスト実行には bats が必要（`brew install bats-core`）
 - **worktree での作業**: worktree を作った後は `make lambda-install` を実行して `.venv` を用意する。`lambda/config/config.yml` 等の追跡対象外ファイルは `.worktreeinclude` に列挙してあり、worktree の作成時にコピーされるため `make config-init` は不要
-- **テスト・lint・format コマンド**: `make test`（Python + shell 一括）／ `make test-python` ／ `make test-shell` ／ `make test-cov`（Python カバレッジ計測。Shell カバレッジは CI でのみ取得）／ `make format` ／ `make format-check` ／ `make lint` ／ `make lint-fix` を使う。target 一覧と用途は `make help` で確認できる
+- **テスト・lint・format コマンド**: `make test`（Python + shell 一括）／ `make test-python` ／ `make test-shell` ／ `make test-cov`（Python カバレッジ計測。Shell カバレッジは CI でのみ取得）／ `make format` ／ `make format-check` ／ `make lint`（Ruff + mypy）／ `make lint-fix` ／ `make typecheck`（mypy のみ）を使う。target 一覧と用途は `make help` で確認できる
+- **型検査**: mypy を `lambda/` と `tests/` に掛ける。`lambda/` では注釈のない関数定義を禁止し、`tests/` では注釈を求めない代わりに関数の中身を検査する。設定は pyproject.toml に置く
 - **Lambda デプロイ・build コマンド**
   - デプロイ: `make lambda-deploy`（AWS 認証確認 + `sam build` + `sam deploy --no-confirm-changeset`）
   - ローカル invoke: `make lambda-invoke`（`sam build` + `sam local invoke`）
   - raw `sam build` / `sam deploy` は Makefile が扱わないケースに限定する（初回 `sam deploy --guided`、S3 バケット変更時の `sam deploy --no-resolve-s3`）
 - **依存管理**: 直接依存は `lambda/requirements.in` / `lambda/requirements-dev.in` に記述し、`make lock` で `uv pip compile --generate-hashes` を呼んで hash 付きの `lambda/requirements.txt` / `lambda/requirements-dev.txt` を再生成する。Lambda デプロイ・CI・`make lambda-install` はいずれも生成された `.txt` を読むため、`.in` を変更したら必ず `make lock` を実行し `.txt` を commit する。`uv` のバージョンが異なると `.txt` の出力が変わり CI drift check が誤検知するため、ローカルでも CI 側（`.github/workflows/ci.yml` の `astral-sh/setup-uv`）と同じバージョンを使う
 - **避けるコマンド**: `uv run pytest` を使わない（CWD の `pyproject.toml` を project marker として検出し `uv.lock` を暗黙生成してしまうため。本リポジトリは `pip-compile` ベースの `requirements*.txt` を lock として運用し、`uv.lock` は管理対象外としている）
-- **言語**: Python 3.12、デプロイ依存: `requests`, `anthropic`, `PyGithub`、開発依存: 左記 + `boto3`
+- **言語**: Python 3.12、デプロイ依存: `requests`, `anthropic`, `PyGithub`、開発依存: 左記 + `boto3`, `mypy`（boto3 の stub は S3 と Secrets Manager のみ）
 - **Claude モデル**: 要約生成モデルは `lambda/config/config.yml` で定義（デフォルト `claude-sonnet-4-6`）。このファイルは追跡対象外で、[config.template.yml](lambda/config/config.template.yml) から `make config-init` で生成する
 - **GitHub API**: REST、Fine-grained PAT、セッションログから特定したリポジトリのみ対象
 - **Notion API**: Internal Integration Token、データベースプロパティは [Spec: Database Properties](docs/Spec.md#database-properties) に定義
