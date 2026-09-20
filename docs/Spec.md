@@ -217,6 +217,8 @@ sync_session.sh [--project <project-name>] [--cwd <dir>] [--repo <name>] [--all]
 
 リポジトリ名は転送前に `.ayumy_repo` へ記録する。`--repo` で名前を渡された場合はそれを記録し、まだ記録の無いプロジェクトに限り、session が `cwd` として記録するディレクトリの origin remote から解決する。ディレクトリが消えた worktree や Git 管理外で開いた session では解決できない
 
+リポジトリ名を解決できないプロジェクトは転送せず、飛ばしたことを表示する。リポジトリ名の無い session は Lambda が取り込まずに飛ばし、転送しても削除対象に入らないまま S3 に残り続けるためである
+
 要件
 
 - **環境変数 `AYUMY_S3_BUCKET`**: session ログの保管先 S3 バケット名
