@@ -2,6 +2,7 @@
 
 import logging
 from datetime import datetime
+from typing import Any, cast
 
 import notion_client
 
@@ -61,7 +62,9 @@ class Client:
 
     def init_data_source(self) -> None:
         """Resolves and caches the first data source ID; required before query/page-creation calls."""
-        db = self.client.databases.retrieve(database_id=self.database_id)
+        db = cast(
+            dict[str, Any], self.client.databases.retrieve(database_id=self.database_id)
+        )
         self._data_source_id = db["data_sources"][0]["id"]
 
     def _build_properties(
@@ -285,19 +288,24 @@ class Client:
         claude_sessions: int,
         regens: int,
     ) -> str:
-        page = self.client.pages.create(
-            parent={"database_id": self.database_id},
-            icon=_page_icon(repo_summary["name"]),
-            properties=self._build_properties(
-                target_date,
-                repo_summary,
-                commits,
-                prs_merged,
-                issues_closed,
-                claude_sessions,
-                regens,
+        page = cast(
+            dict[str, Any],
+            self.client.pages.create(
+                parent={"database_id": self.database_id},
+                icon=_page_icon(repo_summary["name"]),
+                properties=self._build_properties(
+                    target_date,
+                    repo_summary,
+                    commits,
+                    prs_merged,
+                    issues_closed,
+                    claude_sessions,
+                    regens,
+                ),
+                children=self._build_children(
+                    repo_summary, repo_activity, since, until
+                ),
             ),
-            children=self._build_children(repo_summary, repo_activity, since, until),
         )
 
         return page["url"]
@@ -309,9 +317,12 @@ class Client:
         """
         date_str = target_date.astimezone(dates.JST).strftime("%Y-%m-%d")
         # No pagination: daily page count won't exceed Notion's default page size (100)
-        results = self.client.data_sources.query(
-            data_source_id=self.data_source_id,
-            filter={"property": "Date", "date": {"equals": date_str}},
+        results = cast(
+            dict[str, Any],
+            self.client.data_sources.query(
+                data_source_id=self.data_source_id,
+                filter={"property": "Date", "date": {"equals": date_str}},
+            ),
         )
         existing = results["results"]
 

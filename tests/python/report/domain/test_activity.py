@@ -143,7 +143,7 @@ class TestCommitInfo:
     def test_is_frozen(self):
         c = _commit()
         with pytest.raises(dataclasses.FrozenInstanceError):
-            c.sha = "other"  # type: ignore[misc]
+            c.sha = "other"
 
 
 class TestPullInfo:
@@ -338,9 +338,9 @@ class TestGitHubActivityFormat:
 
     def test_with_commits_prs_issues(self):
         data = {
-            "my-repo": {
-                "commits": [_builders.commit(message="Fix bug")],
-                "pulls": [
+            "my-repo": _builders.repo_activity(
+                commits=[_builders.commit(message="Fix bug")],
+                pulls=[
                     _builders.pull(
                         1,
                         "Add feature",
@@ -349,7 +349,7 @@ class TestGitHubActivityFormat:
                         merged_at=_builders.jst(2026, 3, 28, 10),
                     )
                 ],
-                "issues": [
+                issues=[
                     _builders.issue(
                         2,
                         "Bug report",
@@ -357,7 +357,7 @@ class TestGitHubActivityFormat:
                         closed_at=_builders.jst(2026, 3, 28, 11),
                     )
                 ],
-            },
+            ),
         }
         result = activity.GitHubActivity(data).format(_builders.SINCE, _builders.UNTIL)
         assert "## my-repo" in result
@@ -367,58 +367,49 @@ class TestGitHubActivityFormat:
 
     def test_repos_sorted_alphabetically(self):
         data = {
-            "z-repo": {
-                "commits": [_builders.commit(message="z")],
-                "pulls": [],
-                "issues": [],
-            },
-            "a-repo": {
-                "commits": [_builders.commit(message="a")],
-                "pulls": [],
-                "issues": [],
-            },
+            "z-repo": _builders.repo_activity(commits=[_builders.commit(message="z")]),
+            "a-repo": _builders.repo_activity(commits=[_builders.commit(message="a")]),
         }
         result = activity.GitHubActivity(data).format(_builders.SINCE, _builders.UNTIL)
         assert result.index("a-repo") < result.index("z-repo")
 
     def test_omits_items_completed_before_window(self):
         data = {
-            "my-repo": {
-                "commits": [
+            "my-repo": _builders.repo_activity(
+                commits=[
                     _builders.commit(
                         message="Yesterday", date=_builders.jst(2026, 3, 27, 10)
                     )
                 ],
-                "pulls": [
+                pulls=[
                     _builders.pull(
                         1, "Merged", "merged", merged_at=_builders.jst(2026, 3, 27, 10)
                     )
                 ],
-                "issues": [
+                issues=[
                     _builders.issue(
                         2, "Closed", "closed", closed_at=_builders.jst(2026, 3, 27, 11)
                     )
                 ],
-            },
+            ),
         }
         result = activity.GitHubActivity(data).format(_builders.SINCE, _builders.UNTIL)
         assert result == "# GitHub アクティビティ\nアクティビティなし"
 
     def test_reports_items_completed_after_window_as_open(self):
         data = {
-            "my-repo": {
-                "commits": [],
-                "pulls": [
+            "my-repo": _builders.repo_activity(
+                pulls=[
                     _builders.pull(
                         1, "Merged", "merged", merged_at=_builders.jst(2026, 3, 29, 10)
                     )
                 ],
-                "issues": [
+                issues=[
                     _builders.issue(
                         2, "Closed", "closed", closed_at=_builders.jst(2026, 3, 29, 11)
                     )
                 ],
-            },
+            ),
         }
         result = activity.GitHubActivity(data).format(_builders.SINCE, _builders.UNTIL)
         assert "- [open] #1 Merged" in result

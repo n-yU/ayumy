@@ -4,7 +4,7 @@ from datetime import datetime
 from unittest.mock import MagicMock
 
 from report.domain import activity
-from report.domain.session import SessionActivity
+from report.domain.session import SessionActivity, SessionInfo
 from report.shared import dates
 
 OWNER = "n-yU"
@@ -136,7 +136,7 @@ def session_entry(
     session_commits=None,
     session_pulls=None,
     session_issues=None,
-):
+) -> SessionInfo:
     return {
         "session_id": session_id,
         "project": project,
@@ -156,7 +156,7 @@ def session(repo=REPO, *, entries=None, **entry_kwargs):
     return SessionActivity({repo: entries})
 
 
-def repo_activity(*, commits=(), pulls=(), issues=()):
+def repo_activity(*, commits=(), pulls=(), issues=()) -> activity.Repo:
     return {
         "commits": list(commits),
         "pulls": list(pulls),

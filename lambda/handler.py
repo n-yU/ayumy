@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from typing import Any, Protocol
 
 import boto3
 
@@ -11,7 +12,15 @@ logging.getLogger().setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def lambda_handler(event, context):
+class LambdaContext(Protocol):
+    """The parts of the Lambda runtime context this handler reads."""
+
+    memory_limit_in_mb: int
+
+    def get_remaining_time_in_millis(self) -> int: ...
+
+
+def lambda_handler(event: dict[str, Any], context: LambdaContext) -> dict[str, Any]:
     secrets_client = boto3.client("secretsmanager")
     secret_names = {
         "GITHUB_PAT": "ayumy/github-pat",

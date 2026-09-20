@@ -1,8 +1,10 @@
 """Tests for report.summarizer.client logic."""
 
 from datetime import datetime
+from typing import cast
 from unittest.mock import MagicMock
 
+import anthropic
 import pytest
 
 from config import CONFIG
@@ -38,7 +40,7 @@ class TestValidateReport:
         self.valid_tag = tags.ALLOWED_NAMES[0]
 
     def test_valid_report_unchanged(self):
-        report = {
+        report: summary.Report = {
             "repositories": [
                 {
                     "name": "repo",
@@ -52,7 +54,7 @@ class TestValidateReport:
         assert report["repositories"][0]["tags"] == [self.valid_tag]
 
     def test_invalid_tags_removed(self):
-        report = {
+        report: summary.Report = {
             "repositories": [
                 {
                     "name": "repo",
@@ -77,17 +79,18 @@ class TestGenerateSummary:
         message = MagicMock(content=blocks)
         message.usage.input_tokens = input_tokens
         message.usage.output_tokens = output_tokens
-        self.client.client.messages.create.return_value = message
+        create = cast(MagicMock, self.client.client.messages.create)
+        create.return_value = message
 
     def test_returns_input_from_tool_use_block(self):
         report = {
             "repositories": [{"name": "r", "summary": ["s1", "s2"], "tags": ["CI/CD"]}]
         }
-        tool_use = MagicMock(type="tool_use", input=report)
+        tool_use = MagicMock(spec=anthropic.types.ToolUseBlock, input=report)
         tool_use.name = (
             resources.TOOL_NAME  # `name` kwarg on MagicMock sets the mock label, not attr
         )
-        text_block = MagicMock(type="text")
+        text_block = MagicMock(spec=anthropic.types.TextBlock)
         self._set_response([text_block, tool_use])
 
         result, _ = self.client.generate_summary(self.target, "gh", "sess")
@@ -95,11 +98,14 @@ class TestGenerateSummary:
         assert result == report
 
     def _call_kwargs(self) -> dict:
-        tool_use = MagicMock(type="tool_use", input={"repositories": []})
+        tool_use = MagicMock(
+            spec=anthropic.types.ToolUseBlock, input={"repositories": []}
+        )
         tool_use.name = resources.TOOL_NAME
         self._set_response([tool_use])
         self.client.generate_summary(self.target, "gh", "sess")
-        return self.client.client.messages.create.call_args.kwargs
+        create = cast(MagicMock, self.client.client.messages.create)
+        return dict(create.call_args.kwargs)
 
     def test_sends_prompt_and_tool_from_resources(self):
         kwargs = self._call_kwargs()
@@ -121,7 +127,9 @@ class TestGenerateSummary:
         assert kwargs["max_tokens"] == CONFIG.claude.max_tokens
 
     def test_returns_usage_from_response(self):
-        tool_use = MagicMock(type="tool_use", input={"repositories": []})
+        tool_use = MagicMock(
+            spec=anthropic.types.ToolUseBlock, input={"repositories": []}
+        )
         tool_use.name = resources.TOOL_NAME
         self._set_response([tool_use], input_tokens=10_000, output_tokens=2_000)
 
@@ -138,14 +146,14 @@ class TestGenerateSummary:
         assert usage.spend_usd == pytest.approx(expected_spend)
 
     def test_raises_when_no_tool_use_block(self):
-        text_block = MagicMock(type="text")
+        text_block = MagicMock(spec=anthropic.types.TextBlock)
         self._set_response([text_block])
 
         with pytest.raises(ValueError, match=resources.TOOL_NAME):
             self.client.generate_summary(self.target, "gh", "sess")
 
     def _set_tool_use_input(self, payload):
-        tool_use = MagicMock(type="tool_use", input=payload)
+        tool_use = MagicMock(spec=anthropic.types.ToolUseBlock, input=payload)
         tool_use.name = resources.TOOL_NAME
         self._set_response([tool_use])
 

@@ -276,8 +276,8 @@ class Client:
             for chunk in chunk_lines(lines, SECTION_TEXT_MAX - len(header) - 1):
                 blocks.append(section_block(f"{header}\n{chunk}"))
         fallback = f"⚠️ {total} warning(s) emitted"
-        for chunk in _chunk_blocks(blocks):
-            self._send(fallback, chunk, thread_ts=self.parent_ts)
+        for block_chunk in _chunk_blocks(blocks):
+            self._send(fallback, block_chunk, thread_ts=self.parent_ts)
 
     def _send(
         self,

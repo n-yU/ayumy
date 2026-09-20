@@ -75,7 +75,9 @@ class Store:
         self, year_month: str, through_date: date | None = None
     ) -> MonthSummary:
         """Sum `spend_usd` and count rows; `through_date` caps SK to include only rows up to that JST date."""
-        condition = conditions.Key("year_month").eq(year_month)
+        condition: conditions.ConditionBase = conditions.Key("year_month").eq(
+            year_month
+        )
         if through_date is not None:
             # "Z" (0x5A) sorts after "#" (0x23), so <= "<date>Z" includes all rows for that date
             condition = condition & conditions.Key("sk").lte(
@@ -104,7 +106,7 @@ class Store:
             call_count_change_pct=_pct_change(current.call_count, prev.call_count),
         )
 
-    def _query_all(self, condition) -> list[dict]:
+    def _query_all(self, condition: conditions.ConditionBase) -> list[dict]:
         items: list[dict] = []
         response = self.table.query(KeyConditionExpression=condition)
         items.extend(response["Items"])

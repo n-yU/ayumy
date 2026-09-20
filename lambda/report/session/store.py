@@ -11,6 +11,7 @@ import botocore.exceptions
 
 from ..domain.session import SessionActivity, SessionCommit, SessionInfo
 from ..shared.notice import Notice
+from .client import Client
 from .parser import SessionLogParser
 
 logger = logging.getLogger(__name__)
@@ -46,7 +47,7 @@ class Store:
         self.table = boto3.resource("dynamodb").Table(table_name)
         self.parser = parser or SessionLogParser(notice)
 
-    def ingest(self, session_client) -> list[str]:
+    def ingest(self, session_client: Client) -> list[str]:
         """Write session metadata parsed from S3 and return the consumed S3 keys; existing attributes such as `reported_at` are preserved on re-ingestion.
 
         Keys of items skipped as unchanged are included, since their content is already stored.

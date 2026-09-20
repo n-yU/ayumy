@@ -15,14 +15,14 @@ class TestSessionActivityFormat:
     def test_with_sessions(self):
         data = {
             "my-repo": [
-                {
-                    "session_id": "abc",
-                    "project": "my-repo",
-                    "start_time": _builders.jst(2026, 3, 28, 10),
-                    "end_time": _builders.jst(2026, 3, 28, 11, 30),
-                    "user_messages": ["Fix the bug"],
-                    "tools_used": ["Read", "Edit"],
-                }
+                _builders.session_entry(
+                    session_id="abc",
+                    project="my-repo",
+                    start=_builders.jst(2026, 3, 28, 10),
+                    end=_builders.jst(2026, 3, 28, 11, 30),
+                    messages=("Fix the bug",),
+                    tools=("Read", "Edit"),
+                )
             ],
         }
         result = SessionActivity(data).format()

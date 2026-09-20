@@ -52,3 +52,19 @@ known-first-party = ["config", "handler", "report"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
+
+[tool.mypy]
+python_version = "3.12"
+# `lambda` is a reserved word, so the directory cannot be a package; resolve its contents as top-level modules.
+mypy_path = "lambda"
+explicit_package_bases = true
+files = ["lambda", "tests"]
+disallow_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+
+[[tool.mypy.overrides]]
+# Bodies are checked without annotations so that test data diverging from the types under test is caught
+module = "tests.*"
+disallow_untyped_defs = false
+check_untyped_defs = true

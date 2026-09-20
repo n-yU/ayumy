@@ -1,7 +1,7 @@
 """S3 client for Claude Code session JSONL files."""
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 import boto3
 
@@ -27,7 +27,7 @@ class Client:
             for obj in page.get("Contents", []):
                 if not obj["Key"].endswith(".jsonl"):
                     continue
-                objects.append(obj)
+                objects.append(cast(dict[str, Any], obj))
 
         return objects
 
