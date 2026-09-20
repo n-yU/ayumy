@@ -11,6 +11,7 @@ from pathlib import Path, PurePosixPath
 
 from ..shared import dates
 from ..shared.notice import Notice, NoticeSource
+from .client import Client
 
 logger = logging.getLogger(__name__)
 
@@ -136,7 +137,7 @@ class SessionLogParser:
     def __init__(self, notice: Notice | None = None) -> None:
         self._notice = notice or Notice()
 
-    def build_items(self, session_client) -> tuple[list[dict], list[str]]:
+    def build_items(self, session_client: Client) -> tuple[list[dict], list[str]]:
         """Groups by (JST date, repo, session_id). Entries without timestamps and projects without `.ayumy_repo` are skipped."""
         # MULTILINE lets the commit summary line match even when hook output precedes it
         commit_pattern = re.compile(r"^\[.+\s+([0-9a-f]+)\]\s+(.+)", re.MULTILINE)

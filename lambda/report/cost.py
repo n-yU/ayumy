@@ -106,7 +106,7 @@ class Store:
             call_count_change_pct=_pct_change(current.call_count, prev.call_count),
         )
 
-    def _query_all(self, condition) -> list[dict]:
+    def _query_all(self, condition: conditions.ConditionBase) -> list[dict]:
         items: list[dict] = []
         response = self.table.query(KeyConditionExpression=condition)
         items.extend(response["Items"])
