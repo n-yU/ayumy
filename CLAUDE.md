@@ -55,6 +55,7 @@ template.yaml                        # AWS SAM テンプレート（Lambda, Even
 - **実行環境**: AWS Lambda（SAM でデプロイ）
 - **クライアント対応 OS**: クライアント側のスクリプト（`scripts/`, `hooks/`, `bin/ayumy`）は macOS のみサポート
 - **ローカル開発**: uv で `.venv` を管理。shell テスト実行には bats が必要（`brew install bats-core`）
+- **worktree での作業**: worktree を作った後は `make lambda-install` を実行して `.venv` を用意する。`lambda/config/config.yml` 等の追跡対象外ファイルは `.worktreeinclude` に列挙してあり、worktree の作成時にコピーされるため `make config-init` は不要
 - **テスト・lint・format コマンド**: `make test`（Python + shell 一括）／ `make test-python` ／ `make test-shell` ／ `make test-cov`（Python カバレッジ計測。Shell カバレッジは CI でのみ取得）／ `make format` ／ `make format-check` ／ `make lint` ／ `make lint-fix` を使う。target 一覧と用途は `make help` で確認できる
 - **Lambda デプロイ・build コマンド**
   - デプロイ: `make lambda-deploy`（AWS 認証確認 + `sam build` + `sam deploy --no-confirm-changeset`）

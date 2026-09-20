@@ -43,7 +43,7 @@ config-diff: | $(CONFIG_FILE) ## Show how config.yml differs from the template
 ##@ Lambda
 
 lambda-install: ## Install lambda deps into local .venv via uv (includes dev deps)
-	test -d .venv || uv venv
+	test -d .venv || uv venv --python 3.12
 	uv pip install --python .venv/bin/python -r lambda/requirements-dev.txt
 
 lambda-invoke: | $(CONFIG_FILE) ## Invoke Lambda function locally for testing
