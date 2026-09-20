@@ -71,23 +71,12 @@ template.yaml                        # AWS SAM テンプレート（Lambda, Even
 - **Hook 設計**: フォアグラウンド同期実行で、転送失敗時は非ゼロ終了で push を中止する（silent fail 防止）。セッション ID 単位の上書きで冪等性を担保
 
 ## 環境変数
-Lambda（環境変数 + Secrets Manager）:
-- `AYUMY_S3_BUCKET` — セッションログの保管先 S3 バケット名（環境変数）
-- `AYUMY_DYNAMO_TABLE` — セッションメタデータの DynamoDB テーブル名（環境変数）
-- `AYUMY_LAMBDA_TIMEOUT` — Lambda 関数の timeout 秒数（環境変数、template.yaml の `LambdaTimeoutSeconds` パラメータと連動）
-- `NOTION_DATABASE_ID` — 書き込み先の Notion データベース ID（環境変数）
-- `SLACK_CHANNEL` — 通知先 Slack channel ID（環境変数）
-- `GITHUB_PAT` — GitHub Fine-grained PAT（Secrets Manager）
-- `ANTHROPIC_API_KEY` — Anthropic API キー（Secrets Manager）
-- `NOTION_SECRET` — Notion Internal Integration トークン（Secrets Manager）
-- `SLACK_BOT_TOKEN` — Slack Bot User OAuth Token（Secrets Manager）
+Lambda 側は [template.yaml](template.yaml) の `Environment` で定義する。認証情報は環境変数に置かず Secrets Manager から取得する
 
-クライアントマシン:
-- `AYUMY_S3_BUCKET` — セッションログの保管先 S3 バケット名
-- `AYUMY_LAMBDA_FUNCTION` — Lambda 関数名（`--report` オプション用）
+クライアントマシン側に設定する変数は [Setup.md](docs/Setup.md) を参照する
 
 ## 開発メモ
-- 仕様書は [Spec.md](docs/Spec.md)（日本語）— すべての要件の原典
+- 仕様書は [Spec.md](docs/Spec.md)（日本語）— コードから読み取れない内容の原典
 - [Manual.md](docs/Manual.md) は運用者目線で書く。実装寄りの用語（「振る舞いを調整する値」等）や構造の説明（「〜に集約されている」等）は使わず、「何ができるか」「どこで変更するか」を具体的に示す。実装・仕様レベルの細部は Spec.md 側に委ねる
   - 見出しは H2 を英語、H3 以下を日本語で書く
 - [config.template.yml](lambda/config/config.template.yml) のコメントは、共通規約「コード内コメントは英語」の例外として日本語で書く。利用者が生成した config.yml を読みながら設定を変えるため、Manual.md と同じ運用者目線で書く
