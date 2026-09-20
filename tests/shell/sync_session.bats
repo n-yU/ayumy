@@ -205,6 +205,46 @@ teardown() {
   [[ "$output" == *".ayumy_repo metadata"* ]]
 }
 
+# --- repository name resolution ---
+
+@test "sync_session.sh: repository name is resolved from the session cwd when unrecorded" {
+  mkdir -p "$TMPDIR_TEST/workdir"
+  make_cwd_project "myproj" "$TMPDIR_TEST/workdir"
+  GIT_STUB_REMOTE_URL="git@github.com:my-org/my-repo.git" run "$SCRIPT" --project myproj
+  [ "$status" -eq 0 ]
+  [ "$(cat "$proj_dir/.ayumy_repo")" = "my-repo" ]
+  grep -q "^aws s3 cp $proj_dir/.ayumy_repo " "$AWS_STUB_LOG"
+}
+
+@test "sync_session.sh: recorded repository name is left untouched" {
+  mkdir -p "$TMPDIR_TEST/workdir"
+  make_cwd_project "myproj" "$TMPDIR_TEST/workdir"
+  echo 'recorded-repo' > "$proj_dir/.ayumy_repo"
+  GIT_STUB_REMOTE_URL="https://github.com/my-org/other-repo.git" run "$SCRIPT" --project myproj
+  [ "$status" -eq 0 ]
+  [ "$(cat "$proj_dir/.ayumy_repo")" = "recorded-repo" ]
+}
+
+@test "sync_session.sh: repository name is unresolved when the session directory is gone" {
+  make_cwd_project "myproj" "$TMPDIR_TEST/removed-worktree"
+  GIT_STUB_REMOTE_URL="git@github.com:my-org/my-repo.git" run "$SCRIPT" --project myproj
+  [ ! -f "$proj_dir/.ayumy_repo" ]
+}
+
+@test "sync_session.sh: repository name is unresolved outside a git repository" {
+  mkdir -p "$TMPDIR_TEST/workdir"
+  make_cwd_project "myproj" "$TMPDIR_TEST/workdir"
+  run "$SCRIPT" --project myproj
+  [ ! -f "$proj_dir/.ayumy_repo" ]
+}
+
+@test "sync_session.sh: repository name is unresolved without a recorded cwd" {
+  make_project
+  echo '{"type":"user"}' > "$proj_dir/sess.jsonl"
+  GIT_STUB_REMOTE_URL="git@github.com:my-org/my-repo.git" run "$SCRIPT" --project myproj
+  [ ! -f "$proj_dir/.ayumy_repo" ]
+}
+
 # --- --cwd resolution ---
 
 # Create a project dir whose session log records $2 as the working directory.

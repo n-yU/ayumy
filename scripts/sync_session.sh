@@ -55,6 +55,15 @@ project_predates_cwd() {
   return "$found"
 }
 
+# Print the first cwd recorded in the session log $1.
+session_cwd() {
+  local field
+  field="$(grep -o -m 1 '"cwd":"[^"][^"]*"' "$1" || true)"
+  [[ -n "$field" ]] || return 1
+  field="${field#\"cwd\":\"}"
+  echo "${field%\"}"
+}
+
 # Report whether $1 holds a session opened in $2.
 project_opened_in() {
   local project_dir="$1" target="$2" f
@@ -62,10 +71,37 @@ project_opened_in() {
   for f in "$project_dir"/*.jsonl; do
     [[ -f "$f" ]] || continue
     # The first recorded cwd is the project's own; later entries can sit in another repository
-    [[ "$(grep -o -m 1 '"cwd":"[^"][^"]*"' "$f" || true)" == "\"cwd\":\"$target\"" ]] || continue
+    [[ "$(session_cwd "$f" || true)" == "$target" ]] || continue
     return 0
   done
   return 1
+}
+
+# Print the directory $1 was opened in.
+project_cwd() {
+  local project_dir="$1" f cwd
+
+  for f in "$project_dir"/*.jsonl; do
+    [[ -f "$f" ]] || continue
+    cwd="$(session_cwd "$f")" || continue
+    echo "$cwd"
+    return 0
+  done
+  return 1
+}
+
+# Print the repository name of the directory $1 was opened in.
+resolve_repo_name() {
+  local project_dir="$1" cwd url name
+
+  cwd="$(project_cwd "$project_dir")" || return 1
+  # A worktree removed after its sessions were recorded leaves nothing to ask
+  [[ -d "$cwd" ]] || return 1
+  url="$(cd -- "$cwd" 2>/dev/null && git remote get-url origin 2>/dev/null)" || return 1
+  # Kept in step with the name the hook derives from the push destination
+  name="$(echo "$url" | sed 's|.*[:/]||; s|\.git$||')"
+  [[ -n "$name" ]] || return 1
+  echo "$name"
 }
 
 # Print the project directories holding sessions opened in $1, one per line.
@@ -113,6 +149,13 @@ sync_project() {
   local project_name
   project_name=$(basename "$project_dir")
 
+  # A recorded name comes from the push destination, which the origin remote contradicts on a fork
+  local repo_file="$project_dir/$REPO_NAME"
+  local resolved
+  if [[ ! -f "$repo_file" ]] && resolved="$(resolve_repo_name "$project_dir")"; then
+    echo "$resolved" > "$repo_file"
+  fi
+
   # Record sync start time before scanning to avoid race conditions.
   # Any JSONL modified between scan and copy will have mtime newer than
   # this marker and will be picked up on the next run.
@@ -126,7 +169,6 @@ sync_project() {
   local dest_prefix="s3://$AYUMY_S3_BUCKET/claude-sessions/$project_name/"
 
   # Uploaded ahead of the JSONL check so a repo name recorded after the last sync still reaches S3
-  local repo_file="$project_dir/$REPO_NAME"
   if [[ -f "$repo_file" ]]; then
     if ! aws s3 cp "$repo_file" "${dest_prefix}${REPO_NAME}" --quiet; then
       err "$project_name: failed to upload $REPO_NAME metadata"
