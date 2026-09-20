@@ -5,7 +5,7 @@ from __future__ import annotations
 import dataclasses
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING, ClassVar, TypedDict
+from typing import TYPE_CHECKING, ClassVar, TypedDict, TypeGuard
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, KeysView
@@ -20,7 +20,9 @@ if TYPE_CHECKING:
 _IRREGULAR_ISSUE_REASONS = {"not_planned": "not planned", "duplicate": "duplicate"}
 
 
-def in_range(timestamp: datetime | None, since: datetime, until: datetime) -> bool:
+def in_range(
+    timestamp: datetime | None, since: datetime, until: datetime
+) -> TypeGuard[datetime]:
     if timestamp is None:
         return False
     return since <= timestamp < until

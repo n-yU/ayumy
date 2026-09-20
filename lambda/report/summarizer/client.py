@@ -88,7 +88,7 @@ class Client:
             model=CONFIG.claude.model,
             max_tokens=CONFIG.claude.max_tokens,
             system=resources.SYSTEM_PROMPT,
-            tools=[resources.TOOL_DEFINITION],
+            tools=[cast(anthropic.types.ToolParam, resources.TOOL_DEFINITION)],
             tool_choice={"type": "tool", "name": resources.TOOL_NAME},
             messages=[{"role": "user", "content": prompt}],
         )
@@ -99,7 +99,7 @@ class Client:
 
         for block in message.content:
             if (
-                getattr(block, "type", None) == "tool_use"
+                isinstance(block, anthropic.types.ToolUseBlock)
                 and block.name == resources.TOOL_NAME
             ):
                 return _validate_response_shape(block.input), usage

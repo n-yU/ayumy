@@ -5,6 +5,7 @@ import logging
 import time
 from datetime import datetime, timedelta
 from functools import cached_property
+from typing import cast
 
 import github as gh
 from github.Issue import Issue
@@ -116,9 +117,11 @@ class Client:
 
         results: list[activity.PullInfo] = []
         for pr in repo.get_pulls(state="all", sort="updated", direction="desc"):
-            if pr.updated_at < since:
+            # PyGithub types updated_at as optional, but the listing is sorted by it and always carries one
+            updated_at = cast(datetime, pr.updated_at)
+            if updated_at < since:
                 break
-            if pr.updated_at >= until:
+            if updated_at >= until:
                 continue
             results.append(activity.PullInfo.from_pull_request(pr))
         return results

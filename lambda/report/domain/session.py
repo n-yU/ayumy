@@ -2,7 +2,7 @@
 
 from collections.abc import Container, KeysView
 from datetime import datetime
-from typing import NotRequired, TypedDict
+from typing import NotRequired, TypedDict, overload
 
 from ..shared import dates
 
@@ -44,6 +44,12 @@ class SessionActivity:
 
     def __contains__(self, key: str) -> bool:
         return key in self._data
+
+    @overload
+    def get(self, key: str) -> list[SessionInfo] | None: ...
+
+    @overload
+    def get(self, key: str, default: list[SessionInfo]) -> list[SessionInfo]: ...
 
     def get(
         self, key: str, default: list[SessionInfo] | None = None
