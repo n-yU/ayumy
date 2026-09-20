@@ -12,24 +12,24 @@ from ..domain import activity, summary
 from ..domain.session import SessionActivity
 from ..shared import dates, env
 from ..shared.notice import Notice, NoticeSource
-from .blocks import bulleted_link, bulleted_text, heading_2
+from .blocks import Block, bulleted_link, bulleted_text, heading_2
 
 logger = logging.getLogger(__name__)
 
 
-def _page_icon(repo_name: str) -> dict:
+def _page_icon(repo_name: str) -> dict[str, Any]:
     """Build the native icon payload so the database listing distinguishes repositories at a glance."""
     icon = CONFIG.notion.icon_for(repo_name)
     return {"type": "icon", "icon": {"name": icon.name, "color": icon.color}}
 
 
-def _queried_repository(page: dict) -> str | None:
+def _queried_repository(page: dict[str, Any]) -> str | None:
     """Read the repository a queried page belongs to, or None when the property is unset."""
     select = page.get("properties", {}).get("Repository", {}).get("select")
     return select.get("name") if select else None
 
 
-def _queried_regens(page: dict) -> int:
+def _queried_regens(page: dict[str, Any]) -> int:
     """Read how many times a queried page had been rebuilt; pages predating the property count as never rebuilt."""
     value = page.get("properties", {}).get("Regens", {}).get("number")
     return int(value) if value is not None else 0
@@ -76,7 +76,7 @@ class Client:
         issues_closed: int,
         claude_sessions: int,
         regens: int,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Property payload per 'Spec: Database Properties'."""
         date_str = target_date.astimezone(dates.JST).strftime("%Y-%m-%d")
         title_str = f"{target_date.astimezone(dates.JST).strftime('%y-%m-%d')}: {repo_summary['name']}"
@@ -101,7 +101,7 @@ class Client:
         repo_activity: activity.Repo,
         since: datetime,
         until: datetime,
-    ) -> list[dict]:
+    ) -> list[Block]:
         """Per 'Spec: Page Body': Done = PRs / issues completed within the window; TODO = issues still open at `until` and created in window; In Progress = remaining opens. Items completed before the window and empty sections are omitted."""
         done: list[tuple[str, str, str]] = []
         in_progress: list[tuple[str, str, str]] = []
@@ -129,7 +129,7 @@ class Client:
             else:
                 in_progress.append((label, issue.url, issue.pending_prefix()))
 
-        blocks: list[dict] = []
+        blocks: list[Block] = []
         for heading, items in (
             ("Done", done),
             ("In Progress", in_progress),
@@ -148,7 +148,7 @@ class Client:
         repo_activity: activity.Repo,
         since: datetime,
         until: datetime,
-    ) -> list[dict]:
+    ) -> list[Block]:
         """Per 'Spec: Page Body': PR-linked commits nest under their PR via `children`, the merge commit last; direct commits and issue lines sit at top level. PR header sorts before other entries at the same ts (secondary_priority=0)."""
         pulls = repo_activity["pulls"]
         issues = repo_activity["issues"]
@@ -163,7 +163,7 @@ class Client:
         pr_merge_commit: dict[int, activity.CommitInfo] = {}
 
         # secondary_priority is 0 for PR headers so they sort before other entries at the same ts
-        entries: list[tuple[datetime, int, dict]] = []
+        entries: list[tuple[datetime, int, Block]] = []
 
         for c in repo_activity["commits"]:
             if not c.is_in_range(since, until):
@@ -263,8 +263,8 @@ class Client:
         repo_activity: activity.Repo,
         since: datetime,
         until: datetime,
-    ) -> list[dict]:
-        children: list[dict] = []
+    ) -> list[Block]:
+        children: list[Block] = []
 
         children.append(heading_2("Summary"))
         for item in repo_summary["summary"]:

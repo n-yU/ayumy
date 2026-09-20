@@ -1,18 +1,23 @@
 """Notion block primitives: low-level rich_text / block dict builders."""
 
+from typing import Any
+
 from ..shared import inline
+
+type Block = dict[str, Any]
+type RichText = dict[str, Any]
 
 RICH_TEXT_LIMIT = 2000  # Notion's rich_text per-item char limit
 
 
-def chunk_rich_text(text: str) -> list[dict]:
+def chunk_rich_text(text: str) -> list[RichText]:
     return [
         {"type": "text", "text": {"content": text[i : i + RICH_TEXT_LIMIT]}}
         for i in range(0, len(text), RICH_TEXT_LIMIT)
     ]
 
 
-def _segment_rich_text(segment: inline.Segment) -> list[dict]:
+def _segment_rich_text(segment: inline.Segment) -> list[RichText]:
     items = chunk_rich_text(segment.text)
     for item in items:
         if segment.url:
@@ -27,7 +32,7 @@ def _segment_rich_text(segment: inline.Segment) -> list[dict]:
     return items
 
 
-def linked_text(content: str, url: str) -> list[dict]:
+def linked_text(content: str, url: str) -> list[RichText]:
     return [
         {
             "type": "text",
@@ -41,13 +46,13 @@ def bulleted_link(
     label: str,
     url: str,
     prefix: str = "",
-    children: list[dict] | None = None,
-) -> dict:
-    rich_text: list[dict] = []
+    children: list[Block] | None = None,
+) -> Block:
+    rich_text: list[RichText] = []
     if prefix:
         rich_text.append({"type": "text", "text": {"content": prefix}})
     rich_text.extend(linked_text(label, url))
-    body: dict = {"rich_text": rich_text}
+    body: dict[str, Any] = {"rich_text": rich_text}
     if children:
         body["children"] = children
     return {
@@ -57,8 +62,8 @@ def bulleted_link(
     }
 
 
-def bulleted_text(text: str, owner: str, repo: str) -> dict:
-    rich_text: list[dict] = []
+def bulleted_text(text: str, owner: str, repo: str) -> Block:
+    rich_text: list[RichText] = []
     for segment in inline.parse_inline(text, owner, repo):
         rich_text.extend(_segment_rich_text(segment))
     return {
@@ -68,7 +73,7 @@ def bulleted_text(text: str, owner: str, repo: str) -> dict:
     }
 
 
-def heading_2(text: str) -> dict:
+def heading_2(text: str) -> Block:
     return {
         "object": "block",
         "type": "heading_2",

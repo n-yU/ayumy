@@ -9,7 +9,7 @@ import boto3.dynamodb.conditions as conditions
 
 from config import CONFIG
 
-from .domain import summary
+from .domain import dynamo, summary
 from .shared import dates
 
 
@@ -106,8 +106,8 @@ class Store:
             call_count_change_pct=_pct_change(current.call_count, prev.call_count),
         )
 
-    def _query_all(self, condition: conditions.ConditionBase) -> list[dict]:
-        items: list[dict] = []
+    def _query_all(self, condition: conditions.ConditionBase) -> list[dynamo.Item]:
+        items: list[dynamo.Item] = []
         response = self.table.query(KeyConditionExpression=condition)
         items.extend(response["Items"])
         while "LastEvaluatedKey" in response:

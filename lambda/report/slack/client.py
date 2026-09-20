@@ -3,6 +3,7 @@
 import logging
 from collections import defaultdict
 from datetime import datetime
+from typing import Any
 
 import slack_sdk
 import slack_sdk.errors
@@ -14,6 +15,7 @@ from ..shared.notice import Notice
 from ..summarizer import ValidationResult
 from .blocks import (
     SECTION_TEXT_MAX,
+    Block,
     chunk_lines,
     context_block,
     divider,
@@ -31,16 +33,16 @@ logger = logging.getLogger(__name__)
 BLOCKS_MAX = 50  # Slack API limit itself; no margin needed unlike SECTION_TEXT_MAX
 
 
-def _chunk_blocks(blocks: list[dict], limit: int = BLOCKS_MAX) -> list[list[dict]]:
+def _chunk_blocks(blocks: list[Block], limit: int = BLOCKS_MAX) -> list[list[Block]]:
     return [blocks[i : i + limit] for i in range(0, len(blocks), limit)]
 
 
 def _pack_messages(
-    groups: list[list[dict]], fallbacks: list[str], limit: int = BLOCKS_MAX
-) -> list[tuple[list[dict], str]]:
+    groups: list[list[Block]], fallbacks: list[str], limit: int = BLOCKS_MAX
+) -> list[tuple[list[Block], str]]:
     """Pack block groups into messages of at most `limit` blocks, keeping each group whole so one date's report never straddles two messages."""
-    messages: list[tuple[list[dict], str]] = []
-    current: list[dict] = []
+    messages: list[tuple[list[Block], str]] = []
+    current: list[Block] = []
     current_fallbacks: list[str] = []
     for blocks, fallback in zip(groups, fallbacks, strict=True):
         added = len(blocks) + (1 if current else 0)
@@ -65,12 +67,12 @@ class Client:
         self.client = slack_sdk.WebClient(token=token)
         self.channel = channel
         self.is_manual = is_manual
-        self._groups: list[list[dict]] = []
+        self._groups: list[list[Block]] = []
         self._fallback_parts: list[str] = []
         self._delivery_failed = False
         self.parent_ts: str | None = None
 
-    def _append_group(self, blocks: list[dict], fallback: str) -> None:
+    def _append_group(self, blocks: list[Block], fallback: str) -> None:
         self._groups.append(blocks)
         self._fallback_parts.append(fallback)
 
@@ -270,7 +272,7 @@ class Client:
                 line += f"  `{detail_str}`"
             grouped[entry.source].append(line)
         total = len(notice)
-        blocks: list[dict] = [header_block(f"⚠️ Warnings ({total})")]
+        blocks: list[Block] = [header_block(f"⚠️ Warnings ({total})")]
         for source, lines in grouped.items():
             header = f"*{source}* ({len(lines)})"
             for chunk in chunk_lines(lines, SECTION_TEXT_MAX - len(header) - 1):
@@ -282,13 +284,17 @@ class Client:
     def _send(
         self,
         text: str,
-        blocks: list[dict] | None = None,
+        blocks: list[Block] | None = None,
         *,
         thread_ts: str | None = None,
     ) -> None:
         """Suppress Slack SDK failures as best-effort; other exceptions propagate to the pipeline."""
         try:
-            kwargs: dict = {"channel": self.channel, "text": text, "blocks": blocks}
+            kwargs: dict[str, Any] = {
+                "channel": self.channel,
+                "text": text,
+                "blocks": blocks,
+            }
             if thread_ts is not None:
                 kwargs["thread_ts"] = thread_ts
             response = self.client.chat_postMessage(**kwargs)
