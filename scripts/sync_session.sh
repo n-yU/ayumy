@@ -149,19 +149,6 @@ sync_project() {
   local project_name
   project_name=$(basename "$project_dir")
 
-  # A recorded name comes from the push destination, which the origin remote contradicts on a fork
-  local repo_file="$project_dir/$REPO_NAME"
-  local resolved
-  if [[ ! -f "$repo_file" ]]; then
-    if resolved="$(resolve_repo_name "$project_dir")"; then
-      echo "$resolved" > "$repo_file"
-    else
-      # Lambda leaves sessions of an unknown repository in S3 rather than ingesting them
-      log "$project_name: skipped (repository unresolved)"
-      return 1
-    fi
-  fi
-
   # Record sync start time before scanning to avoid race conditions.
   # Any JSONL modified between scan and copy will have mtime newer than
   # this marker and will be picked up on the next run.
@@ -172,12 +159,27 @@ sync_project() {
   local files
   files=$(find_changed_sessions "$project_dir")
 
+  # A recorded name comes from the push destination, which the origin remote contradicts on a fork
+  local repo_file="$project_dir/$REPO_NAME"
+  local resolved
+  if [[ ! -f "$repo_file" ]]; then
+    if resolved="$(resolve_repo_name "$project_dir")"; then
+      echo "$resolved" > "$repo_file"
+    elif [[ -n "$files" ]]; then
+      # Lambda leaves sessions of an unknown repository in S3 rather than ingesting them
+      log "$project_name: skipped (repository unresolved)"
+      return 1
+    fi
+  fi
+
   local dest_prefix="s3://$AYUMY_S3_BUCKET/claude-sessions/$project_name/"
 
   # Uploaded ahead of the JSONL check so a repo name recorded after the last sync still reaches S3
-  if ! aws s3 cp "$repo_file" "${dest_prefix}${REPO_NAME}" --quiet; then
-    err "$project_name: failed to upload $REPO_NAME metadata"
-    return 2
+  if [[ -f "$repo_file" ]]; then
+    if ! aws s3 cp "$repo_file" "${dest_prefix}${REPO_NAME}" --quiet; then
+      err "$project_name: failed to upload $REPO_NAME metadata"
+      return 2
+    fi
   fi
 
   if [[ -z "$files" ]]; then

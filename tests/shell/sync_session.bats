@@ -259,6 +259,15 @@ make_unrecorded_project() {
   ! grep -q "^aws s3 cp " "$AWS_STUB_LOG"
 }
 
+@test "sync_session.sh: project with nothing to transfer is not reported as unresolved" {
+  make_project
+  rm "$proj_dir/.ayumy_repo"
+  run "$SCRIPT" --project myproj
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"no changes"* ]]
+  [[ "$output" != *"skipped"* ]]
+}
+
 @test "sync_session.sh: --all leaves a skipped project out of the count" {
   make_project "kept"
   echo '{}' > "$proj_dir/a.jsonl"
