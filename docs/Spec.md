@@ -46,7 +46,7 @@ GitHub 上の日次開発アクティビティ（Commit, Pull Request, Issue）�
 - [Stage 1: Session Log Transfer](#stage-1-session-log-transfer) — クライアントマシンで動き、session ログを S3 バケットへ送る
 - [Stage 2: Data Integration, Summarization, and Notion Writing](#stage-2-data-integration-summarization-and-notion-writing) — AWS Lambda で動き、S3 の session ログを DynamoDB に取り込んでレポートを生成する
 
-2 段階に分けるのは、session ログがクライアントマシンにしか存在せず、集約と要約は常時稼働の実行環境を必要とするためである。全体の構成図は [README.md](../README.md) に置く
+2 段階に分けるのは、session ログがクライアントマシンにしか存在せず、集約と要約はクライアントの稼働状態に左右されない実行環境を必要とするためである。全体の構成図は [README.md](../README.md) に置く
 
 DynamoDB テーブル設計は [Session Write to DynamoDB](#session-write-to-dynamodb) と [Cost Execution Log Persistence](#cost-execution-log-persistence) を参照
 
