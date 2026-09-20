@@ -232,7 +232,7 @@ hook はリポジトリのルートと push 先のリポジトリ名を `sync_se
 
 - 転送に失敗した場合は非ゼロ終了で push を中止する。これにより AWS 認証切れなど upload 不能な状態を push 時点で顕在化させる
 - 当該リポジトリに対応する Claude session が存在しない場合はその旨を表示して exit 0 とし、push を通す
-- リポジトリ名は push 先の remote URL から解決する。remote URL を引けない場合は `--repo` を渡さず、リポジトリ名の記録を省く
+- リポジトリ名は push 先の remote URL から解決する。remote URL を引けない場合は `--repo` を渡さず、記録は転送スクリプト側の解決に任せる
 
 hook の配布方法（`ayumy setup-hooks` コマンドで設置）
 
