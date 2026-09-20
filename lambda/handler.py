@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class LambdaContext(Protocol):
     """The parts of the Lambda runtime context this handler reads."""
 
-    memory_limit_in_mb: int | str
+    memory_limit_in_mb: int
 
     def get_remaining_time_in_millis(self) -> int: ...
 
