@@ -1,7 +1,7 @@
 """Claude API summary result types and the token / spend record for a call."""
 
 from dataclasses import dataclass
-from typing import TypedDict
+from typing import Self, TypedDict
 
 from config import CONFIG
 
@@ -29,7 +29,7 @@ class Usage:
     spend_usd: float
 
     @classmethod
-    def from_call(cls, input_tokens: int, output_tokens: int) -> "Usage":
+    def from_call(cls, input_tokens: int, output_tokens: int) -> Self:
         rates = CONFIG.claude.pricing[CONFIG.claude.model]
         spend_usd = (
             input_tokens * rates["input_usd_per_1m_tokens"]
