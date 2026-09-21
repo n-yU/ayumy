@@ -154,8 +154,36 @@ class Client:
                 continue
             if issue.updated_at >= until:
                 continue
-            results.append(activity.IssueInfo.from_issue(issue))
+            results.append(
+                self._with_linked_pulls(
+                    repo, issue, activity.IssueInfo.from_issue(issue), since, until
+                )
+            )
         return results
+
+    @staticmethod
+    def _with_linked_pulls(
+        repo: Repository,
+        issue: Issue,
+        info: activity.IssueInfo,
+        since: datetime,
+        until: datetime,
+    ) -> activity.IssueInfo:
+        """Attach the same-repo PRs that referenced `issue`, fetching its timeline only when the issue is still open at `until`."""
+        if info.state_in_range(since, until) != "open":
+            return info
+        linked: list[activity.LinkedPull] = []
+        for event in issue.get_timeline():
+            source = event.source
+            if source is None or source.type != "issue":
+                continue
+            # The timeline payload embeds the referencing item with its repository, so no extra request is made here
+            if source.issue.pull_request is None:
+                continue
+            if source.issue.repository.full_name != repo.full_name:
+                continue
+            linked.append(activity.LinkedPull(source.issue.number, event.created_at))
+        return info.with_linked_pulls(linked)
 
     def fetch_activity(
         self,
@@ -394,5 +422,5 @@ class Client:
             if number in event_numbers and number not in session_set:
                 if not info.has_event_in_range(since, until):
                     continue
-            results.append(info)
+            results.append(self._with_linked_pulls(repo, issue, info, since, until))
         return results

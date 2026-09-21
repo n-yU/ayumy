@@ -7,6 +7,7 @@ import github as gh
 import pytest
 
 from config import CONFIG
+from report.domain import activity
 from report.shared import dates
 
 from .. import _builders
@@ -177,6 +178,33 @@ class TestFetchIssues:
         )
         assert result[0].created_at == datetime(2026, 3, 28, 10, 0, tzinfo=dates.JST)
         assert result[0].closed_at is None
+
+    def test_links_pulls_of_same_repo_that_referenced_open_issue(
+        self, github_client, repo
+    ):
+        issue = _builders.issue_mock(5)
+        issue.get_timeline.return_value = [
+            _builders.timeline_event_mock(),
+            _builders.cross_reference_mock(10, _builders.jst(2026, 3, 28, 11)),
+            _builders.cross_reference_mock(11, is_pull=False),
+            _builders.cross_reference_mock(12, repo_full_name="n-yU/other-repo"),
+        ]
+        repo.get_issues.return_value = [issue]
+
+        result = github_client.fetch_issues(repo, SINCE, UNTIL)
+
+        assert result[0].linked_pulls == (
+            activity.LinkedPull(10, _builders.jst(2026, 3, 28, 11)),
+        )
+
+    def test_skips_timeline_of_issue_closed_within_window(self, github_client, repo):
+        issue = _builders.issue_mock(5, closed_at=_builders.jst(2026, 3, 28, 12))
+        repo.get_issues.return_value = [issue]
+
+        result = github_client.fetch_issues(repo, SINCE, UNTIL)
+
+        issue.get_timeline.assert_not_called()
+        assert result[0].linked_pulls == ()
 
 
 class TestFetchActivity:
@@ -525,6 +553,18 @@ class TestFetchIssuesBackfill:
         )
 
         assert [r.number for r in result] == [42]
+
+    def test_links_pulls_that_referenced_open_issue(self, github_client, repo):
+        github_client.g.search_issues.side_effect = [[], []]
+        issue = _builders.issue_mock(42)
+        issue.get_timeline.return_value = [_builders.cross_reference_mock(10)]
+        repo.get_issue.return_value = issue
+
+        result = github_client.fetch_issues(
+            repo, SINCE, UNTIL, is_backfill=True, session_numbers=[42]
+        )
+
+        assert [p.number for p in result[0].linked_pulls] == [10]
 
     def test_skips_session_number_resolving_to_pr(self, github_client, repo):
         """Session #N may resolve to a PR; PRs must be filtered out."""
