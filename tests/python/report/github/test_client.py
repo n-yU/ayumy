@@ -182,9 +182,12 @@ class TestFetchIssues:
     def test_links_pulls_of_same_repo_that_referenced_open_issue(
         self, github_client, repo
     ):
+        non_issue_source = _builders.cross_reference_mock(13)
+        non_issue_source.source.type = "commit"
         issue = _builders.issue_mock(5)
         issue.get_timeline.return_value = [
             _builders.timeline_event_mock(),
+            non_issue_source,
             _builders.cross_reference_mock(10, _builders.jst(2026, 3, 28, 11)),
             _builders.cross_reference_mock(11, is_pull=False),
             _builders.cross_reference_mock(12, repo_full_name="n-yU/other-repo"),
