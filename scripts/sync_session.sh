@@ -77,7 +77,7 @@ project_opened_in() {
   return 1
 }
 
-# Report whether $1 is named after $2 and holds a session that moved into $2.
+# Report whether $1 is named after $2 and any of its sessions records $2 as a cwd.
 project_switched_to() {
   local project_dir="$1" target="$2" f
 
