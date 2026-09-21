@@ -102,7 +102,11 @@ class Client:
         since: datetime,
         until: datetime,
     ) -> list[Block]:
-        """Per 'Spec: Page Body': Done = PRs / issues completed within the window; TODO = issues still open at `until` and created in window; In Progress = remaining opens. Items completed before the window and empty sections are omitted."""
+        """Build the Done / In Progress / TODO sections defined in 'Spec: Status Sections'.
+
+        An open issue counts as In Progress once any PR referenced it before `until`, whatever that PR's state;
+        items completed before the window and empty sections are omitted.
+        """
         done: list[tuple[str, str, str]] = []
         in_progress: list[tuple[str, str, str]] = []
         todo: list[tuple[str, str, str]] = []
@@ -124,10 +128,10 @@ class Client:
                 continue
             if state != "open":
                 done.append((label, issue.url, issue.done_prefix()))
-            elif activity.in_range(issue.created_at, since, until):
-                todo.append((label, issue.url, issue.pending_prefix()))
-            else:
+            elif issue.has_linked_pull(until):
                 in_progress.append((label, issue.url, issue.pending_prefix()))
+            else:
+                todo.append((label, issue.url, issue.pending_prefix()))
 
         blocks: list[Block] = []
         for heading, items in (

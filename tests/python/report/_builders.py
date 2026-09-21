@@ -105,6 +105,7 @@ def issue(
     created_at=CREATED_AT,
     closed_at=_DERIVED,
     state_reason=None,
+    linked_pulls=(),
 ):
     """Build an IssueInfo whose close timestamp defaults to the value `state` implies."""
     if closed_at is _DERIVED:
@@ -122,6 +123,7 @@ def issue(
         created_at=created_at,
         closed_at=closed_at,
         state_reason=state_reason,
+        linked_pulls=tuple(linked_pulls),
     )
 
 
@@ -243,6 +245,30 @@ def pull_mock(
     mock.labels = [label_mock(n) for n in labels]
     mock.merge_commit_sha = merge_commit_sha
     return mock
+
+
+def cross_reference_mock(
+    number,
+    referenced_at=CREATED_AT,
+    *,
+    is_pull=True,
+    repo_full_name=REPO_FULL_NAME,
+):
+    """Build a timeline event in which issue or PR `number` referenced the issue."""
+    event = MagicMock()
+    event.created_at = referenced_at
+    event.source.type = "issue"
+    event.source.issue.number = number
+    event.source.issue.pull_request = MagicMock() if is_pull else None
+    event.source.issue.repository.full_name = repo_full_name
+    return event
+
+
+def timeline_event_mock():
+    """Build a timeline event without a referencing source, such as a label change."""
+    event = MagicMock()
+    event.source = None
+    return event
 
 
 def issue_mock(

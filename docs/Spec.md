@@ -136,7 +136,7 @@ hook はリポジトリのルートと push 先のリポジトリ名を `sync_se
 ### GitHub Activity Fetch
 対象リポジトリは S3 上の session ログから特定する。各プロジェクトディレクトリの `.ayumy_repo` メタデータファイルからリポジトリ名を読み取り、そのリポジトリだけを取得対象とする。所有するリポジトリをすべて調べないのは、session の無いリポジトリまで API を呼ぶ必要が無いためである
 
-commit は Search API で対象期間を指定して集め、PR と Issue は更新日時を起点に取得する。Search API の呼び出しは secondary rate limit を受けるため、一定時間あたりのリクエスト数を共通の throttle で抑える
+commit は Search API で対象期間を指定して集め、PR と Issue は更新日時を起点に取得する。対象日終了時点で未完了の Issue に限り、timeline も取得して参照元の PR を集める（[Status Sections](#status-sections)）。Search API の呼び出しは secondary rate limit を受けるため、一定時間あたりのリクエスト数を共通の throttle で抑える
 
 #### Target Window
 対象期間は実行方式によって異なる
@@ -354,7 +354,7 @@ Notion ページの本文は Summary、ステータス別セクション、Timel
 [heading_2]            In Progress（該当がある場合のみ）
 [bulleted_list_item]   作業中の PR や Issue（draft PR を含む）
 [heading_2]            TODO（該当がある場合のみ）
-[bulleted_list_item]   対象日に新規作成された Issue（バックログ）
+[bulleted_list_item]   PR から参照されていない Issue（バックログ）
 [heading_2]            Timeline（該当がある場合のみ）
 [bulleted_list_item]   PR ブロック親 + 配下 commit を `children` でネスト、直接 commit と Issue open / close を最上位に時系列で混ぜて配置
 ```
@@ -375,8 +375,12 @@ PR / Issue の状態判定は [Status Sections](#status-sections) と共通と�
 ステータスは取得時点の state ではなく、完了時刻が対象日ウィンドウ内かで振り分ける。完了時刻は PR なら merge、マージされず close された PR と Issue なら close の時刻を指す。対象日より前に完了したアイテムは、session 内での言及や close 後の更新で取得対象に入っただけであるためいずれのセクションにも載せない
 
 - Done: 対象日に完了した PR / Issue
-- In Progress: 対象日終了時点で未完了の PR（draft 含む）、対象日より前に作成された未完了 Issue
-- TODO: 対象日に新規作成され、対象日終了時点で未完了の Issue
+- In Progress: 対象日終了時点で未完了の PR（draft 含む）、対象日終了時点までに PR から参照された未完了 Issue
+- TODO: 対象日終了時点で未完了で、PR から参照されていない Issue
+
+未完了 Issue の振り分けは作成日ではなく、PR から参照されたかで決める。日付が変わっても着手したとは限らず、作成した当日に着手することもある。参照は Issue の timeline に記録されるイベントから取る。複数 PR で対応する Issue の PR には closing keyword を付けない運用に合わせ、closing keyword の無い参照も数える
+
+数えるのは同じリポジトリの PR からの参照に限る。他リポジトリの PR はページに載らず、In Progress に入った理由をページから読み取れないためである。対象日終了時点より後の参照も数えず、過去日を再生成しても結果が変わらないようにする。参照元の PR の状態は問わず、PR がすべて merge 済みでも In Progress に残す。これにより、複数 PR で対応する Issue が PR の合間に TODO へ戻ることはない
 
 各項目には [Row Symbols](#row-symbols) の記号を prefix として付ける。Done の Issue のうち `not_planned` / `duplicate` で close されたものは同じ記号を共有するため、記号に続けて `(理由) ` を添えて区別する
 

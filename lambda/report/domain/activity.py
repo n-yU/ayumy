@@ -144,8 +144,16 @@ class PullInfo:
 
 
 @dataclass(frozen=True, slots=True)
+class LinkedPull:
+    """PR that referenced an issue, with the time the reference was made."""
+
+    number: int
+    referenced_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
 class IssueInfo:
-    """Issue with its lifecycle timestamps and labels."""
+    """Issue with its lifecycle timestamps, labels, and the PRs that referenced it."""
 
     number: int
     title: str
@@ -156,6 +164,7 @@ class IssueInfo:
     created_at: datetime
     closed_at: datetime | None
     state_reason: str | None
+    linked_pulls: tuple[LinkedPull, ...] = ()
 
     def label(self) -> str:
         """Return the issue number and title used in status / timeline rows."""
@@ -195,6 +204,16 @@ class IssueInfo:
         if completed is None or completed >= until:
             return "open"
         return self.state if in_range(completed, since, until) else None
+
+    def has_linked_pull(self, until: datetime) -> bool:
+        """Whether any PR referenced the issue before `until`, regardless of that PR's state.
+
+        References made after the window are ignored so regenerating a past day keeps its result.
+        """
+        return any(p.referenced_at < until for p in self.linked_pulls)
+
+    def with_linked_pulls(self, linked_pulls: Iterable[LinkedPull]) -> IssueInfo:
+        return dataclasses.replace(self, linked_pulls=tuple(linked_pulls))
 
     @classmethod
     def from_issue(cls, issue: Issue) -> IssueInfo:
