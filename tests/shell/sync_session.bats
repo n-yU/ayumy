@@ -319,6 +319,26 @@ make_cwd_project() {
   ! grep -q "^aws s3 cp $PROJECTS_DIR/-path-to-other/" "$AWS_STUB_LOG"
 }
 
+# Create a project dir $1 whose session log opens in $2 and then moves into $3.
+make_moved_project() {
+  make_project "$1"
+  printf '{"type":"user","cwd":"%s"}\n{"type":"user","cwd":"%s"}\n' "$2" "$3" > "$proj_dir/sess.jsonl"
+}
+
+@test "sync_session.sh: --cwd uploads a project whose session moved into the directory" {
+  make_moved_project "-path-to-repo--claude-worktrees-topic" "/path/to/repo" "/path/to/repo/.claude/worktrees/topic"
+  run "$SCRIPT" --cwd /path/to/repo/.claude/worktrees/topic
+  [ "$status" -eq 0 ]
+  grep -q "^aws s3 cp $PROJECTS_DIR/-path-to-repo--claude-worktrees-topic/sess.jsonl " "$AWS_STUB_LOG"
+}
+
+@test "sync_session.sh: --cwd uploads a moved project from the directory it was opened in" {
+  make_moved_project "-path-to-repo--claude-worktrees-topic" "/path/to/repo" "/path/to/repo/.claude/worktrees/topic"
+  run "$SCRIPT" --cwd /path/to/repo
+  [ "$status" -eq 0 ]
+  grep -q "^aws s3 cp $PROJECTS_DIR/-path-to-repo--claude-worktrees-topic/sess.jsonl " "$AWS_STUB_LOG"
+}
+
 @test "sync_session.sh: --cwd resolves when the first entry records no cwd" {
   make_project "-path-to-repo-worktrees-topic"
   printf '{"type":"queue-operation"}\n{"type":"user","cwd":"/path/to/repo.worktrees/topic"}\n' > "$proj_dir/sess.jsonl"
@@ -433,6 +453,31 @@ make_cwd_project() {
   [ "$status" -eq 0 ]
   [ "$(cat "$PROJECTS_DIR/derived-a/.ayumy_repo")" = "my-repo" ]
   [ "$(cat "$PROJECTS_DIR/derived-b/.ayumy_repo")" = "my-repo" ]
+}
+
+@test "sync_session.sh: --repo keeps the name recorded for a project that moved into the directory" {
+  make_moved_project "-path-to-repo--claude-worktrees-topic" "/path/to/other" "/path/to/repo/.claude/worktrees/topic"
+  echo 'other-repo' > "$proj_dir/.ayumy_repo"
+  run "$SCRIPT" --cwd /path/to/repo/.claude/worktrees/topic --repo my-repo
+  [ "$status" -eq 0 ]
+  [ "$(cat "$proj_dir/.ayumy_repo")" = "other-repo" ]
+  grep -q "^aws s3 cp $proj_dir/sess.jsonl " "$AWS_STUB_LOG"
+}
+
+@test "sync_session.sh: --repo records the name for a moved project without one" {
+  make_moved_project "-path-to-repo--claude-worktrees-topic" "/path/to/other" "/path/to/repo/.claude/worktrees/topic"
+  rm "$proj_dir/.ayumy_repo"
+  run "$SCRIPT" --cwd /path/to/repo/.claude/worktrees/topic --repo my-repo
+  [ "$status" -eq 0 ]
+  [ "$(cat "$proj_dir/.ayumy_repo")" = "my-repo" ]
+}
+
+@test "sync_session.sh: --repo overwrites the name of a moved project from the directory it was opened in" {
+  make_moved_project "-path-to-repo--claude-worktrees-topic" "/path/to/other" "/path/to/repo/.claude/worktrees/topic"
+  echo 'repo' > "$proj_dir/.ayumy_repo"
+  run "$SCRIPT" --cwd /path/to/other --repo other-repo
+  [ "$status" -eq 0 ]
+  [ "$(cat "$proj_dir/.ayumy_repo")" = "other-repo" ]
 }
 
 @test "sync_session.sh: --repo without --cwd is rejected" {
