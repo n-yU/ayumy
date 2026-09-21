@@ -6,6 +6,7 @@ Ayumy の構築後の日常運用ガイド。基本的な操作・Notion レポ�
   - [pre-push hook による自動転送](#pre-push-hook-による自動転送)
   - [手動同期](#手動同期)
   - [手動レポート生成](#手動レポート生成)
+  - [別リポジトリでの作業](#別リポジトリでの作業)
 - [Config](#config)
 - [Reading Notion Reports](#reading-notion-reports)
   - [ページプロパティ](#ページプロパティ)
@@ -52,6 +53,11 @@ session 転送に続けてレポート生成まで走らせるときや、既存
 | `ayumy sync --report --date 2026-03-01..2026-03-05` | 日付範囲を一括生成 |
 
 `--report` 指定時の Lambda 呼び出しは非同期のため、コマンド自体はすぐ完了する。結果は Slack 通知で確認する。実行方式別の対象期間は [Spec: Target Window](Spec.md#target-window) を参照
+
+### 別リポジトリでの作業
+session の途中で別のリポジトリで行った作業は、そのリポジトリの記録として残らない。会話は session を開いた側のリポジトリのレポートに入り、作業先の commit と PR は、作業先で開いた session がその日に無ければどのレポートにも載らない。別のリポジトリで作業するときは、そのリポジトリで session を開き直す
+
+同じ session のまま別のリポジトリを扱う場合は、Claude Code に `git -C <path>` で git を実行させない。`git -C` で作った commit は、session を開いた側のリポジトリの commit としてレポートに載り、リンク先も存在しないページになる。各自の CLAUDE.md に「`git -C` を使わず、`cd` で移動してから git を実行する」と書いておけば防げる
 
 ## Config
 - 使用する Claude モデルなど各種設定は `lambda/config/config.yml` で変更できる
