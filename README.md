@@ -1,6 +1,13 @@
 # Ayumy
 *Traces of daily craft, woven by AI*
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark.png">
+    <img src="docs/assets/logo-light.png" alt="Ayumy" width="480">
+  </picture>
+</p>
+
 GitHub 上の日次開発アクティビティ（Commit, PR, Issue）と Claude Code の session ログを自動収集し、Claude API で自然言語の要約を生成して Notion データベースに記録するシステム
 
 - セットアップ方法は [Setup.md](./docs/Setup.md)、基本的な使い方は [Manual.md](./docs/Manual.md) を参照
