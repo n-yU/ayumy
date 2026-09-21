@@ -77,6 +77,21 @@ project_opened_in() {
   return 1
 }
 
+# Report whether $1 is named after $2 and holds a session that moved into $2.
+project_switched_to() {
+  local project_dir="$1" target="$2" f
+
+  # Claude Code names the project after the directory a session moves into, yet its first cwd stays behind
+  [[ "${project_dir##*/}" == "$(path_to_project_name "$target")" ]] || return 1
+  for f in "$project_dir"/*.jsonl; do
+    [[ -f "$f" ]] || continue
+    # The name alone collides across paths that differ only in dots and separators
+    grep -q -F "\"cwd\":\"$target\"" "$f" || continue
+    return 0
+  done
+  return 1
+}
+
 # Print the repository name of the directory $1 was opened in.
 resolve_repo_name() {
   local project_dir="$1" f cwd url name
@@ -97,7 +112,7 @@ resolve_repo_name() {
   return 1
 }
 
-# Print the project directories holding sessions opened in $1, one per line.
+# Print the project directories holding sessions opened in or moved into $1, one per line.
 resolve_project_dirs() {
   local target="$1"
   # Keep the root itself while dropping every other trailing slash, since a recorded cwd carries none
@@ -110,7 +125,7 @@ resolve_project_dirs() {
   for candidate in "$CLAUDE_PROJECTS_DIR"/*/; do
     candidate="${candidate%/}"
     [[ -d "$candidate" ]] || continue
-    project_opened_in "$candidate" "$target" || continue
+    project_opened_in "$candidate" "$target" || project_switched_to "$candidate" "$target" || continue
     echo "$candidate"
     rc=0
   done

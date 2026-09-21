@@ -319,6 +319,26 @@ make_cwd_project() {
   ! grep -q "^aws s3 cp $PROJECTS_DIR/-path-to-other/" "$AWS_STUB_LOG"
 }
 
+# Create a project dir $1 whose session log opens in $2 and then moves into $3.
+make_moved_project() {
+  make_project "$1"
+  printf '{"type":"user","cwd":"%s"}\n{"type":"user","cwd":"%s"}\n' "$2" "$3" > "$proj_dir/sess.jsonl"
+}
+
+@test "sync_session.sh: --cwd uploads a project whose session moved into the directory" {
+  make_moved_project "-path-to-repo--claude-worktrees-topic" "/path/to/repo" "/path/to/repo/.claude/worktrees/topic"
+  run "$SCRIPT" --cwd /path/to/repo/.claude/worktrees/topic
+  [ "$status" -eq 0 ]
+  grep -q "^aws s3 cp $PROJECTS_DIR/-path-to-repo--claude-worktrees-topic/sess.jsonl " "$AWS_STUB_LOG"
+}
+
+@test "sync_session.sh: --cwd uploads a moved project from the directory it was opened in" {
+  make_moved_project "-path-to-repo--claude-worktrees-topic" "/path/to/repo" "/path/to/repo/.claude/worktrees/topic"
+  run "$SCRIPT" --cwd /path/to/repo
+  [ "$status" -eq 0 ]
+  grep -q "^aws s3 cp $PROJECTS_DIR/-path-to-repo--claude-worktrees-topic/sess.jsonl " "$AWS_STUB_LOG"
+}
+
 @test "sync_session.sh: --cwd resolves when the first entry records no cwd" {
   make_project "-path-to-repo-worktrees-topic"
   printf '{"type":"queue-operation"}\n{"type":"user","cwd":"/path/to/repo.worktrees/topic"}\n' > "$proj_dir/sess.jsonl"
