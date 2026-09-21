@@ -121,7 +121,7 @@ resolve_repo_name() {
 resolve_project_dirs() {
   local target="$1"
 
-  # Claude Code rewrites dots as well as separators, so a name built from the path cannot be trusted
+  # Claude Code rewrites dots as well as separators, so a name built from the path is never trusted on its own
   local rc=1 candidate
   for candidate in "$CLAUDE_PROJECTS_DIR"/*/; do
     candidate="${candidate%/}"
