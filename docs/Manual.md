@@ -75,7 +75,7 @@ Notion ページは 1 日 × リポジトリ単位で作られる。GitHub ア�
 
 ### ページ本文
 - **Summary** — Claude API が生成したリポジトリの作業要点（2〜5 項目）
-- **Done / In Progress / TODO** — PR / Issue をステータス別に列挙。Done に載るのは対象日にマージ・クローズされたものだけで、別の日に完了したものはそちらの日のページに載る。該当が無いセクションは表示しない
+- **Done / In Progress / TODO** — PR / Issue をステータス別に列挙。Done に載るのは対象日にマージ・クローズされたものだけで、別の日に完了したものはそちらの日のページに載る。未完了の Issue は、同じリポジトリの PR の本文やコメントで Issue 番号に触れると In Progress に、まだ触れていなければ TODO に載る。該当が無いセクションは表示しない
 - **Timeline** — 対象日の作業が時系列で並ぶ
   - PR ブロックの配下にその PR の commit がネストされる。対象日に merge commit があれば、`🔻` が付いて配下の最後に並ぶ
   - PR に紐づかない commit や Issue の open / close は最上位に並ぶ
