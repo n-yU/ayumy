@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from config import CONFIG, config
+from report.domain.activity import LinkedPull
 from report.domain.session import SessionActivity
 from report.notion import client
 
@@ -104,7 +105,7 @@ class TestStatusSections:
             f"https://github.com/{_builders.REPO_FULL_NAME}/issues/11",
         ]
 
-    def test_in_progress_collects_open_pulls_and_pre_existing_issues(
+    def test_in_progress_collects_open_pulls_and_issues_referenced_by_pulls(
         self, build_status
     ):
         blocks = build_status(
@@ -115,10 +116,18 @@ class TestStatusSections:
             issues=[
                 _builders.issue(
                     20,
-                    "Old open issue",
+                    "Opened and picked up today",
+                    "open",
+                    created_at=_builders.jst(2026, 3, 28, 9),
+                    linked_pulls=[LinkedPull(3, _builders.jst(2026, 3, 28, 10))],
+                ),
+                _builders.issue(
+                    21,
+                    "Referenced by merged PR",
                     "open",
                     created_at=_builders.jst(2026, 3, 20, 9),
-                )
+                    linked_pulls=[LinkedPull(2, _builders.jst(2026, 3, 21, 10))],
+                ),
             ],
         )
 
@@ -126,15 +135,17 @@ class TestStatusSections:
         assert _texts(blocks) == [
             "🟢 #3: WIP",
             "🟢 #4: Ready",
-            "🟩 #20: Old open issue",
+            "🟩 #20: Opened and picked up today",
+            "🟩 #21: Referenced by merged PR",
         ]
         assert _urls(blocks) == [
             f"https://github.com/{_builders.REPO_FULL_NAME}/pull/3",
             f"https://github.com/{_builders.REPO_FULL_NAME}/pull/4",
             f"https://github.com/{_builders.REPO_FULL_NAME}/issues/20",
+            f"https://github.com/{_builders.REPO_FULL_NAME}/issues/21",
         ]
 
-    def test_todo_collects_issues_opened_within_window(self, build_status):
+    def test_todo_collects_issues_not_referenced_by_pulls(self, build_status):
         blocks = build_status(
             issues=[
                 _builders.issue(
@@ -146,17 +157,25 @@ class TestStatusSections:
                     "open",
                     created_at=_builders.jst(2026, 3, 20, 9),
                 ),
+                _builders.issue(
+                    32,
+                    "Referenced after window",
+                    "open",
+                    linked_pulls=[LinkedPull(3, _builders.jst(2026, 3, 29, 10))],
+                ),
             ],
         )
 
-        assert _headings(blocks) == ["In Progress", "TODO"]
+        assert _headings(blocks) == ["TODO"]
         assert _texts(blocks) == [
-            "🟩 #31: Old open issue",
             "🟩 #30: New issue",
+            "🟩 #31: Old open issue",
+            "🟩 #32: Referenced after window",
         ]
         assert _urls(blocks) == [
-            f"https://github.com/{_builders.REPO_FULL_NAME}/issues/31",
             f"https://github.com/{_builders.REPO_FULL_NAME}/issues/30",
+            f"https://github.com/{_builders.REPO_FULL_NAME}/issues/31",
+            f"https://github.com/{_builders.REPO_FULL_NAME}/issues/32",
         ]
 
     def test_reports_items_completed_after_window_as_pending(self, build_status):
@@ -189,8 +208,8 @@ class TestStatusSections:
         assert _headings(blocks) == ["In Progress", "TODO"]
         assert _texts(blocks) == [
             "🟢 #1: Merged next day",
-            "🟩 #11: Created earlier, closed later",
             "🟩 #10: Created in window, closed later",
+            "🟩 #11: Created earlier, closed later",
         ]
 
     @pytest.mark.parametrize(

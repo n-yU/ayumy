@@ -105,6 +105,7 @@ def issue(
     created_at=CREATED_AT,
     closed_at=_DERIVED,
     state_reason=None,
+    linked_pulls=(),
 ):
     """Build an IssueInfo whose close timestamp defaults to the value `state` implies."""
     if closed_at is _DERIVED:
@@ -122,6 +123,7 @@ def issue(
         created_at=created_at,
         closed_at=closed_at,
         state_reason=state_reason,
+        linked_pulls=tuple(linked_pulls),
     )
 
 
