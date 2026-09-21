@@ -306,6 +306,36 @@ class TestIssueInfo:
         issue = _issue(state=state, closed_at=closed_at)
         assert issue.state_in_range(_builders.SINCE, _builders.UNTIL) == expected
 
+    @pytest.mark.parametrize(
+        "referenced_at,expected",
+        [
+            (_builders.jst(2026, 3, 27, 10), True),
+            (_builders.jst(2026, 3, 28, 10), True),
+            # until is exclusive, so a reference made at or after it is ignored
+            (_builders.jst(2026, 3, 29), False),
+            (_builders.jst(2026, 3, 30, 10), False),
+        ],
+    )
+    def test_has_linked_pull(self, referenced_at, expected):
+        issue = _issue(
+            state="open",
+            closed_at=None,
+            linked_pulls=(activity.LinkedPull(42, referenced_at),),
+        )
+        assert issue.has_linked_pull(_builders.UNTIL) is expected
+
+    def test_has_linked_pull_without_links(self):
+        assert _issue().has_linked_pull(_builders.UNTIL) is False
+
+    def test_with_linked_pulls_returns_new_instance(self):
+        issue = _issue()
+        linked = activity.LinkedPull(42, _builders.jst(2026, 3, 28, 10))
+
+        updated = issue.with_linked_pulls([linked])
+
+        assert updated.linked_pulls == (linked,)
+        assert issue.linked_pulls == ()
+
     def test_from_issue_extracts_labels_as_tuple(self):
         issue = _builders.issue_mock(7, labels=("bug", "priority:high"))
 
