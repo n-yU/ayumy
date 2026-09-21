@@ -18,6 +18,7 @@ Ayumy を初めて動かすまでの構築手順。AWS・Notion・Slack・GitHub
 
 ## 3. Slack
 1. [Slack API](https://api.slack.com/apps) で App を作成（From scratch）
+   - Basic Information の Display Information にある App icon に、リポジトリの [docs/assets/logo-symbol.png](assets/logo-symbol.png) をアップロードする。通知の投稿に Ayumy のアイコンが表示される
 2. OAuth & Permissions の Bot Token Scopes に `chat:write` を追加し、Install to Workspace で認可
 3. 発行された Bot User OAuth Token（`xoxb-` で始まる）を控える
 4. 通知先 channel を Slack クライアントで開き、`/invite @<app-name>` で bot を invite
