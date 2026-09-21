@@ -92,6 +92,11 @@ project_switched_to() {
   return 1
 }
 
+# Report whether $1 reaches $2 only through a session that moved into $2.
+project_moved_into() {
+  ! project_opened_in "$1" "$2" && project_switched_to "$1" "$2"
+}
+
 # Print the repository name of the directory $1 was opened in.
 resolve_repo_name() {
   local project_dir="$1" f cwd url name
@@ -115,10 +120,6 @@ resolve_repo_name() {
 # Print the project directories holding sessions opened in or moved into $1, one per line.
 resolve_project_dirs() {
   local target="$1"
-  # Keep the root itself while dropping every other trailing slash, since a recorded cwd carries none
-  while [[ "$target" == */ && "$target" != "/" ]]; do
-    target="${target%/}"
-  done
 
   # Claude Code rewrites dots as well as separators, so a name built from the path cannot be trusted
   local rc=1 candidate
@@ -301,6 +302,10 @@ if [[ "$mode" == "cwd" || -z "$mode" ]]; then
     err "--cwd must be an absolute path when the directory does not exist"
     exit 1
   fi
+  # Keep the root itself while dropping every other trailing slash, since a recorded cwd carries none
+  while [[ "$target_cwd" == */ && "$target_cwd" != "/" ]]; do
+    target_cwd="${target_cwd%/}"
+  done
   # Sessions of a deleted worktree stay resolvable, so the directory need not exist
   dirs="$(resolve_project_dirs "$target_cwd" || true)"
   if [[ -z "$dirs" ]]; then
@@ -367,7 +372,8 @@ case "$mode" in
   cwd|"")
     while IFS= read -r project_dir; do
       [[ -n "$project_dir" ]] || continue
-      if [[ -n "$repo_name" ]]; then
+      # Lambda reads a moved session against the directory it was opened in, so the name recorded from there stays
+      if [[ -n "$repo_name" ]] && { ! project_moved_into "$project_dir" "$target_cwd" || [[ ! -f "$project_dir/$REPO_NAME" ]]; }; then
         echo "$repo_name" > "$project_dir/$REPO_NAME"
       fi
       rc=0; sync_project "$project_dir" || rc=$?

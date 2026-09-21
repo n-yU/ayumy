@@ -455,6 +455,31 @@ make_moved_project() {
   [ "$(cat "$PROJECTS_DIR/derived-b/.ayumy_repo")" = "my-repo" ]
 }
 
+@test "sync_session.sh: --repo keeps the name recorded for a project that moved into the directory" {
+  make_moved_project "-path-to-repo--claude-worktrees-topic" "/path/to/other" "/path/to/repo/.claude/worktrees/topic"
+  echo 'other-repo' > "$proj_dir/.ayumy_repo"
+  run "$SCRIPT" --cwd /path/to/repo/.claude/worktrees/topic --repo my-repo
+  [ "$status" -eq 0 ]
+  [ "$(cat "$proj_dir/.ayumy_repo")" = "other-repo" ]
+  grep -q "^aws s3 cp $proj_dir/sess.jsonl " "$AWS_STUB_LOG"
+}
+
+@test "sync_session.sh: --repo records the name for a moved project without one" {
+  make_moved_project "-path-to-repo--claude-worktrees-topic" "/path/to/other" "/path/to/repo/.claude/worktrees/topic"
+  rm "$proj_dir/.ayumy_repo"
+  run "$SCRIPT" --cwd /path/to/repo/.claude/worktrees/topic --repo my-repo
+  [ "$status" -eq 0 ]
+  [ "$(cat "$proj_dir/.ayumy_repo")" = "my-repo" ]
+}
+
+@test "sync_session.sh: --repo overwrites the name of a moved project from the directory it was opened in" {
+  make_moved_project "-path-to-repo--claude-worktrees-topic" "/path/to/other" "/path/to/repo/.claude/worktrees/topic"
+  echo 'repo' > "$proj_dir/.ayumy_repo"
+  run "$SCRIPT" --cwd /path/to/other --repo other-repo
+  [ "$status" -eq 0 ]
+  [ "$(cat "$proj_dir/.ayumy_repo")" = "other-repo" ]
+}
+
 @test "sync_session.sh: --repo without --cwd is rejected" {
   run "$SCRIPT" --all --repo my-repo
   [ "$status" -ne 0 ]
