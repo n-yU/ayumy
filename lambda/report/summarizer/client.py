@@ -1,6 +1,7 @@
 """Claude API summary generator."""
 
 import logging
+import re
 from datetime import datetime
 from typing import cast
 
@@ -17,6 +18,17 @@ from . import resources, tags
 logger = logging.getLogger(__name__)
 
 _VALUE_REPR_LIMIT = 200
+_DELIMITER_TAG_START = re.compile(
+    r"<(?=/?(?:github_activity|claude_code_sessions)\b)", re.IGNORECASE
+)
+
+
+def _neutralize_delimiters(text: str) -> str:
+    """Turn delimiter tags inside prompt data into lookalikes so the data cannot close its own block.
+
+    Only these tags are touched; escaping every `<` would leak entities like `&lt;` into the summary.
+    """
+    return _DELIMITER_TAG_START.sub("＜", text)
 
 
 def _validate_response_shape(payload: object) -> summary.Report:
@@ -64,8 +76,10 @@ class Client:
             f"以下は {date_str} の GitHub アクティビティおよび"
             f" Claude Code での作業記録です。\n"
             f"日本語で簡潔に要約してください。\n\n"
-            f"<github_activity>\n{formatted_github}\n</github_activity>\n\n"
-            f"<claude_code_sessions>\n{formatted_sessions}\n</claude_code_sessions>"
+            f"<github_activity>\n{_neutralize_delimiters(formatted_github)}\n"
+            f"</github_activity>\n\n"
+            f"<claude_code_sessions>\n{_neutralize_delimiters(formatted_sessions)}\n"
+            f"</claude_code_sessions>"
         )
 
     def generate_summary(
