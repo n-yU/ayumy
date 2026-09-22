@@ -243,7 +243,7 @@ GitHub アクティビティと Claude Code session ログの両方をコンテ�
 - session-only 発生時の Slack 通知での扱いは [Slack Notification](#slack-notification) に従う
 - session store 側の "reported" スタンプは通常通り打つ。翌日以降 push で追いつけば `updated_at > reported_at` の backfill 判定でレポート生成が再走する
 
-Claude API の応答構造が想定を逸脱した場合、要約生成は原因を含む例外を投げ、[Classification Policy](#classification-policy) に沿って当該日のレポート生成を失敗させる。自動再試行は挟まず、運用者が `ayumy sync --report` で明示的に再実行する。検証範囲は必須項目と型に限定する
+Claude API の応答構造が想定を逸脱した場合、要約生成は原因を含む例外を投げ、[Classification Policy](#classification-policy) に沿って当該日のレポート生成を失敗させる。その場での自動再試行は挟まない。当該日は未報告のまま残るため、後続の実行で補完対象になる。すぐに作り直したい場合は、運用者が `ayumy sync --report` で明示的に再実行する。検証範囲は必須項目と型に限定する
 
 ### Slack Notification
 Notion への書き込み完了後、Slack Web API の `chat.postMessage` で指定チャンネルに通知を送信する。通知が失敗しても処理全体は正常終了とする（通知はベストエフォート）
