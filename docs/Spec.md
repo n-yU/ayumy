@@ -54,7 +54,7 @@ DynamoDB テーブル設計は [Session Write to DynamoDB](#session-write-to-dyn
 | Service | Purpose | Authentication |
 |---|---|---|
 | GitHub API (REST) | アクティビティデータの取得 | Fine-grained PAT |
-| Anthropic API | 自然言語による要約生成 | API Key |
+| Claude API | 自然言語による要約生成 | API Key |
 | Notion API | 作業記録の書き込み | Internal Integration Token |
 | Slack Web API | 完了通知 | Bot User OAuth Token |
 | AWS S3 | session ログの保管 | AWS 認証情報（IAM ユーザー / プロファイル） |
@@ -210,7 +210,7 @@ DynamoDB の `ayumy-sessions` テーブルから対象日付をパーティシ�
 書き込み時の動作
 
 - 同一キー（PK + SK）のアイテムは、内容が変わっていれば上書きされる（冪等性を担保）
-- 保存済みの `content_hash` と一致するアイテムは書き込まない。日をまたいで続くセッションは push のたびにファイル全体が再アップロードされるため、内容が変わっていない過去日まで `updated_at` が新しくなり、バックフィル検出（[Session Log Read](#session-log-read)）が同じ日を繰り返し拾ってしまうのを防ぐ
+- 保存済みの `content_hash` と一致するアイテムは書き込まない。日をまたいで続く session は push のたびにファイル全体が再アップロードされるため、内容が変わっていない過去日まで `updated_at` が新しくなり、バックフィル検出（[Session Log Read](#session-log-read)）が同じ日を繰り返し拾ってしまうのを防ぐ
 - ユーザーメッセージも `session_commits` もないグループはスキップする
 - リポジトリ名は `.ayumy_repo` メタデータファイルから解決する。メタデータがないプロジェクトはスキップする
 - assistant の Bash tool_use のコマンドから PR/Issue 番号を抽出する。`gh` / `git` の引数として PR/Issue を明示的に操作した箇所のみが対象で、本文中で言及されただけの URL や `#番号` はノイズとなるため対象外とする。`git` 由来の番号は PR/Issue の種別を判別できないため両方の候補として保持し fetch 側で振り分ける（[Hybrid Backfill Fetch](#hybrid-backfill-fetch)）
