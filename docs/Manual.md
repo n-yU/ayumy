@@ -120,7 +120,7 @@ Notion のレポート作成が完了すると下記情報が Slack に届く。
 | `[backfill]` | `--date` 指定の実行、または未報告日の自動検出 |
 
 ### GitHub アクティビティがないリポジトリ
-Claude Code で作業したものの、対象日に commit, PR, Issue 等の GitHub アクティビティがなかったリポジトリは、Notion のレポートページが作成されず、Slack 通知に `Session-only:` としてリポジトリ名だけが表示される。後日 push して GitHub に反映すると、その日のレポートが自動で作成し直される（デフォルトで 3 日前の日付まで）
+Claude Code で作業したものの、対象日に commit, PR, Issue 等の GitHub アクティビティがなかったリポジトリは、Notion のレポートページが作成されず、Slack 通知に `Session-only:` としてリポジトリ名だけが表示される。後日 push して GitHub に反映すると、その日のレポートが自動で作成し直される
 
 ## Troubleshooting
 ### pre-push hook の再設置
