@@ -16,6 +16,13 @@ Parameters:
   SlackWorkspaceId:
     Type: String
     Description: Slack workspace ID copied from the Amazon Q Developer in chat applications console
+  SessionBucketNameOverride:
+    Type: String
+    Default: ""
+    Description: S3 bucket name for session logs (leave empty to create one in the account regional namespace)
+
+Conditions:
+  HasSessionBucketNameOverride: !Not [!Equals [!Ref SessionBucketNameOverride, ""]]
 
 Globals:
   Function:
@@ -66,7 +73,11 @@ Resources:
   SessionBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: ayumy.n-yu
+      # Changing any of these three on a deployed stack replaces the bucket
+      BucketName: !If [HasSessionBucketNameOverride, !Ref SessionBucketNameOverride, !Ref AWS::NoValue]
+      # The account regional namespace keeps other accounts from claiming the name after deletion
+      BucketNamePrefix: !If [HasSessionBucketNameOverride, !Ref AWS::NoValue, ayumy]
+      BucketNamespace: !If [HasSessionBucketNameOverride, !Ref AWS::NoValue, account-regional]
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
