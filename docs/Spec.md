@@ -54,7 +54,7 @@ DynamoDB テーブル設計は [Session Write to DynamoDB](#session-write-to-dyn
 | Service | Purpose | Authentication |
 |---|---|---|
 | GitHub API (REST) | アクティビティデータの取得 | Fine-grained PAT |
-| Anthropic API | 自然言語による要約生成 | API Key |
+| Claude API | 自然言語による要約生成 | API Key |
 | Notion API | 作業記録の書き込み | Internal Integration Token |
 | Slack Web API | 完了通知 | Bot User OAuth Token |
 | AWS S3 | session ログの保管 | AWS 認証情報（IAM ユーザー / プロファイル） |
@@ -210,7 +210,7 @@ DynamoDB の `ayumy-sessions` テーブルから対象日付をパーティシ�
 書き込み時の動作
 
 - 同一キー（PK + SK）のアイテムは、内容が変わっていれば上書きされる（冪等性を担保）
-- 保存済みの `content_hash` と一致するアイテムは書き込まない。日をまたいで続くセッションは push のたびにファイル全体が再アップロードされるため、内容が変わっていない過去日まで `updated_at` が新しくなり、バックフィル検出（[Session Log Read](#session-log-read)）が同じ日を繰り返し拾ってしまうのを防ぐ
+- 保存済みの `content_hash` と一致するアイテムは書き込まない。日をまたいで続く session は push のたびにファイル全体が再アップロードされるため、内容が変わっていない過去日まで `updated_at` が新しくなり、バックフィル検出（[Session Log Read](#session-log-read)）が同じ日を繰り返し拾ってしまうのを防ぐ
 - ユーザーメッセージも `session_commits` もないグループはスキップする
 - リポジトリ名は `.ayumy_repo` メタデータファイルから解決する。メタデータがないプロジェクトはスキップする
 - assistant の Bash tool_use のコマンドから PR/Issue 番号を抽出する。`gh` / `git` の引数として PR/Issue を明示的に操作した箇所のみが対象で、本文中で言及されただけの URL や `#番号` はノイズとなるため対象外とする。`git` 由来の番号は PR/Issue の種別を判別できないため両方の候補として保持し fetch 側で振り分ける（[Hybrid Backfill Fetch](#hybrid-backfill-fetch)）
@@ -243,7 +243,7 @@ GitHub アクティビティと Claude Code session ログの両方をコンテ�
 - session-only 発生時の Slack 通知での扱いは [Slack Notification](#slack-notification) に従う
 - session store 側の "reported" スタンプは通常通り打つ。翌日以降 push で追いつけば `updated_at > reported_at` の backfill 判定でレポート生成が再走する
 
-Claude API の応答構造が想定を逸脱した場合、要約生成は原因を含む例外を投げ、[Classification Policy](#classification-policy) に沿って当該日のレポート生成を失敗させる。自動再試行は挟まず、運用者が `ayumy sync --report` で明示的に再実行する。検証範囲は必須項目と型に限定する
+Claude API の応答構造が想定を逸脱した場合、要約生成は原因を含む例外を投げ、[Classification Policy](#classification-policy) に沿って当該日のレポート生成を失敗させる。その場での自動再試行は挟まない。当該日は未報告のまま残るため、後続の実行で補完対象になる。すぐに作り直したい場合は、運用者が `ayumy sync --report` で明示的に再実行する。検証範囲は必須項目と型に限定する
 
 ### Slack Notification
 Notion への書き込み完了後、Slack Web API の `chat.postMessage` で指定チャンネルに通知を送信する。通知が失敗しても処理全体は正常終了とする（通知はベストエフォート）

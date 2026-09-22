@@ -94,6 +94,7 @@ Lambda 側は [template.yaml](template.yaml) の `Environment` で定義する�
 - 仕様書は [Spec.md](docs/Spec.md)（日本語）— コードから読み取れない内容の原典
 - [Manual.md](docs/Manual.md) は運用者目線で書く。実装寄りの用語（「振る舞いを調整する値」等）や構造の説明（「〜に集約されている」等）は使わず、「何ができるか」「どこで変更するか」を具体的に示す。実装・仕様レベルの細部は Spec.md 側に委ねる
   - 見出しは H2 を英語、H3 以下を日本語で書く
+- [README.md](README.md) は、初めて訪れた読者に向けて丁寧体（です・ます調）で書く。表のセルや体言止めの箇条書きは対象外とする
 - コード内コメントは英語で書くが、[config.template.yml](lambda/config/config.template.yml) のコメントだけは例外として日本語で書く。利用者が生成した config.yml を読みながら設定を変えるため、Manual.md と同じ運用者目線で書く
 - JSONL の生データは S3 バケットに保管し、リモートリポジトリには push しない
 - アクティビティの取得対象期間: 前日 JST 00:00:00 〜 当日 JST 00:00:00
