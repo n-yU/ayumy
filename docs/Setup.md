@@ -31,7 +31,7 @@
 ## 3. Slack
 1. [Slack API](https://api.slack.com/apps) で Create New App → Blank App で App を作成
 2. 任意: Basic Information → Display Information に以下設定する
-   - App icon に [docs/assets/logo-symbol.png](assets/logo-symbol.png) を設定
+   - App icon に [docs/assets/logo/logo-symbol.png](assets/logo/logo-symbol.png) を設定
    - Background color に `#383A3D` を指定
    - Short description `Traces of daily craft, woven by AI` と入力（元々空欄だが App icon 変更により必須項目になる）
 3. OAuth & Permissions → Bot Token Scopes に `chat:write` を追加し、Install to Workspace で認可

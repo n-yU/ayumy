@@ -1,10 +1,12 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help help-% config-init config-diff lambda-install lambda-invoke lambda-deploy lock test test-python test-shell test-cov format format-check lint lint-fix typecheck scan-sessions aws-auth-check
+.PHONY: help help-% config-init config-diff lambda-install lambda-invoke lambda-deploy lock test test-python test-shell test-cov format format-check lint lint-fix typecheck scan-sessions aws-auth-check diagram
 
 FORMAT_TARGETS := lambda tests
 CONFIG_FILE := lambda/config/config.yml
 CONFIG_TEMPLATE := lambda/config/config.template.yml
+DRAWIO := /Applications/draw.io.app/Contents/MacOS/draw.io
+DIAGRAM_DIR := docs/assets/arch
 
 ##@ Help
 
@@ -95,6 +97,12 @@ lint-fix: lambda-install ## Apply auto-fixable Ruff lint fixes
 
 typecheck: lambda-install ## Run mypy type checks only
 	.venv/bin/python -m mypy
+
+##@ Docs
+
+diagram: ## Export the architecture diagram to SVG with M PLUS 1p embedded (needs draw.io desktop)
+	$(DRAWIO) -x -f svg -b 10 -o $(DIAGRAM_DIR)/architecture.svg $(DIAGRAM_DIR)/architecture.drawio
+	uv run --no-project --with fonttools --with brotli python $(DIAGRAM_DIR)/postprocess_svg.py $(DIAGRAM_DIR)/architecture.svg
 
 ##@ AWS
 

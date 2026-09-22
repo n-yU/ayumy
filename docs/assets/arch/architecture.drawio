@@ -1,0 +1,198 @@
+<mxfile host="65bd71144e">
+    <diagram name="Page-1" id="diagram-1">
+        <mxGraphModel dx="843" dy="949" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="1000" pageHeight="800" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title-group" value="" style="group;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;" parent="1" connectable="0" vertex="1">
+                    <mxGeometry x="25" y="30" width="955" height="83" as="geometry"/>
+                </mxCell>
+                <mxCell id="title-text" value="Ayumy Architecture" style="text;html=1;resizable=1;points=[];autosize=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=30;fontStyle=1;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;" parent="title-group" vertex="1">
+                    <mxGeometry width="800" height="42" as="geometry"/>
+                </mxCell>
+                <mxCell id="subtitle-text" value="Daily development reports from GitHub activity and Claude Code sessions, written to Notion and announced on Slack" style="text;html=1;resizable=0;points=[];autosize=1;align=left;verticalAlign=top;spacingTop=-4;fontSize=16;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;" parent="title-group" vertex="1">
+                    <mxGeometry x="5" y="40" width="900" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="title-separator" value="" style="line;strokeWidth=2;html=1;fontSize=14;strokeColor=#FF9900;" parent="title-group" vertex="1">
+                    <mxGeometry y="70" width="955" height="10" as="geometry"/>
+                </mxCell>
+                <mxCell id="local-machine" value="&lt;div&gt;&lt;br&gt;&lt;/div&gt;Local Machine (macOS)" style="fillColor=#f5f5f5;strokeColor=light-dark(#666666,#D4D4D4);rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fontColor=#333333;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;container=1;collapsible=0;shadow=1;strokeWidth=1;perimeterSpacing=0;" parent="1" vertex="1">
+                    <mxGeometry x="25" y="150" width="185" height="610" as="geometry"/>
+                </mxCell>
+                <mxCell id="text-read-logs" value="read logs" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];labelBackgroundColor=none;fontSize=12;horizontal=0;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;" vertex="1" parent="local-machine">
+                    <mxGeometry x="40.7" y="359" width="16" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="grp-cli" value="CLI" style="fillColor=#FFF2E8;strokeColor=#ED7100;rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fontColor=#ED7100;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;container=1;collapsible=0;shadow=1;strokeWidth=1.5;" parent="1" vertex="1">
+                    <mxGeometry x="70" y="370" width="120" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="svc-cli" value="ayumy CLI&lt;div&gt;&lt;i&gt;pre-push hook, sync&lt;/i&gt;&lt;/div&gt;" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#ED7100;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.generic_application;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;" parent="grp-cli" vertex="1">
+                    <mxGeometry x="36" y="28" width="48" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="grp-claude-code" value="Coding Agent" style="fillColor=#FBEEE9;strokeColor=#D97757;rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fontColor=#D97757;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;container=1;collapsible=0;shadow=1;strokeWidth=1.5;" parent="1" vertex="1">
+                    <mxGeometry x="70" y="610" width="120" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="svc-claude-code" value="Claude Code&lt;div&gt;&lt;i&gt;session logs&lt;/i&gt;&lt;/div&gt;" style="shape=image;verticalLabelPosition=bottom;verticalAlign=top;align=center;aspect=fixed;imageAspect=0;html=1;fontSize=11;fontColor=#232F3E;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;image=data:image/svg+xml,PHN2ZyByb2xlPSJpbWciIHZpZXdCb3g9IjAgMCAyNCAyNCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48dGl0bGU+Q2xhdWRlPC90aXRsZT48cGF0aCBmaWxsPSIjRDk3NzU3IiBkPSJtNC43MTQ0IDE1Ljk1NTUgNC43MTc0LTIuNjQ3MS4wNzktLjIzMDctLjA3OS0uMTI3NWgtLjIzMDdsLS43ODkzLS4wNDg2LTIuNjk1Ni0uMDcyOS0yLjMzNzUtLjA5NzEtMi4yNjQ2LS4xMjE0LS41NzA3LS4xMjE1LS41MzQzLS43MDQyLjA1NDYtLjM1MjIuNDc5Ny0uMzIxOC42ODYuMDYwOCAxLjUxNzkuMTAzMiAyLjI3NjcuMTU3OCAxLjY1MTQuMDk3MiAyLjQ0NjguMjU1aC4zODg2bC4wNTQ2LS4xNTc5LS4xMzM2LS4wOTcxLS4xMDMyLS4wOTcyTDYuOTczIDkuODM1NmwtMi41NS0xLjY4NzktMS4zMzU2LS45NzE0LS43MjI1LS40OTE4LS4zNjQzLS40NjE0LS4xNTc4LTEuMDA3OC42NTU3LS43MjI1Ljg4MDMuMDYwNy4yMjQ2LjA2MDcuODkyNS42ODYgMS45MDY0IDEuNDc1NCAyLjQ4OTMgMS44MzM2LjM2NDMuMzAzNS4xNDU3LS4xMDMyLjAxODItLjA3MjgtLjE2NC0uMjczMy0xLjM1MzktMi40NDY3LTEuNDQ1LTIuNDg5My0uNjQzNS0xLjAzMi0uMTctLjYxOTRjLS4wNjA3LS4yNTUtLjEwMzItLjQ2NzQtLjEwMzItLjcyODVMNi4yODcuMTMzNSA2LjY5OTcgMGwuOTk1Ny4xMzM2LjQxOS4zNjQyLjYxOTIgMS40MTQ3IDEuMDAxOCAyLjIyODIgMS41NTQzIDMuMDI5Ni40NTUzLjg5ODUuMjQyOS44MzE4LjA5MS4yNTVoLjE1Nzl2LS4xNDU3bC4xMjc1LTEuNzA2LjIzNjgtMi4wOTQ3LjIzMDctMi42OTU3LjA3ODktLjc1ODkuMzc2NC0uOTEwNy43NDY4LS40OTE4LjU4MjguMjc5My40Nzk3LjY4Ni0uMDY2OC40NDMzLS4yODUzIDEuODUxNy0uNTU4NiAyLjkwMjEtLjM2NDMgMS45NDI5aC4yMTI1bC4yNDI5LS4yNDI5Ljk4MzUtMS4zMDUzIDEuNjUxNC0yLjA2NDMuNzI4Ni0uODE5Ni44NS0uOTA0Ni41NDY0LS40MzExaDEuMDMyMWwuNzU5IDEuMTI5My0uMzQgMS4xNjU3LTEuMDYyNSAxLjM0NzgtLjg4MDQgMS4xNDE0LTEuMjYyOCAxLjctLjc4OTMgMS4zNi4wNzI5LjEwOTMuMTg4Mi0uMDE4MyAyLjg1MzUtLjYwNyAxLjU0MjEtLjI3OTQgMS44Mzk2LS4zMTU3LjgzMTguMzg4Ni4wOTEuMzk0Ni0uMzI3OC44MDc1LTEuOTY3LjQ4NTctMi4zMDcyLjQ2MTQtMy40MzY0LjgxMzYtLjA0MjUuMDMwNC4wNDg2LjA2MDcgMS41NDgyLjE0NTcuNjYxOC4wMzY0aDEuNjIxbDMuMDE3NS4yMjQ3Ljc4OTIuNTIyLjQ3MzYuNjM3Ni0uMDc5LjQ4NTctMS4yMTQyLjYxOTMtMS42MzkzLS4zODg2LTMuODI1LS45MTA3LTEuMzExMy0uMzI3OWgtLjE4MjJ2LjEwOTNsMS4wOTI5IDEuMDY4NiAyLjAwMzUgMS44MDkyIDIuNTA3NSAyLjMzMTQuMTI3NS41NzY4LS4zMjE4LjQ1NTQtLjM0LS4wNDg2LTIuMjAzOS0xLjY1NzUtLjg1LS43NDY4LTEuOTI0Ni0xLjYyMWgtLjEyNzV2LjE3bC40NDMyLjY0OTYgMi4zNDM2IDMuNTIxNC4xMjE0IDEuMDgwNy0uMTcuMzUyMS0uNjA3MS4yMTI1LS42Njc5LS4xMjE0LTEuMzcyMS0xLjkyNDZMMTQuMzggMTcuOTU5bC0xLjE0MTQtMS45NDI4LS4xMzk3LjA3OS0uNjc0IDcuMjU1Mi0uMzE1Ni4zNzAzLS43Mjg2LjI3OTMtLjYwNzEtLjQ2MTQtLjMyMTgtLjc0NjguMzIxOC0xLjQ3NTMuMzg4Ni0xLjkyNDYuMzE1Ny0xLjUzLjI4NTMtMS45MDA0LjE3LS42MzE0LS4wMTIxLS4wNDI1LS4xMzk3LjAxODItMS40MzI4IDEuOTY3Mi0yLjE3OTYgMi45NDQ2LTEuNzI0MyAxLjg0NTYtLjQxMjguMTY0LS43MTY0LS4zNzA0LjA2NjctLjY2MTguNDAwOC0uNTg4OSAyLjM4Ni0zLjAzNTcgMS40Mzg5LTEuODgyLjkyOS0xLjA4NjgtLjAwNjItLjE1NzloLS4wNTQ2bC02LjMzODUgNC4xMTY0LTEuMTI5My4xNDU3LS40ODU3LS40NTU0LjA2MDgtLjc0NjcuMjMwNy0uMjQyOSAxLjkwNjQtMS4zMTE0WiIvPjwvc3ZnPg==;" parent="grp-claude-code" vertex="1">
+                    <mxGeometry x="36" y="28" width="48" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="aws-cloud" value="AWS Cloud" style="points=[[0,0],[0.25,0],[0.5,0],[0.75,0],[1,0],[1,0.25],[1,0.5],[1,0.75],[1,1],[0.75,1],[0.5,1],[0.25,1],[0,1],[0,0.75],[0,0.5],[0,0.25]];outlineConnect=0;gradientColor=none;html=1;whiteSpace=wrap;fontSize=12;fontStyle=0;shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_aws_cloud;strokeColor=#232F3E;fillColor=light-dark(#232F3E0D,#232F3E0D);fillStyle=auto;verticalAlign=top;align=left;spacingLeft=30;fontColor=#232F3E;dashed=0;container=1;pointerEvents=0;collapsible=0;recursiveResize=0;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;" parent="1" vertex="1">
+                    <mxGeometry x="260" y="150" width="433" height="610" as="geometry"/>
+                </mxCell>
+                <mxCell id="grp-secrets" value="Security" style="fillColor=#FFEBEE;strokeColor=#DD344C;rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fontColor=#DD344C;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;container=1;collapsible=0;shadow=1;strokeWidth=1.5;" parent="aws-cloud" vertex="1">
+                    <mxGeometry x="100" y="40" width="120" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="svc-secrets" value="Secrets Manager&lt;div&gt;&lt;i&gt;API tokens&lt;/i&gt;&lt;/div&gt;" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#DD344C;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.secrets_manager;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;shadow=1;" parent="grp-secrets" vertex="1">
+                    <mxGeometry x="36" y="28" width="48" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="text-secrets" value="3. read API tokens" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];labelBackgroundColor=none;fontSize=12;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;" vertex="1" parent="aws-cloud">
+                    <mxGeometry x="244" y="76" width="120" height="16" as="geometry"/>
+                </mxCell>
+                <mxCell id="text-ingest" value="4. ingest logs" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];labelBackgroundColor=none;fontSize=12;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;" vertex="1" parent="aws-cloud">
+                    <mxGeometry x="170" y="230" width="100" height="16" as="geometry"/>
+                </mxCell>
+                <mxCell id="text-invoke" value="2b. invoke daily&lt;br&gt;&amp;nbsp; &amp;nbsp; &amp;nbsp; at 00:00 JST" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];labelBackgroundColor=none;fontSize=12;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;" vertex="1" parent="aws-cloud">
+                    <mxGeometry x="108" y="397" width="90" height="32" as="geometry"/>
+                </mxCell>
+                <mxCell id="text-store" value="5. store sessions" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];labelBackgroundColor=none;fontSize=12;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;" vertex="1" parent="aws-cloud">
+                    <mxGeometry x="232" y="375" width="100" height="16" as="geometry"/>
+                </mxCell>
+                <mxCell id="text-upload" value="&lt;span style=&quot;background-color: light-dark(#ffffff, var(--ge-dark-color, #121212));&quot;&gt;&lt;font style=&quot;color: rgb(0, 0, 0); line-height: 140%;&quot;&gt;1. upload logs&lt;br&gt;&amp;nbsp; &amp;nbsp; on git push&lt;/font&gt;&lt;/span&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];labelBackgroundColor=none;fontSize=12;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;" vertex="1" parent="aws-cloud">
+                    <mxGeometry x="-66" y="291" width="100" height="32" as="geometry"/>
+                </mxCell>
+                <mxCell id="grp-s3" value="Storage" style="fillColor=#E8F5E9;strokeColor=#3F8624;rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fontColor=#3F8624;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;container=1;collapsible=0;shadow=1;strokeWidth=1.5;" parent="1" vertex="1">
+                    <mxGeometry x="300" y="370" width="120" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="svc-s3" value="Amazon S3&lt;div&gt;&lt;i&gt;session logs&lt;/i&gt;&lt;/div&gt;" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#3F8624;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.s3;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;shadow=1;" parent="grp-s3" vertex="1">
+                    <mxGeometry x="36" y="28" width="48" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="grp-lambda" value="Compute" style="fillColor=#FFF2E8;strokeColor=#ED7100;rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fontColor=#ED7100;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;container=1;collapsible=0;shadow=1;strokeWidth=1.5;" parent="1" vertex="1">
+                    <mxGeometry x="540" y="370" width="120" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="svc-lambda" value="AWS Lambda&lt;div&gt;&lt;i&gt;ayumy-report&lt;/i&gt;&lt;/div&gt;" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#ED7100;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.lambda;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;shadow=1;" parent="grp-lambda" vertex="1">
+                    <mxGeometry x="36" y="28" width="48" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="grp-scheduler" value="Scheduling" style="fillColor=#FCE4EC;strokeColor=#E7157B;rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fontColor=#E7157B;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;container=1;collapsible=0;shadow=1;strokeWidth=1.5;" parent="1" vertex="1">
+                    <mxGeometry x="300" y="610" width="120" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="svc-scheduler" value="EventBridge&lt;br&gt;Scheduler" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#E7157B;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.eventbridge_scheduler;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;" parent="grp-scheduler" vertex="1">
+                    <mxGeometry x="36" y="28" width="48" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="grp-dynamodb" value="Database" style="fillColor=#F5E6F7;strokeColor=#C925D1;rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fontColor=#C925D1;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;container=1;collapsible=0;shadow=1;strokeWidth=1.5;" parent="1" vertex="1">
+                    <mxGeometry x="540" y="610" width="120" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="svc-dynamodb" value="Amazon DynamoDB&lt;div&gt;&lt;i&gt;sessions, costs&lt;/i&gt;&lt;/div&gt;" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#C925D1;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.dynamodb;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;shadow=1;" parent="grp-dynamodb" vertex="1">
+                    <mxGeometry x="36" y="28" width="48" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="external-services" value="&lt;div&gt;&lt;br&gt;&lt;/div&gt;External Services" style="fillColor=#f5f5f5;strokeColor=light-dark(#666666,#D4D4D4);rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fontColor=#333333;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;container=1;collapsible=0;shadow=1;strokeWidth=1;perimeterSpacing=0;" parent="1" vertex="1">
+                    <mxGeometry x="820" y="150" width="160" height="610" as="geometry"/>
+                </mxCell>
+                <mxCell id="grp-slack" value="Notification" style="fillColor=#FCE4EC;strokeColor=#E7157B;rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fontColor=#E7157B;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;container=1;collapsible=0;shadow=1;strokeWidth=1.5;" parent="external-services" vertex="1">
+                    <mxGeometry x="20" y="470" width="120" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="svc-slack" value="Slack API&lt;div&gt;&lt;i&gt;run summary&lt;/i&gt;&lt;/div&gt;" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#E7157B;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.generic_application;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;" parent="grp-slack" vertex="1">
+                    <mxGeometry x="36" y="28" width="48" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="grp-notion" value="Report" style="fillColor=#F2F2F2;strokeColor=#37352F;rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fontColor=#37352F;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;container=1;collapsible=0;shadow=1;strokeWidth=1.5;" parent="external-services" vertex="1">
+                    <mxGeometry x="20" y="331" width="120" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="svc-notion" value="Notion API&lt;div&gt;&lt;i&gt;report database&lt;/i&gt;&lt;/div&gt;" style="shape=image;verticalLabelPosition=bottom;verticalAlign=top;align=center;aspect=fixed;imageAspect=0;html=1;fontSize=11;fontColor=#232F3E;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;image=data:image/svg+xml,PHN2ZyByb2xlPSJpbWciIHZpZXdCb3g9IjAgMCAyNCAyNCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48dGl0bGU+Tm90aW9uPC90aXRsZT48cGF0aCBmaWxsPSIjMDAwMDAwIiBkPSJNNC40NTkgNC4yMDhjLjc0Ni42MDYgMS4wMjYuNTYgMi40MjguNDY2bDEzLjIxNS0uNzkzYy4yOCAwIC4wNDctLjI4LS4wNDYtLjMyNkwxNy44NiAxLjk2OGMtLjQyLS4zMjYtLjk4MS0uNy0yLjA1NS0uNjA3TDMuMDEgMi4yOTVjLS40NjYuMDQ2LS41Ni4yOC0uMzc0LjQ2NnptLjc5MyAzLjA4djEzLjkwNGMwIC43NDcuMzczIDEuMDI3IDEuMjE0Ljk4bDE0LjUyMy0uODRjLjg0MS0uMDQ2LjkzNS0uNTYuOTM1LTEuMTY3VjYuMzU0YzAtLjYwNi0uMjMzLS45MzMtLjc0OC0uODg3bC0xNS4xNzcuODg3Yy0uNTYuMDQ3LS43NDcuMzI3LS43NDcuOTMzem0xNC4zMzcuNzQ1Yy4wOTMuNDIgMCAuODQtLjQyLjg4OGwtLjcuMTR2MTAuMjY0Yy0uNjA4LjMyNy0xLjE2OC41MTQtMS42MzUuNTE0LS43NDggMC0uOTM1LS4yMzQtMS40OTUtLjkzM2wtNC41NzctNy4xODZ2Ni45NTJMMTIuMjEgMTlzMCAuODQtMS4xNjguODRsLTMuMjIyLjE4NmMtLjA5My0uMTg2IDAtLjY1My4zMjctLjc0NmwuODQtLjIzM1Y5Ljg1NEw3LjgyMiA5Ljc2Yy0uMDk0LS40Mi4xNC0xLjAyNi43OTMtMS4wNzNsMy40NTYtLjIzMyA0Ljc2NCA3LjI3OXYtNi40NGwtMS4yMTUtLjEzOWMtLjA5My0uNTE0LjI4LS44ODcuNzQ3LS45MzN6TTEuOTM2IDEuMDM1bDEzLjMxLS45OGMxLjYzNC0uMTQgMi4wNTUtLjA0NyAzLjA4Mi43bDQuMjQ5IDIuOTg2Yy43LjUxMy45MzQuNjUzLjkzNCAxLjIxM3YxNi4zNzhjMCAxLjAyNi0uMzczIDEuNjM0LTEuNjggMS43MjZsLTE1LjQ1OC45MzRjLS45OC4wNDctMS40NDgtLjA5My0xLjk2Mi0uNzQ3bC0zLjEyOS00LjA2Yy0uNTYtLjc0Ny0uNzkzLTEuMzA2LS43OTMtMS45NlYyLjY2N2MwLS44MzkuMzc0LTEuNTQgMS40NDctMS42MzJ6Ii8+PC9zdmc+;" parent="grp-notion" vertex="1">
+                    <mxGeometry x="36" y="28" width="48" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="grp-claude-api" value="Summarization" style="fillColor=#FBEEE9;strokeColor=#D97757;rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fontColor=#D97757;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;container=1;collapsible=0;shadow=1;strokeWidth=1.5;" parent="external-services" vertex="1">
+                    <mxGeometry x="20" y="191" width="120" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="svc-claude-api" value="Claude API&lt;div&gt;&lt;i&gt;daily summary&lt;/i&gt;&lt;/div&gt;" style="shape=image;verticalLabelPosition=bottom;verticalAlign=top;align=center;aspect=fixed;imageAspect=0;html=1;fontSize=11;fontColor=#232F3E;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;image=data:image/svg+xml,PHN2ZyByb2xlPSJpbWciIHZpZXdCb3g9IjAgMCAyNCAyNCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48dGl0bGU+Q2xhdWRlPC90aXRsZT48cGF0aCBmaWxsPSIjRDk3NzU3IiBkPSJtNC43MTQ0IDE1Ljk1NTUgNC43MTc0LTIuNjQ3MS4wNzktLjIzMDctLjA3OS0uMTI3NWgtLjIzMDdsLS43ODkzLS4wNDg2LTIuNjk1Ni0uMDcyOS0yLjMzNzUtLjA5NzEtMi4yNjQ2LS4xMjE0LS41NzA3LS4xMjE1LS41MzQzLS43MDQyLjA1NDYtLjM1MjIuNDc5Ny0uMzIxOC42ODYuMDYwOCAxLjUxNzkuMTAzMiAyLjI3NjcuMTU3OCAxLjY1MTQuMDk3MiAyLjQ0NjguMjU1aC4zODg2bC4wNTQ2LS4xNTc5LS4xMzM2LS4wOTcxLS4xMDMyLS4wOTcyTDYuOTczIDkuODM1NmwtMi41NS0xLjY4NzktMS4zMzU2LS45NzE0LS43MjI1LS40OTE4LS4zNjQzLS40NjE0LS4xNTc4LTEuMDA3OC42NTU3LS43MjI1Ljg4MDMuMDYwNy4yMjQ2LjA2MDcuODkyNS42ODYgMS45MDY0IDEuNDc1NCAyLjQ4OTMgMS44MzM2LjM2NDMuMzAzNS4xNDU3LS4xMDMyLjAxODItLjA3MjgtLjE2NC0uMjczMy0xLjM1MzktMi40NDY3LTEuNDQ1LTIuNDg5My0uNjQzNS0xLjAzMi0uMTctLjYxOTRjLS4wNjA3LS4yNTUtLjEwMzItLjQ2NzQtLjEwMzItLjcyODVMNi4yODcuMTMzNSA2LjY5OTcgMGwuOTk1Ny4xMzM2LjQxOS4zNjQyLjYxOTIgMS40MTQ3IDEuMDAxOCAyLjIyODIgMS41NTQzIDMuMDI5Ni40NTUzLjg5ODUuMjQyOS44MzE4LjA5MS4yNTVoLjE1Nzl2LS4xNDU3bC4xMjc1LTEuNzA2LjIzNjgtMi4wOTQ3LjIzMDctMi42OTU3LjA3ODktLjc1ODkuMzc2NC0uOTEwNy43NDY4LS40OTE4LjU4MjguMjc5My40Nzk3LjY4Ni0uMDY2OC40NDMzLS4yODUzIDEuODUxNy0uNTU4NiAyLjkwMjEtLjM2NDMgMS45NDI5aC4yMTI1bC4yNDI5LS4yNDI5Ljk4MzUtMS4zMDUzIDEuNjUxNC0yLjA2NDMuNzI4Ni0uODE5Ni44NS0uOTA0Ni41NDY0LS40MzExaDEuMDMyMWwuNzU5IDEuMTI5My0uMzQgMS4xNjU3LTEuMDYyNSAxLjM0NzgtLjg4MDQgMS4xNDE0LTEuMjYyOCAxLjctLjc4OTMgMS4zNi4wNzI5LjEwOTMuMTg4Mi0uMDE4MyAyLjg1MzUtLjYwNyAxLjU0MjEtLjI3OTQgMS44Mzk2LS4zMTU3LjgzMTguMzg4Ni4wOTEuMzk0Ni0uMzI3OC44MDc1LTEuOTY3LjQ4NTctMi4zMDcyLjQ2MTQtMy40MzY0LjgxMzYtLjA0MjUuMDMwNC4wNDg2LjA2MDcgMS41NDgyLjE0NTcuNjYxOC4wMzY0aDEuNjIxbDMuMDE3NS4yMjQ3Ljc4OTIuNTIyLjQ3MzYuNjM3Ni0uMDc5LjQ4NTctMS4yMTQyLjYxOTMtMS42MzkzLS4zODg2LTMuODI1LS45MTA3LTEuMzExMy0uMzI3OWgtLjE4MjJ2LjEwOTNsMS4wOTI5IDEuMDY4NiAyLjAwMzUgMS44MDkyIDIuNTA3NSAyLjMzMTQuMTI3NS41NzY4LS4zMjE4LjQ1NTQtLjM0LS4wNDg2LTIuMjAzOS0xLjY1NzUtLjg1LS43NDY4LTEuOTI0Ni0xLjYyMWgtLjEyNzV2LjE3bC40NDMyLjY0OTYgMi4zNDM2IDMuNTIxNC4xMjE0IDEuMDgwNy0uMTcuMzUyMS0uNjA3MS4yMTI1LS42Njc5LS4xMjE0LTEuMzcyMS0xLjkyNDZMMTQuMzggMTcuOTU5bC0xLjE0MTQtMS45NDI4LS4xMzk3LjA3OS0uNjc0IDcuMjU1Mi0uMzE1Ni4zNzAzLS43Mjg2LjI3OTMtLjYwNzEtLjQ2MTQtLjMyMTgtLjc0NjguMzIxOC0xLjQ3NTMuMzg4Ni0xLjkyNDYuMzE1Ny0xLjUzLjI4NTMtMS45MDA0LjE3LS42MzE0LS4wMTIxLS4wNDI1LS4xMzk3LjAxODItMS40MzI4IDEuOTY3Mi0yLjE3OTYgMi45NDQ2LTEuNzI0MyAxLjg0NTYtLjQxMjguMTY0LS43MTY0LS4zNzA0LjA2NjctLjY2MTguNDAwOC0uNTg4OSAyLjM4Ni0zLjAzNTcgMS40Mzg5LTEuODgyLjkyOS0xLjA4NjgtLjAwNjItLjE1NzloLS4wNTQ2bC02LjMzODUgNC4xMTY0LTEuMTI5My4xNDU3LS40ODU3LS40NTU0LjA2MDgtLjc0NjcuMjMwNy0uMjQyOSAxLjkwNjQtMS4zMTE0WiIvPjwvc3ZnPg==;" parent="grp-claude-api" vertex="1">
+                    <mxGeometry x="36" y="28" width="48" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="grp-github" value="Activity" style="fillColor=#EDE7F6;strokeColor=#8C4FFF;rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fontColor=#8C4FFF;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;container=1;collapsible=0;shadow=1;strokeWidth=1.5;" parent="external-services" vertex="1">
+                    <mxGeometry x="20" y="53" width="120" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="svc-github" value="GitHub API&lt;div&gt;&lt;i&gt;commits, PRs, issues&lt;/i&gt;&lt;/div&gt;" style="shape=image;verticalLabelPosition=bottom;verticalAlign=top;align=center;aspect=fixed;imageAspect=0;html=1;fontSize=11;fontColor=#232F3E;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;image=data:image/svg+xml,PHN2ZyByb2xlPSJpbWciIHZpZXdCb3g9IjAgMCAyNCAyNCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48dGl0bGU+R2l0SHViPC90aXRsZT48c3R5bGU+cGF0aHtmaWxsOiMxODE3MTd9QG1lZGlhIChwcmVmZXJzLWNvbG9yLXNjaGVtZTpkYXJrKXtwYXRoe2ZpbGw6I0YwRjZGQ319PC9zdHlsZT48cGF0aCBkPSJNMTIgLjI5N2MtNi42MyAwLTEyIDUuMzczLTEyIDEyIDAgNS4zMDMgMy40MzggOS44IDguMjA1IDExLjM4NS42LjExMy44Mi0uMjU4LjgyLS41NzcgMC0uMjg1LS4wMS0xLjA0LS4wMTUtMi4wNC0zLjMzOC43MjQtNC4wNDItMS42MS00LjA0Mi0xLjYxQzQuNDIyIDE4LjA3IDMuNjMzIDE3LjcgMy42MzMgMTcuN2MtMS4wODctLjc0NC4wODQtLjcyOS4wODQtLjcyOSAxLjIwNS4wODQgMS44MzggMS4yMzYgMS44MzggMS4yMzYgMS4wNyAxLjgzNSAyLjgwOSAxLjMwNSAzLjQ5NS45OTguMTA4LS43NzYuNDE3LTEuMzA1Ljc2LTEuNjA1LTIuNjY1LS4zLTUuNDY2LTEuMzMyLTUuNDY2LTUuOTMgMC0xLjMxLjQ2NS0yLjM4IDEuMjM1LTMuMjItLjEzNS0uMzAzLS41NC0xLjUyMy4xMDUtMy4xNzYgMCAwIDEuMDA1LS4zMjIgMy4zIDEuMjMuOTYtLjI2NyAxLjk4LS4zOTkgMy0uNDA1IDEuMDIuMDA2IDIuMDQuMTM4IDMgLjQwNSAyLjI4LTEuNTUyIDMuMjg1LTEuMjMgMy4yODUtMS4yMy42NDUgMS42NTMuMjQgMi44NzMuMTIgMy4xNzYuNzY1Ljg0IDEuMjMgMS45MSAxLjIzIDMuMjIgMCA0LjYxLTIuODA1IDUuNjI1LTUuNDc1IDUuOTIuNDIuMzYuODEgMS4wOTYuODEgMi4yMiAwIDEuNjA2LS4wMTUgMi44OTYtLjAxNSAzLjI4NiAwIC4zMTUuMjEuNjkuODI1LjU3QzIwLjU2NSAyMi4wOTIgMjQgMTcuNTkyIDI0IDEyLjI5N2MwLTYuNjI3LTUuMzczLTEyLTEyLTEyIi8+PC9zdmc+;" parent="grp-github" vertex="1">
+                    <mxGeometry x="36" y="28" width="48" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge-claude-code-to-cli" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;endArrow=block;endFill=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="grp-claude-code" target="grp-cli" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="41" y="670"/>
+                            <mxPoint x="41" y="430"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="edge-cli-to-s3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="grp-cli" target="grp-s3" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge-cli-to-lambda" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;endArrow=block;endFill=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.25;entryY=0;entryDx=0;entryDy=0;" parent="1" source="grp-cli" target="grp-lambda" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="130" y="345"/>
+                            <mxPoint x="570" y="345"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="text-sync-report" value="&lt;span style=&quot;background-color: light-dark(#ffffff, var(--ge-dark-color, #121212));&quot;&gt;&lt;font style=&quot;color: rgb(0, 0, 0);&quot;&gt;2a. ayumy sync --report&lt;/font&gt;&lt;/span&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];labelBackgroundColor=none;fontSize=12;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;" vertex="1" parent="1">
+                    <mxGeometry x="140" y="321" width="140" height="16" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge-scheduler-to-lambda" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.8;entryDx=0;entryDy=0;" parent="1" source="grp-scheduler" target="grp-lambda" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="480" y="670"/>
+                            <mxPoint x="480" y="466"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="edge-lambda-to-secrets" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;endArrow=block;endFill=1;exitX=0.75;exitY=0;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="grp-lambda" target="grp-secrets" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge-s3-to-lambda" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.3;exitDx=0;exitDy=0;entryX=0;entryY=0.3;entryDx=0;entryDy=0;" parent="1" source="grp-s3" target="grp-lambda" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge-lambda-to-dynamodb" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;endArrow=block;endFill=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="grp-lambda" target="grp-dynamodb" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge-lambda-to-github" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.2;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="grp-lambda" target="grp-github" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="720" y="394"/>
+                            <mxPoint x="720" y="263"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="text-github" value="6. fetch activity" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];labelBackgroundColor=none;fontSize=12;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;" vertex="1" parent="1">
+                    <mxGeometry x="698" y="238" width="116" height="16" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge-lambda-to-claude-api" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.4;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="grp-lambda" target="grp-claude-api" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="750" y="418"/>
+                            <mxPoint x="750" y="401"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="text-claude-api" value="7. summarize" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];labelBackgroundColor=none;fontSize=12;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;" vertex="1" parent="1">
+                    <mxGeometry x="728" y="377" width="86" height="16" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge-lambda-to-notion" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.6;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="grp-lambda" target="grp-notion" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="750" y="442"/>
+                            <mxPoint x="750" y="541"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="text-notion" value="8. write pages" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];labelBackgroundColor=none;fontSize=12;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;" vertex="1" parent="1">
+                    <mxGeometry x="723" y="549" width="86" height="16" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge-lambda-to-slack" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;endArrow=block;endFill=1;exitX=1;exitY=0.8;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="grp-lambda" target="grp-slack" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="710" y="466"/>
+                            <mxPoint x="710" y="680"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="text-slack" value="9. notify" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];labelBackgroundColor=none;fontSize=12;fontFamily=M PLUS 1p;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DM%2BPLUS%2B1p;" vertex="1" parent="1">
+                    <mxGeometry x="708" y="657" width="116" height="16" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
