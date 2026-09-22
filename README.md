@@ -82,3 +82,7 @@ Anthropic API と AWS の費用が発生する（GitHub API・Notion API は無�
 | AWS（Lambda, S3, Secrets Manager 等） | ~$0.5/月 |
 
 ※ 平均的な開発日の見積もり。session ログが大量にある日はトークン数が増加する
+
+## License
+- 本リポジトリのコードは [MIT License](LICENSE) で公開しています
+- ただし、ロゴ画像（`docs/assets/logo-*.png`）は MIT License の対象外とし、[Setup.md](docs/Setup.md) の手順で使う場合を除き、@n-yU の許可なく使用できません
