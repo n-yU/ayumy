@@ -16,6 +16,13 @@ Parameters:
   SlackWorkspaceId:
     Type: String
     Description: Slack workspace ID copied from the Amazon Q Developer in chat applications console
+  SessionBucketNameOverride:
+    Type: String
+    Default: ""
+    Description: S3 bucket name for session logs (leave empty to create one in the account regional namespace)
+
+Conditions:
+  HasSessionBucketNameOverride: !Not [!Equals [!Ref SessionBucketNameOverride, ""]]
 
 Globals:
   Function:
@@ -66,7 +73,11 @@ Resources:
   SessionBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: ayumy.n-yu
+      # Changing any of these three on a deployed stack replaces the bucket
+      BucketName: !If [HasSessionBucketNameOverride, !Ref SessionBucketNameOverride, !Ref AWS::NoValue]
+      # The account regional namespace keeps other accounts from claiming the name after deletion
+      BucketNamePrefix: !If [HasSessionBucketNameOverride, !Ref AWS::NoValue, ayumy]
+      BucketNamespace: !If [HasSessionBucketNameOverride, !Ref AWS::NoValue, account-regional]
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -138,6 +149,20 @@ Resources:
       AlarmActions:
         - !Ref AlarmTopic
 
+  # Mirrors the Notification permissions template; CloudWatchReadOnlyAccess would also let channel members read logs
+  AlarmNotificationPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - cloudwatch:Describe*
+              - cloudwatch:Get*
+              - cloudwatch:List*
+            Resource: "*"
+
   AlarmChatbotRole:
     Type: AWS::IAM::Role
     Properties:
@@ -149,7 +174,7 @@ Resources:
               Service: chatbot.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/CloudWatchReadOnlyAccess
+        - !Ref AlarmNotificationPolicy
 
   AlarmSlackChannel:
     Type: AWS::Chatbot::SlackChannelConfiguration
@@ -162,7 +187,7 @@ Resources:
         - !Ref AlarmTopic
       # Default guardrail is AdministratorAccess, so it is narrowed to match what the role already allows
       GuardrailPolicies:
-        - arn:aws:iam::aws:policy/CloudWatchReadOnlyAccess
+        - !Ref AlarmNotificationPolicy
 
 Outputs:
   ReportFunctionName:

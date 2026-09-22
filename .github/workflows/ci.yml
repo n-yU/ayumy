@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   test:
     # Pinned because Ubuntu 24.04 (noble) removed kcov from universe; 22.04 still ships it.

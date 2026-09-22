@@ -495,6 +495,27 @@ class TestNotifyValidationErrors:
         text = _blocks_text(_get_send_kwargs(client)["blocks"])
         assert "BadTag" in text
 
+    def test_special_chars_are_escaped(self, client):
+        result = summarizer.ValidationResult()
+        result.invalid_tags = {"<@U1>": ["<!channel>"]}
+        client.notify_validation_errors(_builders.TARGET_DATE, result)
+        client.flush()
+
+        text = _blocks_text(_get_send_kwargs(client)["blocks"])
+        assert "<!channel>" not in text
+        assert "<@U1>" not in text
+        assert "&lt;!channel&gt;" in text
+
+    def test_long_body_is_truncated_to_section_limit(self, client):
+        result = summarizer.ValidationResult()
+        result.invalid_tags = {"repo": ["x" * 5000]}
+        client.notify_validation_errors(_builders.TARGET_DATE, result)
+        client.flush()
+
+        section_text = _get_send_kwargs(client)["blocks"][1]["text"]["text"]
+        assert len(section_text) == SECTION_TEXT_MAX
+        assert section_text.endswith("…")
+
 
 class TestNotifyError:
     def test_sends_error_message(self, client):
@@ -503,6 +524,23 @@ class TestNotifyError:
 
         text = _blocks_text(_get_send_kwargs(client)["blocks"])
         assert "something went wrong" in text
+
+    def test_special_chars_are_escaped(self, client):
+        client.notify_error(_builders.TARGET_DATE, ValueError("got <!here> & more"))
+        client.flush()
+
+        kwargs = _get_send_kwargs(client)
+        assert "<!here>" not in _blocks_text(kwargs["blocks"])
+        assert "<!here>" not in kwargs["text"]
+        assert "&lt;!here&gt; &amp; more" in _blocks_text(kwargs["blocks"])
+
+    def test_long_message_is_truncated_to_section_limit(self, client):
+        client.notify_error(_builders.TARGET_DATE, ValueError("x" * 5000))
+        client.flush()
+
+        section_text = _get_send_kwargs(client)["blocks"][1]["text"]["text"]
+        assert len(section_text) == SECTION_TEXT_MAX
+        assert section_text.endswith("…")
 
 
 class TestNotifyTimeout:

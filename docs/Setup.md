@@ -47,6 +47,7 @@ Ayumy を初めて動かすまでの構築手順。AWS・Notion・Slack・GitHub
    - `NotionDatabaseId` に [2. Notion](#2-notion) で取得したデータベース ID を入力
    - `SlackChannelId` に [3. Slack](#3-slack) で取得した channel ID を入力
    - `SlackWorkspaceId` に [3. Slack](#3-slack) で取得した Workspace ID を入力
+   - `SessionBucketNameOverride` は空欄のままでよい。session ログを保管する S3 バケットが `ayumy-<アカウント ID>-<リージョン>-an` という名前で作られる
    - Confirm changes before deploy: `Y`
    - Allow SAM CLI IAM role creation: `Y`
    - Disable rollback: `N`
