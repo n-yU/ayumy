@@ -183,7 +183,9 @@ class Client:
             escape_mrkdwn(f"• {name}: tags={tags}")
             for name, tags in result.invalid_tags.items()
         ]
-        body = f"Invalid tags detected\n{'\n'.join(lines)}"
+        body = truncate_headline(
+            f"Invalid tags detected\n{'\n'.join(lines)}", SECTION_TEXT_MAX
+        )
         self._append_report_section(
             "⚠️", date_str, body, "Invalid tags detected", is_backfill=is_backfill
         )

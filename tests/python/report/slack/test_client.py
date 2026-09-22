@@ -506,6 +506,16 @@ class TestNotifyValidationErrors:
         assert "<@U1>" not in text
         assert "&lt;!channel&gt;" in text
 
+    def test_long_body_is_truncated_to_section_limit(self, client):
+        result = summarizer.ValidationResult()
+        result.invalid_tags = {"repo": ["x" * 5000]}
+        client.notify_validation_errors(_builders.TARGET_DATE, result)
+        client.flush()
+
+        section_text = _get_send_kwargs(client)["blocks"][1]["text"]["text"]
+        assert len(section_text) == SECTION_TEXT_MAX
+        assert section_text.endswith("…")
+
 
 class TestNotifyError:
     def test_sends_error_message(self, client):
