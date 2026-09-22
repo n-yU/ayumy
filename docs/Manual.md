@@ -120,7 +120,7 @@ Summary 以外の各行の先頭には、次の記号が付く。ステータス
 | `[backfill]` | `--date` 指定の実行、または未報告日の自動検出 |
 
 ### GitHub アクティビティがないリポジトリ
-Claude Code で作業したものの、対象日に commit, PR, Issue 等の GitHub アクティビティがなかったリポジトリは、Notion のレポートページが作成されず、Slack 通知に `Session-only:` としてリポジトリ名だけが表示される。後日 push して GitHub に反映すると、その日のレポートが自動で作成し直される
+Claude Code で作業したものの、対象日に commit, PR, Issue 等の GitHub アクティビティがなかったリポジトリは、Notion のレポートページが作成されず、Slack 通知に `Session-only:` としてリポジトリ名だけが表示される（`config.yml` で変更できる）。後日 push して GitHub に反映すると、その日のレポートが自動で作成し直される
 
 ## Troubleshooting
 ### pre-push hook の再設置
