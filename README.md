@@ -62,3 +62,4 @@ Ayumy の稼働にあたっては Claude API と AWS のコストが発生しま
 ## ⚖️ License
 - 本リポジトリのコードは [MIT License](LICENSE) で公開しています
 - ただし、ロゴ画像 `docs/assets/logo/` は MIT License の対象外とし、[Setup.md](docs/Setup.md) の手順で使う場合を除き、@n-yU の許可なく使用できません
+- 構成図 `docs/assets/arch/` に含まれる各サービスのロゴは、それぞれの権利者の商標です
