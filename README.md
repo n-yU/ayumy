@@ -18,11 +18,11 @@ Ayumy は全自動開発ログシステムです。あなたの GitHub 上の開
 
 ## 🏗️ Architecture
 - S3 + DynamoDB + AWS Lambda を使用した 2 段階構成です
-- クライアント側システムは macOS のみサポートしています
+- ローカルマシンは macOS のみサポートしています
 
 ```mermaid
 flowchart TB
-    subgraph Client[Client Machine]
+    subgraph Client[Local Machine]
         Hook[git push → pre-push hook]
         Sync[ayumy sync]
         Report[ayumy sync --report]
