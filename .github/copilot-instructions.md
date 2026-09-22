@@ -70,13 +70,15 @@ ayumy リポジトリの PR レビューにおいて、過去の PR で繰り返
 - Claude Code が生成する JSONL（`timestamp`, `message.content` 等）
 - DynamoDB に書き込んだセッションアイテム
 - Notion DB の select オプションラベル（オーナー管理 + allowlist 検証）
-- LLM が summarizer プロンプトのスキーマに従って出力する enum 値（tag / status）
+- LLM が出力した enum 値（tag / status）のうち、allowlist の検証を通ったもの
 - `handler.py` → `pipeline.py` → 各クライアントモジュール間で受け渡される型付き値（例: `memory_limit_mb: int | None`）
 - AWS Lambda Python ランタイムが返す `context.memory_limit_in_mb`（`int`）
 
+LLM の出力は、allowlist の検証前の値やエラー文に埋め込まれた値も含めて信頼境界の外側として扱う。Issue / PR のタイトルなど第三者が書いた文章が入力に含まれ、出力を誘導できるため。Slack の mrkdwn に埋め込む箇所で escape が漏れていれば指摘する
+
 ### プロジェクト固有の設定前提
 すでにプロジェクト側で対処済みのため、対応提案は不要
-- `samconfig.toml` はローカル保存（`.gitignore` 対象）で、`sam deploy` が stack 名・capabilities・S3 バケット／プレフィックス・`NotionDatabaseId` / `SlackChannelId` を自動読み込みする
+- `samconfig.toml` はローカル保存（`.gitignore` 対象）で、`sam deploy` が stack 名・capabilities・S3 バケット／プレフィックスと、`parameter_overrides` に保存した template のパラメータを自動読み込みする
 - `lambda/VERSION` はリポジトリルート `VERSION` への git symlink（mode `120000`）であり drift しない
 - `lambda/config/config.yml` は `.gitignore` 対象で、追跡対象の `config.template.yml` から `make config-init` で生成する。テストとデプロイは make target 側の依存で生成を担保する
 
