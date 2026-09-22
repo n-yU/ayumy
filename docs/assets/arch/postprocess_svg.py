@@ -48,7 +48,9 @@ def postprocess(svg_path: Path) -> None:
         for name, weight in WEIGHTS.items()
     )
     style = f'<style id="{STYLE_ID}">{faces}</style>'
-    svg, count = re.subn(r"<svg\b[^>]*>", lambda match: match.group(0) + style, svg, count=1)
+    svg, count = re.subn(
+        r"<svg\b[^>]*>", lambda match: match.group(0) + style, svg, count=1
+    )
     if count != 1:
         sys.exit(f"no <svg> element found in {svg_path}")
     svg_path.write_text(svg, encoding="utf-8")

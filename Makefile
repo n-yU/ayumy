@@ -2,7 +2,7 @@
 
 .PHONY: help help-% config-init config-diff lambda-install lambda-invoke lambda-deploy lock test test-python test-shell test-cov format format-check lint lint-fix typecheck scan-sessions aws-auth-check diagram
 
-FORMAT_TARGETS := lambda tests
+FORMAT_TARGETS := lambda tests docs/assets/arch
 CONFIG_FILE := lambda/config/config.yml
 CONFIG_TEMPLATE := lambda/config/config.template.yml
 DRAWIO := /Applications/draw.io.app/Contents/MacOS/draw.io

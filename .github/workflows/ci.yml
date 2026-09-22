@@ -37,10 +37,10 @@ jobs:
         run: make config-init
 
       - name: Check formatting
-        run: python -m ruff format --check --diff lambda tests
+        run: python -m ruff format --check --diff lambda tests docs/assets/arch
 
       - name: Lint
-        run: python -m ruff check lambda tests
+        run: python -m ruff check lambda tests docs/assets/arch
 
       - name: Type check
         run: python -m mypy
