@@ -85,4 +85,4 @@ Anthropic API と AWS の費用が発生する（GitHub API・Notion API は無�
 
 ## License
 - 本リポジトリのコードは [MIT License](LICENSE) で公開しています
-- ただし、ロゴ画像（`docs/assets/logo-*.png`）は MIT License の対象外とし、@n-yU の許可なく使用できません
+- ただし、ロゴ画像（`docs/assets/logo-*.png`）は MIT License の対象外とし、[Setup.md](docs/Setup.md) の手順で使う場合を除き、@n-yU の許可なく使用できません
