@@ -13,6 +13,7 @@
 ## 1. AWS CLI
 1. 自身の AWS 環境を用意し、AWS CLI をインストール
 2. `aws login` 等で CLI 認証（S3 への書き込み、Lambda の呼び出し、CloudFormation の操作権限が必要）
+3. 使用するリージョンを決め、AWS CLI のデフォルトリージョンに設定する。以降のシークレットの登録とデプロイは、すべてこのリージョンで行う
 
 ## 2. Notion
 1. [Notion Integrations](https://www.notion.so/my-integrations) で Internal Integration を作成
