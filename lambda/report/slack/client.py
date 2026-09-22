@@ -178,7 +178,11 @@ class Client:
         is_backfill: bool = False,
     ) -> None:
         date_str = target_date.astimezone(dates.JST).strftime("%Y-%m-%d")
-        lines = [f"• {name}: tags={tags}" for name, tags in result.invalid_tags.items()]
+        # Names and tags come from model output that untrusted activity text can steer.
+        lines = [
+            escape_mrkdwn(f"• {name}: tags={tags}")
+            for name, tags in result.invalid_tags.items()
+        ]
         body = f"Invalid tags detected\n{'\n'.join(lines)}"
         self._append_report_section(
             "⚠️", date_str, body, "Invalid tags detected", is_backfill=is_backfill
@@ -188,8 +192,10 @@ class Client:
         self, target_date: datetime, error: Exception, *, is_backfill: bool = False
     ) -> None:
         date_str = target_date.astimezone(dates.JST).strftime("%Y-%m-%d")
+        # Validation errors embed model output verbatim and can exceed the section limit.
+        message = truncate_headline(escape_mrkdwn(str(error)), SECTION_TEXT_MAX)
         self._append_report_section(
-            "❌", date_str, str(error), str(error), is_backfill=is_backfill
+            "❌", date_str, message, message, is_backfill=is_backfill
         )
 
     def notify_timeout(
