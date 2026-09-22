@@ -1,5 +1,5 @@
 # Manual
-本ドキュメントでは稼働後の日常的な運用ガイドとして、基本的な操作・Notion レポートの読み方・トラブル時の対処法をまとめています。セットアップ手順は [Setup.md](Setup.md) を、さらに詳しいシステムの仕様は [Spec.md](Spec.md) を参照してください
+本ドキュメントでは稼働後の日常的な運用ガイドとして、基本的な操作・Notion レポートと Slack 通知の読み方・トラブル時の対処法をまとめています。セットアップ手順は [Setup.md](Setup.md) を、さらに詳しいシステムの仕様は [Spec.md](Spec.md) を参照してください
 
 - [Overview](#overview)
 - [Daily Operations](#daily-operations)
