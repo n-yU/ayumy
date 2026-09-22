@@ -8,13 +8,17 @@
   </picture>
 </p>
 
-GitHub 上の日次開発アクティビティ（Commit, PR, Issue）と Claude Code の session ログを自動収集し、Claude API で自然言語の要約を生成して Notion データベースに記録するシステム
+Ayumy は全自動開発ログシステムです。あなたの GitHub 上の開発アクティビティ (Commit, PR, Issue) と Claude Code の session ログを元に、Claude API で日次レポートを生成して Notion データベースに記録します
 
-- セットアップ方法は [Setup.md](./docs/Setup.md)、基本的な使い方は [Manual.md](./docs/Manual.md) を参照
-- クライアント側のスクリプト（`scripts/`, `hooks/`, `bin/ayumy`）は macOS のみサポート
+<div align="center">
 
-## Architecture
-S3 + DynamoDB + AWS Lambda を使用した 2 段階構成
+🛠️ [Setup - セットアップ方法](./docs/Setup.md) | 📖 [Manual - 基本的な使い方](./docs/Manual.md)
+
+</div>
+
+## 🏗️ Architecture
+- S3 + DynamoDB + AWS Lambda を使用した 2 段階構成です
+- クライアント側システムは macOS のみサポートしています
 
 ```mermaid
 flowchart TB
@@ -49,40 +53,41 @@ flowchart TB
     Lambda --> Slack
 ```
 
-## Tech Stack
+## 🧰 Tech Stack
 | Technology | Purpose |
 |---|---|
 | AWS Lambda | レポート生成の実行環境 |
 | AWS S3 | session ログの保管 |
 | Amazon DynamoDB | session メタデータと Claude API コスト履歴の集約 |
 | Amazon EventBridge Scheduler | 日次の定期実行 |
-| Python 3.12 | メインスクリプト（`requests`, `anthropic`, `PyGithub`） |
+| Python | メインスクリプト |
 | GitHub API (REST) | 開発アクティビティの取得 |
-| Anthropic API (`claude-sonnet-4-6`) | 自然言語による要約生成 |
+| Claude API | 自然言語による要約生成 |
 | Notion API | 作業記録の書き込み |
 | Slack Web API | 完了通知 |
 
-## Directory Structure
+## 📁 Directory Structure
 ```
 ayumy/
 ├── bin/ayumy           # CLI entrypoint
-├── scripts/            # セッション転送・hook 設置スクリプト
+├── scripts/            # session 転送・hook 設置スクリプト
 ├── hooks/pre-push      # 各リポジトリにシンボリックリンクで配置
 ├── lambda/             # Lambda ハンドラとメインパッケージ
 ├── template.yaml       # AWS SAM テンプレート
 └── docs/               # 仕様・セットアップ・運用ガイド
 ```
 
-## Running Cost
-Anthropic API と AWS の費用が発生する（GitHub API・Notion API は無料枠内）
+## 💰 Running Cost
+Ayumy の稼働にあたっては Claude API と AWS のコストが発生します
 
 | Item | Cost |
 |---|---|
-| Anthropic API | ~$1.5/月 |
-| AWS（Lambda, S3, Secrets Manager 等） | ~$0.5/月 |
+| Claude API | ~$1.5/月 |
+| AWS (Lambda, S3, Secrets Manager etc.) | ~$0.5/月 |
 
-※ 平均的な開発日の見積もり。session ログが大量にある日はトークン数が増加する
+- GitHub API・Notion API は無料枠内で概ね収まります
+- 上記は平均的な利用における見積もりであり、消費トークンの増減によりコストが変動します
 
-## License
+## ⚖️ License
 - 本リポジトリのコードは [MIT License](LICENSE) で公開しています
-- ただし、ロゴ画像（`docs/assets/logo-*.png`）は MIT License の対象外とし、[Setup.md](docs/Setup.md) の手順で使う場合を除き、@n-yU の許可なく使用できません
+- ただし、ロゴ画像 `docs/assets/logo-*.png` は MIT License の対象外とし、[Setup.md](docs/Setup.md) の手順で使う場合を除き、@n-yU の許可なく使用できません
