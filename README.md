@@ -8,6 +8,18 @@
   </picture>
 </p>
 
+<div align="center">
+
+[![CI](https://img.shields.io/github/actions/workflow/status/n-yU/ayumy/ci.yml?branch=main&label=CI&logo=github)](https://github.com/n-yU/ayumy/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/n-yU/ayumy)](https://github.com/n-yU/ayumy/releases/latest)
+[![License](https://img.shields.io/github/license/n-yU/ayumy)](./LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+![Platform](https://img.shields.io/badge/platform-macOS-000000?logo=apple&logoColor=white)
+[![X](https://img.shields.io/badge/X-%40__yun32-000000?logo=x&logoColor=white)](https://x.com/_yun32)
+
+</div>
+
 Ayumy は全自動開発ログシステムです。あなたの GitHub 上の開発アクティビティ (Commit, PR, Issue) と Claude Code の session ログを元に、Claude API で日次レポートを生成して Notion データベースに記録します
 
 <div align="center">
