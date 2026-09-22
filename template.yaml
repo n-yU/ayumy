@@ -149,6 +149,20 @@ Resources:
       AlarmActions:
         - !Ref AlarmTopic
 
+  # Mirrors the Notification permissions template; CloudWatchReadOnlyAccess would also let channel members read logs
+  AlarmNotificationPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - cloudwatch:Describe*
+              - cloudwatch:Get*
+              - cloudwatch:List*
+            Resource: "*"
+
   AlarmChatbotRole:
     Type: AWS::IAM::Role
     Properties:
@@ -160,7 +174,7 @@ Resources:
               Service: chatbot.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/CloudWatchReadOnlyAccess
+        - !Ref AlarmNotificationPolicy
 
   AlarmSlackChannel:
     Type: AWS::Chatbot::SlackChannelConfiguration
@@ -173,7 +187,7 @@ Resources:
         - !Ref AlarmTopic
       # Default guardrail is AdministratorAccess, so it is narrowed to match what the role already allows
       GuardrailPolicies:
-        - arn:aws:iam::aws:policy/CloudWatchReadOnlyAccess
+        - !Ref AlarmNotificationPolicy
 
 Outputs:
   ReportFunctionName:
