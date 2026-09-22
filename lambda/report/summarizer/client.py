@@ -64,8 +64,8 @@ class Client:
             f"以下は {date_str} の GitHub アクティビティおよび"
             f" Claude Code での作業記録です。\n"
             f"日本語で簡潔に要約してください。\n\n"
-            f"---\n{formatted_github}\n\n"
-            f"---\n{formatted_sessions}"
+            f"<github_activity>\n{formatted_github}\n</github_activity>\n\n"
+            f"<claude_code_sessions>\n{formatted_sessions}\n</claude_code_sessions>"
         )
 
     def generate_summary(

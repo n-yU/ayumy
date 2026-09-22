@@ -30,8 +30,8 @@ class TestBuildPrompt:
         result = client.build_prompt(target, "github data", "session data")
 
         assert "2026-03-28" in result
-        assert "github data" in result
-        assert "session data" in result
+        assert "<github_activity>\ngithub data\n</github_activity>" in result
+        assert "<claude_code_sessions>\nsession data\n</claude_code_sessions>" in result
 
 
 class TestValidateReport:
