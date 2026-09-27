@@ -1,0 +1,12 @@
+coverage:
+  status: # Coverage is tracked for visibility only; Copilot review is the merge gate.
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
+
+comment:
+  layout: "diff, flags, files"
+  after_n_builds: 2 # CI uploads Python and Shell reports separately; wait for both before commenting.

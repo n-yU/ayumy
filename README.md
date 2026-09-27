@@ -11,6 +11,7 @@
 <div align="center">
 
 [![CI](https://img.shields.io/github/actions/workflow/status/n-yU/ayumy/ci.yml?branch=main&label=CI&logo=github)](https://github.com/n-yU/ayumy/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/codecov/c/github/n-yU/ayumy?logo=codecov&label=coverage)](https://codecov.io/gh/n-yU/ayumy)
 [![Release](https://img.shields.io/github/v/release/n-yU/ayumy)](https://github.com/n-yU/ayumy/releases/latest)
 [![License](https://img.shields.io/github/license/n-yU/ayumy)](./LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
