@@ -105,3 +105,4 @@ Lambda 側は [template.yaml](template.yaml) の `Environment` で定義する�
 - JSONL の生データは S3 バケットに保管し、リモートリポジトリには push しない
 - アクティビティの取得対象期間: 前日 JST 00:00:00 〜 当日 JST 00:00:00
 - commit の前に、変更と食い違う記述がないかを [Spec.md](docs/Spec.md), [README.md](README.md), [Setup.md](docs/Setup.md), [Manual.md](docs/Manual.md) で確かめ、ずれがあれば同じ commit で直す
+- PR の branch に積む commit には、ドキュメントのみの変更でも `[skip ci]` を付けない。Codecov の PR comment と status は PR の先頭の commit の upload に対して付くため
