@@ -13,6 +13,9 @@ jobs:
   test:
     # Pinned because Ubuntu 24.04 (noble) removed kcov from universe; 22.04 still ships it.
     runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      id-token: write # Codecov authenticates uploads through GitHub OIDC instead of a stored token.
     steps:
       - uses: actions/checkout@v4
 
@@ -67,3 +70,30 @@ jobs:
       - name: Note partial coverage on test failure
         if: failure()
         run: echo "_Coverage values may be partial when tests fail._" >> "$GITHUB_STEP_SUMMARY"
+
+      # The upload steps below run only when every test passed, so partial coverage never reaches Codecov.
+      - name: Locate shell coverage report
+        id: shell-report
+        run: |
+          # kcov suffixes its output directory with a hash, so the path cannot be written statically.
+          report=$(find tests/coverage-shell -name cobertura.xml -path '*bats*' | head -1)
+          test -n "$report"
+          echo "path=$report" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Python coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          use_oidc: true
+          files: tests/coverage-python.xml
+          disable_search: true
+          flags: python
+          fail_ci_if_error: true
+
+      - name: Upload shell coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          use_oidc: true
+          files: ${{ steps.shell-report.outputs.path }}
+          disable_search: true
+          flags: shell
+          fail_ci_if_error: true
