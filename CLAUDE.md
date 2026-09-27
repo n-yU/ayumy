@@ -71,7 +71,10 @@ template.yaml                        # AWS SAM テンプレート（Lambda, Even
 - **クライアント対応 OS**: クライアント側のスクリプト（`scripts/`, `hooks/`, `bin/ayumy`）は macOS のみサポート
 - **ローカル開発**: uv で `.venv` を管理。shell テスト実行には bats が必要（`brew install bats-core`）
 - **worktree での作業**: worktree を作った後は `make lambda-install` を実行して `.venv` を用意する。`lambda/config/config.yml` 等の追跡対象外ファイルは `.worktreeinclude` に列挙してあり、worktree の作成時にコピーされるため `make config-init` は不要
-- **テスト・lint・format コマンド**: `make test`（Python + shell 一括）／ `make test-python` ／ `make test-shell` ／ `make test-cov`（Python カバレッジ計測。Shell カバレッジは CI でのみ取得）／ `make format` ／ `make format-check` ／ `make lint`（Ruff + mypy）／ `make lint-fix` ／ `make typecheck`（mypy のみ）を使う。target 一覧と用途は `make help` で確認できる
+- **テスト・lint・format コマンド**: 以下を使う。target 一覧と用途は `make help` で確認できる
+  - `make test`（Python + shell 一括）／ `make test-python` ／ `make test-shell`
+  - `make test-cov`（Python カバレッジ計測。Shell カバレッジは CI でのみ取得し、CI は両方の計測結果を Codecov に送る）
+  - `make format` ／ `make format-check` ／ `make lint`（Ruff + mypy）／ `make lint-fix` ／ `make typecheck`（mypy のみ）
 - **構成図**: 元ファイルは `docs/assets/arch/architecture.drawio`。編集した後は `make diagram` で README が表示する SVG を書き出し直す
   - GitHub の README は外部フォントを読み込めないため、書き出しの後処理で M PLUS 1p の必要な文字だけを SVG に埋め込んでいる（draw.io デスクトップ版が必要）
   - 外部サービス（GitHub, Claude, Notion, Slack）の枠には各社のブランド色を使う。Notion の枠だけは、公式の黒いロゴを読めるようダークでも明るい灰色に固定する
