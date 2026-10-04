@@ -419,11 +419,17 @@ PR に関する行は親エントリ 1 か所に集約し、merge / close を示
 
 値の置き場所は 3 つに分ける
 
-- **config.yml**: モデル ID・API throttle 値・truncation 長など、利用者が振る舞いを調整する値。追跡対象はデフォルト値だけを持つ [config.template.yml](../lambda/config/config.template.yml) とし、利用者ごとの設定を書く `config.yml` は各自の手元で生成する。既にあるファイルは上書きしない
+- **config.yml**: モデル ID・API throttle 値・truncation 長など、利用者が振る舞いを調整する値
+  - 追跡対象はデフォルト値だけを持つ [config.template.yml](../lambda/config/config.template.yml) とし、利用者ごとの設定を書く `config.yml` は各自の手元で生成する
+  - 既にあるファイルは上書きしない
+  - 環境依存値と認証情報は書かない
 - **環境変数**: 環境ごとに変わる値。S3 バケット名・DynamoDB テーブル名・Notion データベース ID など
 - **Secrets Manager**: 外部サービスの認証情報
 
-config.yml には環境依存値と認証情報を書かない
+stack が作る IAM ロールには、デプロイ時のパラメータで権限の上限 (permissions boundary) が付けられる。指定しなければ上限は付かない
+
+- デプロイする側に「上限を付けたロールしか作れない」という制限をかける運用に対応するためである。この制限があれば、デプロイの仕組みが乗っ取られても template の書き換えで強い権限のロールは作られない
+- この制限の下では、上限の無いロールを 1 つでも含む stack はデプロイできない。template にロールを足すときも、同じ上限を付ける
 
 ## Operational Considerations
 ### Error Handling

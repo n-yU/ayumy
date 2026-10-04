@@ -20,9 +20,16 @@ Parameters:
     Type: String
     Default: ""
     Description: S3 bucket name for session logs (leave empty to create one in the account regional namespace)
+  PermissionsBoundaryArn:
+    Type: String
+    Default: ""
+    AllowedPattern: '^(arn:aws[a-z-]*:iam::(aws|[0-9]{12}):policy/.+)?$'
+    ConstraintDescription: must be empty or an IAM policy ARN
+    Description: IAM policy ARN set as the permissions boundary of every IAM role this stack creates (leave empty for none)
 
 Conditions:
   HasSessionBucketNameOverride: !Not [!Equals [!Ref SessionBucketNameOverride, ""]]
+  HasPermissionsBoundary: !Not [!Equals [!Ref PermissionsBoundaryArn, ""]]
 
 Globals:
   Function:
@@ -95,6 +102,7 @@ Resources:
       FunctionName: ayumy-report
       Handler: handler.lambda_handler
       CodeUri: lambda/
+      PermissionsBoundary: !If [HasPermissionsBoundary, !Ref PermissionsBoundaryArn, !Ref AWS::NoValue]
       Environment:
         Variables:
           AYUMY_S3_BUCKET: !Ref SessionBucket
@@ -121,6 +129,8 @@ Resources:
             ScheduleExpressionTimezone: UTC
             State: ENABLED
             Description: Run daily at JST 00:00 (UTC 15:00)
+            # The function's boundary does not reach the role SAM generates for this schedule
+            PermissionsBoundary: !If [HasPermissionsBoundary, !Ref PermissionsBoundaryArn, !Ref AWS::NoValue]
 
   # SNS topic for alarms on failures the function cannot report itself
   AlarmTopic:
@@ -173,6 +183,7 @@ Resources:
             Principal:
               Service: chatbot.amazonaws.com
             Action: sts:AssumeRole
+      PermissionsBoundary: !If [HasPermissionsBoundary, !Ref PermissionsBoundaryArn, !Ref AWS::NoValue]
       ManagedPolicyArns:
         - !Ref AlarmNotificationPolicy
 

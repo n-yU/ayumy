@@ -62,6 +62,9 @@
    - `SlackChannelId` に [§3.6](#3-slack) で控えた Channel ID を入力
    - `SlackWorkspaceId` に [§3.7](#3-slack) で控えた Workspace ID を入力
    - `SessionBucketNameOverride` は空欄のままでよい。session ログを保管する S3 バケットが `ayumy-<アカウント ID>-<リージョン>-an` という名前で作られる
+   - `PermissionsBoundaryArn` は通常は空欄のままでよい
+     - デプロイする側の権限に 「権限の上限 (permissions boundary) を付けた IAM ロールしか作れない」 という制限をかけている場合のみ、上限にする IAM ポリシーの ARN を入力する
+     - 上限のポリシーでは、[template.yaml](../template.yaml) で各ロールに付けている権限を許可しておく
    - Confirm changes before deploy: `Y`
    - Allow SAM CLI IAM role creation: `Y`
    - Disable rollback: `N`
