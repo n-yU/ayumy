@@ -137,4 +137,4 @@ hook が動いていないときや、別のパスから設置し直したいと
 Lambda の詳細なログは CloudWatch Logs に出力される。Slack 通知だけでは分からないエラーの原因や API のレスポンスを確かめたいときに活用する。ログはデフォルトでは 90 日を超えると削除される設定になっているため、必要に応じて `samconfig.toml` に `LogRetentionDays` を追記する
 
 ### ロググループの衝突からの復旧
-ロググループを stack で管理する前にデプロイした環境では、Ayumy を更新した後の `make lambda-deploy` が、ロググループが既に存在するというエラーで失敗する。既存のロググループを CloudFormation の自動取り込みで stack に移し、drift-aware change set で保持期間を反映してからデプロイし直す。実際のコマンドは [PR #233 comment](https://github.com/n-yU/ayumy/pull/233#issuecomment-6122661874) を参照
+ロググループを stack で管理する前にデプロイした環境では、Ayumy を更新した後の `make lambda-deploy` が、ロググループが既に存在するというエラーで失敗する。既存のロググループを CloudFormation の自動取り込みで stack に移し、drift-aware change set で保持期間を反映してからデプロイし直す。実際のコマンドは [PR #233 comment](https://github.com/n-yU/ayumy/pull/233#issuecomment-6122661874) を参照。stack を削除して作り直すときも削除後に残ったロググループと名前が衝突するため、残ったロググループを削除してからデプロイする
