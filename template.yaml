@@ -13,6 +13,11 @@ Parameters:
     Type: Number
     Default: 300
     Description: Lambda function timeout in seconds
+  LogRetentionDays:
+    Type: Number
+    Default: 90
+    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653]
+    Description: Days to keep the report function's logs in CloudWatch Logs
   SlackWorkspaceId:
     Type: String
     Description: Slack workspace ID copied from the Amazon Q Developer in chat applications console
@@ -103,6 +108,8 @@ Resources:
       Handler: handler.lambda_handler
       CodeUri: lambda/
       PermissionsBoundary: !If [HasPermissionsBoundary, !Ref PermissionsBoundaryArn, !Ref AWS::NoValue]
+      LoggingConfig:
+        LogGroup: !Ref ReportFunctionLogGroup
       Environment:
         Variables:
           AYUMY_S3_BUCKET: !Ref SessionBucket
@@ -131,6 +138,15 @@ Resources:
             Description: Run daily at JST 00:00 (UTC 15:00)
             # The function's boundary does not reach the role SAM generates for this schedule
             PermissionsBoundary: !If [HasPermissionsBoundary, !Ref PermissionsBoundaryArn, !Ref AWS::NoValue]
+
+  # Defined here because the group Lambda creates on first invocation keeps logs forever
+  ReportFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: RetainExceptOnCreate # Auto-import of a group Lambda already created requires a retaining policy
+    UpdateReplacePolicy: Retain
+    Properties:
+      LogGroupName: /aws/lambda/ayumy-report # A static name keeps the group eligible for auto-import, which a !Sub from ReportFunction would not
+      RetentionInDays: !Ref LogRetentionDays
 
   # SNS topic for alarms on failures the function cannot report itself
   AlarmTopic:

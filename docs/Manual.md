@@ -22,6 +22,7 @@
   - [AWS 認証切れからの復旧](#aws-認証切れからの復旧)
   - [過去日レポートの再生成](#過去日レポートの再生成)
   - [CloudWatch Logs の確認](#cloudwatch-logs-の確認)
+  - [ロググループの衝突からの復旧](#ロググループの衝突からの復旧)
 
 ## Overview
 - git push と日次の定期実行をきっかけに、GitHub アクティビティと Claude Code の session を集めて Notion にレポートを書き込む。レポートは `ayumy sync --report` で手動でも生成できる
@@ -133,4 +134,7 @@ hook が動いていないときや、別のパスから設置し直したいと
 [手動レポート生成](#手動レポート生成) で `--date` を指定して再生成できる。転送済みの session は AWS 側に保存されているため、転送し直す必要はない。Notion では、同じ日の既存ページをアーカイブしてから新しいページを作る。作り直した回数は新しいページの `Regens` に残る。初回の生成が `0` で、再生成のたびに 1 ずつ増える
 
 ### CloudWatch Logs の確認
-Lambda の詳細なログは CloudWatch Logs に出力される。Slack 通知だけでは分からないエラーの原因や API のレスポンスを確かめたいときに活用する
+Lambda の詳細なログは CloudWatch Logs に出力される。Slack 通知だけでは分からないエラーの原因や API のレスポンスを確かめたいときに活用する。ログはデフォルトでは 90 日を超えると削除される設定になっているため、必要に応じて `samconfig.toml` に `LogRetentionDays` を追記する
+
+### ロググループの衝突からの復旧
+ロググループを stack で管理する前にデプロイした環境では、Ayumy を更新した後の `make lambda-deploy` が、ロググループが既に存在するというエラーで失敗する。既存のロググループを CloudFormation の自動取り込みで stack に移し、drift-aware change set で保持期間を反映してからデプロイし直す。実際のコマンドは [PR #233 comment](https://github.com/n-yU/ayumy/pull/233#issuecomment-6122661874) を参照。stack を削除して作り直すときも削除後に残ったロググループと名前が衝突するため、残ったロググループを削除してからデプロイする
