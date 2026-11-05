@@ -17,13 +17,13 @@ jobs:
       contents: read
       id-token: write # Codecov authenticates uploads through GitHub OIDC instead of a stored token.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           version: "0.10.12"
 
