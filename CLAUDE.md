@@ -85,6 +85,9 @@ template.yaml                        # AWS SAM テンプレート（Lambda, Even
   - raw `sam build` / `sam deploy` は Makefile が扱わないケースに限定する（初回 `sam deploy --guided`、S3 バケット変更時の `sam deploy --no-resolve-s3`）
 - **依存管理**: 直接依存は `lambda/requirements.in` / `lambda/requirements-dev.in` に記述し、`make lock` で `uv pip compile --generate-hashes` を呼んで hash 付きの `lambda/requirements.txt` / `lambda/requirements-dev.txt` を再生成する。Lambda デプロイ・CI・`make lambda-install` はいずれも生成された `.txt` を読むため、`.in` を変更したら必ず `make lock` を実行し `.txt` を commit する。`uv` のバージョンが異なると `.txt` の出力が変わり CI drift check が誤検知するため、ローカルでも CI 側（`.github/workflows/ci.yml` の `astral-sh/setup-uv`）と同じバージョンを使う
 - **避けるコマンド**: `uv run pytest` を使わない（CWD の `pyproject.toml` を project marker として検出し `uv.lock` を暗黙生成してしまうため。本リポジトリは `pip-compile` ベースの `requirements*.txt` を lock として運用し、`uv.lock` は管理対象外としている）
+- **CI の action**: repo の Actions の設定で SHA 固定を必須にし、実行できる action を許可リストで限定している
+  - workflow の action は commit SHA で指定し、行末に `# v1.2.3` の形で version を記載する
+  - GitHub 公式以外の action を追加するときは repo の設定の許可リストにも追加する（追加しないと CI が失敗する）
 - **言語**: Python 3.12、デプロイ依存: `requests`, `anthropic`, `PyGithub`、開発依存: 左記 + `boto3`, `mypy`（boto3 の stub は S3 と Secrets Manager のみ）
 - **Claude モデル**: 要約生成モデルは `lambda/config/config.yml` で定義（デフォルト `claude-sonnet-4-6`）。このファイルは追跡対象外で、[config.template.yml](lambda/config/config.template.yml) から `make config-init` で生成する
 - **GitHub API**: REST、Fine-grained PAT、セッションログから特定したリポジトリのみ対象
