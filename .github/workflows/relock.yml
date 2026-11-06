@@ -1,0 +1,116 @@
+name: Relock Dependabot PR
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - lambda/requirements.txt
+      - lambda/requirements-dev.txt
+
+permissions:
+  contents: read
+
+concurrency:
+  group: relock-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  regenerate:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-22.04
+    # No secrets in this job: resolving may build sdists, which runs third-party code.
+    permissions:
+      contents: read
+    outputs:
+      changed: ${{ steps.diff.outputs.changed }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Lock must match the PR head, not the merge commit pull_request checks out by default.
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          # Keep in sync with ci.yml: another uv version changes make lock output.
+          version: "0.10.12"
+
+      - name: Regenerate requirements lock
+        run: make lock
+
+      - name: Detect lock changes
+        id: diff
+        run: |
+          if git diff --quiet lambda/requirements.txt lambda/requirements-dev.txt; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload regenerated lock
+        if: steps.diff.outputs.changed == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: requirements-lock
+          path: |
+            lambda/requirements.txt
+            lambda/requirements-dev.txt
+          retention-days: 1
+
+  push:
+    needs: regenerate
+    if: needs.regenerate.outputs.changed == 'true'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+      - name: Issue GitHub App token
+        id: app
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ secrets.RELOCK_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELOCK_APP_PRIVATE_KEY }}
+          permission-contents: write
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          token: ${{ steps.app.outputs.token }}
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: requirements-lock
+          path: ${{ runner.temp }}/requirements-lock
+
+      # Copy only the lock files: the artifact comes from a job that ran third-party code.
+      - name: Replace lock files
+        env:
+          ARTIFACT_DIR: ${{ runner.temp }}/requirements-lock
+        run: |
+          cp "$ARTIFACT_DIR/requirements.txt" lambda/requirements.txt
+          cp "$ARTIFACT_DIR/requirements-dev.txt" lambda/requirements-dev.txt
+
+      - name: Resolve bot user
+        id: bot
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          APP_SLUG: ${{ steps.app.outputs.app-slug }}
+        run: echo "user-id=$(gh api "/users/${APP_SLUG}[bot]" --jq .id)" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and push
+        env:
+          APP_SLUG: ${{ steps.app.outputs.app-slug }}
+          BOT_USER_ID: ${{ steps.bot.outputs.user-id }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${BOT_USER_ID}+${APP_SLUG}[bot]@users.noreply.github.com"
+          git add lambda/requirements.txt lambda/requirements-dev.txt
+          # Skip marker lets Dependabot keep rebasing over this commit.
+          git commit -m "Align requirements lock with make lock output" -m "[dependabot skip]"
+          # Rejected if Dependabot pushed meanwhile; the run triggered by that push handles it.
+          git push origin "HEAD:refs/heads/${HEAD_REF}"
